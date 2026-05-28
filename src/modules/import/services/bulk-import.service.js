@@ -144,8 +144,8 @@ class BulkImportService {
         qty,
         expiryDate,
         price,
-        batch: batch || `IMP-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
-        barcode: barcode || (barcodeOptions.autoGen ? `BC-${Date.now()}-${Math.floor(Math.random() * 1000)}` : null),
+        batch: batch || `IMP-${crypto.randomUUID().substring(0, 8).toUpperCase()}`,
+        barcode: barcode || (barcodeOptions.autoGen ? `BC-${crypto.randomUUID().substring(0, 8).toUpperCase()}` : null),
         matchedMedicine,
         isExpired,
         warnings: validationWarnings

@@ -4,7 +4,7 @@ const mockFindUnique = jest.fn();
 
 jest.unstable_mockModule('../../../src/config/prisma.js', () => ({
   default: {
-    subscription: { findUnique: mockFindUnique },
+    subscription: { findUnique: mockFindUnique, update: jest.fn() },
   },
 }));
 
@@ -12,11 +12,10 @@ const { subscriptionGuard } = await import(
   '../../../src/middleware/subscription.guard.fastify.js'
 );
 
-function createReqResTenant(tenantId) {
+function createReqReplyTenant(tenantId) {
   const req = { tenantId };
-  const res = { status: jest.fn().mockReturnThis(), json: jest.fn() };
-  const next = jest.fn();
-  return { req, res, next };
+  const reply = { code: jest.fn().mockReturnThis(), send: jest.fn() };
+  return { req, reply };
 }
 
 describe('subscriptionGuard', () => {
@@ -29,9 +28,9 @@ describe('subscriptionGuard', () => {
     futureDate.setDate(futureDate.getDate() + 10);
     mockFindUnique.mockResolvedValue({ status: 'ACTIVE', endDate: futureDate });
 
-    const { req, res, next } = createReqResTenant('tenant-1');
-    await subscriptionGuard(req, res, next);
-    expect(next).toHaveBeenCalled();
+    const { req, reply } = createReqReplyTenant('tenant-1');
+    await subscriptionGuard(req, reply);
+    expect(reply.code).not.toHaveBeenCalled();
   });
 
   it('should block expired subscription (ACTIVE but date passed)', async () => {
@@ -39,35 +38,39 @@ describe('subscriptionGuard', () => {
     pastDate.setDate(pastDate.getDate() - 10);
     mockFindUnique.mockResolvedValue({ status: 'ACTIVE', endDate: pastDate });
 
-    const { req, res, next } = createReqResTenant('tenant-1');
-    await subscriptionGuard(req, res, next);
-    expect(res.status).toHaveBeenCalledWith(403);
-    expect(res.json).toHaveBeenCalledWith({ message: 'Subscription expired.' });
+    const { req, reply } = createReqReplyTenant('tenant-1');
+    await subscriptionGuard(req, reply);
+    expect(reply.code).toHaveBeenCalledWith(403);
+    expect(reply.send).toHaveBeenCalledWith(
+      expect.objectContaining({ error: expect.objectContaining({ message: expect.stringContaining('expired') }) })
+    );
   });
 
   it('should block EXPIRED status subscription', async () => {
     mockFindUnique.mockResolvedValue({ status: 'EXPIRED' });
 
-    const { req, res, next } = createReqResTenant('tenant-1');
-    await subscriptionGuard(req, res, next);
-    expect(res.status).toHaveBeenCalledWith(403);
-    expect(res.json).toHaveBeenCalledWith({ message: 'Access denied due to subscription status.' });
+    const { req, reply } = createReqReplyTenant('tenant-1');
+    await subscriptionGuard(req, reply);
+    expect(reply.code).toHaveBeenCalledWith(403);
+    expect(reply.send).toHaveBeenCalledWith(
+      expect.objectContaining({ error: expect.objectContaining({ message: expect.stringContaining('expired') }) })
+    );
   });
 
   it('should block CANCELLED status subscription', async () => {
     mockFindUnique.mockResolvedValue({ status: 'CANCELLED' });
 
-    const { req, res, next } = createReqResTenant('tenant-1');
-    await subscriptionGuard(req, res, next);
-    expect(res.status).toHaveBeenCalledWith(403);
+    const { req, reply } = createReqReplyTenant('tenant-1');
+    await subscriptionGuard(req, reply);
+    expect(reply.code).toHaveBeenCalledWith(403);
   });
 
   it('should block SUSPENDED status subscription', async () => {
     mockFindUnique.mockResolvedValue({ status: 'SUSPENDED' });
 
-    const { req, res, next } = createReqResTenant('tenant-1');
-    await subscriptionGuard(req, res, next);
-    expect(res.status).toHaveBeenCalledWith(403);
+    const { req, reply } = createReqReplyTenant('tenant-1');
+    await subscriptionGuard(req, reply);
+    expect(reply.code).toHaveBeenCalledWith(403);
   });
 
   it('should allow grace period access', async () => {
@@ -75,10 +78,9 @@ describe('subscriptionGuard', () => {
     futureGraceDate.setDate(futureGraceDate.getDate() + 5);
     mockFindUnique.mockResolvedValue({ status: 'GRACE_PERIOD', graceEndDate: futureGraceDate });
 
-    const { req, res, next } = createReqResTenant('tenant-1');
-    await subscriptionGuard(req, res, next);
-    expect(req.subscriptionGrace).toBe(true);
-    expect(next).toHaveBeenCalled();
+    const { req, reply } = createReqReplyTenant('tenant-1');
+    await subscriptionGuard(req, reply);
+    expect(reply.code).not.toHaveBeenCalled();
   });
 
   it('should block grace period if grace date passed', async () => {
@@ -86,26 +88,23 @@ describe('subscriptionGuard', () => {
     pastGraceDate.setDate(pastGraceDate.getDate() - 5);
     mockFindUnique.mockResolvedValue({ status: 'GRACE_PERIOD', graceEndDate: pastGraceDate });
 
-    const { req, res, next } = createReqResTenant('tenant-1');
-    await subscriptionGuard(req, res, next);
-    expect(res.status).toHaveBeenCalledWith(403);
+    const { req, reply } = createReqReplyTenant('tenant-1');
+    await subscriptionGuard(req, reply);
+    expect(reply.code).toHaveBeenCalledWith(403);
   });
 
-  it('should return 403 when no subscription found', async () => {
+  it('should pass through when no subscription found', async () => {
     mockFindUnique.mockResolvedValue(null);
 
-    const { req, res, next } = createReqResTenant('tenant-1');
-    await subscriptionGuard(req, res, next);
-    expect(res.status).toHaveBeenCalledWith(403);
-    expect(res.json).toHaveBeenCalledWith({ message: 'Active subscription required.' });
+    const { req, reply } = createReqReplyTenant('tenant-1');
+    await subscriptionGuard(req, reply);
+    expect(reply.code).not.toHaveBeenCalled();
   });
 
-  it('should return 403 when no tenant context', async () => {
+  it('should pass through when no tenant context', async () => {
     const req = {};
-    const res = { status: jest.fn().mockReturnThis(), json: jest.fn() };
-    const next = jest.fn();
-    await subscriptionGuard(req, res, next);
-    expect(res.status).toHaveBeenCalledWith(403);
-    expect(res.json).toHaveBeenCalledWith({ message: 'Tenant context required.' });
+    const reply = { code: jest.fn().mockReturnThis(), send: jest.fn() };
+    await subscriptionGuard(req, reply);
+    expect(reply.code).not.toHaveBeenCalled();
   });
 });

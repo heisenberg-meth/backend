@@ -39,6 +39,13 @@ const mockPrisma = {
     findFirst: jest.fn().mockResolvedValue(null),
     create: jest.fn().mockResolvedValue({ id: 'mfg-1', name: 'Cipla Ltd' }),
   },
+  medicine: {
+    create: jest.fn(),
+  },
+  inventoryBatch: {
+    create: jest.fn(),
+  },
+  $transaction: jest.fn(async (cb) => cb(mockPrisma)),
 };
 
 jest.unstable_mockModule('../../src/config/prisma.js', () => ({
@@ -91,6 +98,7 @@ describe('MedicinePrismaService Unit Tests (ESM)', () => {
     it('should create a medicine and an initial batch', async () => {
       const medicineData = {
         name: 'Paracetamol',
+        branchId: 'branch-1',
         initialBatch: {
           batchNumber: 'P001',
           quantity: 100,
@@ -114,6 +122,7 @@ describe('MedicinePrismaService Unit Tests (ESM)', () => {
         name: 'Amoxil',
         brandName: 'Amoxil',
         genericName: 'Amoxicillin',
+        branchId: 'branch-1',
         category: 'Antibiotics',
         manufacturer: 'Cipla Ltd',
         gst: 12,
@@ -139,7 +148,7 @@ describe('MedicinePrismaService Unit Tests (ESM)', () => {
         gstPercentage: 12,
         status: 'ACTIVE',
         scheduleType: 'OTC'
-      }));
+      }), expect.anything());
       expect(result.name).toBe('Amoxil');
     });
   });

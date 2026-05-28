@@ -4,7 +4,7 @@ const mockFindUnique = jest.fn();
 
 jest.unstable_mockModule('../../../src/config/prisma.js', () => ({
   default: {
-    subscription: { findUnique: mockFindUnique },
+    subscription: { findUnique: mockFindUnique, update: jest.fn() },
   },
 }));
 
@@ -14,16 +14,14 @@ const { subscriptionGuard } = await import(
 
 describe('Subscription Guard Middleware', () => {
   let req;
-  let res;
-  let next;
+  let reply;
 
   beforeEach(() => {
     req = { tenantId: 'tenant-1' };
-    res = {
-      status: jest.fn().mockReturnThis(),
-      json: jest.fn(),
+    reply = {
+      code: jest.fn().mockReturnThis(),
+      send: jest.fn(),
     };
-    next = jest.fn();
     jest.clearAllMocks();
   });
 
@@ -35,8 +33,8 @@ describe('Subscription Guard Middleware', () => {
       endDate: futureDate,
     });
 
-    await subscriptionGuard(req, res, next);
-    expect(next).toHaveBeenCalled();
+    await subscriptionGuard(req, reply);
+    expect(reply.code).not.toHaveBeenCalled();
   });
 
   it('should block expired subscription (status ACTIVE but date passed)', async () => {
@@ -47,9 +45,11 @@ describe('Subscription Guard Middleware', () => {
       endDate: pastDate,
     });
 
-    await subscriptionGuard(req, res, next);
-    expect(res.status).toHaveBeenCalledWith(403);
-    expect(res.json).toHaveBeenCalledWith({ message: 'Subscription expired.' });
+    await subscriptionGuard(req, reply);
+    expect(reply.code).toHaveBeenCalledWith(403);
+    expect(reply.send).toHaveBeenCalledWith(
+      expect.objectContaining({ error: expect.objectContaining({ message: expect.stringContaining('expired') }) })
+    );
   });
 
   it('should block expired subscription (status EXPIRED)', async () => {
@@ -57,8 +57,8 @@ describe('Subscription Guard Middleware', () => {
       status: 'EXPIRED',
     });
 
-    await subscriptionGuard(req, res, next);
-    expect(res.status).toHaveBeenCalledWith(403);
+    await subscriptionGuard(req, reply);
+    expect(reply.code).toHaveBeenCalledWith(403);
   });
 
   it('should allow grace period access', async () => {
@@ -69,9 +69,8 @@ describe('Subscription Guard Middleware', () => {
       graceEndDate: futureGraceDate,
     });
 
-    await subscriptionGuard(req, res, next);
-    expect(req.subscriptionGrace).toBe(true);
-    expect(next).toHaveBeenCalled();
+    await subscriptionGuard(req, reply);
+    expect(reply.code).not.toHaveBeenCalled();
   });
 
   it('should block grace period if grace date passed', async () => {
@@ -82,8 +81,8 @@ describe('Subscription Guard Middleware', () => {
       graceEndDate: pastGraceDate,
     });
 
-    await subscriptionGuard(req, res, next);
-    expect(res.status).toHaveBeenCalledWith(403);
+    await subscriptionGuard(req, reply);
+    expect(reply.code).toHaveBeenCalledWith(403);
   });
 
   it('should block suspended or cancelled subscription', async () => {
@@ -91,7 +90,7 @@ describe('Subscription Guard Middleware', () => {
       status: 'SUSPENDED',
     });
 
-    await subscriptionGuard(req, res, next);
-    expect(res.status).toHaveBeenCalledWith(403);
+    await subscriptionGuard(req, reply);
+    expect(reply.code).toHaveBeenCalledWith(403);
   });
 });

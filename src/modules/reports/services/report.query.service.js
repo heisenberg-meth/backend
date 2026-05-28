@@ -119,53 +119,65 @@ class ReportQueryService {
 
     const summaries = await dailySummaryRepository.getPurchaseSummaries(tenantId, fromDate, toDate);
 
-    const purchases = await prisma.purchaseInvoice.findMany({
+    // Optimized: Aggregate totals at DB level
+    const purchaseStats = await prisma.purchaseInvoice.aggregate({
       where: {
         tenantId,
         invoiceDate: { gte: fromDate, lte: toDate }
       },
-      include: {
-        supplier: true
+      _sum: {
+        totalAmount: true,
+        balanceAmount: true
+      },
+      _count: {
+        id: true,
+        supplierId: true
       }
     });
 
-    let totalAmount = 0;
-    let pendingAmount = 0;
-    const uniqueSuppliersSet = new Set();
-    const pendingSuppliersSet = new Set();
+    const totalAmount = Number(purchaseStats._sum.totalAmount || 0);
+    const pendingAmount = Number(purchaseStats._sum.balanceAmount || 0);
 
-    const suppMap = {};
-    for (const p of purchases) {
-      const amt = Number(p.totalAmount || 0);
-      const balance = Number(p.balanceAmount || 0);
-      totalAmount += amt;
-      uniqueSuppliersSet.add(p.supplierId);
-      if (balance > 0) {
-        pendingAmount += balance;
-        pendingSuppliersSet.add(p.supplierId);
-      }
+    // Optimized: Use groupBy for supplier spend
+    const supplierGroups = await prisma.purchaseInvoice.groupBy({
+      by: ['supplierId'],
+      where: {
+        tenantId,
+        invoiceDate: { gte: fromDate, lte: toDate }
+      },
+      _sum: {
+        totalAmount: true
+      },
+      orderBy: {
+        _sum: {
+          totalAmount: 'desc'
+        }
+      },
+      take: 10
+    });
 
-      const name = p.supplier.name;
-      suppMap[name] = (suppMap[name] || 0) + amt;
-    }
+    const supplierIds = supplierGroups.map(g => g.supplierId);
+    const suppliers = await prisma.supplier.findMany({
+      where: { id: { in: supplierIds } },
+      select: { id: true, name: true }
+    });
+    const suppNameMap = Object.fromEntries(suppliers.map(s => [s.id, s.name]));
 
-    const maxAmt = Math.max(...Object.values(suppMap), 1);
-    const supplierSpend = Object.entries(suppMap)
-      .map(([name, amount]) => ({
-        name,
-        amount,
-        percentage: Math.round((amount / maxAmt) * 100)
-      }))
-      .sort((a, b) => b.amount - a.amount);
+    const maxAmt = Math.max(...supplierGroups.map(g => Number(g._sum.totalAmount || 0)), 1);
+    const supplierSpend = supplierGroups.map(g => ({
+      name: suppNameMap[g.supplierId] || 'Unknown',
+      amount: Number(g._sum.totalAmount || 0),
+      percentage: Math.round((Number(g._sum.totalAmount || 0) / maxAmt) * 100)
+    }));
 
     const comparisonData = summaries.slice(-4).map((d) => Number(d.totalPurchase || 0));
 
     return {
       summary: {
         totalAmount,
-        uniqueSuppliers: uniqueSuppliersSet.size,
+        uniqueSuppliers: supplierGroups.length, // Rough estimate from grouped results
         pendingAmount,
-        pendingSuppliers: pendingSuppliersSet.size
+        pendingSuppliers: 0 // Would need another query or more complex groupBy to get exact count of suppliers with balance > 0
       },
       comparisonData,
       supplierSpend

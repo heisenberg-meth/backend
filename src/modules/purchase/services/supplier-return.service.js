@@ -1,89 +1,50 @@
-import prisma from "../../../config/prisma.js";
 import movementService from '../../stock/service/movement.service.js';
-import auditService from '../../audit/service/audit.prisma.service.js';
-import ledgerService from '../../suppliers/financials/ledger/ledger.service.js';
+import ledgerService from '../../vendors/services/ledger.service.js';
+import prisma from '../../../config/prisma.js';
+import logger from '../../../shared/utils/logger.js';
 
 class SupplierReturnService {
-  /**
-   * Return goods to supplier
-   */
   async processReturn(tenantId, data, userId) {
-    const { batchId, quantity, supplierId, reason } = data;
+    const batch = await prisma.inventoryBatch.findUnique({
+      where: { id: data.batchId },
+      include: { medicine: true },
+    });
 
-    return prisma.$transaction(async (tx) => {
-      // 1. Reduce inventory
-      const batch = await tx.inventoryBatch.findUnique({
-        where: { id: batchId },
-        include: { medicine: true },
-      });
+    await movementService.stockOut(tenantId, {
+      medicineId: batch.medicineId,
+      batchId: data.batchId,
+      quantity: data.quantity,
+      branchId: data.branchId,
+      referenceType: 'SUPPLIER_RETURN',
+      reason: data.reason,
+    });
 
-      if (!batch || batch.medicine.tenantId !== tenantId) {
-        throw new Error('Batch not found');
-      }
+    const returnAmount = data.quantity * (batch.purchasePrice || 0);
 
-      if (batch.quantity < quantity) {
-        throw new Error(`Insufficient batch stock. Available: ${batch.quantity}`);
-      }
+    await ledgerService.recordEntry(tenantId, {
+      supplierId: data.supplierId,
+      type: 'RETURN',
+      creditAmount: returnAmount,
+      referenceType: 'SUPPLIER_RETURN',
+      referenceId: data.batchId,
+    }, prisma);
 
-      await movementService.stockOut(tenantId, {
+    const returnRecord = await prisma.supplierReturn.create({
+      data: {
+        tenantId,
+        supplierId: data.supplierId,
+        batchId: data.batchId,
         medicineId: batch.medicineId,
-        quantity,
-        type: 'RETURN',
-        referenceType: 'SUPPLIER_RETURN',
-        notes: reason
-      }, userId, tx);
-
-      // 2. Create Supplier Return record
-      const supplierReturn = await tx.supplierReturn.create({
-        data: {
-          tenantId,
-          supplierId,
-          batchId,
-          quantity,
-          reason,
-          status: 'COMPLETED'
-        }
-      });
-
-      // 3. Update Supplier Ledger (Credit the payable/liability)
-      const refundValue = quantity * batch.purchasePrice;
-      await ledgerService.createEntry(tx, {
-        tenantId,
-        supplierId,
-        type: 'RETURN',
-        referenceType: 'RETURN_RECORD',
-        referenceId: supplierReturn.id,
-        creditAmount: refundValue,
-        notes: `Return: ${batch.medicine.name} (Batch: ${batch.batchNumber})`
-      });
-
-      // 4. Audit Log
-      await auditService.log({
-        tenantId,
-        userId,
-        action: 'SUPPLIER_RETURN',
-        target: `${batch.medicine.name} (Batch: ${batch.batchNumber})`,
-        type: 'INVENTORY'
-      });
-
-      return supplierReturn;
-    });
-  }
-
-  async getReturns(tenantId, page = 1, limit = 20) {
-    const skip = (page - 1) * limit;
-    return prisma.supplierReturn.findMany({
-      where: { tenantId },
-      include: {
-        supplier: true,
-        batch: {
-          include: { medicine: true }
-        }
+        quantity: data.quantity,
+        reason: data.reason,
+        returnAmount,
+        status: 'COMPLETED',
+        createdBy: userId,
       },
-      orderBy: { createdAt: 'desc' },
-      skip,
-      take: limit
     });
+
+    logger.info(`[SupplierReturn] Processed return for batch ${data.batchId} (${data.quantity})`);
+    return returnRecord;
   }
 }
 

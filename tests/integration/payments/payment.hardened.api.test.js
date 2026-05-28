@@ -11,6 +11,11 @@ const mockHealthCheck = jest.fn();
 const mockRazorpayHealth = jest.fn();
 const mockReconcileAll = jest.fn();
 
+jest.unstable_mockModule('../../../src/config/prisma.js', () => ({
+  default: {},
+  ensureDbConnection: jest.fn().mockResolvedValue(),
+}));
+
 jest.unstable_mockModule('../../../src/modules/payments/services/payment.orchestrator.service.js', () => ({
   default: {
     createPaymentOrder: mockCreatePaymentOrder,
@@ -40,6 +45,8 @@ jest.unstable_mockModule('../../../src/config/razorpay.js', () => ({
     payments: { all: jest.fn(), fetch: jest.fn() },
   },
   healthCheck: mockRazorpayHealth,
+  getRazorpay: jest.fn(),
+  resetInstance: jest.fn(),
 }));
 
 jest.unstable_mockModule('../../../src/modules/payments/services/payment.reconciliation.service.js', () => ({

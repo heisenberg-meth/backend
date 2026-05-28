@@ -1,6 +1,10 @@
 import { jest , describe, afterEach, it, expect } from '@jest/globals';
 
 const mockPrisma = {
+  stockMovement: {
+    create: jest.fn(),
+    findUnique: jest.fn(),
+  },
   inventoryBatch: {
     update: jest.fn(),
     aggregate: jest.fn()
@@ -60,22 +64,22 @@ describe('Real-Time Inventory Service Unit Tests', () => {
         medicineId: 'm1',
         batchId: 'b1',
         branchId: 'br1',
-        transactionType: 'SALE',
-        quantityChange: -5,
+        movementType: 'SALE',
+        quantity: -5,
         quantityAfter: 45,
         referenceType: 'INVOICE',
         referenceId: 'INV-001'
       };
 
-      mockPrisma.inventoryTransaction.create.mockResolvedValue({ id: 'tx1', ...data });
+      mockPrisma.stockMovement.create.mockResolvedValue({ id: 'tx1', ...data });
       mockRedis.set.mockResolvedValue('OK');
 
       await inventoryService.recordTransaction(mockPrisma, tenantId, data, userId);
 
-      expect(mockPrisma.inventoryTransaction.create).toHaveBeenCalledWith(expect.objectContaining({
+      expect(mockPrisma.stockMovement.create).toHaveBeenCalledWith(expect.objectContaining({
         data: expect.objectContaining({
-          transactionType: 'SALE',
-          quantityChange: -5
+          movementType: 'SALE',
+          quantity: -5
         })
       }));
       expect(mockRedis.set).toHaveBeenCalled();

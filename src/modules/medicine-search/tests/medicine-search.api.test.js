@@ -218,7 +218,7 @@ describe('Medicine Search API Integration', () => {
         .expect(200);
 
       expect(response.body.success).toBe(true);
-      expect(response.body.data.medicine.brandName).toBe('Dolo 650');
+      expect(response.body.data.medicine.name).toBe('Dolo 650');
     });
 
     it('should return 404 for non-existent barcode', async () => {

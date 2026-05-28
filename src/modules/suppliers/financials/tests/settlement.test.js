@@ -42,6 +42,13 @@ jest.unstable_mockModule('../../../../shared/constants/events.js', () => ({
     SUPPLIER_PAYMENT_REVERSED: 'supplier.payment.reversed',
     SUPPLIER_LEDGER_UPDATED: 'supplier.ledger.updated',
   },
+  EVENTS: {},
+  EVENT_PRIORITY: {},
+  EVENT_RETENTION: {},
+  PROCUREMENT_STATUS: {},
+  BILLING_STATUS: {},
+  PRESCRIPTION_STATUS: {},
+  PRESCRIPTION_EVENTS: {},
 }));
 
 // Dynamic Imports
