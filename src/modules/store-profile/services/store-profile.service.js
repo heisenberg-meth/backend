@@ -12,6 +12,7 @@ import {
   validatePincode,
   validateLogoUrl,
 } from '../validators/store-profile.validator.js';
+import { scanKeys } from '../../../shared/utils/scan-keys.js';
 
 class StoreProfileService {
   async getProfile(tenantId, branchId = null) {
@@ -269,7 +270,7 @@ class StoreProfileService {
       if (branchId) {
         await redisClient.del(`store_profile:${tenantId}:${branchId}`);
       } else {
-        const keys = await redisClient.keys(`store_profile:${tenantId}:*`);
+        const keys = await scanKeys(`store_profile:${tenantId}:*`);
         if (keys.length > 0) {
           await redisClient.del(...keys);
         }

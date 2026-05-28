@@ -2,11 +2,11 @@ import { Queue } from 'bullmq';
 import { getBullRedis } from '../../../config/redis.js';
 import { registerQueue } from '../../../config/queue-registry.js';
 
-const connection = getBullRedis();
+const isTest = process.env.NODE_ENV === 'test';
 
 const createQueue = (name) => {
   return new Queue(name, {
-    connection,
+    connection: getBullRedis(),
     defaultJobOptions: {
       attempts: 3,
       backoff: { type: 'exponential', delay: 5000 },
@@ -16,7 +16,7 @@ const createQueue = (name) => {
   });
 };
 
-export const billingQueues = {
+export const billingQueues = isTest ? {} : {
   pdf: registerQueue(createQueue('billing_pdf_generation')),
   share: registerQueue(createQueue('billing_invoice_sharing')),
 };

@@ -32,6 +32,21 @@ const mockForecasting = {
 
 const mockEmit = jest.fn();
 
+const mockRedisClient = {
+  get: jest.fn(),
+  set: jest.fn(),
+  del: jest.fn(),
+  scan: jest.fn().mockResolvedValue(['0', []]),
+  keys: jest.fn().mockResolvedValue([]),
+};
+
+jest.unstable_mockModule('../../src/config/redis.js', () => ({
+  default: mockRedisClient,
+  quitRedis: jest.fn().mockResolvedValue(),
+  getBullRedis: jest.fn(() => mockRedisClient),
+  initRedis: jest.fn(() => mockRedisClient),
+}));
+
 jest.unstable_mockModule('../../src/config/prisma.js', () => ({ default: mockPrisma }));
 jest.unstable_mockModule(
   '../../src/modules/medicine-configuration/repositories/configuration.repository.js',

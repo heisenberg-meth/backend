@@ -8,6 +8,8 @@ import { initAnalyticsWorker } from './modules/billing-analytics/workers/analyti
 import { initRiskWorker } from './modules/medicine-alerts/workers/risk.worker.js';
 import { startCommunicationWorker } from './modules/communications/workers/communication.worker.js';
 import { initNotificationsModule } from './modules/notifications/index.js';
+import { createInventoryQueue, createInventoryWorker } from './modules/realtime-inventory/workers/inventory.worker.js';
+import { seal as sealQueueRegistry } from './config/queue-registry.js';
 import logger from './shared/utils/logger.js';
 
 /**
@@ -123,10 +125,13 @@ const start = async () => {
 
     await validateDatabaseHealth();
 
+    createInventoryQueue();
+    createInventoryWorker();
     initAnalyticsWorker();
     initRiskWorker();
     startCommunicationWorker();
     initNotificationsModule();
+    sealQueueRegistry();
     logger.info('[BOOT] Workers started — all systems operational');
   } catch (err) {
     console.error('[BOOT] Failed to start server:', err.message);

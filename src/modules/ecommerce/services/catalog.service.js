@@ -1,5 +1,6 @@
 import prisma from '../../../config/prisma.js';
 import redisClient from '../../../config/redis.js';
+import { scanKeys } from '../../../shared/utils/scan-keys.js';
 
 class CatalogService {
   /**
@@ -81,7 +82,7 @@ class CatalogService {
    * Invalidates catalog cache for a tenant.
    */
   async invalidateCatalogCache(tenantId) {
-    const keys = await redisClient.keys(`catalog:${tenantId}:*`);
+    const keys = await scanKeys(`catalog:${tenantId}:*`);
     if (keys.length > 0) {
       await redisClient.del(keys);
     }

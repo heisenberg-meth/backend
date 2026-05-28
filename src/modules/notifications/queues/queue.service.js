@@ -3,11 +3,11 @@ import { getBullRedis } from '../../../config/redis.js';
 import { registerQueue } from '../../../config/queue-registry.js';
 import logger from '../../../shared/utils/logger.js';
 
-const connection = getBullRedis();
+const isTest = process.env.NODE_ENV === 'test';
 
 const createQueue = (name) => {
   return new Queue(name, {
-    connection,
+    connection: getBullRedis(),
     defaultJobOptions: {
       attempts: 3,
       backoff: {
@@ -20,7 +20,7 @@ const createQueue = (name) => {
   });
 };
 
-export const queues = {
+export const queues = isTest ? {} : {
   sms: registerQueue(createQueue('notification_sms')),
   email: registerQueue(createQueue('notification_email')),
   whatsapp: registerQueue(createQueue('notification_whatsapp')),

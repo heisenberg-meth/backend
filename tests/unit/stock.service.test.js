@@ -109,7 +109,7 @@ describe('MovementService Unit Tests (Stock)', () => {
   });
 
   describe('stockOut - FEFO Strategy', () => {
-    it.skip('should deduct from the earliest expiring batch first', async () => {
+    it('should deduct from the earliest expiring batch first', async () => {
       const medicineId = 'med-1';
       const now = new Date();
       const future1 = new Date(now.getTime() + 1000 * 60 * 60 * 24 * 30);
@@ -143,7 +143,7 @@ describe('MovementService Unit Tests (Stock)', () => {
       }));
     });
 
-    it.skip('should throw error if insufficient total stock', async () => {
+    it('should throw error if insufficient total stock', async () => {
       const medicineId = 'med-1';
       const futureDate = new Date();
       futureDate.setDate(futureDate.getDate() + 30);
@@ -160,7 +160,7 @@ describe('MovementService Unit Tests (Stock)', () => {
   });
 
   describe('stockIn', () => {
-    it.skip('should create a new batch and ledger entry', async () => {
+    it('should create a new batch and ledger entry', async () => {
       const data = {
         medicineId: 'med-1',
         batchNumber: 'P001',

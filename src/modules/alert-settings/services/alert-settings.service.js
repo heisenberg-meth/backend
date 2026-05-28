@@ -2,6 +2,7 @@ import repo from '../repositories/alert-settings.repository.js';
 import auditService from '../../audit/service/audit.service.js';
 import logger from '../../../shared/utils/logger.js';
 import redisClient from '../../../config/redis.js';
+import { scanKeys } from '../../../shared/utils/scan-keys.js';
 
 const DEFAULT_SETTINGS = {
   lowStockThreshold: 20,
@@ -182,7 +183,7 @@ class AlertSettingsService {
       ];
 
       for (const pattern of patterns) {
-        const keys = await redisClient.keys(pattern);
+        const keys = await scanKeys(pattern);
         if (keys.length > 0) {
           await redisClient.del(...keys);
         }

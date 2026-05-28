@@ -5,11 +5,11 @@ import providerRegistry from '../providers/provider-registry.js';
 import recoveryService from '../recovery/recovery.service.js';
 import logger from '../../../shared/utils/logger.js';
 
-const connection = getBullRedis();
+export let workers = null;
 
 const createWorker = (queueName, handler) => {
   return new Worker(queueName, handler, {
-    connection,
+    connection: getBullRedis(),
     concurrency: 5,
   });
 };
@@ -26,7 +26,6 @@ const processNotification = async (job) => {
   }
 
   try {
-    // 1. Update status to PROCESSING
     await prisma.notification.update({
       where: { id: notificationId },
       data: { deliveryStatus: 'PROCESSING' },
@@ -39,22 +38,16 @@ const processNotification = async (job) => {
       },
     });
 
-    // 2. Perform Delivery with Failover
     const deliveryResult = await providerRegistry.sendWithFailover(
       notification.tenantId,
       notification.channel,
       async (provider) => {
-        // Here we would call the actual provider implementation (e.g. twilio, resend)
-        // For the sake of this architectural implementation, we simulate provider call
         logger.info({ notificationId, provider: provider.providerName }, 'Attempting delivery via provider');
-        
-        // Mock success for now, in real app call providerService.send(notification, provider)
         return { messageId: `provider-${Date.now()}` };
       }
     );
 
     if (deliveryResult.success) {
-      // 3. Update status to SENT/DELIVERED
       await prisma.notification.update({
         where: { id: notificationId },
         data: {
@@ -85,7 +78,6 @@ const processNotification = async (job) => {
     logger.warn({ notificationId, retryCount, error: errorMessage }, 'Notification processing failed');
 
     if (retryCount < notification.maxRetries) {
-      // Automatic retry handled by BullMQ backoff or manual logic
       await prisma.notification.update({
         where: { id: notificationId },
         data: {
@@ -103,19 +95,19 @@ const processNotification = async (job) => {
         },
       });
       
-      throw error; // Let BullMQ handle retry
+      throw error;
     } else {
-      // Move to DLQ
       await recoveryService.moveToDLQ(notificationId, errorMessage, job.data);
     }
   }
 };
 
-export const workers = {
-  sms: createWorker('notification_sms', processNotification),
-  email: createWorker('notification_email', processNotification),
-  whatsapp: createWorker('notification_whatsapp', processNotification),
-  retry: createWorker('notification_retry', processNotification),
+export const createNotificationWorkers = () => {
+  workers = {
+    sms: createWorker('notification_sms', processNotification),
+    email: createWorker('notification_email', processNotification),
+    whatsapp: createWorker('notification_whatsapp', processNotification),
+    retry: createWorker('notification_retry', processNotification),
+  };
+  logger.info('Notification workers initialized');
 };
-
-logger.info('Notification workers initialized');

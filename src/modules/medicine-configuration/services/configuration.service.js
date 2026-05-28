@@ -4,6 +4,7 @@ import { emitEvent } from '../../../shared/events/erp-event-bus.js';
 import redisClient from '../../../config/redis.js';
 import logger from '../../../shared/utils/logger.js';
 import prisma from '../../../config/prisma.js';
+import { scanKeys } from '../../../shared/utils/scan-keys.js';
 
 const SCHEDULE_RESTRICTED = ['X', 'H1'];
 const PRICE_CHANGE_APPROVAL_THRESHOLD = 0.2;
@@ -206,7 +207,7 @@ class ConfigurationService {
 
   async _invalidateMedicineCache(tenantId, medicineId) {
     try {
-      const keys = await redisClient.keys(`medicine:${tenantId}:${medicineId}:*`);
+      const keys = await scanKeys(`medicine:${tenantId}:${medicineId}:*`);
       if (keys.length > 0) await redisClient.del(...keys);
     } catch (err) { logger.error({ err }, 'Failed to invalidate medicine cache'); }
   }
@@ -219,7 +220,7 @@ class ConfigurationService {
 
   async _invalidateSearchCache(tenantId) {
     try {
-      const keys = await redisClient.keys(`search:${tenantId}:*`);
+      const keys = await scanKeys(`search:${tenantId}:*`);
       if (keys.length > 0) await redisClient.del(...keys);
     } catch (err) {
       logger.error({ err }, 'Failed to invalidate search cache');

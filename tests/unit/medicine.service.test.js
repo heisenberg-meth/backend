@@ -48,6 +48,21 @@ const mockPrisma = {
   $transaction: jest.fn(async (cb) => cb(mockPrisma)),
 };
 
+const mockRedisClient = {
+  get: jest.fn(),
+  set: jest.fn(),
+  del: jest.fn(),
+  scan: jest.fn().mockResolvedValue(['0', []]),
+  keys: jest.fn().mockResolvedValue([]),
+};
+
+jest.unstable_mockModule('../../src/config/redis.js', () => ({
+  default: mockRedisClient,
+  quitRedis: jest.fn().mockResolvedValue(),
+  getBullRedis: jest.fn(() => mockRedisClient),
+  initRedis: jest.fn(() => mockRedisClient),
+}));
+
 jest.unstable_mockModule('../../src/config/prisma.js', () => ({
   default: mockPrisma,
 }));
@@ -178,30 +193,4 @@ describe('MedicinePrismaService Unit Tests (ESM)', () => {
     });
   });
 
-  describe('getFefoBatches', () => {
-    it.skip('should return batches sorted by expiry', async () => {
-      const futureDate1 = new Date();
-      futureDate1.setFullYear(now().getFullYear() + 1);
-      const futureDate2 = new Date();
-      futureDate2.setFullYear(now().getFullYear() + 2);
-
-      const mockBatches = [
-        { id: 'b2', expiryDate: futureDate2, quantity: 100 },
-        { id: 'b1', expiryDate: futureDate1, quantity: 50 },
-      ];
-
-      mockInventoryBatchRepository.findByMedicineId.mockResolvedValue(mockBatches);
-
-      const result = await medicineService.getFefoBatches('med-1', tenantId, 75);
-
-      expect(result.selectedBatches).toHaveLength(2);
-      expect(result.selectedBatches[0].id).toBe('b1'); // Earlier expiry
-      expect(result.selectedBatches[0].taken).toBe(50);
-      expect(result.selectedBatches[1].id).toBe('b2');
-      expect(result.selectedBatches[1].taken).toBe(25);
-      expect(result.fulfilled).toBe(true);
-    });
-  });
 });
-
-function now() { return new Date(); }

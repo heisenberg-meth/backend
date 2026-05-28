@@ -3,6 +3,7 @@ import logger from '../../../shared/utils/logger.js';
 import repo from '../repositories/notification-settings.repository.js';
 import { notificationSettingsEventEmitter, NotificationSettingsEvents } from '../events/notification-settings.events.js';
 import auditService from '../../audit/service/audit.service.js';
+import { scanKeys } from '../../../shared/utils/scan-keys.js';
 
 const DEFAULT_SETTINGS = {
   smsEnabled: true,
@@ -520,7 +521,7 @@ class NotificationSettingsService {
       const pattern = branchId
         ? `notif:settings:${tenantId}:${branchId}*`
         : `notif:settings:${tenantId}:*`;
-      const keys = await redisClient.keys(pattern);
+      const keys = await scanKeys(pattern);
       if (keys.length > 0) {
         await redisClient.del(...keys);
       }

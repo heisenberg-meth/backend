@@ -1,5 +1,5 @@
 import prisma from '../../../config/prisma.js';
-import redisClient from '../../../config/redis.js';
+import { scanKeys } from '../../../shared/utils/scan-keys.js';
 
 class QueueMetricsService {
   async getQueueMetrics(tenantId) {
@@ -48,7 +48,7 @@ class QueueMetricsService {
 
   async getQueueDepth() {
     try {
-      const keys = await redisClient.keys('bull:viyan-medassist-notifications:*');
+      const keys = await scanKeys('bull:viyan-medassist-notifications:*');
       const waiting = keys.filter(k => k.includes('wait')).length;
       const active = keys.filter(k => k.includes('active')).length;
       return { waiting, active, total: waiting + active };

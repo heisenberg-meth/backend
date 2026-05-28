@@ -1,5 +1,6 @@
 import redisClient from '../../../config/redis.js';
 import logger from '../../../shared/utils/logger.js';
+import { scanKeys } from '../../../shared/utils/scan-keys.js';
 
 const BARCODE_CACHE_TTL = 86400;
 const AUTOCOMPLETE_CACHE_TTL = 3600;
@@ -118,7 +119,7 @@ class MedicineSearchCache {
 
   async invalidateAll(tenantId) {
     try {
-      const keys = await redisClient.keys(`medicine-search:${tenantId}:*`);
+      const keys = await scanKeys(`medicine-search:${tenantId}:*`);
       if (keys.length > 0) {
         await redisClient.del(...keys);
       }

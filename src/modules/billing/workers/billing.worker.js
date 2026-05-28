@@ -4,31 +4,32 @@ import pdfService from '../services/pdf.service.js';
 import notificationService from '../../notifications/services/notification.service.js';
 import logger from '../../../shared/utils/logger.js';
 
-const connection = getBullRedis();
+import { registerWorker } from '../../../config/queue-registry.js';
 
-// --- PDF WORKER ---
-export const pdfWorker = new Worker('billing_pdf_generation', async (job) => {
-  const { invoiceId, tenantId } = job.data;
-  logger.info({ invoiceId }, 'Processing PDF generation job');
-  await pdfService.generateInvoicePdf(invoiceId, tenantId);
-}, { connection });
+export let pdfWorker = null;
+export let shareWorker = null;
 
-// --- SHARING WORKER ---
-export const shareWorker = new Worker('billing_invoice_sharing', async (job) => {
-  const { invoiceId, tenantId, channel, recipient } = job.data;
-  logger.info({ invoiceId, channel }, 'Processing sharing job');
-  
-  // 1. Ensure PDF is generated
-  let pdfUrl = await pdfService.generateInvoicePdf(invoiceId, tenantId);
-  
-  // 2. Send via notification system
-  await notificationService.queueNotification({
-    tenantId,
-    channel,
-    recipient,
-    message: `Your invoice is ready. View it here: ${process.env.FRONTEND_URL}${pdfUrl}`,
-    notificationType: 'INVOICE_SHARE',
-  });
+export const createBillingWorkers = () => {
+  pdfWorker = registerWorker(new Worker('billing_pdf_generation', async (job) => {
+    const { invoiceId, tenantId } = job.data;
+    logger.info({ invoiceId }, 'Processing PDF generation job');
+    await pdfService.generateInvoicePdf(invoiceId, tenantId);
+  }, { connection: getBullRedis() }));
 
-  logger.info({ invoiceId, channel }, 'Invoice share queued via notification system');
-}, { connection });
+  shareWorker = registerWorker(new Worker('billing_invoice_sharing', async (job) => {
+    const { invoiceId, tenantId, channel, recipient } = job.data;
+    logger.info({ invoiceId, channel }, 'Processing sharing job');
+    
+    let pdfUrl = await pdfService.generateInvoicePdf(invoiceId, tenantId);
+    
+    await notificationService.queueNotification({
+      tenantId,
+      channel,
+      recipient,
+      message: `Your invoice is ready. View it here: ${process.env.FRONTEND_URL}${pdfUrl}`,
+      notificationType: 'INVOICE_SHARE',
+    });
+
+    logger.info({ invoiceId, channel }, 'Invoice share queued via notification system');
+  }, { connection: getBullRedis() }));
+};

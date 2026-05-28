@@ -3,6 +3,7 @@ import redisClient from '../../../config/redis.js';
 import logger from '../../../shared/utils/logger.js';
 import settingsAuditRepository from '../gst/settings.audit.repository.js';
 import { settingsEventEmitter, SettingsEvents } from '../events/settings.events.js';
+import { scanKeys } from '../../../shared/utils/scan-keys.js';
 
 const SETTINGS_CATEGORIES = [
   'inventory',
@@ -238,13 +239,13 @@ class SettingsPrismaService {
     try {
       if (category) {
         const cacheKey = `settings:${tenantId}:${category}:*`;
-        const keys = await redisClient.keys(cacheKey);
+        const keys = await scanKeys(cacheKey);
         if (keys.length > 0) {
           await redisClient.del(...keys);
         }
       } else {
         const cacheKey = `settings:${tenantId}:*`;
-        const keys = await redisClient.keys(cacheKey);
+        const keys = await scanKeys(cacheKey);
         if (keys.length > 0) {
           await redisClient.del(...keys);
         }

@@ -49,7 +49,10 @@ const mockEventEmitter = {
 };
 
 jest.unstable_mockModule('../../../src/config/prisma.js', () => ({ default: mockPrisma }));
-jest.unstable_mockModule('../../../src/config/redis.js', () => ({ default: mockRedisClient }));
+jest.unstable_mockModule('../../../src/config/redis.js', () => ({
+  default: mockRedisClient,
+  quitRedis: jest.fn().mockResolvedValue(),
+}));
 jest.unstable_mockModule('../../../src/shared/utils/logger.js', () => ({ default: mockLogger }));
 jest.unstable_mockModule('../../../src/modules/settings/gst/settings.audit.repository.js', () => ({ default: mockAuditRepository }));
 jest.unstable_mockModule('../../../src/modules/store-profile/events/store-profile.events.js', () => ({

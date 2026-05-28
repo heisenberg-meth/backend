@@ -4,10 +4,15 @@ import logger from '../../../shared/utils/logger.js';
 import { getIO } from '../../../config/socket.js';
 import { inventoryQueue } from '../workers/inventory.worker.js';
 
-class InventoryService {
-  /**
-   * Record inventory transaction and trigger real-time updates
-   */
+export class InventoryService {
+  constructor(deps = {}) {
+    this.prisma = deps.prisma || prisma;
+    this.redis = deps.redis || redisClient;
+    this.logger = deps.logger || logger;
+    this.getIO = deps.getIO || getIO;
+    this.inventoryQueue = deps.inventoryQueue !== undefined ? deps.inventoryQueue : inventoryQueue;
+  }
+
   async recordTransaction(tx, tenantId, data, userId) {
     const {
       medicineId,
@@ -21,7 +26,6 @@ class InventoryService {
       idempotencyKey,
     } = data;
 
-    // Check idempotency
     if (idempotencyKey) {
       const existing = await tx.stockMovement.findUnique({
         where: { idempotencyKey }
@@ -29,7 +33,6 @@ class InventoryService {
       if (existing) return existing;
     }
 
-    // 1. Record to Ledger (StockMovement)
     const ledgerEntry = await tx.stockMovement.create({
       data: {
         tenantId,
@@ -46,10 +49,8 @@ class InventoryService {
       }
     });
 
-    // 2. Update Redis Cache (Async)
     this.updateCache(tenantId, medicineId, branchId, quantityAfter);
 
-    // 3. Broadcast Real-time event
     this.broadcastUpdate(tenantId, branchId, {
       event: 'STOCK_UPDATED',
       medicineId,
@@ -60,15 +61,16 @@ class InventoryService {
       referenceId
     });
 
-    // 4. Queue Dashboard Refresh (Background)
-    inventoryQueue.add('refresh-dashboard', {
-      type: 'REFRESH_DASHBOARD',
-      tenantId,
-      branchId
-    }, {
-      removeOnComplete: true,
-      jobId: `dashboard-refresh:${tenantId}:${branchId || 'global'}`
-    }).catch(err => logger.error({ err }, '[INVENTORY_SERVICE] Failed to queue dashboard refresh'));
+    if (this.inventoryQueue) {
+      this.inventoryQueue.add('refresh-dashboard', {
+        type: 'REFRESH_DASHBOARD',
+        tenantId,
+        branchId
+      }, {
+        removeOnComplete: true,
+        jobId: `dashboard-refresh:${tenantId}:${branchId || 'global'}`
+      }).catch(err => this.logger.error({ err }, '[INVENTORY_SERVICE] Failed to queue dashboard refresh'));
+    }
 
     return ledgerEntry;
   }
@@ -76,34 +78,31 @@ class InventoryService {
   async updateCache(tenantId, medicineId, branchId, newQuantity) {
     const key = `inventory:${tenantId}:${medicineId}:${branchId || 'central'}`;
     try {
-      await redisClient.set(key, newQuantity);
+      await this.redis.set(key, newQuantity);
     } catch (err) {
-      logger.error({ err }, '[INVENTORY_SERVICE] Redis cache update failed');
+      this.logger.error({ err }, '[INVENTORY_SERVICE] Redis cache update failed');
     }
   }
 
   broadcastUpdate(tenantId, branchId, payload) {
     try {
-      const io = getIO();
-      // Broadcast to tenant room
+      const io = this.getIO();
       io.to(`tenant:${tenantId}`).emit('INVENTORY_UPDATE', payload);
       
-      // If branch specific, broadcast to branch room too
       if (branchId) {
         io.to(`branch:${branchId}`).emit('INVENTORY_UPDATE', payload);
       }
     } catch (err) {
-      logger.error({ err }, '[INVENTORY_SERVICE] WebSocket broadcast failed');
+      this.logger.error({ err }, '[INVENTORY_SERVICE] WebSocket broadcast failed');
     }
   }
 
   async getLiveStock(tenantId, medicineId, branchId) {
     const key = `inventory:${tenantId}:${medicineId}:${branchId || 'central'}`;
-    let stock = await redisClient.get(key);
+    let stock = await this.redis.get(key);
 
     if (stock === null) {
-      // Cache miss, fetch from DB
-      const batchSum = await prisma.inventoryBatch.aggregate({
+      const batchSum = await this.prisma.inventoryBatch.aggregate({
         where: {
           medicineId,
           branchId,

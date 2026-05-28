@@ -11,6 +11,7 @@ jest.unstable_mockModule('../../../src/config/redis.js', () => ({
     set: mockRedisSet,
     del: jest.fn(),
   },
+  quitRedis: jest.fn().mockResolvedValue(),
 }));
 
 jest.unstable_mockModule('../../../src/config/prisma.js', () => ({

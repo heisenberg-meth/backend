@@ -5,6 +5,7 @@ import redisClient from '../../../config/redis.js';
 import { emitLocalEvent } from '../../../shared/events/local-event-bus.js';
 import { DOMAIN_EVENTS } from '../../../shared/constants/events.js';
 import logger from '../../../shared/utils/logger.js';
+import { scanKeys } from '../../../shared/utils/scan-keys.js';
 
 const ALERT_CACHE_TTL = 300;
 const CRITICAL_DAYS_THRESHOLD = 15;
@@ -550,7 +551,7 @@ class MedicineAlertService {
 
   async _invalidateCache(tenantId) {
     try {
-      const keys = await redisClient.keys(`alerts:${tenantId}:*`);
+      const keys = await scanKeys(`alerts:${tenantId}:*`);
       if (keys.length > 0) {
         await redisClient.del(...keys);
       }

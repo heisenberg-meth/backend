@@ -1,5 +1,6 @@
 import redisClient from '../../../config/redis.js';
 import logger from '../../../shared/utils/logger.js';
+import { scanKeys } from '../../../shared/utils/scan-keys.js';
 
 const CACHE_TTLS = {
   overview: 30,
@@ -59,7 +60,7 @@ class DashboardCacheManager {
           ? `dashboard:*:${tenantId}:${branchId}`
           : `dashboard:*:${tenantId}:*`;
 
-        const keys = await redisClient.keys(pattern);
+        const keys = await scanKeys(pattern);
         if (keys.length > 0) {
           await redisClient.del(...keys);
         }

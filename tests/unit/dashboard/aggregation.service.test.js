@@ -51,7 +51,10 @@ const mockLogger = {
 };
 
 jest.unstable_mockModule('../../../src/config/prisma.js', () => ({ default: mockPrisma }));
-jest.unstable_mockModule('../../../src/config/redis.js', () => ({ default: mockRedisClient }));
+jest.unstable_mockModule('../../../src/config/redis.js', () => ({
+  default: mockRedisClient,
+  quitRedis: jest.fn().mockResolvedValue(),
+}));
 jest.unstable_mockModule('../../../src/shared/utils/logger.js', () => ({ default: mockLogger }));
 
 const { default: dashboardAggregationService } = await import('../../../src/modules/dashboard/aggregations/dashboard.aggregation.service.js');

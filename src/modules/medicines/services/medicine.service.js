@@ -3,6 +3,7 @@ import prisma from '../../../config/prisma.js';
 import redisClient from '../../../config/redis.js';
 import auditService from '../../audit/service/audit.prisma.service.js';
 import eventBus from '../../../shared/services/eventbus.service.js';
+import { scanKeys } from '../../../shared/utils/scan-keys.js';
 import { mainQueue } from '../../../queue/index.js';
 import movementService from '../../stock/service/movement.service.js';
 
@@ -55,7 +56,7 @@ class MedicineIntelligenceService {
 
   async invalidateCache(tenantId) {
     try {
-      const keys = await redisClient.keys(`inventory:${tenantId}:*`);
+      const keys = await scanKeys(`inventory:${tenantId}:*`);
       if (keys.length > 0) {
         await redisClient.del(...keys);
       }
