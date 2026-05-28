@@ -1,0 +1,94 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: ims_postgres
+
+    environment:
+      POSTGRES_USER: viyan_user
+      POSTGRES_PASSWORD: viyan_password
+      POSTGRES_DB: viyan_db
+
+    ports:
+      - "5433:5432"
+
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+    networks:
+      - viyan-network
+
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U viyan_user -d viyan_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+
+    ports:
+      - "6379:6379"
+
+    networks:
+      - viyan-network
+
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+      target: production
+
+    environment:
+      NODE_ENV: production
+      PORT: 5000
+      DATABASE_URL: postgresql://viyan_user:viyan_password@postgres:5432/viyan_db?schema=public
+      REDIS_URL: redis://redis:6379
+      JWT_SECRET: viyan_medassist_secure_prod_2024
+      FRONTEND_URL: http://localhost:5173
+
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+      redis:
+        condition: service_healthy
+
+    volumes:
+      - uploads_data:/app/uploads
+
+    networks:
+      - viyan-network
+
+    ports:
+      - "5000:5000"
+
+  frontend:
+    build:
+      context: ./frontend
+      target: production
+
+    environment:
+      VITE_API_BASE_URL: http://localhost:5000/api
+
+    depends_on:
+      - backend
+
+    networks:
+      - viyan-network
+
+    ports:
+      - "5173:5173"
+
+networks:
+  viyan-network:
+    driver: bridge
+
+volumes:
+  postgres_data:
+  uploads_data:

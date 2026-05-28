@@ -1,0 +1,224 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Tenant {
+  id             String          @id @default(uuid())
+  email          String          @unique
+  name           String?
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+  deletedAt      DateTime?
+  auditLogs      AuditLog[]
+  recalls        BatchRecall[]
+  medicines      Medicine[]
+  notifications  Notification[]
+  purchaseOrders PurchaseOrder[]
+  Settings       Settings?
+  subscription   Subscription?
+  transactions   Transaction[]
+  users          User[]
+}
+
+model Subscription {
+  id        String    @id @default(uuid())
+  tenantId  String    @unique
+  plan      String?
+  status    String?
+  startDate DateTime?
+  endDate   DateTime?
+  tenant    Tenant    @relation(fields: [tenantId], references: [id])
+}
+
+model Transaction {
+  id              String            @id @default(uuid())
+  tenantId        String
+  userId          String
+  amount          Float
+  currency        String            @default("INR")
+  razorpayOrderId String            @unique
+  paymentId       String?           @unique
+  status          TransactionStatus @default(PENDING)
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+  deletedAt       DateTime?
+  tenant          Tenant            @relation(fields: [tenantId], references: [id])
+  user            User              @relation(fields: [userId], references: [id])
+}
+
+model User {
+  id             String          @id @default(uuid())
+  email          String          @unique
+  password       String
+  fullName       String
+  role           Role            @default(OWNER)
+  tenantId       String
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+  deletedAt      DateTime?
+  auditLogs      AuditLog[]
+  medicines      Medicine[]
+  notifications  Notification[]
+  purchaseOrders PurchaseOrder[]
+  refreshTokens  RefreshToken[]
+  transactions   Transaction[]
+  tenant         Tenant          @relation(fields: [tenantId], references: [id])
+}
+
+model Medicine {
+  id          String    @id @default(uuid())
+  name        String
+  tenantId    String
+  userId      String?
+  itemCode    String?
+  quantity    Int       @default(0)
+  expiry      String?
+  price       Float     @default(0)
+  batchNumber String?
+  supplier    String?
+  lastUpdated DateTime  @default(now())
+  deletedAt   DateTime?
+  tenant      Tenant    @relation(fields: [tenantId], references: [id])
+  user        User?     @relation(fields: [userId], references: [id])
+
+  @@index([tenantId, name])
+  @@index([tenantId, itemCode])
+}
+
+model PurchaseOrder {
+  id          String              @id @default(uuid())
+  tenantId    String
+  userId      String?
+  orderNumber String              @unique
+  supplier    String?
+  status      PurchaseOrderStatus @default(DRAFT)
+  totalAmount Float?
+  notes       String?
+  createdAt   DateTime            @default(now())
+  updatedAt   DateTime            @updatedAt
+  deletedAt   DateTime?
+  tenant      Tenant              @relation(fields: [tenantId], references: [id])
+  user        User?               @relation(fields: [userId], references: [id])
+  items       PurchaseOrderItem[]
+
+  @@index([tenantId, status])
+}
+
+model PurchaseOrderItem {
+  id              String        @id @default(uuid())
+  purchaseOrderId String
+  medicineName    String
+  currentStock    Int
+  reorderQty      Int
+  unitPrice       Float
+  purchaseOrder   PurchaseOrder @relation(fields: [purchaseOrderId], references: [id])
+}
+
+model AuditLog {
+  id       String       @id @default(uuid())
+  shopName String?
+  tenantId String
+  userId   String?
+  username String?
+  action   String
+  target   String
+  type     AuditLogType @default(INVENTORY)
+  date     DateTime     @default(now())
+  tenant   Tenant       @relation(fields: [tenantId], references: [id])
+  user     User?        @relation(fields: [userId], references: [id])
+
+  @@index([tenantId, type])
+  @@index([tenantId, date])
+}
+
+model BatchRecall {
+  id           String   @id @default(uuid())
+  tenantId     String
+  batchNumber  String
+  medicineName String
+  reason       String?
+  status       String   @default("pending")
+  date         DateTime @default(now())
+  tenant       Tenant   @relation(fields: [tenantId], references: [id])
+
+  @@index([tenantId, batchNumber])
+}
+
+model Notification {
+  id        String   @id @default(uuid())
+  tenantId  String
+  userId    String?
+  title     String
+  message   String
+  type      String   @default("info")
+  isRead    Boolean  @default(false)
+  createdAt DateTime @default(now())
+  tenant    Tenant   @relation(fields: [tenantId], references: [id])
+  user      User?    @relation(fields: [userId], references: [id])
+
+  @@index([tenantId, userId, isRead])
+}
+
+model RefreshToken {
+  id        String   @id @default(uuid())
+  token     String   @unique
+  userId    String
+  expiresAt DateTime
+  user      User     @relation(fields: [userId], references: [id])
+}
+
+model PasswordReset {
+  id        String   @id @default(uuid())
+  email     String
+  otp       String
+  expiresAt DateTime
+}
+
+model RegistrationAttempt {
+  id          String   @id
+  ip          String?
+  fingerprint String?
+  timestamp   DateTime @default(now())
+}
+
+model Settings {
+  id             String  @id
+  tenantId       String  @unique
+  lowStock       Int     @default(10)
+  expiryDays     Int     @default(30)
+  theme          String  @default("dark")
+  autoEscalation Boolean @default(true)
+  auditLogging   Boolean @default(false)
+  Tenant         Tenant  @relation(fields: [tenantId], references: [id])
+}
+
+enum TransactionStatus {
+  PENDING
+  SUCCESS
+  FAILED
+}
+
+enum PurchaseOrderStatus {
+  DRAFT
+  SENT
+  RECEIVED
+  CANCELLED
+}
+
+enum AuditLogType {
+  SECURITY
+  INVENTORY
+  FINANCIAL
+  SYSTEM
+  ACCESS
+}
+
+enum Role {
+  OWNER
+  STAFF
+}

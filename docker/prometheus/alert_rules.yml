@@ -1,0 +1,38 @@
+groups:
+- name: viyan_alerts
+  rules:
+  - alert: HighCpuUsage
+    expr: node_cpu_seconds_total > 0.8
+    for: 5m
+    labels:
+      severity: warning
+    annotations:
+      summary: "High CPU usage on {{ $labels.instance }}"
+      description: "CPU usage is above 80% for more than 5 minutes."
+
+  - alert: HighErrorRate
+    expr: rate(http_request_duration_seconds_count{status=~"5.."}[5m]) / rate(http_request_duration_seconds_count[5m]) > 0.05
+    for: 2m
+    labels:
+      severity: critical
+    annotations:
+      summary: "High error rate on {{ $labels.instance }}"
+      description: "More than 5% of requests are failing with 5xx errors."
+
+  - alert: DatabaseDown
+    expr: health_db_status == 0
+    for: 1m
+    labels:
+      severity: critical
+    annotations:
+      summary: "Database disconnected"
+      description: "The backend is unable to connect to PostgreSQL."
+
+  - alert: RedisDown
+    expr: health_redis_status == 0
+    for: 1m
+    labels:
+      severity: critical
+    annotations:
+      summary: "Redis down"
+      description: "The Redis instance is unreachable."

@@ -1,0 +1,8 @@
+[]
+[2026-05-22 12:14:24.087 +0530] [32mINFO[39m (46087): [36m[EVENT-LISTENERS] Initializing ERP Domain Listeners...[39m
+[2026-05-22 12:14:24.087 +0530] [32mINFO[39m (46087): [36m[SUPPLIER-LISTENERS] Initializing Supplier Domain Listeners...[39m
+[2026-05-22 12:14:24.087 +0530] [32mINFO[39m (46087): [36m[EVENT-LISTENERS] All ERP Domain Listeners initialized[39m
+[2026-05-22 12:14:24.088 +0530] [32mINFO[39m (46087): [36m[ALERT-WORKER] Alert worker started and listening to erp-events queue[39m
+[2026-05-22 12:14:24.088 +0530] [32mINFO[39m (46087): [36m[ALERT-EVENTS] All medicine alert event listeners registered[39m
+[2026-05-22 12:14:24.103 +0530] [32mINFO[39m (46087): [36mRedis client connected[39m
+[2026-05-22 12:14:25.357 +0530] [32mINFO[39m (46087): [36mMongoDB connected[39m

@@ -1,0 +1,7 @@
+{
+  "compilerOptions": {
+    "checkJs": false,
+    "allowSyntheticDefaultImports": true
+  },
+  "exclude": ["node_modules"]
+}

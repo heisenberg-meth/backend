@@ -1,0 +1,8 @@
+resources:
+  - config.yaml
+  - auth-service.yaml
+  - inventory-service.yaml
+  - payment-service.yaml
+  - notification-service.yaml
+  - worker-deployment.yaml
+  - ingress.yaml

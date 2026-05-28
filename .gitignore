@@ -1,0 +1,15 @@
+node_modules
+# Keep environment variables out of version control
+.env
+
+/src/generated/prisma
+CLAUDE.md
+CODEBASE_AUDIT_REPORT.md
+PRD.md
+.planning/enterprise-roadmap.md
+.planning/migration-plan.md
+skills/graphify/.graphify_version
+skills/graphify/SKILL.md
+test-results/tests-e2e-auth-Auth-API-E2-138a9-sfully-with-registered-user/error-context.md
+test-results/tests-e2e-auth-Auth-API-E2-cb14b-ter-a-new-user-successfully/error-context.md
+test-results/tests-e2e-auth-Auth-API-E2-e5547-login-with-invalid-password/error-context.md

@@ -1,0 +1,154 @@
+import nodemailer from "nodemailer";
+import https from 'https';
+import { mainQueue } from "../../queue/index.js";
+import { OTP_TEMPLATE, EXPIRY_ALERT_TEMPLATE, RESET_OTP_TEMPLATE } from "../../modules/notifications/templates/email.templates.js";
+
+const RESEND_API_KEY = process.env.RESEND_API || '';
+const EMAIL_FROM = process.env.EMAIL_FROM || 'noreply@viyanmedassist.com';
+
+/**
+ * Send email via Resend API directly (preferred)
+ */
+const sendViaResend = async (to, subject, html) => {
+  if (!RESEND_API_KEY) return null;
+
+  return new Promise((resolve) => {
+    const data = JSON.stringify({
+      from: EMAIL_FROM,
+
+      to,
+      subject,
+      html,
+    });
+
+    const req = https.request({
+      hostname: 'api.resend.com',
+      path: '/emails',
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${RESEND_API_KEY}`,
+        'Content-Type': 'application/json',
+        'Content-Length': Buffer.byteLength(data),
+      },
+    }, (res) => {
+      let body = '';
+      res.on('data', chunk => body += chunk);
+      res.on('end', () => {
+        if (res.statusCode === 200) {
+          console.log(`[RESEND_SENT] To: ${to}`);
+          resolve(body);
+        } else {
+          console.error(`[RESEND_ERROR] ${res.statusCode}: ${body}`);
+          resolve(null);
+        }
+      });
+    });
+
+    req.on('error', (err) => {
+      console.error('[RESEND_ERROR]', err.message);
+      resolve(null);
+    });
+
+    req.write(data);
+    req.end();
+  });
+};
+
+/**
+ * Send email via Nodemailer (Gmail SMTP fallback)
+ */
+const sendViaNodemailer = async (to, subject, html) => {
+  if (!process.env.EMAIL_USER) return null;
+
+  const transporter = nodemailer.createTransport({
+    service: process.env.EMAIL_SERVICE || 'gmail',
+    auth: {
+      user: process.env.EMAIL_USER || '',
+      pass: process.env.EMAIL_PASS || '',
+    },
+  });
+
+  try {
+    await transporter.sendMail({
+      from: `"Viyan MedAssist" <${process.env.EMAIL_USER}>`,
+      to,
+      subject,
+      html,
+    });
+    console.log(`[EMAIL_SENT] To: ${to}`);
+    return true;
+  } catch (err) {
+    console.error("[EMAIL_ERROR]", err.message);
+    return null;
+  }
+};
+
+/**
+ * Queued email sending via BullMQ
+ */
+export const queueEmail = async (to, subject, html) => {
+  await mainQueue.add('send-email', { to, subject, html });
+};
+
+/**
+ * Actual send function (called by queue worker).
+ * Tries Resend first, falls back to Nodemailer, then mock log.
+ */
+export const sendEmail = async (to, subject, html) => {
+  const resent = await sendViaResend(to, subject, html);
+  if (resent) return;
+
+  const nodemailer = await sendViaNodemailer(to, subject, html);
+  if (nodemailer) return;
+
+  console.log(`[EMAIL_MOCK] To: ${to} | Subject: ${subject}`);
+};
+
+/**
+ * Higher-level methods for common system emails
+ */
+export const sendOtpEmail = async (to, otp) => {
+  const html = OTP_TEMPLATE(otp);
+  return queueEmail(to, "Viyan MedAssist — Verification Code", html);
+};
+
+export const sendPasswordResetOtp = async (to, otp) => {
+  const html = RESET_OTP_TEMPLATE(otp);
+  return queueEmail(to, "Reset Your Viyan MedAssist Password", html);
+};
+
+export const sendWelcomeEmail = async (to, name) => {
+  const html = `<div style="font-family:Arial;max-width:480px;margin:0 auto;padding:24px;background:#f9fafb;border-radius:12px;">
+    <h2 style="color:#2563eb;">Welcome to Viyan MedAssist!</h2>
+    <p>Hi ${name},</p>
+    <p>Your 28-day free trial has started. Get started by adding your inventory and exploring the dashboard.</p>
+    <p style="margin-top:24px;color:#6b7280;font-size:12px;">&copy; 2026 Viyan MedAssist</p>
+  </div>`;
+  return queueEmail(to, "Welcome to Viyan MedAssist — Your 28-Day Trial Awaits", html);
+};
+
+export const sendSubscriptionExpiredEmail = async (to, name) => {
+  const html = `<div style="font-family:Arial;max-width:480px;margin:0 auto;padding:24px;background:#f9fafb;border-radius:12px;">
+    <h2 style="color:#dc2626;">Trial Expired</h2>
+    <p>Hi ${name},</p>
+    <p>Your Viyan MedAssist trial has ended. Upgrade now to regain access to all features.</p>
+    <p style="margin-top:24px;color:#6b7280;font-size:12px;">&copy; 2026 Viyan MedAssist</p>
+  </div>`;
+  return queueEmail(to, "Your Viyan MedAssist Trial Has Expired", html);
+};
+
+export const sendTrialEndingReminder = async (to, name, daysLeft) => {
+  const html = `<div style="font-family:Arial;max-width:480px;margin:0 auto;padding:24px;background:#f9fafb;border-radius:12px;">
+    <h2 style="color:#d97706;">Trial Ending Soon</h2>
+    <p>Hi ${name},</p>
+    <p>Your Viyan MedAssist free trial ends in <strong>${daysLeft} day${daysLeft > 1 ? 's' : ''}</strong>.</p>
+    <p>Upgrade now to keep using all features without interruption.</p>
+    <p style="margin-top:24px;color:#6b7280;font-size:12px;">&copy; 2026 Viyan MedAssist</p>
+  </div>`;
+  return queueEmail(to, `Your Viyan MedAssist Trial Ends in ${daysLeft} Day${daysLeft > 1 ? 's' : ''}`, html);
+};
+
+export const sendExpiryAlertEmail = async (to, shopName, items, daysAhead) => {
+  const html = EXPIRY_ALERT_TEMPLATE(shopName, items, daysAhead);
+  return queueEmail(to, `Expiry Alert: ${items.length} items at risk — ${shopName}`, html);
+};

@@ -1,0 +1,64 @@
+class RefundCalculationService {
+  NON_REFUNDABLE_CHARGES_RATE = 0;
+
+  calculateRefundAmount(item, quantity) {
+    const unitPrice = Number(item.unitPrice);
+    const gstPercentage = Number(item.gstPercentage);
+    const lineTotal = unitPrice * quantity;
+    const gstAmount = lineTotal * (gstPercentage / 100);
+
+    let cgst = 0;
+    let sgst = 0;
+    let igst = 0;
+
+    if (Number(item.igst) > 0) {
+      igst = gstAmount;
+    } else {
+      cgst = gstAmount / 2;
+      sgst = gstAmount / 2;
+    }
+
+    return {
+      subtotal: parseFloat(lineTotal.toFixed(2)),
+      cgst: parseFloat(cgst.toFixed(2)),
+      sgst: parseFloat(sgst.toFixed(2)),
+      igst: parseFloat(igst.toFixed(2)),
+      gstAmount: parseFloat(gstAmount.toFixed(2)),
+      totalRefund: parseFloat((lineTotal + gstAmount).toFixed(2)),
+    };
+  }
+
+  calculateTotalRefund(items) {
+    let subtotal = 0;
+    let totalCgst = 0;
+    let totalSgst = 0;
+    let totalIgst = 0;
+    let totalGst = 0;
+    let totalRefund = 0;
+
+    for (const item of items) {
+      subtotal += item.subtotal;
+      totalCgst += item.cgst;
+      totalSgst += item.sgst;
+      totalIgst += item.igst;
+      totalGst += item.gstAmount;
+      totalRefund += item.totalRefund;
+    }
+
+    return {
+      subtotal: parseFloat(subtotal.toFixed(2)),
+      cgst: parseFloat(totalCgst.toFixed(2)),
+      sgst: parseFloat(totalSgst.toFixed(2)),
+      igst: parseFloat(totalIgst.toFixed(2)),
+      gstAmount: parseFloat(totalGst.toFixed(2)),
+      totalRefund: parseFloat(totalRefund.toFixed(2)),
+    };
+  }
+
+  calculateReturnNumber(tenantId, count) {
+    const seq = String(count + 1).padStart(4, '0');
+    return `REF-${new Date().getFullYear()}-${seq}`;
+  }
+}
+
+export default new RefundCalculationService();
