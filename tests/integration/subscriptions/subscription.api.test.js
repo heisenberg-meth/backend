@@ -22,7 +22,7 @@ jest.unstable_mockModule('../../../src/middleware/auth.fastify.js', () => ({
 }));
 
 jest.unstable_mockModule('../../../src/middleware/subscription.guard.fastify.js', () => ({
-  subscriptionGuard: async (request, reply) => {},
+  subscriptionGuard: async () => {},
 }));
 
 const { default: subscriptionRoutes } = await import(

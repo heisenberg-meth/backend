@@ -3,9 +3,8 @@ import prisma from '../../../config/prisma.js';
 import pdfRenderer from '../services/pdf-renderer.service.js';
 import s3Storage from '../services/s3-storage.service.js';
 import pdfGenerationService from '../services/pdf-generation.service.js';
-import printService from '../services/print.service.js';
 import deliveryAuditService from '../services/delivery-audit.service.js';
-import { invoiceDeliveryQueue, invoicePrintQueue } from '../queue/invoice-delivery.queue.js';
+import { invoiceDeliveryQueue } from '../queue/invoice-delivery.queue.js';
 import authMiddleware from '../../../middleware/auth.middleware.js';
 import { authorize } from '../../../middleware/role.middleware.js';
 import validate from '../../../middleware/validate.middleware.js';
@@ -165,7 +164,7 @@ router.get('/invoices/:id/print-history', authorize('billing.read'), handleError
   });
 }));
 
-router.use((err, req, res, next) => {
+router.use((err, req, res) => {
   res.status(err.status || 500).json({ success: false, message: err.message || 'Internal server error' });
 });
 

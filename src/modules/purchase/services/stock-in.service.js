@@ -6,7 +6,7 @@ import logger from '../../../shared/utils/logger.js';
 
 class StockInService {
   async receiveGoods(tenantId, data, userId) {
-    const supplier = await prisma.supplier.findFirst({ where: { id: data.supplierId } });
+    await prisma.supplier.findFirst({ where: { id: data.supplierId } });
 
     const invoice = await prisma.purchaseInvoice.create({
       data: {

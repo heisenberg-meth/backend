@@ -45,7 +45,6 @@
     "@opentelemetry/sdk-node": "^0.218.0",
     "@prisma/client": "^6.19.3",
     "@socket.io/redis-adapter": "^8.3.0",
-    "@viyan/contracts": "file:../packages/contracts",
     "amqplib": "^2.0.1",
     "bcryptjs": "^3.0.3",
     "bullmq": "^5.77.3",

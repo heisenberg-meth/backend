@@ -1,2 +1,2 @@
-const validate = (schema) => (req, res, next) => next();
+const validate = () => (req, res, next) => next();
 export default validate;
