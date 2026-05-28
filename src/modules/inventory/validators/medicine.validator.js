@@ -4,7 +4,7 @@ import {
   AddBatchSchema as addBatchSchema,
   CategorySchema as categorySchema,
   ManufacturerSchema as manufacturerSchema,
-} from "@viyan/contracts";
+} from "../../../packages/medicine.schema.js";
 
 export {
   createMedicineSchema,

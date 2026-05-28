@@ -1,4 +1,4 @@
-import { SubscriptionStatus } from '@viyan/contracts';
+import { SubscriptionStatus } from '../../packages/enums.js';
 
 export const TRIAL_PLAN_ID = 'free-trial';
 

@@ -1,14 +1,10 @@
-/**
- * Backend shared constants.
- * Delegates to @viyan/contracts for enum values — do NOT redefine them here.
- */
 import {
   SubscriptionStatus,
   Role,
   AuditLogType,
   PurchaseOrderStatus,
   RecallSeverity,
-} from '@viyan/contracts';
+} from '../../packages/enums.js';
 
 const SUBSCRIPTION_STATUS = SubscriptionStatus;
 const ROLES = Role;
