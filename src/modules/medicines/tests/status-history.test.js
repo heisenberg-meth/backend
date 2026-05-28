@@ -50,6 +50,7 @@ describe('Medicine Status History', () => {
     // Cleanup
     await prisma.medicineStatusHistory.deleteMany({ where: { tenantId } });
     await prisma.inventory.deleteMany({ where: { tenantId } });
+    await prisma.inventoryBatch.deleteMany({ where: { tenantId } });
     await prisma.medicine.deleteMany({ where: { tenantId } });
     await prisma.user.deleteMany({ where: { tenantId } });
     await prisma.branch.deleteMany({ where: { tenantId } });

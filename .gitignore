@@ -13,3 +13,4 @@ skills/graphify/SKILL.md
 test-results/tests-e2e-auth-Auth-API-E2-138a9-sfully-with-registered-user/error-context.md
 test-results/tests-e2e-auth-Auth-API-E2-cb14b-ter-a-new-user-successfully/error-context.md
 test-results/tests-e2e-auth-Auth-API-E2-e5547-login-with-invalid-password/error-context.md
+docs/plans/schema-remediation.md

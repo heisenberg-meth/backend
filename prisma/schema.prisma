@@ -16,7 +16,7 @@ model Tenant {
   createdAt                  DateTime                    @default(now())
   updatedAt                  DateTime                    @updatedAt
   deletedAt                  DateTime?
-  status                     String                      @default("ACTIVE")
+  status                     TenantStatus                @default(ACTIVE)
   maxBranches                Int                         @default(1)
   maxUsers                   Int                         @default(5)
   aiEnabled                  Boolean                     @default(false)
@@ -74,14 +74,14 @@ model Tenant {
   journalEntries             JournalEntry[]
   loyaltyTransactions        LoyaltyTransaction[]
   manufacturers              Manufacturer[]
-  medicationReminders        MedicationReminder[]
+
   medicines                  Medicine[]
   medicineBarcodes           MedicineBarcode[]
   categories                 MedicineCategory[]
   medicineInventoryConfigs   MedicineInventoryConfig[]
   medicinePriceHistories     MedicinePriceHistory[]
   medicinePricings           MedicinePricing[]
-  medicineReminders          MedicineReminder[]
+  patientReminders          PatientReminder[]
   medicineStatusHistories    MedicineStatusHistory[]
   medicineSubscriptions      MedicineSubscription[]
   medicineSuppliers          MedicineSupplier[]
@@ -154,12 +154,12 @@ model Branch {
   id                        String                    @id @default(uuid())
   tenantId                  String
   name                      String
-  code                      String                    @unique
+  code                      String
   phone                     String?
   email                     String?
   address                   String?
   gstNumber                 String?
-  status                    String                    @default("ACTIVE")
+  status                    BranchStatus              @default(ACTIVE)
   deletedAt                 DateTime?
   alertSettings             AlertSettings[]
   alertThresholdOverrides   AlertThresholdOverride[]
@@ -201,6 +201,7 @@ model Branch {
   storeProfileDocuments     StoreProfileDocument[]
   users                     User[]
 
+  @@unique([tenantId, code])
   @@index([tenantId])
 }
 
@@ -339,8 +340,8 @@ model Settings {
 model SubscriptionPlan {
   id            String         @id @default(uuid())
   name          String
-  price         Float
-  billingCycle  String         @default("monthly")
+  price         Decimal @db.Decimal(12,2)
+  billingCycle  BillingCycle         @default(MONTHLY)
   features      Json?
   createdAt     DateTime       @default(now())
   updatedAt     DateTime       @updatedAt
@@ -600,7 +601,7 @@ model Medicine {
   inventoryReconciliations InventoryReconciliation[]
   inventorySyncLogs        InventorySyncLog[]
   invoiceItems             InvoiceItem[]
-  medicationReminders      MedicationReminder[]
+
   category                 MedicineCategory?          @relation(fields: [categoryId], references: [id])
   manufacturer             Manufacturer?              @relation(fields: [manufacturerId], references: [id])
   tenant                   Tenant                     @relation(fields: [tenantId], references: [id])
@@ -609,7 +610,7 @@ model Medicine {
   inventoryConfigs         MedicineInventoryConfig[]
   priceHistory             MedicinePriceHistory[]
   pricingMaster            MedicinePricing[]
-  medicineReminders        MedicineReminder[]
+  patientReminders        PatientReminder[]
   statusHistory            MedicineStatusHistory[]
   medicineSubscriptions    MedicineSubscription[]
   supplierItems            MedicineSupplier[]
@@ -640,9 +641,9 @@ model MedicinePricing {
   id            String   @id @default(uuid())
   tenantId      String
   medicineId    String
-  mrp           Float
-  purchasePrice Float
-  sellingPrice  Float
+  mrp           Decimal @db.Decimal(12,2)
+  purchasePrice Decimal @db.Decimal(12,2)
+  sellingPrice  Decimal @db.Decimal(12,2)
   effectiveFrom DateTime @default(now())
   isActive      Boolean  @default(true)
   createdAt     DateTime @default(now())
@@ -688,7 +689,7 @@ model EcommercePricing {
   id                 String    @id @default(uuid())
   tenantId           String
   medicineId         String
-  onlinePrice        Float
+  onlinePrice        Decimal @db.Decimal(12,2)
   discountPercentage Float     @default(0)
   effectiveFrom      DateTime  @default(now())
   effectiveTo        DateTime?
@@ -706,7 +707,7 @@ model InventorySyncLog {
   tenantId     String
   medicineId   String
   sourceSystem String    @db.VarChar(100)
-  syncStatus   String    @default("PENDING") @db.VarChar(50)
+  syncStatus   SyncStatus                @default(PENDING)
   errorMessage String?
   syncedAt     DateTime?
   createdAt    DateTime  @default(now())
@@ -727,7 +728,7 @@ model Inventory {
   reorderQuantity Int       @default(50)
   minimumStock    Int       @default(5)
   maximumStock    Int       @default(500)
-  status          String    @default("HEALTHY")
+  status          InventoryStatus @default(HEALTHY)
   rackLocation    String?
   lastAuditAt     DateTime?
   updatedAt       DateTime  @updatedAt
@@ -820,7 +821,7 @@ model StockMovement {
   branchId       String?
   medicineId     String
   batchId        String?
-  movementType   String
+  movementType   MovementType
   quantity       Int
   quantityBefore Int?
   quantityAfter  Int?
@@ -902,7 +903,7 @@ model ExpiryAlert {
   severity          String         @default("INFO")
   alertStatus       AlertStatus    @default(ACTIVE)
   daysRemaining     Int
-  potentialLoss     Float?
+  potentialLoss     Decimal? @db.Decimal(12,2)
   recommendedAction String?
   snoozedUntil      DateTime?
   snoozeReason      String?
@@ -1004,18 +1005,18 @@ model Supplier {
   address            String?
   leadTimeDays       Int                @default(7)
   rating             Float              @default(5.0)
-  totalPurchases     Float              @default(0)
+  totalPurchases     Decimal @db.Decimal(12,2) @default(0)
   lastPurchaseDate   DateTime?
   createdAt          DateTime           @default(now())
   updatedAt          DateTime           @updatedAt
   deletedAt          DateTime?
   accountNumber      String?
   bankName           String?
-  creditLimit        Float              @default(0)
+  creditLimit        Decimal @db.Decimal(12,2) @default(0)
   ifscCode           String?
   isPreferred        Boolean            @default(false)
   licenseExpiry      DateTime?
-  outstandingBalance Float              @default(0)
+  outstandingBalance Decimal @db.Decimal(12,2) @default(0)
   supplierType       SupplierType       @default(WHOLESALER)
   status             SupplierStatus     @default(ACTIVE)
   inventoryBatches   InventoryBatch[]
@@ -1042,8 +1043,8 @@ model MedicineSupplier {
   tenantId             String
   medicineId           String
   supplierId           String
-  averagePurchasePrice Float?
-  contractPrice        Float?
+  averagePurchasePrice Decimal? @db.Decimal(12,2)
+  contractPrice        Decimal? @db.Decimal(12,2)
   leadDays             Int?      @default(7)
   isPreferred          Boolean   @default(false)
   reliabilityScore     Float?    @default(100)
@@ -1051,7 +1052,7 @@ model MedicineSupplier {
   totalPurchasedQty    Int       @default(0)
   createdAt            DateTime  @default(now())
   updatedAt            DateTime  @updatedAt
-  lastPurchasePrice    Float?
+  lastPurchasePrice    Decimal? @db.Decimal(12,2)
   medicine             Medicine  @relation(fields: [medicineId], references: [id])
   supplier             Supplier  @relation(fields: [supplierId], references: [id])
   tenant               Tenant    @relation(fields: [tenantId], references: [id])
@@ -1069,9 +1070,9 @@ model SupplierLedger {
   type          String
   referenceType String?
   referenceId   String?
-  debitAmount   Float    @default(0)
-  creditAmount  Float    @default(0)
-  balanceAfter  Float
+  debitAmount   Decimal @db.Decimal(12,2) @default(0)
+  creditAmount  Decimal @db.Decimal(12,2) @default(0)
+  balanceAfter  Decimal @db.Decimal(12,2)
   notes         String?
   createdAt     DateTime @default(now())
   supplier      Supplier @relation(fields: [supplierId], references: [id])
@@ -1086,9 +1087,9 @@ model SupplierPayment {
   supplierId       String
   paymentReference String?
   paymentMethod    String
-  amount           Float
+  amount           Decimal @db.Decimal(12,2)
   paymentDate      DateTime
-  status           String                      @default("COMPLETED")
+  status           SupplierPaymentStatus       @default(COMPLETED)
   notes            String?
   createdBy        String?
   createdAt        DateTime                    @default(now())
@@ -1104,7 +1105,7 @@ model SupplierPaymentAllocation {
   tenantId          String
   paymentId         String
   purchaseInvoiceId String
-  amount            Float
+  amount            Decimal @db.Decimal(12,2)
   createdAt         DateTime        @default(now())
   payment           SupplierPayment @relation(fields: [paymentId], references: [id])
   purchaseInvoice   PurchaseInvoice @relation(fields: [purchaseInvoiceId], references: [id])
@@ -1142,7 +1143,7 @@ model SupplierReturn {
   batchId    String
   quantity   Int
   reason     String?
-  status     String         @default("PENDING")
+  status     SupplierReturnStatus @default(PENDING)
   createdAt  DateTime       @default(now())
   updatedAt  DateTime       @updatedAt
   batch      InventoryBatch @relation(fields: [batchId], references: [id])
@@ -1158,9 +1159,9 @@ model PurchaseOrder {
   supplierId           String?
   orderNumber          String
   status               PurchaseOrderStatus     @default(DRAFT)
-  subtotal             Float                   @default(0)
-  gstAmount            Float                   @default(0)
-  totalAmount          Float                   @default(0)
+  subtotal             Decimal @db.Decimal(12,2) @default(0)
+  gstAmount            Decimal @db.Decimal(12,2) @default(0)
+  totalAmount          Decimal @db.Decimal(12,2) @default(0)
   notes                String?
   expectedDeliveryDate DateTime?
   approvedBy           String?
@@ -1207,9 +1208,9 @@ model PurchaseOrderItem {
   reorderQty       Int
   quantity         Int              @default(0)
   receivedQuantity Int              @default(0)
-  unitPrice        Float
+  unitPrice        Decimal @db.Decimal(12,2)
   gstPercentage    Float            @default(0)
-  totalAmount      Float
+  totalAmount      Decimal @db.Decimal(12,2)
   inventoryBatches InventoryBatch[]
   medicine         Medicine         @relation(fields: [medicineId], references: [id])
   purchaseOrder    PurchaseOrder    @relation(fields: [purchaseOrderId], references: [id])
@@ -1242,8 +1243,8 @@ model GoodsReceiptNoteItem {
   receivedQuantity    Int
   batchNumber         String?
   expiryDate          DateTime?
-  purchasePrice       Float?
-  sellingPrice        Float?
+  purchasePrice       Decimal? @db.Decimal(12,2)
+  sellingPrice        Decimal? @db.Decimal(12,2)
   grn                 GoodsReceiptNote @relation(fields: [grnId], references: [id])
   medicine            Medicine         @relation(fields: [medicineId], references: [id])
 }
@@ -1256,12 +1257,12 @@ model PurchaseInvoice {
   invoiceNumber   String
   invoiceDate     DateTime
   dueDate         DateTime?
-  paymentStatus   String                      @default("PENDING")
-  subtotal        Float
-  gstAmount       Float
-  totalAmount     Float
-  paidAmount      Float                       @default(0)
-  balanceAmount   Float                       @default(0)
+  paymentStatus   PurchasePaymentStatus       @default(PENDING)
+  subtotal        Decimal @db.Decimal(12,2)
+  gstAmount       Decimal @db.Decimal(12,2)
+  totalAmount     Decimal @db.Decimal(12,2)
+  paidAmount      Decimal @db.Decimal(12,2) @default(0)
+  balanceAmount   Decimal @db.Decimal(12,2) @default(0)
   invoicePdfUrl   String?
   createdAt       DateTime                    @default(now())
   updatedAt       DateTime                    @updatedAt
@@ -1287,12 +1288,12 @@ model Patient {
   age                         Int?
   bloodGroup                  String?
   loyaltyPoints               Int                     @default(0)
-  totalSpent                  Float                   @default(0)
+  totalSpent                  Decimal @db.Decimal(12,2) @default(0)
   totalVisits                 Int                     @default(0)
   lastPurchaseDate            DateTime?
-  creditLimit                 Float                   @default(0)
-  creditUsed                  Float                   @default(0)
-  status                      String                  @default("ACTIVE")
+  creditLimit                 Decimal @db.Decimal(12,2) @default(0)
+  creditUsed                  Decimal @db.Decimal(12,2) @default(0)
+  status                      PatientStatus             @default(ACTIVE)
   createdAt                   DateTime                @default(now())
   updatedAt                   DateTime                @updatedAt
   deletedAt                   DateTime?
@@ -1306,8 +1307,8 @@ model Patient {
   fileAssets                  FileAsset[]
   invoices                    Invoice[]
   loyaltyTransactions         LoyaltyTransaction[]
-  medicationReminders         MedicationReminder[]
-  medicineReminders           MedicineReminder[]
+
+  patientReminders           PatientReminder[]
   medicineSubscriptions       MedicineSubscription[]
   notifications               Notification[]
   onlineOrders                OnlineOrder[]
@@ -1374,7 +1375,7 @@ model SmsNotification {
   phone     String
   message   String
   type      String
-  status    String    @default("PENDING")
+  status    SmsNotificationStatus     @default(PENDING)
   error     String?
   sentAt    DateTime?
   createdAt DateTime  @default(now())
@@ -1394,7 +1395,7 @@ model Doctor {
   email              String?
   clinicName         String?
   address            String?
-  status             String         @default("ACTIVE")
+  status             DoctorStatus         @default(ACTIVE)
   deletedAt          DateTime?
   createdAt          DateTime       @default(now())
   updatedAt          DateTime       @updatedAt
@@ -1419,14 +1420,14 @@ model Prescription {
   insurancePolicyNo           String?
   insuranceCoveragePercentage Float                      @default(0)
   discountPercentage          Float                      @default(0)
-  verificationStatus          String                     @default("PENDING")
+  verificationStatus          VerificationStatus              @default(PENDING)
   createdBy                   String?
   createdAt                   DateTime                   @default(now())
   updatedAt                   DateTime                   @updatedAt
   deletedAt                   DateTime?
   refillCount                 Int                        @default(0)
   refillMax                   Int                        @default(0)
-  status                      String                     @default("ACTIVE")
+  status                      VerificationStatus             @default(PENDING)
   verifiedAt                  DateTime?
   verifiedBy                  String?
   fileAssets                  FileAsset[]
@@ -1467,7 +1468,7 @@ model PrescriptionVerification {
   id              String       @id @default(uuid())
   prescriptionId  String
   verifiedBy      String
-  status          String
+  status          VerificationStatus       @default(PENDING)
   rejectionReason String?
   verifiedAt      DateTime     @default(now())
   prescription    Prescription @relation(fields: [prescriptionId], references: [id])
@@ -1480,17 +1481,18 @@ model PatientInsuranceClaim {
   id             String       @id @default(uuid())
   tenantId       String
   prescriptionId String
-  claimNumber    String       @unique
+  claimNumber    String
   providerName   String
   policyNumber   String
   coverageAmount Decimal      @db.Decimal(12, 2)
-  status         String       @default("PENDING")
+  status         VerificationStatus        @default(PENDING)
   notes          String?
   createdAt      DateTime     @default(now())
   updatedAt      DateTime     @updatedAt
   prescription   Prescription @relation(fields: [prescriptionId], references: [id])
   tenant         Tenant       @relation(fields: [tenantId], references: [id])
 
+  @@unique([tenantId, claimNumber])
   @@index([prescriptionId])
   @@index([tenantId])
 }
@@ -1528,7 +1530,7 @@ model ImportJob {
   id              String                @id @default(uuid())
   tenantId        String
   importType      String
-  importStatus    String                @default("UPLOADED")
+  importStatus    ImportJobStatus       @default(UPLOADED)
   uploadedBy      String
   fileUrl         String?
   fileName        String?
@@ -1559,7 +1561,7 @@ model ImportExtractedItem {
   gstPercentage     Decimal?  @db.Decimal(5, 2)
   totalAmount       Decimal?  @db.Decimal(12, 2)
   validationErrors  Json?
-  status            String    @default("PENDING")
+  status            ImportItemStatus          @default(PENDING)
   createdAt         DateTime  @default(now())
   importJob         ImportJob @relation(fields: [importJobId], references: [id])
   medicine          Medicine? @relation(fields: [matchedMedicineId], references: [id])
@@ -1664,7 +1666,7 @@ model InvoicePayment {
   paymentMode          String
   amount               Decimal  @db.Decimal(12, 2)
   transactionReference String?  @db.VarChar(255)
-  paymentStatus        String   @default("PAID")
+  paymentStatus        InvoicePaymentStatus @default(PAID)
   createdAt            DateTime @default(now())
   invoice              Invoice  @relation(fields: [invoiceId], references: [id])
 
@@ -1690,7 +1692,7 @@ model InvoicePrintJob {
   invoiceId       String
   printerType     String
   copies          Int      @default(1)
-  printStatus     String   @default("PENDING")
+  printStatus     PrintJobStatus   @default(PENDING)
   retryCount      Int      @default(0)
   failureReason   String?
   printerEndpoint String?
@@ -1741,8 +1743,8 @@ model Sale {
   gstAmount      Decimal       @default(0) @db.Decimal(12, 2)
   totalAmount    Decimal       @db.Decimal(12, 2)
   paymentMethod  String        @default("CASH")
-  paymentStatus  String        @default("PAID")
-  status         String        @default("COMPLETED")
+  paymentStatus  SalePaymentStatus        @default(PAID)
+  status         SaleStatus        @default(COMPLETED)
   soldBy         String?
   soldAt         DateTime      @default(now())
   invoice        Invoice?
@@ -1786,7 +1788,7 @@ model SalesReturn {
   quantity      Int
   reason        String?
   refundAmount  Decimal        @db.Decimal(12, 2)
-  status        String         @default("PENDING")
+  status        ReturnStatus   @default(PENDING)
   createdBy     String?
   createdAt     DateTime       @default(now())
   updatedAt     DateTime       @updatedAt
@@ -1812,11 +1814,11 @@ model Return {
   patientId           String?
   returnReason        String
   returnType          String          @default("PATIENT_RETURN")
-  status              String          @default("REQUESTED")
+  status              ReturnStatus     @default(REQUESTED)
   totalReturnAmount   Decimal         @db.Decimal(12, 2)
   totalGstAdjustment  Decimal         @default(0) @db.Decimal(12, 2)
   refundMethod        String?
-  refundStatus        String          @default("PENDING")
+  refundStatus        ReturnRefundStatus @default(PENDING)
   refundTransactionId String?
   approvalRequired    Boolean         @default(false)
   approvedBy          String?
@@ -1824,7 +1826,7 @@ model Return {
   rejectionReason     String?
   rejectedBy          String?
   rejectedAt          DateTime?
-  fraudScore          Float           @default(0)
+  fraudScore          Decimal @db.Decimal(12,2) @default(0)
   fraudFlags          String[]
   notes               String?
   createdBy           String?
@@ -1886,7 +1888,7 @@ model CreditNote {
   cgstAdjustment    Decimal  @default(0) @db.Decimal(12, 2)
   sgstAdjustment    Decimal  @default(0) @db.Decimal(12, 2)
   igstAdjustment    Decimal  @default(0) @db.Decimal(12, 2)
-  status            String   @default("ISSUED")
+  status            CreditNoteStatus @default(ISSUED)
   notes             String?
   createdBy         String?
   createdAt         DateTime @default(now())
@@ -1910,7 +1912,7 @@ model RefundPayment {
   paymentMode          String
   amount               Decimal  @db.Decimal(12, 2)
   transactionReference String?  @db.VarChar(255)
-  refundStatus         String   @default("COMPLETED")
+  refundStatus         RefundStatus @default(COMPLETED)
   createdBy            String?
   createdAt            DateTime @default(now())
   user                 User?    @relation(fields: [createdBy], references: [id])
@@ -1928,15 +1930,15 @@ model DailySalesSummary {
   tenantId       String
   branchId       String?
   salesDate      DateTime @db.Date
-  totalSales     Float
+  totalSales     Decimal @db.Decimal(12,2)
   totalInvoices  Int
   totalItemsSold Int
-  totalDiscount  Float
-  totalReturns   Float    @default(0)
-  totalGst       Float
-  cashSales      Float    @default(0)
-  cardSales      Float    @default(0)
-  upiSales       Float    @default(0)
+  totalDiscount  Decimal @db.Decimal(12,2)
+  totalReturns   Decimal @db.Decimal(12,2) @default(0)
+  totalGst       Decimal @db.Decimal(12,2)
+  cashSales      Decimal @db.Decimal(12,2) @default(0)
+  cardSales      Decimal @db.Decimal(12,2) @default(0)
+  upiSales       Decimal @db.Decimal(12,2) @default(0)
   createdAt      DateTime @default(now())
   branch         Branch?  @relation(fields: [branchId], references: [id])
   tenant         Tenant   @relation(fields: [tenantId], references: [id])
@@ -1950,7 +1952,7 @@ model PaymentMethodAnalytics {
   branchId      String?
   paymentDate   DateTime @db.Date
   paymentMethod String
-  totalAmount   Float    @default(0)
+  totalAmount   Decimal @db.Decimal(12,2) @default(0)
   totalCount    Int      @default(0)
   updatedAt     DateTime @updatedAt
   branch        Branch?  @relation(fields: [branchId], references: [id])
@@ -1964,13 +1966,13 @@ model CashRegisterSession {
   tenantId            String
   branchId            String
   cashierId           String
-  openingCash         Float
-  closingCash         Float?
-  expectedClosingCash Float?
-  cashSales           Float     @default(0)
-  cashRefunds         Float     @default(0)
-  variance            Float?
-  status              String    @default("OPEN")
+  openingCash         Decimal @db.Decimal(12,2)
+  closingCash         Decimal? @db.Decimal(12,2)
+  expectedClosingCash Decimal? @db.Decimal(12,2)
+  cashSales           Decimal @db.Decimal(12,2) @default(0)
+  cashRefunds         Decimal @db.Decimal(12,2) @default(0)
+  variance            Decimal? @db.Decimal(12,2)
+  status              CashSessionStatus          @default(OPEN)
   openedAt            DateTime  @default(now())
   closedAt            DateTime?
   notes               String?
@@ -1989,9 +1991,9 @@ model DailyProcurementSummary {
   tenantId       String
   branchId       String?
   reportDate     DateTime @db.Date
-  totalPurchased Float    @default(0)
+  totalPurchased Decimal @db.Decimal(12,2) @default(0)
   totalInvoices  Int      @default(0)
-  totalReturns   Float    @default(0)
+  totalReturns   Decimal @db.Decimal(12,2) @default(0)
   createdAt      DateTime @default(now())
   branch         Branch?  @relation(fields: [branchId], references: [id])
   tenant         Tenant   @relation(fields: [tenantId], references: [id])
@@ -2003,11 +2005,11 @@ model DailyPurchaseSummary {
   id             String   @id @default(uuid())
   tenantId       String
   reportDate     DateTime @db.Date
-  totalPurchase  Float
+  totalPurchase  Decimal @db.Decimal(12,2)
   totalOrders    Int
   totalSuppliers Int
-  totalReturns   Float    @default(0)
-  totalInputGst  Float
+  totalReturns   Decimal @db.Decimal(12,2) @default(0)
+  totalInputGst  Decimal @db.Decimal(12,2)
   createdAt      DateTime @default(now())
   tenant         Tenant   @relation(fields: [tenantId], references: [id])
 
@@ -2018,11 +2020,11 @@ model DailyFinanceSummary {
   id            String   @id @default(uuid())
   tenantId      String
   reportDate    DateTime @db.Date
-  totalRevenue  Float
-  totalCogs     Float
-  grossProfit   Float
-  totalExpenses Float    @default(0)
-  netProfit     Float
+  totalRevenue  Decimal @db.Decimal(12,2)
+  totalCogs     Decimal @db.Decimal(12,2)
+  grossProfit   Decimal @db.Decimal(12,2)
+  totalExpenses Decimal @db.Decimal(12,2) @default(0)
+  netProfit     Decimal @db.Decimal(12,2)
   createdAt     DateTime @default(now())
   tenant        Tenant   @relation(fields: [tenantId], references: [id])
 
@@ -2048,7 +2050,7 @@ model Expense {
   branchId      String?
   categoryId    String
   title         String
-  amount        Float
+  amount        Decimal @db.Decimal(12,2)
   paymentMethod String
   expenseDate   DateTime
   invoiceNumber String?
@@ -2070,11 +2072,11 @@ model GstSummary {
   id               String   @id @default(uuid())
   tenantId         String
   reportMonth      DateTime @db.Date
-  totalSalesGst    Float    @default(0)
-  totalPurchaseGst Float    @default(0)
-  outputTax        Float    @default(0)
-  inputTaxCredit   Float    @default(0)
-  netGstPayable    Float    @default(0)
+  totalSalesGst    Decimal @db.Decimal(12,2) @default(0)
+  totalPurchaseGst Decimal @db.Decimal(12,2) @default(0)
+  outputTax        Decimal @db.Decimal(12,2) @default(0)
+  inputTaxCredit   Decimal @db.Decimal(12,2) @default(0)
+  netGstPayable    Decimal @db.Decimal(12,2) @default(0)
   generatedAt      DateTime @default(now())
   tenant           Tenant   @relation(fields: [tenantId], references: [id])
 
@@ -2086,8 +2088,8 @@ model HsnSummary {
   tenantId      String
   reportMonth   DateTime @db.Date
   hsnCode       String
-  taxableValue  Float    @default(0)
-  totalGst      Float    @default(0)
+  taxableValue  Decimal @db.Decimal(12,2) @default(0)
+  totalGst      Decimal @db.Decimal(12,2) @default(0)
   totalQuantity Int      @default(0)
   createdAt     DateTime @default(now())
   tenant        Tenant   @relation(fields: [tenantId], references: [id])
@@ -2102,7 +2104,7 @@ model JournalEntry {
   referenceId   String?
   accountDebit  String
   accountCredit String
-  amount        Float
+  amount        Decimal @db.Decimal(12,2)
   notes         String?
   createdAt     DateTime @default(now())
   tenant        Tenant   @relation(fields: [tenantId], references: [id])
@@ -2115,7 +2117,7 @@ model TallyExport {
   tenantId      String
   exportType    String
   exportFileUrl String
-  status        String   @default("COMPLETED")
+  status        TallyExportStatus         @default(COMPLETED)
   fromDate      DateTime
   toDate        DateTime
   createdAt     DateTime @default(now())
@@ -2145,7 +2147,7 @@ model BatchRecall {
   batchNumber  String
   medicineName String
   reason       String?
-  status       String   @default("pending")
+  status       BatchRecallStatus   @default(PENDING)
   date         DateTime @default(now())
   tenant       Tenant   @relation(fields: [tenantId], references: [id])
 
@@ -2392,7 +2394,7 @@ model NotificationRetryLog {
   originalChannel String    @db.VarChar(50)
   retryAttempt    Int       @default(0)
   maxRetries      Int       @default(5)
-  status          String    @default("pending") @db.VarChar(50)
+  status          NotificationRetryStatus   @default(PENDING)
   errorMessage    String?
   lastErrorAt     DateTime?
   nextRetryAt     DateTime?
@@ -2452,7 +2454,7 @@ model Shift {
   userId    String
   startTime DateTime
   endTime   DateTime?
-  status    String    @default("OPEN")
+  status    ShiftStatus    @default(OPEN)
   notes     String?
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
@@ -2502,7 +2504,7 @@ model DeadStockAnalysis {
   branchId        String?
   medicineId      String
   currentStock    Int      @default(0)
-  stockValue      Float    @default(0)
+  stockValue      Decimal @db.Decimal(12,2) @default(0)
   daysDead        Int      @default(0)
   expiryRiskScore Float    @default(0)
   createdAt       DateTime @default(now())
@@ -2520,7 +2522,7 @@ model RevenueHeatmap {
   branchId         String?
   hourSlot         Int
   weekday          Int
-  revenue          Float    @default(0)
+  revenue          Decimal @db.Decimal(12,2) @default(0)
   transactionCount Int      @default(0)
   updatedAt        DateTime @updatedAt
   branch           Branch?  @relation(fields: [branchId], references: [id])
@@ -2535,7 +2537,7 @@ model MedicineBarcode {
   tenantId    String
   medicineId  String
   batchId     String?
-  barcode     String          @unique
+  barcode     String
   barcodeType String          @default("CODE128") @db.VarChar(50)
   generated   Boolean         @default(false)
   createdAt   DateTime        @default(now())
@@ -2543,6 +2545,7 @@ model MedicineBarcode {
   medicine    Medicine        @relation(fields: [medicineId], references: [id])
   tenant      Tenant          @relation(fields: [tenantId], references: [id])
 
+  @@unique([tenantId, barcode])
   @@index([tenantId, barcode])
   @@index([medicineId])
   @@index([batchId])
@@ -2555,7 +2558,7 @@ model PatientBehavior {
   medicineId              String?
   purchaseFrequency       Int       @default(0)
   averagePurchaseInterval Int       @default(0)
-  totalSpent              Float     @default(0)
+  totalSpent              Decimal @db.Decimal(12,2) @default(0)
   lastPurchaseDate        DateTime?
   adherenceScore          Float     @default(0)
   updatedAt               DateTime  @updatedAt
@@ -2695,22 +2698,27 @@ model PatientRefillReminder {
   @@index([deliveryStatus, scheduledAt])
 }
 
-model MedicineReminder {
-  id              String   @id @default(uuid())
+model PatientReminder {
+  id              String        @id @default(uuid())
   tenantId        String
   patientId       String
   medicineId      String
-  reminderType    String   @db.VarChar(50)
-  nextReminderAt  DateTime
-  reminderChannel String   @db.VarChar(50)
-  status          String   @default("PENDING") @db.VarChar(50)
-  createdAt       DateTime @default(now())
-  medicine        Medicine @relation(fields: [medicineId], references: [id])
-  patient         Patient  @relation(fields: [patientId], references: [id])
-  tenant          Tenant   @relation(fields: [tenantId], references: [id])
+  reminderType    String        @db.VarChar(50)
+  frequency       String?
+  reminderTime    String?
+  nextReminderAt  DateTime?
+  reminderChannel String        @db.VarChar(50)
+  status          ReminderStatus @default(PENDING)
+  active          Boolean       @default(true)
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+  medicine        Medicine      @relation(fields: [medicineId], references: [id])
+  patient         Patient       @relation(fields: [patientId], references: [id])
+  tenant          Tenant        @relation(fields: [tenantId], references: [id])
 
-  @@index([tenantId, nextReminderAt])
   @@index([patientId])
+  @@index([tenantId, nextReminderAt])
+  @@index([tenantId, status, nextReminderAt])
 }
 
 model MedicineSubscription {
@@ -2722,7 +2730,7 @@ model MedicineSubscription {
   quantity           Int
   nextDeliveryDate   DateTime @db.Date
   autoBilling        Boolean  @default(false)
-  subscriptionStatus String   @default("ACTIVE") @db.VarChar(50)
+  subscriptionStatus MedicineSubscriptionStatus @default(ACTIVE)
   createdAt          DateTime @default(now())
   medicine           Medicine @relation(fields: [medicineId], references: [id])
   patient            Patient  @relation(fields: [patientId], references: [id])
@@ -2739,9 +2747,9 @@ model OnlineOrder {
   patientId            String?
   branchId             String?
   orderNumber          String            @db.VarChar(100)
-  orderStatus          String            @default("PENDING") @db.VarChar(50)
-  paymentStatus        String            @default("PENDING") @db.VarChar(50)
-  totalAmount          Float             @default(0)
+  orderStatus          OnlineOrderStatus    @default(PENDING)
+  paymentStatus        SalePaymentStatus    @default(PENDING)
+  totalAmount          Decimal @db.Decimal(12,2) @default(0)
   prescriptionVerified Boolean           @default(false)
   deliveryAddress      String
   deliveryLatitude     Float?
@@ -2767,8 +2775,8 @@ model OnlineOrderItem {
   medicineId String
   batchId    String?
   quantity   Int
-  unitPrice  Float
-  totalPrice Float
+  unitPrice  Decimal @db.Decimal(12,2)
+  totalPrice Decimal @db.Decimal(12,2)
   batch      InventoryBatch? @relation(fields: [batchId], references: [id])
   medicine   Medicine        @relation(fields: [medicineId], references: [id])
   order      OnlineOrder     @relation(fields: [orderId], references: [id], onDelete: Cascade)
@@ -2783,7 +2791,7 @@ model Delivery {
   tenantId              String
   orderId               String
   riderId               String?
-  deliveryStatus        String      @default("ASSIGNED") @db.VarChar(50)
+  deliveryStatus        DeliveryStatus      @default(ASSIGNED)
   pickupTime            DateTime?
   outForDeliveryTime    DateTime?
   deliveredTime         DateTime?
@@ -2807,7 +2815,7 @@ model Rider {
   fullName         String     @db.VarChar(255)
   phone            String     @db.VarChar(20)
   vehicleType      String     @db.VarChar(50)
-  currentStatus    String     @default("AVAILABLE") @db.VarChar(50)
+  currentStatus    RiderStatus     @default(AVAILABLE)
   currentLatitude  Float?
   currentLongitude Float?
   lastActiveAt     DateTime?
@@ -2846,15 +2854,17 @@ model PatientAdmission {
   id                String                     @id @default(uuid())
   tenantId          String
   patientId         String
-  admissionNumber   String                     @unique
+  admissionNumber   String
   admissionDate     DateTime                   @default(now())
   dischargeDate     DateTime?
   ward              String?
   attendingDoctorId String?
-  admissionStatus   String                     @default("ACTIVE")
+  admissionStatus   AdmissionStatus           @default(ACTIVE)
   createdAt         DateTime                   @default(now())
   medicationUsage   InpatientMedicationUsage[]
   tenant            Tenant                     @relation(fields: [tenantId], references: [id])
+
+  @@unique([tenantId, admissionNumber])
 }
 
 model InpatientMedicationUsage {
@@ -3039,7 +3049,7 @@ model FraudInvestigation {
   id               String    @id @default(uuid())
   anomalyId        String
   investigatorId   String
-  resolutionStatus String    @default("PENDING")
+  resolutionStatus FraudResolutionStatus     @default(PENDING)
   notes            String?
   resolvedAt       DateTime?
 }
@@ -3099,7 +3109,7 @@ model PatientPrescription {
   tenantId           String
   patientId          String
   prescriptionUrl    String
-  prescriptionStatus String   @default("UPLOADED")
+  prescriptionStatus PrescriptionUploadStatus  @default(UPLOADED)
   verifiedBy         String?
   uploadedAt         DateTime @default(now())
   patient            Patient  @relation(fields: [patientId], references: [id])
@@ -3108,28 +3118,14 @@ model PatientPrescription {
   @@index([patientId])
 }
 
-model MedicationReminder {
-  id           String   @id @default(uuid())
-  tenantId     String
-  patientId    String
-  medicineId   String
-  reminderTime String
-  frequency    String
-  active       Boolean  @default(true)
-  createdAt    DateTime @default(now())
-  medicine     Medicine @relation(fields: [medicineId], references: [id])
-  patient      Patient  @relation(fields: [patientId], references: [id])
-  tenant       Tenant   @relation(fields: [tenantId], references: [id])
 
-  @@index([patientId])
-}
 
 model HardwareDevice {
   id           String   @id @default(uuid())
   tenantId     String
   branchId     String
   deviceType   String
-  deviceStatus String   @default("OFFLINE")
+  deviceStatus HardwareDeviceStatus     @default(OFFLINE)
   lastSeenAt   DateTime @default(now())
   createdAt    DateTime @default(now())
   branch       Branch   @relation(fields: [branchId], references: [id])
@@ -3236,7 +3232,7 @@ model SettingsApproval {
   branchId        String?
   proposedValue   Json
   proposedBy      String?
-  status          String    @default("PENDING")
+  status          SettingsApprovalStatus    @default(PENDING)
   approvedBy      String?
   approvedAt      DateTime?
   rejectionReason String?
@@ -3287,7 +3283,7 @@ model TenantDomain {
   id         String   @id @default(uuid())
   tenantId   String
   domainName String   @unique
-  sslStatus  String   @default("PENDING")
+  sslStatus  TenantDomainSslStatus     @default(PENDING)
   active     Boolean  @default(true)
   createdAt  DateTime @default(now())
   tenant     Tenant   @relation(fields: [tenantId], references: [id])
@@ -3355,12 +3351,12 @@ model MedicinePriceHistory {
   id               String   @id @default(uuid())
   tenantId         String
   medicineId       String
-  oldMrp           Float?
-  newMrp           Float
-  oldSellingPrice  Float?
-  newSellingPrice  Float
-  oldPurchasePrice Float?
-  newPurchasePrice Float
+  oldMrp           Decimal? @db.Decimal(12,2)
+  newMrp           Decimal @db.Decimal(12,2)
+  oldSellingPrice  Decimal? @db.Decimal(12,2)
+  newSellingPrice  Decimal @db.Decimal(12,2)
+  oldPurchasePrice Decimal? @db.Decimal(12,2)
+  newPurchasePrice Decimal @db.Decimal(12,2)
   changedBy        String
   changedAt        DateTime @default(now())
   changedByUser    User     @relation("PriceChanger", fields: [changedBy], references: [id])
@@ -3771,6 +3767,253 @@ enum StoreProfileStatus {
   PENDING_VERIFICATION
   SUSPENDED
   EXPIRED
+}
+
+enum TenantStatus {
+  ACTIVE
+  SUSPENDED
+  EXPIRED
+}
+enum BranchStatus {
+  ACTIVE
+  INACTIVE
+  SUSPENDED
+}
+enum InventoryStatus {
+  HEALTHY
+  LOW_STOCK
+  OUT_OF_STOCK
+  OVERSTOCK
+}
+enum PatientStatus {
+  ACTIVE
+  INACTIVE
+  BLOCKED
+  DECEASED
+}
+enum DoctorStatus {
+  ACTIVE
+  INACTIVE
+  SUSPENDED
+}
+enum ShiftStatus {
+  OPEN
+  CLOSED
+  CANCELLED
+}
+enum CashSessionStatus {
+  OPEN
+  CLOSED
+  RECONCILED
+}
+enum SaleStatus {
+  COMPLETED
+  PENDING
+  CANCELLED
+  REFUNDED
+}
+enum SalePaymentStatus {
+  PENDING
+  PAID
+  UNPAID
+  PARTIAL
+  REFUNDED
+}
+enum PurchasePaymentStatus {
+  PENDING
+  PAID
+  PARTIAL
+  OVERDUE
+}
+enum CreditNoteStatus {
+  ISSUED
+  APPLIED
+  VOIDED
+  EXPIRED
+}
+enum RefundStatus {
+  PENDING
+  COMPLETED
+  FAILED
+}
+enum ReturnStatus {
+  PENDING
+  REQUESTED
+  UNDER_REVIEW
+  APPROVED
+  REJECTED
+  REFUNDED
+}
+enum ReturnRefundStatus {
+  PENDING
+  PROCESSED
+  COMPLETED
+  FAILED
+}
+enum SupplierReturnStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  COMPLETED
+}
+enum SupplierPaymentStatus {
+  PENDING
+  COMPLETED
+  FAILED
+  VOIDED
+}
+enum ImportJobStatus {
+  UPLOADED
+  VALIDATING
+  PROCESSING
+  COMPLETED
+  FAILED
+}
+enum SyncStatus {
+  PENDING
+  SYNCING
+  COMPLETED
+  FAILED
+}
+enum PrintJobStatus {
+  PENDING
+  PRINTING
+  PRINTED
+  FAILED
+  RETRYING
+}
+enum PrescriptionVerificationStatus {
+  PENDING
+  VERIFIED
+  REJECTED
+  EXPIRED
+}
+enum AdmissionStatus {
+  ACTIVE
+  DISCHARGED
+  TRANSFERRED
+  CANCELLED
+}
+enum PrescriptionUploadStatus {
+  UPLOADED
+  VERIFIED
+  REJECTED
+}
+enum OnlineOrderStatus {
+  PENDING
+  CONFIRMED
+  PROCESSING
+  SHIPPED
+  DELIVERED
+  CANCELLED
+}
+enum DeliveryStatus {
+  ASSIGNED
+  PICKED_UP
+  IN_TRANSIT
+  DELIVERED
+  FAILED
+}
+enum RiderStatus {
+  AVAILABLE
+  BUSY
+  OFFLINE
+}
+enum ReminderStatus {
+  PENDING
+  SENT
+  DELIVERED
+  FAILED
+  CANCELLED
+}
+enum ImportItemStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  ERROR
+}
+enum NotificationRetryStatus {
+  PENDING
+  RETRYING
+  SUCCESS
+  FAILED
+  DEAD_LETTER
+}
+enum BatchRecallStatus {
+  PENDING
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+}
+enum TallyExportStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
+}
+enum HardwareDeviceStatus {
+  ONLINE
+  OFFLINE
+  ERROR
+  MAINTENANCE
+}
+enum SettingsApprovalStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+enum BillingCycle {
+  MONTHLY
+  QUARTERLY
+  YEARLY
+}
+enum MedicineSubscriptionStatus {
+  ACTIVE
+  PAUSED
+  CANCELLED
+  EXPIRED
+}
+enum MovementType {
+  STOCK_IN
+  STOCK_OUT
+  ADJUSTMENT
+  SALE
+  PURCHASE
+  RETURN
+  DAMAGE
+  EXPIRED
+  TRANSFER_IN
+  TRANSFER_OUT
+}
+enum TenantDomainSslStatus {
+  PENDING
+  ISSUED
+  EXPIRED
+  FAILED
+}
+enum FraudResolutionStatus {
+  PENDING
+  INVESTIGATING
+  RESOLVED
+  DISMISSED
+}
+enum SmsNotificationStatus {
+  PENDING
+  SENT
+  DELIVERED
+  FAILED
+}
+enum VerificationStatus {
+  PENDING
+  VERIFIED
+  REJECTED
+  EXPIRED
+}
+enum ActorType {
+  SYSTEM
+  USER
+  INTEGRATION
+  BATCH
 }
 
 model SequenceCounter {
