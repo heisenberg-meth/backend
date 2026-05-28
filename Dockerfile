@@ -2,34 +2,33 @@ FROM node:22-alpine AS builder
 
 WORKDIR /app
 
-# Copy root packages first (contracts dependency)
-COPY packages/contracts/package.json /app/packages/contracts/
-COPY packages/contracts/src /app/packages/contracts/src/
-COPY packages/contracts/ /app/packages/contracts/
+# Install dependencies first for layer caching
+COPY package*.json ./
 
-# Copy backend package.json and install
-COPY backend/package*.json /app/backend/
-WORKDIR /app/backend
-RUN npm ci --silent
+RUN npm ci --omit=dev
 
-# Copy Prisma schema
-COPY backend/prisma /app/backend/prisma
+# Copy application
+COPY . .
+
+# Generate Prisma client
 RUN npx prisma generate
 
-# Copy backend source
-COPY backend/src /app/backend/src
+# ---------- Production Stage ----------
 
 FROM node:22-alpine AS production
 
 WORKDIR /app
 
-# Copy node_modules and contracts
-COPY --from=builder /app /app
+ENV NODE_ENV=production
 
-WORKDIR /app/backend
+# Copy built app
+COPY --from=builder /app ./
+
+# Security hardening
+RUN addgroup -S appgroup && adduser -S appuser -G appgroup
+
+USER appuser
 
 EXPOSE 5000
-
-ENV NODE_ENV=production
 
 CMD ["node", "src/fastify-server.js"]
