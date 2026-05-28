@@ -1,4 +1,5 @@
 import prisma from '../../../config/prisma.js';
+import sequenceService from '../../../shared/services/sequence.service.js';
 
 class ReturnRepository {
   async createReturn(data, tx) {
@@ -168,24 +169,8 @@ class ReturnRepository {
     };
   }
 
-  async generateReturnNumber(tenantId, branchCode) {
-    const year = new Date().getFullYear();
-    const prefix = `RET-${branchCode || 'GEN'}-${year}`;
-
-    const lastReturn = await prisma.return.findFirst({
-      where: {
-        tenantId,
-        returnNumber: { startsWith: prefix },
-      },
-      orderBy: { returnNumber: 'desc' },
-      select: { returnNumber: true },
-    });
-
-    const sequence = lastReturn
-      ? parseInt(lastReturn.returnNumber.split('-').pop(), 10) + 1
-      : 1;
-
-    return `${prefix}-${String(sequence).padStart(6, '0')}`;
+  async generateReturnNumber(tenantId, branchCode, tx) {
+    return sequenceService.nextReturnNumber(tenantId, tx, branchCode);
   }
 }
 

@@ -1,4 +1,5 @@
 import prisma from "../../../config/prisma.js";
+import sequenceService from '../../../shared/services/sequence.service.js';
 
 const PHONE_REGEX = /^[+]?[(]?[0-9]{1,4}[)]?[-\s./0-9]*$/;
 const MIN_AGE = 0;
@@ -121,24 +122,8 @@ class PatientRepository {
     return { valid: true };
   }
 
-  async getNextPatientCode(tenantId) {
-    const year = new Date().getFullYear();
-    const lastPatient = await prisma.patient.findFirst({
-      where: {
-        tenantId,
-        patientCode: { startsWith: `PAT-${year}-` },
-      },
-      orderBy: { patientCode: 'desc' },
-      select: { patientCode: true },
-    });
-
-    if (!lastPatient || !lastPatient.patientCode) {
-      return `PAT-${year}-0001`;
-    }
-
-    const lastNum = parseInt(lastPatient.patientCode.split('-').pop());
-    const nextNum = (lastNum + 1).toString().padStart(4, '0');
-    return `PAT-${year}-${nextNum}`;
+  async getNextPatientCode(tenantId, tx) {
+    return sequenceService.nextPatientCode(tenantId, tx);
   }
 
   async create(tenantId, data) {

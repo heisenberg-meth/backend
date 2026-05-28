@@ -54,11 +54,6 @@ class RefundCalculationService {
       totalRefund: parseFloat(totalRefund.toFixed(2)),
     };
   }
-
-  calculateReturnNumber(tenantId, count) {
-    const seq = String(count + 1).padStart(4, '0');
-    return `REF-${new Date().getFullYear()}-${seq}`;
-  }
 }
 
 export default new RefundCalculationService();

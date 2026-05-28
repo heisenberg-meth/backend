@@ -1,4 +1,5 @@
 import prisma from '../../../config/prisma.js';
+import sequenceService from '../../../shared/services/sequence.service.js';
 
 class CreditNoteRepository {
   async createCreditNote(data, tx) {
@@ -41,24 +42,8 @@ class CreditNoteRepository {
     });
   }
 
-  async generateCreditNoteNumber(tenantId, branchCode) {
-    const year = new Date().getFullYear();
-    const prefix = `CN-${branchCode || 'GEN'}-${year}`;
-
-    const lastCreditNote = await prisma.creditNote.findFirst({
-      where: {
-        tenantId,
-        creditNoteNumber: { startsWith: prefix },
-      },
-      orderBy: { creditNoteNumber: 'desc' },
-      select: { creditNoteNumber: true },
-    });
-
-    const sequence = lastCreditNote
-      ? parseInt(lastCreditNote.creditNoteNumber.split('-').pop(), 10) + 1
-      : 1;
-
-    return `${prefix}-${String(sequence).padStart(6, '0')}`;
+  async generateCreditNoteNumber(tenantId, branchCode, tx) {
+    return sequenceService.nextCreditNoteNumber(tenantId, tx, branchCode);
   }
 }
 

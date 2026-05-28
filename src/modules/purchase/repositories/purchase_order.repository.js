@@ -1,4 +1,5 @@
 import prisma from "../../../config/prisma.js";
+import sequenceService from '../../../shared/services/sequence.service.js';
 
 class PurchaseOrderRepository {
   async createPO(data, tx) {
@@ -74,21 +75,8 @@ class PurchaseOrderRepository {
     });
   }
 
-  async getNextPONumber(tenantId) {
-    const lastPO = await prisma.purchaseOrder.findFirst({
-      where: { tenantId },
-      orderBy: { createdAt: 'desc' },
-      select: { orderNumber: true }
-    });
-
-    const year = new Date().getFullYear();
-    if (!lastPO) {
-      return `PO-${year}-000001`;
-    }
-
-    const lastNum = parseInt(lastPO.orderNumber.split('-').pop());
-    const nextNum = (lastNum + 1).toString().padStart(6, '0');
-    return `PO-${year}-${nextNum}`;
+  async getNextPONumber(tenantId, tx) {
+    return sequenceService.nextPONumber(tenantId, tx);
   }
 }
 

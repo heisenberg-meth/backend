@@ -1,4 +1,5 @@
 import prisma from "../../../config/prisma.js";
+import sequenceService from '../../../shared/services/sequence.service.js';
 
 class TransferRepository {
   async createTransfer(data, tx) {
@@ -82,21 +83,8 @@ class TransferRepository {
     });
   }
 
-  async getNextTransferNumber(tenantId) {
-    const lastTransfer = await prisma.stockTransfer.findFirst({
-      where: { tenantId },
-      orderBy: { createdAt: 'desc' },
-      select: { transferNumber: true }
-    });
-
-    const year = new Date().getFullYear();
-    if (!lastTransfer) {
-      return `TRF-${year}-000001`;
-    }
-
-    const lastNum = parseInt(lastTransfer.transferNumber.split('-').pop());
-    const nextNum = (lastNum + 1).toString().padStart(6, '0');
-    return `TRF-${year}-${nextNum}`;
+  async getNextTransferNumber(tenantId, tx) {
+    return sequenceService.nextTransferNumber(tenantId, tx);
   }
 }
 

@@ -141,12 +141,6 @@ describe('RefundCalculationService', () => {
     expect(total.totalRefund).toBeGreaterThan(total.subtotal);
   });
 
-  it('generates sequential refund numbers', () => {
-    const num1 = refundCalculation.calculateReturnNumber('tenant-1', 0);
-    expect(num1).toMatch(/^REF-\d{4}-0001$/);
-    const num5 = refundCalculation.calculateReturnNumber('tenant-1', 4);
-    expect(num5).toMatch(/^REF-\d{4}-0005$/);
-  });
 });
 
 describe('RefundEligibilityService', () => {

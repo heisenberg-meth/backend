@@ -1,4 +1,5 @@
 import prisma from "../../../config/prisma.js";
+import sequenceService from '../../../shared/services/sequence.service.js';
 
 class InvoiceRepository {
   async findById(id, tenantId, tx = null) {
@@ -67,20 +68,7 @@ class InvoiceRepository {
   }
 
   async getNextInvoiceNumber(tenantId) {
-    const lastInvoice = await prisma.invoice.findFirst({
-      where: { tenantId },
-      orderBy: { createdAt: 'desc' },
-      select: { invoiceNumber: true }
-    });
-
-    const year = new Date().getFullYear();
-    if (!lastInvoice || !lastInvoice.invoiceNumber.includes(`INV-${year}`)) {
-      return `INV-${year}-000001`;
-    }
-
-    const lastNum = parseInt(lastInvoice.invoiceNumber.split('-').pop());
-    const nextNum = (lastNum + 1).toString().padStart(6, '0');
-    return `INV-${year}-${nextNum}`;
+    return sequenceService.nextInvoiceNumber(tenantId);
   }
 
   async update(id, tenantId, data) {

@@ -3,15 +3,12 @@ import logger from '../../../shared/utils/logger.js';
 import { emitLocalEvent } from '../../../shared/events/local-event-bus.js';
 import { EVENTS } from '../../../shared/constants/events.js';
 import prescriptionRepository from '../repositories/prescription.repository.js';
+import sequenceService from '../../../shared/services/sequence.service.js';
 
 class PrescriptionService {
   async createPrescription(tenantId, data, userId) {
     const { patientId, doctorId, doctorName, prescriptionDate, notes, items } = data;
-
-    const count = await prisma.prescription.count({ where: { tenantId } });
-    const seq = String(count + 1).padStart(5, '0');
-    const prescriptionNumber = `RX-${new Date().getFullYear()}-${seq}`;
-
+    const prescriptionNumber = await sequenceService.nextPrescriptionNumber(tenantId);
     const prescription = await prescriptionRepository.createPrescription(
       {
         tenantId,

@@ -1,4 +1,5 @@
 import prisma from '../../../config/prisma.js';
+import sequenceService from '../../../shared/services/sequence.service.js';
 
 class SupplierRepository {
   async findAll(tenantId, { search, status, page = 1, limit = 20 }) {
@@ -60,20 +61,8 @@ class SupplierRepository {
     });
   }
 
-  async getNextSupplierCode(tenantId) {
-    const lastSupplier = await prisma.supplier.findFirst({
-      where: { tenantId },
-      orderBy: { createdAt: 'desc' },
-      select: { supplierCode: true },
-    });
-
-    if (!lastSupplier || !lastSupplier.supplierCode) {
-      return 'SUP-0001';
-    }
-
-    const lastNum = parseInt(lastSupplier.supplierCode.split('-').pop(), 10);
-    const nextNum = (Number.isNaN(lastNum) ? 0 : lastNum) + 1;
-    return `SUP-${String(nextNum).padStart(4, '0')}`;
+  async getNextSupplierCode(tenantId, tx) {
+    return sequenceService.nextSupplierCode(tenantId, tx);
   }
 
   async create(data) {

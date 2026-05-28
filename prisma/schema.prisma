@@ -965,7 +965,7 @@ model StockTransfer {
   tenantId            String
   sourceBranchId      String
   destinationBranchId String
-  transferNumber      String              @unique
+  transferNumber      String
   status              StockTransferStatus @default(PENDING)
   initiatedBy         String?
   approvedBy          String?
@@ -978,6 +978,7 @@ model StockTransfer {
   items               StockTransferItem[]
 
   @@index([tenantId, status])
+  @@unique([tenantId, transferNumber])
 }
 
 model StockTransferItem {
@@ -992,7 +993,7 @@ model StockTransferItem {
 model Supplier {
   id                 String             @id @default(uuid())
   tenantId           String
-  supplierCode       String?            @unique
+  supplierCode       String?
   name               String
   contactPerson      String?
   email              String?
@@ -1028,6 +1029,7 @@ model Supplier {
   supplierReturns    SupplierReturn[]
 
   @@unique([tenantId, gstNumber])
+  @@unique([tenantId, supplierCode])
   @@index([tenantId, name])
   @@index([tenantId, supplierType])
   @@index([tenantId, status])
@@ -1154,7 +1156,7 @@ model PurchaseOrder {
   branchId             String?
   userId               String?
   supplierId           String?
-  orderNumber          String                  @unique
+  orderNumber          String
   status               PurchaseOrderStatus     @default(DRAFT)
   subtotal             Float                   @default(0)
   gstAmount            Float                   @default(0)
@@ -1181,6 +1183,7 @@ model PurchaseOrder {
 
   @@index([tenantId, status])
   @@index([tenantId, supplierId])
+  @@unique([tenantId, orderNumber])
 }
 
 model PurchaseOrderApproval {
@@ -1216,7 +1219,7 @@ model GoodsReceiptNote {
   id              String                 @id @default(uuid())
   tenantId        String
   purchaseOrderId String
-  grnNumber       String                 @unique
+  grnNumber       String
   receivedDate    DateTime               @default(now())
   receivedBy      String?
   notes           String?
@@ -1228,6 +1231,7 @@ model GoodsReceiptNote {
   items           GoodsReceiptNoteItem[]
 
   @@index([tenantId, purchaseOrderId])
+  @@unique([tenantId, grnNumber])
 }
 
 model GoodsReceiptNoteItem {
@@ -1270,7 +1274,7 @@ model PurchaseInvoice {
 model Patient {
   id                          String                  @id @default(uuid())
   tenantId                    String
-  patientCode                 String?                 @unique
+  patientCode                 String?
   fullName                    String
   phone                       String?
   email                       String?
@@ -1324,7 +1328,7 @@ model Patient {
   smsNotifications            SmsNotification[]
 
   @@index([tenantId, phone])
-  @@index([tenantId, patientCode])
+  @@unique([tenantId, patientCode])
 }
 
 model PatientAuditLog {
@@ -1438,6 +1442,7 @@ model Prescription {
   @@index([patientId])
   @@index([verificationStatus])
   @@index([status])
+  @@unique([tenantId, prescriptionNumber])
 }
 
 model PrescriptionItem {
@@ -1566,7 +1571,7 @@ model Invoice {
   id                 String               @id @default(uuid())
   tenantId           String
   branchId           String
-  invoiceNumber      String               @unique @db.VarChar(100)
+  invoiceNumber      String               @db.VarChar(100)
   patientId          String?
   patientName        String?
   patientPhone       String?
@@ -1616,6 +1621,7 @@ model Invoice {
 
   @@index([tenantId, createdAt])
   @@index([patientId])
+  @@unique([tenantId, invoiceNumber])
 }
 
 model InvoiceEvent {
@@ -1800,7 +1806,7 @@ model Return {
   id                  String          @id @default(uuid())
   tenantId            String
   branchId            String?
-  returnNumber        String          @unique
+  returnNumber        String
   invoiceId           String
   saleId              String?
   patientId           String?
@@ -1837,7 +1843,7 @@ model Return {
   @@index([tenantId, createdAt])
   @@index([invoiceId])
   @@index([status])
-  @@index([returnNumber])
+  @@unique([tenantId, returnNumber])
   @@index([tenantId, status])
 }
 
@@ -1872,7 +1878,7 @@ model ReturnItem {
 model CreditNote {
   id                String   @id @default(uuid())
   tenantId          String
-  creditNoteNumber  String   @unique
+  creditNoteNumber  String
   returnId          String
   invoiceId         String
   totalCreditAmount Decimal  @db.Decimal(12, 2)
@@ -1893,7 +1899,7 @@ model CreditNote {
   @@index([tenantId, createdAt])
   @@index([returnId])
   @@index([invoiceId])
-  @@index([creditNoteNumber])
+  @@unique([tenantId, creditNoteNumber])
 }
 
 model RefundPayment {
@@ -3765,4 +3771,15 @@ enum StoreProfileStatus {
   PENDING_VERIFICATION
   SUSPENDED
   EXPIRED
+}
+
+model SequenceCounter {
+  id            String   @id @default(uuid())
+  tenantId      String
+  sequenceType  String   @db.VarChar(50)
+  currentValue  BigInt   @default(0)
+  updatedAt     DateTime @updatedAt
+
+  @@unique([tenantId, sequenceType])
+  @@index([tenantId])
 }

@@ -4,6 +4,7 @@ import { emitLocalEvent } from '../../../shared/events/local-event-bus.js';
 import { EVENTS } from '../../../shared/constants/events.js';
 import refundEligibility from './refund-eligibility.service.js';
 import refundCalculation from './refund-calculation.service.js';
+import sequenceService from '../../../shared/services/sequence.service.js';
 import refundInventory from './refund-inventory.service.js';
 import refundFraud from './refund-fraud.service.js';
 import refundAudit from './refund-audit.service.js';
@@ -105,14 +106,13 @@ class RefundOrchestrationService {
       existingReturns,
     );
 
-    const refundCount = await prisma.return.count({ where: { tenantId } });
-
     const refund = await prisma.$transaction(async (tx) => {
+      const returnNumber = await sequenceService.nextRefundNumber(tenantId, tx);
       const created = await tx.return.create({
         data: {
           tenantId,
           branchId: branchId || invoice.branchId,
-          returnNumber: refundCalculation.calculateReturnNumber(tenantId, refundCount),
+          returnNumber,
           invoiceId,
           patientId: invoice.patientId,
           returnReason: reason || 'PATIENT_RETURN',

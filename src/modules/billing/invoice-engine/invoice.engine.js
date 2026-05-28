@@ -1,5 +1,6 @@
 import { Decimal } from "@prisma/client/runtime/library";
 import prisma from "../../../config/prisma.js";
+import sequenceService from '../../../shared/services/sequence.service.js';
 import movementService from '../../stock/service/movement.service.js';
 import gstService from '../services/gst.service.js';
 import { DOMAIN_EVENTS } from '../../../shared/constants/events.js';
@@ -395,10 +396,7 @@ class InvoiceEngine {
   }
 
   async _generateInvoiceNumber(tenantId, tx) {
-    const count = await tx.invoice.count({ where: { tenantId } });
-    const year = new Date().getFullYear();
-    const sequence = String(count + 1).padStart(6, '0');
-    return `INV-${year}-${sequence}`;
+    return sequenceService.nextInvoiceNumber(tenantId, tx);
   }
 }
 
