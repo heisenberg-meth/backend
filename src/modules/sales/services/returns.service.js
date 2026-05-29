@@ -1,4 +1,4 @@
-import prisma from "../../../config/prisma.js";
+import prisma from '../../../config/prisma.js';
 import salesReturnRepository from '../repositories/sales_return.repository.js';
 import auditService from '../../audit/service/audit.prisma.service.js';
 
@@ -27,32 +27,37 @@ class ReturnsService {
       // Check return quantity
       const alreadyReturned = saleItem.returns.reduce((sum, r) => sum + r.quantity, 0);
       if (alreadyReturned + quantity > saleItem.quantity) {
-        throw new Error(`Cannot return more than sold. Sold: ${saleItem.quantity}, Already Returned: ${alreadyReturned}`);
+        throw new Error(
+          `Cannot return more than sold. Sold: ${saleItem.quantity}, Already Returned: ${alreadyReturned}`,
+        );
       }
 
       // 2. Calculate Refund (Proportional)
       const refundAmount = (saleItem.totalAmount / saleItem.quantity) * quantity;
 
       // 3. Create Return Record
-      const ret = await salesReturnRepository.createReturn({
-        tenantId,
-        saleId: saleItem.saleId,
-        saleItemId: saleItem.id,
-        batchId: saleItem.batchId,
-        quantity,
-        reason,
-        refundAmount: parseFloat(refundAmount.toFixed(2)),
-        status: 'COMPLETED',
-        createdBy: userId
-      }, tx);
+      const ret = await salesReturnRepository.createReturn(
+        {
+          tenantId,
+          saleId: saleItem.saleId,
+          saleItemId: saleItem.id,
+          batchId: saleItem.batchId,
+          quantity,
+          reason,
+          refundAmount: parseFloat(refundAmount.toFixed(2)),
+          status: 'COMPLETED',
+          createdBy: userId,
+        },
+        tx,
+      );
 
       if (condition === 'sealed') {
         await tx.inventoryBatch.update({
           where: { id: saleItem.batchId },
           data: {
             quantity: { increment: quantity },
-            availableQuantity: { increment: quantity }
-          }
+            availableQuantity: { increment: quantity },
+          },
         });
 
         await tx.stockMovement.create({
@@ -65,22 +70,14 @@ class ReturnsService {
             referenceType: 'SALES_RETURN',
             referenceId: ret.id,
             performedBy: userId,
-            notes: `Restock from sales return: ${ret.id}`
-          }
+            notes: `Restock from sales return: ${ret.id}`,
+          },
         });
-      }
-
-      // 5. Update Sale Status
-      const newTotalReturned = alreadyReturned + quantity;
-      const itemFullyReturned = newTotalReturned >= saleItem.quantity;
-      let newSaleStatus = 'COMPLETED';
-      if (itemFullyReturned) {
-         newSaleStatus = 'REFUNDED';
       }
 
       await tx.sale.update({
         where: { id: saleItem.saleId },
-        data: { status: newSaleStatus }
+        data: { status: 'COMPLETED' },
       });
 
       return { ret, medicineName: saleItem.medicine.name };
@@ -92,7 +89,7 @@ class ReturnsService {
       userId,
       action: 'SALES_RETURN',
       target: `Return for ${salesReturn.medicineName}`,
-      type: 'FINANCIAL'
+      type: 'FINANCIAL',
     });
 
     return salesReturn.ret;
