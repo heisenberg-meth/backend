@@ -5,10 +5,12 @@ class AuditService {
   /**
    * Log a sensitive action
    * @param {Object} data - Audit details
+   * @param {Object} [tx] - Prisma transaction client (optional)
    */
-  async logAction({ tenantId, userId, entityType, entityId, action, previousData, newData, ipAddress, userAgent }) {
+  async logAction({ tenantId, userId, entityType, entityId, action, previousData, newData, ipAddress, userAgent }, tx) {
     try {
-      await prisma.auditLog.create({
+      const client = tx || prisma;
+      await client.auditLog.create({
         data: {
           tenantId,
           userId,
@@ -23,7 +25,6 @@ class AuditService {
       });
     } catch (error) {
       logger.error({ error }, '[AUDIT_SERVICE] Failed to log action');
-      // Do not throw to avoid blocking the main business transaction
     }
   }
 }

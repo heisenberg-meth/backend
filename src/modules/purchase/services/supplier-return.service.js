@@ -10,11 +10,13 @@ class SupplierReturnService {
       include: { medicine: true },
     });
 
+    if (!batch) throw new Error(`Batch ${data.batchId} not found`);
+
     await movementService.stockOut(tenantId, {
       medicineId: batch.medicineId,
       batchId: data.batchId,
       quantity: data.quantity,
-      branchId: data.branchId,
+      branchId: batch.branchId,
       referenceType: 'SUPPLIER_RETURN',
       reason: data.reason,
     });

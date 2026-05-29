@@ -108,7 +108,45 @@ describe('Sales Module Unit Tests', () => {
         refundAmount: 20 // (100 / 10) * 2
       }), mockPrisma);
       expect(mockMovementService.stockIn).toHaveBeenCalled();
+      expect(mockPrisma.sale.update).toHaveBeenCalledWith(expect.objectContaining({
+        where: { id: 's-1' },
+        data: { status: 'COMPLETED' }
+      }));
       expect(result.id).toBe('ret-1');
+    });
+
+    it('should set sale status to REFUNDED if item is fully returned', async () => {
+      const data = {
+        saleItemId: 'si-1',
+        quantity: 10,
+        reason: 'Wrong Item',
+        condition: 'sealed'
+      };
+
+      mockPrisma.saleItem.findUnique.mockResolvedValue({
+        id: 'si-1',
+        saleId: 's-1',
+        medicineId: 'med-1',
+        batchId: 'batch-1',
+        quantity: 10,
+        totalAmount: 100,
+        unitPrice: 10,
+        returns: [],
+        sale: { tenantId },
+        medicine: { name: 'Dolo' }
+      });
+
+      mockSalesReturnRepository.createReturn.mockResolvedValue({ id: 'ret-1' });
+      mockMovementService.stockIn.mockResolvedValue({});
+      mockPrisma.inventoryBatch.update.mockResolvedValue({});
+      mockPrisma.sale.update.mockResolvedValue({});
+
+      await returnsService.processReturn(tenantId, data, userId);
+
+      expect(mockPrisma.sale.update).toHaveBeenCalledWith(expect.objectContaining({
+        where: { id: 's-1' },
+        data: { status: 'REFUNDED' }
+      }));
     });
 
     it('should fail if return quantity exceeds sold', async () => {

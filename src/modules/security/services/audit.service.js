@@ -4,10 +4,12 @@ import crypto from 'crypto';
 class AuditService {
   /**
    * Log action with integrity checksum
+   * @param {Object} [tx] - Prisma transaction client (optional)
    */
-  async logSecureAction(tenantId, _userId, actionType, entityType, entityId, metadata) {
-    // Generate a simple chain hash to simulate immutability
-    const lastLog = await prisma.securityAuditLog.findFirst({
+  async logSecureAction(tenantId, _userId, actionType, entityType, entityId, metadata, tx) {
+    const client = tx || prisma;
+
+    const lastLog = await client.securityAuditLog.findFirst({
         orderBy: { createdAt: 'desc' }
     });
     
@@ -17,7 +19,7 @@ class AuditService {
       .update(prevHash + actionType + entityId + JSON.stringify(metadata))
       .digest('hex');
 
-    return await prisma.securityAuditLog.create({
+    return await client.securityAuditLog.create({
       data: {
         tenantId,
         actionType,

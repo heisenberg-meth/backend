@@ -18,7 +18,7 @@ class AnalyticsService {
           gte: startOfDay,
           lte: endOfDay,
         },
-        status: { in: ['COMPLETED', 'PARTIALLY_RETURNED'] },
+        status: { in: ['COMPLETED'] },
       },
     });
 

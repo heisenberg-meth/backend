@@ -6,7 +6,7 @@ import inventoryService from '../../realtime-inventory/services/inventory.servic
 
 class TransferService {
   async requestTransfer(tenantId, data, userId) {
-    return prisma.$transaction(async (tx) => {
+    const transfer = await prisma.$transaction(async (tx) => {
       const transferNumber = await transferRepository.getNextTransferNumber(tenantId);
 
       // 1. Reserve stock in source branch
@@ -52,7 +52,7 @@ class TransferService {
       }
 
       // 2. Create Transfer Record
-      const transfer = await transferRepository.createTransfer({
+      return transferRepository.createTransfer({
         tenantId,
         sourceBranchId: data.sourceBranchId,
         destinationBranchId: data.destinationBranchId,
@@ -62,17 +62,17 @@ class TransferService {
         notes: data.notes,
         items: data.items
       }, tx);
-
-      await auditService.log({
-        tenantId,
-        userId,
-        action: 'REQUEST_TRANSFER',
-        target: transferNumber,
-        type: 'INVENTORY'
-      });
-
-      return transfer;
     });
+
+    await auditService.log({
+      tenantId,
+      userId,
+      action: 'REQUEST_TRANSFER',
+      target: transfer.transferNumber,
+      type: 'INVENTORY'
+    });
+
+    return transfer;
   }
 
   async approveTransfer(transferId, tenantId, userId) {
@@ -90,7 +90,7 @@ class TransferService {
   }
 
   async receiveTransfer(transferId, tenantId, userId) {
-    return prisma.$transaction(async (tx) => {
+    const updatedTransfer = await prisma.$transaction(async (tx) => {
       const transfer = await transferRepository.findById(transferId, tenantId, tx);
       if (!transfer || transfer.status !== 'IN_TRANSIT') {
         throw new Error('Transfer not found or not in transit');
@@ -255,18 +255,18 @@ class TransferService {
       }
 
       // Update transfer status
-      const updatedTransfer = await transferRepository.updateStatus(transferId, tenantId, 'RECEIVED', null, tx);
-
-      await auditService.log({
-        tenantId,
-        userId,
-        action: 'RECEIVE_TRANSFER',
-        target: updatedTransfer.transferNumber,
-        type: 'INVENTORY'
-      });
-
-      return updatedTransfer;
+      return transferRepository.updateStatus(transferId, tenantId, 'RECEIVED', null, tx);
     });
+
+    await auditService.log({
+      tenantId,
+      userId,
+      action: 'RECEIVE_TRANSFER',
+      target: updatedTransfer.transferNumber,
+      type: 'INVENTORY'
+    });
+
+    return updatedTransfer;
   }
 
   async getTransfers(tenantId, filters = {}, page = 1, limit = 20) {

@@ -62,7 +62,7 @@ class ReportQueryService {
         sale: {
           tenantId,
           soldAt: { gte: fromDate, lte: toDate },
-          status: { in: ['COMPLETED', 'PARTIALLY_RETURNED'] }
+          status: { in: ['COMPLETED'] }
         }
       },
       _sum: {

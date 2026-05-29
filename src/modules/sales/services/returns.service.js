@@ -1,5 +1,4 @@
 import prisma from "../../../config/prisma.js";
-import movementService from '../../stock/service/movement.service.js';
 import salesReturnRepository from '../repositories/sales_return.repository.js';
 import auditService from '../../audit/service/audit.prisma.service.js';
 
@@ -10,7 +9,7 @@ class ReturnsService {
   async processReturn(tenantId, data, userId) {
     const { saleItemId, quantity, reason, condition = 'sealed' } = data;
 
-    return prisma.$transaction(async (tx) => {
+    const salesReturn = await prisma.$transaction(async (tx) => {
       // 1. Validate Sale Item
       const saleItem = await tx.saleItem.findUnique({
         where: { id: saleItemId },
@@ -35,7 +34,7 @@ class ReturnsService {
       const refundAmount = (saleItem.totalAmount / saleItem.quantity) * quantity;
 
       // 3. Create Return Record
-      const salesReturn = await salesReturnRepository.createReturn({
+      const ret = await salesReturnRepository.createReturn({
         tenantId,
         saleId: saleItem.saleId,
         saleItemId: saleItem.id,
@@ -47,31 +46,36 @@ class ReturnsService {
         createdBy: userId
       }, tx);
 
-      // 4. Inventory Restock (only if condition is sealed)
       if (condition === 'sealed') {
-        await movementService.stockIn(tenantId, {
-          medicineId: saleItem.medicineId,
-          batchId: saleItem.batchId,
-          quantity,
-          expiryDate: new Date(),
-          purchasePrice: 0,
-          sellingPrice: saleItem.unitPrice,
-          notes: `Restock from return: ${salesReturn.id}`
-        }, userId, tx);
-        
-        // Manual override for stockIn to use existing batch
         await tx.inventoryBatch.update({
           where: { id: saleItem.batchId },
-          data: { quantity: { increment: quantity } }
+          data: {
+            quantity: { increment: quantity },
+            availableQuantity: { increment: quantity }
+          }
+        });
+
+        await tx.stockMovement.create({
+          data: {
+            tenantId,
+            medicineId: saleItem.medicineId,
+            batchId: saleItem.batchId,
+            movementType: 'RETURN',
+            quantity: quantity,
+            referenceType: 'SALES_RETURN',
+            referenceId: ret.id,
+            performedBy: userId,
+            notes: `Restock from sales return: ${ret.id}`
+          }
         });
       }
 
       // 5. Update Sale Status
       const newTotalReturned = alreadyReturned + quantity;
-      const totalSold = saleItem.sale.totalItems;
-      let newSaleStatus = 'PARTIALLY_RETURNED';
-      if (newTotalReturned === totalSold) {
-         newSaleStatus = 'RETURNED';
+      const itemFullyReturned = newTotalReturned >= saleItem.quantity;
+      let newSaleStatus = 'COMPLETED';
+      if (itemFullyReturned) {
+         newSaleStatus = 'REFUNDED';
       }
 
       await tx.sale.update({
@@ -79,17 +83,19 @@ class ReturnsService {
         data: { status: newSaleStatus }
       });
 
-      // 6. Audit Log
-      await auditService.log({
-        tenantId,
-        userId,
-        action: 'SALES_RETURN',
-        target: `Return for ${saleItem.medicine.name}`,
-        type: 'FINANCIAL'
-      });
-
-      return salesReturn;
+      return { ret, medicineName: saleItem.medicine.name };
     });
+
+    // 6. Audit Log (outside transaction — queue-based, cannot roll back)
+    await auditService.log({
+      tenantId,
+      userId,
+      action: 'SALES_RETURN',
+      target: `Return for ${salesReturn.medicineName}`,
+      type: 'FINANCIAL'
+    });
+
+    return salesReturn.ret;
   }
 
   async getReturns(tenantId, page = 1, limit = 20) {

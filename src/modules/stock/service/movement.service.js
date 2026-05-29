@@ -4,11 +4,12 @@ import stockRepository from '../repositories/stock.repository.js';
 import ledgerRepository from '../repositories/ledger.repository.js';
 
 class MovementService {
-  async stockOut(tenantId, { medicineId, quantity, type }, userId) {
+  async stockOut(tenantId, { medicineId, quantity, type, branchId }, userId) {
     return prisma.$transaction(async (tx) => {
       const batches = await tx.inventoryBatch.findMany({
         where: {
           medicineId,
+          branchId,
           status: 'ACTIVE',
           quantity: { gt: 0 },
           deletedAt: null,

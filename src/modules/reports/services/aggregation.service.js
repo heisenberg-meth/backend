@@ -30,7 +30,7 @@ class AggregationService {
       where: {
         tenantId,
         soldAt: { gte: start, lte: end },
-        status: { in: ['COMPLETED', 'PARTIALLY_RETURNED'] }
+        status: { in: ['COMPLETED'] }
       },
       include: { salesReturns: true }
     });
@@ -100,7 +100,7 @@ class AggregationService {
       where: {
         tenantId,
         soldAt: { gte: start, lte: end },
-        status: { in: ['COMPLETED', 'PARTIALLY_RETURNED'] }
+        status: { in: ['COMPLETED'] }
       },
       include: { 
         items: {
