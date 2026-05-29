@@ -88,7 +88,7 @@ const createServiceApp = async (options = {}) => {
   });
 
   await fastify.register(cors, {
-    origin: env.cors?.origin || ['http://localhost:5173', 'http://localhost:5174'],
+    origin: env.cors?.origin || ['http://localhost:5173', 'http://localhost:5174', 'https://medassist-indol.vercel.app',],
     credentials: true,
     methods: ['GET', 'PUT', 'POST', 'DELETE', 'OPTIONS', 'PATCH'],
     allowedHeaders: ['Content-Type', 'Authorization', 'x-csrf-token', 'X-Idempotency-Key', 'ngrok-skip-browser-warning'],
