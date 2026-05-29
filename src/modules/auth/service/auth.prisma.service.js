@@ -61,7 +61,7 @@ class AuthPrismaService {
           id: 'free-trial',
           name: 'Free Trial',
           price: 0,
-          billingCycle: 'one-time',
+          billingCycle: 'MONTHLY',
           features: ['28-day free trial', 'Full feature access'],
         },
       });
