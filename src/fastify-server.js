@@ -12,17 +12,25 @@ import { createInventoryQueue, createInventoryWorker } from './modules/realtime-
 import { seal as sealQueueRegistry } from './config/queue-registry.js';
 import logger from './shared/utils/logger.js';
 
-/**
- * Validate database connectivity and schema consistency before starting workers.
- * Workers must NOT process jobs until the database schema is confirmed healthy.
- */
 async function validateDatabaseHealth() {
   try {
-    // Step 1: Basic connectivity check
+    if (process.env.DATABASE_URL) {
+      const sanitizedUrl = process.env.DATABASE_URL.replace(/:[^:@]+@/, ':***@');
+      logger.info(`[BOOT] DATABASE_URL (sanitized): ${sanitizedUrl}`);
+    } else {
+      logger.warn('[BOOT] DATABASE_URL is not set in process.env');
+    }
+
     await prisma.$queryRaw`SELECT 1`;
     logger.info('[BOOT] Database connectivity verified');
 
-    // Step 2: Schema consistency check — verify critical tables exist
+    try {
+      const dbDetails = await prisma.$queryRaw`SELECT current_database(), current_schema(), current_user`;
+      logger.info({ dbDetails }, '[BOOT] Connected database context details');
+    } catch (detailsErr) {
+      logger.warn({ err: detailsErr.message }, '[BOOT] Failed to retrieve database details');
+    }
+
     const criticalTables = [
       'Patient', 'Invoice', 'Medicine', 'User', 'Settings',
       'Notification', 'Prescription', 'Payment', 'Tenant', 'Branch',
