@@ -1,8 +1,9 @@
 import prisma from "../../../config/prisma.js";
 
 class StockRepository {
-  async getCurrentStock(tenantId, medicineId) {
-    const batches = await prisma.inventoryBatch.findMany({
+  async getCurrentStock(tenantId, medicineId, client) {
+    const db = client || prisma;
+    const batches = await db.inventoryBatch.findMany({
       where: {
         medicineId,
         medicine: { tenantId },

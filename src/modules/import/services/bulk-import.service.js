@@ -1,6 +1,5 @@
 import crypto from 'crypto';
 import prisma from '../../../config/prisma.js';
-import movementService from '../../stock/service/movement.service.js';
 import auditService from '../../audit/service/audit.prisma.service.js';
 
 class BulkImportService {
@@ -252,140 +251,153 @@ class BulkImportService {
       mergedCount: 0
     };
 
-    let supplierId = null;
-    if (supplierName && supplierName !== 'None') {
-      const existingSupplier = await prisma.supplier.findFirst({
-        where: { tenantId, name: { equals: supplierName, mode: 'insensitive' }, deletedAt: null }
-      });
-      if (existingSupplier) {
-        supplierId = existingSupplier.id;
-      } else {
-        const newSupplier = await prisma.supplier.create({
-          data: { name: supplierName, tenantId }
-        });
-        supplierId = newSupplier.id;
-      }
-    }
-
-    // Process chunk-by-chunk using individual transactions
-    const CHUNK_SIZE = 1000;
+    const CHUNK_SIZE = 500;
 
     for (let i = 0; i < validatedRows.length; i += CHUNK_SIZE) {
       const chunk = validatedRows.slice(i, i + CHUNK_SIZE);
 
-      await prisma.$transaction(async (tx) => {
-        for (const row of chunk) {
-          let medicineId = null;
+      console.log(
+        `[IMPORT] Processing chunk ${i / CHUNK_SIZE + 1} of ${Math.ceil(validatedRows.length / CHUNK_SIZE)}`,
+      );
 
-          // Re-lookup dynamically to catch duplicates created in earlier chunks of this import
-          const normName = row.name.toLowerCase().trim();
-          const normBarcode = row.barcode ? row.barcode.trim() : '';
+      await prisma.$transaction(
+        async (tx) => {
+          const batchesToCreate = [];
+          const movementsToCreate = [];
+          const inventoryUpdates = [];
 
-          let currentMatch = medicineMapByName.get(normName) ||
-                             (normBarcode ? medicineMapByBarcode.get(normBarcode) : null);
+          for (const row of chunk) {
+            let medicineId = null;
 
-          if (currentMatch) {
-            medicineId = currentMatch.id;
+            // Re-lookup dynamically to catch duplicates created in earlier chunks of this import
+            const normName = row.name.toLowerCase().trim();
+            const normBarcode = row.barcode ? row.barcode.trim() : '';
 
-            if (row.isDuplicate) {
-              if (duplicateStrategy === 'Skip') {
-                commitSummary.skippedCount++;
-                continue; // Skip this row entirely
+            let currentMatch =
+              medicineMapByName.get(normName) ||
+              (normBarcode ? medicineMapByBarcode.get(normBarcode) : null);
+
+            if (currentMatch) {
+              medicineId = currentMatch.id;
+
+              if (row.isDuplicate) {
+                if (duplicateStrategy === 'Skip') {
+                  commitSummary.skippedCount++;
+                  continue;
+                }
+
+                if (duplicateStrategy === 'Overwrite') {
+                  commitSummary.overwrittenCount++;
+                  const updatePayload = {};
+                  if (row.barcode && (barcodeOptions.overwrite || !currentMatch.barcode)) {
+                    updatePayload.barcode = row.barcode;
+                    currentMatch.barcode = row.barcode;
+                    medicineMapByBarcode.set(row.barcode.trim(), currentMatch);
+                  }
+                  if (Object.keys(updatePayload).length > 0) {
+                    await tx.medicine.update({
+                      where: { id: medicineId },
+                      data: updatePayload,
+                    });
+                  }
+                } else if (duplicateStrategy === 'Merge') {
+                  commitSummary.mergedCount++;
+                  const updatePayload = {};
+                  if (row.barcode && !currentMatch.barcode) {
+                    updatePayload.barcode = row.barcode;
+                    currentMatch.barcode = row.barcode;
+                    medicineMapByBarcode.set(row.barcode.trim(), currentMatch);
+                  }
+                  if (Object.keys(updatePayload).length > 0) {
+                    await tx.medicine.update({
+                      where: { id: medicineId },
+                      data: updatePayload,
+                    });
+                  }
+                }
               }
+            } else {
+              const newMed = await tx.medicine.create({
+                data: {
+                  tenantId,
+                  userId,
+                  name: row.name,
+                  barcode: row.barcode,
+                  sku: `SKU-${crypto.randomUUID()}`,
+                  gstPercentage: 0,
+                  reorderLevel: 10,
+                  status: 'ACTIVE',
+                  isActive: true,
+                },
+              });
+              medicineId = newMed.id;
+              commitSummary.newMedicinesCount++;
 
-              if (duplicateStrategy === 'Overwrite') {
-                commitSummary.overwrittenCount++;
-                const updatePayload = {};
-                if (row.barcode && (barcodeOptions.overwrite || !currentMatch.barcode)) {
-                  updatePayload.barcode = row.barcode;
-                  currentMatch.barcode = row.barcode; // update cache
-                  medicineMapByBarcode.set(row.barcode.trim(), currentMatch);
-                }
-                if (Object.keys(updatePayload).length > 0) {
-                  await tx.medicine.update({
-                    where: { id: medicineId },
-                    data: updatePayload
-                  });
-                }
-              } else if (duplicateStrategy === 'Merge') {
-                commitSummary.mergedCount++;
-                const updatePayload = {};
-                if (row.barcode && !currentMatch.barcode) {
-                  updatePayload.barcode = row.barcode;
-                  currentMatch.barcode = row.barcode; // update cache
-                  medicineMapByBarcode.set(row.barcode.trim(), currentMatch);
-                }
-                if (Object.keys(updatePayload).length > 0) {
-                  await tx.medicine.update({
-                    where: { id: medicineId },
-                    data: updatePayload
-                  });
-                }
+              const cachedMed = { id: medicineId, name: row.name, barcode: row.barcode };
+              medicineMapByName.set(normName, cachedMed);
+              if (row.barcode) {
+                medicineMapByBarcode.set(row.barcode.trim(), cachedMed);
               }
             }
-          } else {
-            // Create new medicine catalog entry
-            const newMed = await tx.medicine.create({
-              data: {
+
+            if (row.qty > 0) {
+              const defaultExpiry = new Date(new Date().setFullYear(new Date().getFullYear() + 2));
+              batchesToCreate.push({
                 tenantId,
-                userId,
-                name: row.name,
-                barcode: row.barcode,
-                sku: `SKU-${crypto.randomUUID()}`,
-                gstPercentage: 0,
-                reorderLevel: 10,
+                medicineId,
+                branchId,
+                batchNumber: row.batch,
+                quantity: row.qty,
+                receivedQuantity: row.qty,
+                availableQuantity: row.qty,
+                expiryDate: row.expiryDate || defaultExpiry,
+                purchasePrice: row.price || 0,
+                sellingPrice: (row.price || 0) * 1.2,
+                mrp: (row.price || 0) * 1.2,
                 status: 'ACTIVE',
-                isActive: true
-              }
+              });
+
+              movementsToCreate.push({
+                tenantId,
+                branchId,
+                medicineId,
+                movementType: 'STOCK_IN',
+                quantity: row.qty,
+                referenceType: 'BULK_IMPORT',
+                performedBy: userId,
+                notes: `Bulk imported from ${supplierName !== 'None' ? supplierName : 'spreadsheet'}`,
+              });
+
+              inventoryUpdates.push({ medicineId, qty: row.qty });
+              commitSummary.newBatchesCount++;
+            }
+
+            commitSummary.importedCount++;
+          }
+
+          if (batchesToCreate.length > 0) {
+            await tx.inventoryBatch.createMany({ data: batchesToCreate, skipDuplicates: true });
+          }
+
+          if (movementsToCreate.length > 0) {
+            await tx.stockMovement.createMany({ data: movementsToCreate });
+          }
+
+          for (const inv of inventoryUpdates) {
+            await tx.inventory.upsert({
+              where: {
+                tenantId_branchId_medicineId: { tenantId, branchId, medicineId: inv.medicineId },
+              },
+              update: { currentStock: { increment: inv.qty } },
+              create: {
+                tenantId, branchId, medicineId: inv.medicineId,
+                currentStock: inv.qty, reorderPoint: 10,
+              },
             });
-            medicineId = newMed.id;
-            commitSummary.newMedicinesCount++;
-
-            // Cache newly created medicine so subsequent rows in same import can match
-            const cachedMed = { id: medicineId, name: row.name, barcode: row.barcode };
-            medicineMapByName.set(normName, cachedMed);
-            if (row.barcode) {
-              medicineMapByBarcode.set(row.barcode.trim(), cachedMed);
-            }
           }
-
-          // Initialize Central inventory availability if not exists
-          await tx.inventory.upsert({
-            where: {
-              tenantId_branchId_medicineId: { tenantId, branchId, medicineId }
-            },
-            update: {},
-            create: {
-              tenantId,
-              branchId,
-              medicineId,
-              reorderPoint: 10,
-              currentStock: 0
-            }
-          });
-
-          // Add lot batch inventory (passing skipSideEffects: true)
-          if (row.qty > 0) {
-            await movementService.stockIn(tenantId, {
-              medicineId,
-              batchNumber: row.batch,
-              quantity: row.qty,
-              expiryDate: row.expiryDate || new Date(new Date().setFullYear(new Date().getFullYear() + 2)),
-              purchasePrice: row.price,
-              sellingPrice: row.price * 1.2,
-              mrp: row.price * 1.2,
-              branchId,
-              supplierId,
-              referenceType: 'BULK_IMPORT',
-              notes: `Bulk imported from ${supplierName !== 'None' ? supplierName : 'spreadsheet'}`,
-              skipSideEffects: true
-            }, userId, tx);
-            commitSummary.newBatchesCount++;
-          }
-
-          commitSummary.importedCount++;
-        }
-      });
+        },
+        { timeout: 60000 },
+      );
     }
 
     // Post-commit side effects: Log audit trail

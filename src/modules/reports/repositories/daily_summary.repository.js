@@ -3,17 +3,18 @@ import prisma from "../../../config/prisma.js";
 class DailySummaryRepository {
   // Sales Summaries
   async upsertSalesSummary(data) {
-    return prisma.dailySalesSummary.upsert({
-      where: {
-        tenantId_salesDate: {
-          tenantId: data.tenantId,
-          salesDate: data.salesDate
-        }
+  return prisma.dailySalesSummary.upsert({
+    where: {
+      tenantId_branchId_salesDate: {
+        tenantId: data.tenantId,
+        branchId: data.branchId ?? null,
+        salesDate: data.salesDate,
       },
-      update: data,
-      create: data
-    });
-  }
+    },
+    update: data,
+    create: data,
+  });
+}
 
   async getSalesSummaries(tenantId, fromDate, toDate) {
     return prisma.dailySalesSummary.findMany({

@@ -47,6 +47,7 @@ class MovementService {
         tenantId,
         medicineId,
         batchId: deductions[0]?.batchId,
+        branchId,
         type: type || 'SALE',
         quantity: totalDeducted,
         previousStock: batches.reduce((s, b) => s + b.quantity, 0),
@@ -60,14 +61,15 @@ class MovementService {
     });
   }
 
-  async stockIn(tenantId, data, userId) {
-    return prisma.$transaction(async (tx) => {
-      const currentStock = await stockRepository.getCurrentStock(tenantId, data.medicineId);
+  async stockIn(tenantId, data, userId, tx) {
+    const run = async (client) => {
+      const currentStock = await stockRepository.getCurrentStock(tenantId, data.medicineId, client);
 
-      const newBatch = await tx.inventoryBatch.create({
+      const newBatch = await client.inventoryBatch.create({
         data: {
           tenantId,
           medicineId: data.medicineId,
+          branchId: data.branchId,
           batchNumber: data.batchNumber,
           quantity: data.quantity,
           receivedQuantity: data.quantity,
@@ -84,17 +86,23 @@ class MovementService {
         tenantId,
         medicineId: data.medicineId,
         batchId: newBatch.id,
+        branchId: data.branchId,
         type: 'STOCK_IN',
         quantity: data.quantity,
         previousStock: currentStock.totalQuantity,
         newStock: currentStock.totalQuantity + data.quantity,
         createdBy: userId,
-      }, tx);
+        referenceType: data.referenceType,
+        notes: data.notes,
+      }, client);
 
       logger.info({ tenantId, medicineId: data.medicineId, quantity: data.quantity, batchId: newBatch.id }, 'Stock in completed');
 
       return newBatch;
-    });
+    };
+
+    if (tx) return run(tx);
+    return prisma.$transaction(run);
   }
 }
 
