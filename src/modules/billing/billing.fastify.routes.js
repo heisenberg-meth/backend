@@ -29,11 +29,6 @@ async function billingFastifyRoutes(fastify) {
     handler: billingController.getInvoiceById
   });
 
-  fastify.post('/invoices/:id/pdf', {
-    schema: { tags: ['Billing'], summary: 'Generate invoice PDF' },
-    handler: billingController.generatePdf
-  });
-
   fastify.post('/invoices/:id/cancel', {
     schema: { tags: ['Billing'], summary: 'Cancel invoice' },
     handler: billingController.cancelInvoice

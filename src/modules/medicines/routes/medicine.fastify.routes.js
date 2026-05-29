@@ -1,5 +1,4 @@
 import medicineController from '../controllers/medicine.fastify.controller.js';
-import medicineService from '../services/medicine.service.js';
 import prisma from '../../../config/prisma.js';
 import { authenticate, requireTenant } from '../../../middleware/auth.fastify.js';
 
@@ -120,41 +119,6 @@ async function medicineIntelligenceRoutes(fastify) {
       }
     },
     medicineController.deleteMedicine
-  );
-
-  // --- Specialized Lookups ---
-  fastify.get(
-    '/barcode/:code',
-    {
-      schema: {
-        tags: ['Medicines'],
-        params: {
-          type: 'object',
-          properties: { code: { type: 'string' } }
-        }
-      }
-    },
-    medicineController.lookupBarcode
-  );
-
-  // --- Clinical Decision Support ---
-  fastify.get(
-    '/:id/alternatives',
-    {
-      schema: {
-        tags: ['Medicines'],
-        params: {
-          type: 'object',
-          properties: { id: { type: 'string', format: 'uuid' } },
-        },
-      },
-    },
-    async (request) => {
-      const { tenantId } = request.user;
-      const { id } = request.params;
-      const details = await medicineService.getMedicineDetails(id, tenantId);
-      return details.alternatives;
-    },
   );
 
   fastify.get(
