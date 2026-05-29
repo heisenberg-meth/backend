@@ -73,7 +73,7 @@ class DashboardAggregationService {
       SELECT SUM("quantity" * COALESCE("purchasePrice", 0)) as "totalValue"
       FROM "InventoryBatch" as "ib"
       INNER JOIN "Medicine" as "m" ON "ib"."medicineId" = "m"."id"
-      WHERE "m"."tenantId" = ${tenantId}::uuid
+      WHERE "m"."tenantId" = ${tenantId}
         AND "ib"."quantity" > 0
         AND "ib"."deletedAt" IS NULL
         AND "m"."deletedAt" IS NULL
