@@ -98,8 +98,7 @@ class AuthFastifyController {
 
   async logout(request, reply) {
     try {
-      const sessionId = request.headers['x-session-id'];
-      await authService.logout(sessionId);
+      await authService.logout(request.sessionId);
 
       reply.clearCookie('refreshToken', { path: '/' });
       return reply.send(success({ message: 'Logged out successfully' }));

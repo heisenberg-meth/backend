@@ -48,7 +48,7 @@ class RecommendationService {
     });
 
     return prisma.medicine.findMany({
-      where: { id: { in: medicineSales.map(s => s.medicineId) } }
+      where: { tenantId, id: { in: medicineSales.map(s => s.medicineId) } }
     });
   }
 }

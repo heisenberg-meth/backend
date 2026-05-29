@@ -271,7 +271,6 @@ class CsvImportService {
         medicineId,
         movementType: 'PURCHASE',
         quantity: qty,
-        quantityAfter: 0,
         referenceType: 'BULK_IMPORT',
         performedBy: userId,
         notes: `Bulk imported from CSV`,

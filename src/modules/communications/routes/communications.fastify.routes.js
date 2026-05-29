@@ -1,5 +1,6 @@
 import controller from '../fastify/communications.fastify.controller.js';
 import { authenticate, requireTenant } from '../../../middleware/auth.fastify.js';
+import { requirePermission } from '../../../middleware/permission.fastify.js';
 
 export default async function (fastify) {
   fastify.addHook('preHandler', authenticate);
@@ -7,21 +8,25 @@ export default async function (fastify) {
 
   fastify.post('/patients/:id/send-refill-reminder', {
     schema: { tags: ['Communications'], summary: 'Send refill reminder with full orchestration' },
+    preHandler: [requirePermission('VIEW_INVENTORY')],
     handler: controller.sendRefillReminder,
   });
 
   fastify.post('/patients/:id/send-prescription-reminder', {
     schema: { tags: ['Communications'], summary: 'Send prescription expiry/renewal reminder' },
+    preHandler: [requirePermission('VIEW_INVENTORY')],
     handler: controller.sendPrescriptionReminder,
   });
 
   fastify.post('/patients/:id/send-invoice', {
     schema: { tags: ['Communications'], summary: 'Send invoice via preferred channel' },
+    preHandler: [requirePermission('VIEW_INVENTORY')],
     handler: controller.sendInvoice,
   });
 
   fastify.post('/patients/:id/preferences', {
     schema: { tags: ['Communications'], summary: 'Update patient communication preferences' },
+    preHandler: [requirePermission('VIEW_INVENTORY')],
     handler: controller.updatePreferences,
   });
 
@@ -47,11 +52,13 @@ export default async function (fastify) {
 
   fastify.post('/:id/retry', {
     schema: { tags: ['Communications'], summary: 'Retry failed communication delivery' },
+    preHandler: [requirePermission('VIEW_INVENTORY')],
     handler: controller.retryCommunication,
   });
 
   fastify.post('/scan', {
     schema: { tags: ['Communications'], summary: 'Trigger adherence engine scan' },
+    preHandler: [requirePermission('VIEW_INVENTORY')],
     handler: controller.scanAll,
   });
 }

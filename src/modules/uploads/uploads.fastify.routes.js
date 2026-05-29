@@ -23,6 +23,11 @@ async function uploadsRoutes(fastify) {
         return reply.code(400).send({ success: false, error: { message: 'No file uploaded', code: 'NO_FILE' } });
       }
 
+      const allowedTypes = ['image/jpeg', 'image/png', 'image/webp'];
+      if (!allowedTypes.includes(data.mimetype)) {
+        return reply.code(400).send({ success: false, error: { message: 'Invalid image type. Only JPEG, PNG and WebP allowed.', code: 'INVALID_MIME' } });
+      }
+
       const ext = path.extname(data.filename) || '.jpg';
       const filename = `avatar-${request.user.id}-${crypto.randomUUID()}${ext}`;
       const uploadsDir = path.join(__dirname, '../../../uploads/avatars');

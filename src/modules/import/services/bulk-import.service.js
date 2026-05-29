@@ -1,6 +1,7 @@
 import crypto from 'crypto';
 import prisma from '../../../config/prisma.js';
 import auditService from '../../audit/service/audit.prisma.service.js';
+import logger from '../../../shared/utils/logger.js';
 
 class BulkImportService {
   async analyzeOrCommit(payload, tenantId, branchId, userId) {
@@ -256,9 +257,10 @@ class BulkImportService {
     for (let i = 0; i < validatedRows.length; i += CHUNK_SIZE) {
       const chunk = validatedRows.slice(i, i + CHUNK_SIZE);
 
-      console.log(
-        `[IMPORT] Processing chunk ${i / CHUNK_SIZE + 1} of ${Math.ceil(validatedRows.length / CHUNK_SIZE)}`,
-      );
+      logger.info({
+  chunk: i / CHUNK_SIZE + 1,
+  totalChunks: Math.ceil(validatedRows.length / CHUNK_SIZE)
+}, 'Bulk import chunk');
 
       await prisma.$transaction(
         async (tx) => {

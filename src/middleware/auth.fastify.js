@@ -1,6 +1,33 @@
 import prisma from '../config/prisma.js';
 import logger from '../shared/utils/logger.js';
 
+const sessionCache = new Map();
+const SESSION_CACHE_TTL_MS = 30_000;
+const SESSION_CACHE_MAX = 500;
+
+async function verifySession(sessionId, userId) {
+  const session = await prisma.userSession.findUnique({
+    where: { id: sessionId },
+    select: { revoked: true, expiresAt: true },
+  });
+  return session && !session.revoked && new Date() <= session.expiresAt ? session : null;
+}
+
+async function fetchAndCacheUser(userId) {
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    include: {
+      tenant: true,
+      assignedRole: {
+        include: {
+          permissions: { include: { permission: true } },
+        },
+      },
+    },
+  });
+  return user;
+}
+
 export const authenticate = async (request, reply) => {
   try {
     await request.jwtVerify();
@@ -12,17 +39,35 @@ export const authenticate = async (request, reply) => {
     });
   }
 
-  const user = await prisma.user.findUnique({
-    where: { id: request.user.userId },
-    include: {
-      tenant: true,
-      assignedRole: {
-        include: {
-          permissions: { include: { permission: true } },
-        },
-      },
-    },
-  });
+  const { sessionId } = request.user;
+  if (!sessionId) {
+    return reply.code(401).send({
+      success: false,
+      error: { message: 'Session ID missing from token', code: 'SESSION_ID_MISSING' },
+    });
+  }
+
+  const cached = sessionCache.get(sessionId);
+  const sessionValid = cached && cached.expiresAt > Date.now()
+    ? cached.valid
+    : (await verifySession(sessionId, request.user.userId)) !== null;
+
+  if (!sessionValid) {
+    return reply.code(401).send({
+      success: false,
+      error: { message: 'Session revoked or expired', code: 'SESSION_INVALID' },
+    });
+  }
+
+  if (!cached || cached.expiresAt <= Date.now()) {
+    if (sessionCache.size >= SESSION_CACHE_MAX) {
+      const oldest = sessionCache.keys().next().value;
+      sessionCache.delete(oldest);
+    }
+    sessionCache.set(sessionId, { valid: true, expiresAt: Date.now() + SESSION_CACHE_TTL_MS });
+  }
+
+  const user = await fetchAndCacheUser(request.user.userId);
 
   if (!user) {
     return reply.code(401).send({
@@ -32,6 +77,7 @@ export const authenticate = async (request, reply) => {
   }
 
   request.user = user;
+  request.sessionId = sessionId;
   request.tenantId = user.tenantId;
   request.branchId = user.branchId;
 };

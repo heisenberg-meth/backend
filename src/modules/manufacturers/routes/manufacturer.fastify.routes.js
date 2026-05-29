@@ -1,5 +1,6 @@
 import controller from '../fastify/manufacturer.fastify.controller.js';
 import { authenticate, requireTenant } from '../../../middleware/auth.fastify.js';
+import { requirePermission } from '../../../middleware/permission.fastify.js';
 
 export default async function (fastify) {
   fastify.addHook('preHandler', authenticate);
@@ -17,16 +18,19 @@ export default async function (fastify) {
 
   fastify.post('/', {
     schema: { tags: ['Manufacturers'], summary: 'Create manufacturer' },
+    preHandler: [requirePermission('VIEW_INVENTORY')],
     handler: controller.createManufacturer,
   });
 
   fastify.put('/:id', {
     schema: { tags: ['Manufacturers'], summary: 'Update manufacturer' },
+    preHandler: [requirePermission('VIEW_INVENTORY')],
     handler: controller.updateManufacturer,
   });
 
   fastify.delete('/:id', {
     schema: { tags: ['Manufacturers'], summary: 'Delete manufacturer' },
+    preHandler: [requirePermission('VIEW_INVENTORY')],
     handler: controller.deleteManufacturer,
   });
 }

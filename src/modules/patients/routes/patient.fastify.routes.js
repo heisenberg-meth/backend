@@ -1,5 +1,6 @@
 import controller from '../fastify/patient.fastify.controller.js';
 import { authenticate, requireTenant } from '../../../middleware/auth.fastify.js';
+import { requirePermission } from '../../../middleware/permission.fastify.js';
 
 export default async function (fastify) {
   fastify.addHook('preHandler', authenticate);
@@ -42,16 +43,19 @@ export default async function (fastify) {
 
   fastify.post('/', {
     schema: { tags: ['Patients'], summary: 'Create patient' },
+    preHandler: [requirePermission('VIEW_INVENTORY')],
     handler: controller.createPatient,
   });
 
   fastify.put('/:id', {
     schema: { tags: ['Patients'], summary: 'Update patient' },
+    preHandler: [requirePermission('VIEW_INVENTORY')],
     handler: controller.updatePatient,
   });
 
   fastify.delete('/:id', {
     schema: { tags: ['Patients'], summary: 'Delete patient' },
+    preHandler: [requirePermission('VIEW_INVENTORY')],
     handler: controller.deletePatient,
   });
 
@@ -72,11 +76,13 @@ export default async function (fastify) {
 
   fastify.post('/:id/credit', {
     schema: { tags: ['Patients'], summary: 'Add credit' },
+    preHandler: [requirePermission('VIEW_INVENTORY')],
     handler: controller.addCredit,
   });
 
   fastify.post('/:id/refill-reminder', {
     schema: { tags: ['Patients'], summary: 'Send refill reminder' },
+    preHandler: [requirePermission('VIEW_INVENTORY')],
     handler: controller.sendRefillReminder,
   });
 }

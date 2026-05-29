@@ -2,6 +2,7 @@ import paymentController from '../payments/controllers/payment.fastify.controlle
 import billingController from './fastify/billing.fastify.controller.js';
 import { authenticate, requireTenant } from '../../middleware/auth.fastify.js';
 import { requireBranch } from '../../middleware/requireBranch.js';
+import { requirePermission } from '../../middleware/permission.fastify.js';
 
 async function billingFastifyRoutes(fastify) {
   fastify.addHook('preHandler', authenticate);
@@ -11,37 +12,44 @@ async function billingFastifyRoutes(fastify) {
   // --- Invoice Lifecycle ---
   fastify.get('/invoices', {
     schema: { tags: ['Billing'], summary: 'List invoices' },
+    preHandler: [requirePermission('VIEW_BILL')],
     handler: billingController.getInvoices
   });
 
   fastify.post('/invoices', {
     schema: { tags: ['Billing'], summary: 'Create invoice (checkout)' },
+    preHandler: [requirePermission('CREATE_BILL')],
     handler: billingController.checkout
   });
 
   fastify.post('/invoices/draft', {
     schema: { tags: ['Billing'], summary: 'Create draft invoice' },
+    preHandler: [requirePermission('CREATE_BILL')],
     handler: billingController.createDraft
   });
 
   fastify.get('/invoices/:id', {
     schema: { tags: ['Billing'], summary: 'Get invoice details' },
+    preHandler: [requirePermission('VIEW_BILL')],
     handler: billingController.getInvoiceById
   });
 
   fastify.post('/invoices/:id/cancel', {
     schema: { tags: ['Billing'], summary: 'Cancel invoice' },
+    preHandler: [requirePermission('VOID_BILL')],
     handler: billingController.cancelInvoice
   });
 
   fastify.post('/invoices/:id/refund', {
     schema: { tags: ['Billing'], summary: 'Process invoice refund' },
+    preHandler: [requirePermission('REFUND_BILL')],
     handler: billingController.processRefund
   });
 
   // --- POS Utilities ---
   fastify.get('/scan/:barcode', {
     schema: { tags: ['Billing'], summary: 'Scan item by barcode' },
+    preHandler: [requirePermission('VIEW_BILL')],
     handler: billingController.scanItem
   });
 
@@ -75,6 +83,7 @@ async function billingFastifyRoutes(fastify) {
           },
         },
       },
+      preHandler: [requirePermission('CREATE_BILL')],
     },
     paymentController.settleInvoice,
   );

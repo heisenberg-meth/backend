@@ -40,6 +40,7 @@ class RoleService {
       { name: 'DELETE_INVENTORY', module: 'INVENTORY' },
       
       // Billing
+      { name: 'VIEW_BILL', module: 'BILLING' },
       { name: 'CREATE_BILL', module: 'BILLING' },
       { name: 'VOID_BILL', module: 'BILLING' },
       { name: 'REFUND_BILL', module: 'BILLING' },

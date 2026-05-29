@@ -4,6 +4,7 @@ import manufacturerController from '../manufacturers/fastify/manufacturer.fastif
 import batchController from '../batches/fastify/batch.fastify.controller.js';
 import { authenticate, requireTenant } from '../../middleware/auth.fastify.js';
 import { requireBranch } from '../../middleware/requireBranch.js';
+import { requirePermission } from '../../middleware/permission.fastify.js';
 
 async function medicineRoutes(fastify) {
   // Apply authentication to all routes in this plugin
@@ -85,18 +86,20 @@ async function medicineRoutes(fastify) {
           initialBatch: { type: 'object' }
         }
       }
-    }
+    },
+    preHandler: [requirePermission('VIEW_INVENTORY')],
   }, medicineController.createMedicine);
 
   fastify.put('/medicines/:id', {
     schema: {
       tags: ['Inventory'],
       params: { type: 'object', properties: { id: { type: 'string' } } }
-    }
+    },
+    preHandler: [requirePermission('VIEW_INVENTORY')],
   }, medicineController.updateMedicine);
 
   fastify.delete('/medicines/:id', {
-    preHandler: [authenticate, requireTenant],
+    preHandler: [requirePermission('VIEW_INVENTORY')],
     schema: {
       tags: ['Inventory'],
       params: { type: 'object', properties: { id: { type: 'string' } } }
@@ -111,16 +114,19 @@ async function medicineRoutes(fastify) {
 
   fastify.post('/categories', {
     schema: { tags: ['Inventory'], summary: 'Create category' },
+    preHandler: [requirePermission('VIEW_INVENTORY')],
     handler: categoryController.createCategory
   });
 
   fastify.put('/categories/:id', {
     schema: { tags: ['Inventory'], summary: 'Update category' },
+    preHandler: [requirePermission('VIEW_INVENTORY')],
     handler: categoryController.updateCategory
   });
 
   fastify.delete('/categories/:id', {
     schema: { tags: ['Inventory'], summary: 'Delete category' },
+    preHandler: [requirePermission('VIEW_INVENTORY')],
     handler: categoryController.deleteCategory
   });
 
@@ -132,16 +138,19 @@ async function medicineRoutes(fastify) {
 
   fastify.post('/manufacturers', {
     schema: { tags: ['Inventory'], summary: 'Create manufacturer' },
+    preHandler: [requirePermission('VIEW_INVENTORY')],
     handler: manufacturerController.createManufacturer
   });
 
   fastify.put('/manufacturers/:id', {
     schema: { tags: ['Inventory'], summary: 'Update manufacturer' },
+    preHandler: [requirePermission('VIEW_INVENTORY')],
     handler: manufacturerController.updateManufacturer
   });
 
   fastify.delete('/manufacturers/:id', {
     schema: { tags: ['Inventory'], summary: 'Delete manufacturer' },
+    preHandler: [requirePermission('VIEW_INVENTORY')],
     handler: manufacturerController.deleteManufacturer
   });
 
@@ -153,16 +162,19 @@ async function medicineRoutes(fastify) {
 
   fastify.post('/batches', {
     schema: { tags: ['Inventory'], summary: 'Add a batch' },
+    preHandler: [requirePermission('VIEW_INVENTORY')],
     handler: batchController.createBatch
   });
 
   fastify.put('/batches/:id', {
     schema: { tags: ['Inventory'], summary: 'Update batch' },
+    preHandler: [requirePermission('VIEW_INVENTORY')],
     handler: batchController.updateBatch
   });
 
   fastify.delete('/batches/:id', {
     schema: { tags: ['Inventory'], summary: 'Delete batch' },
+    preHandler: [requirePermission('VIEW_INVENTORY')],
     handler: batchController.deleteBatch
   });
 
@@ -201,14 +213,16 @@ async function medicineRoutes(fastify) {
           severity: { type: 'string' }
         }
       }
-    }
+    },
+    preHandler: [requirePermission('VIEW_INVENTORY')],
   }, medicineController.batchRecall);
 
   fastify.delete('/medicines-clear-all', {
     schema: {
       tags: ['Inventory'],
       summary: 'Clear all medicines for the tenant'
-    }
+    },
+    preHandler: [requirePermission('VIEW_INVENTORY')],
   }, medicineController.clearAllMedicines);
 
   // Batch Management
@@ -216,7 +230,8 @@ async function medicineRoutes(fastify) {
     schema: {
       tags: ['Inventory'],
       params: { type: 'object', properties: { id: { type: 'string' } } }
-    }
+    },
+    preHandler: [requirePermission('VIEW_INVENTORY')],
   }, medicineController.addBatch);
 
   // Barcode

@@ -1,5 +1,6 @@
 import analyticsController from '../controllers/analytics.fastify.controller.js';
 import { authenticate, requireTenant } from '../../../middleware/auth.fastify.js';
+import { requirePermission } from '../../../middleware/permission.fastify.js';
 
 async function analyticsRoutes(fastify) {
   fastify.addHook('preHandler', authenticate);
@@ -80,7 +81,8 @@ async function analyticsRoutes(fastify) {
             notes: { type: 'string' }
           }
         }
-      }
+      },
+      preHandler: [requirePermission('VIEW_FINANCIALS')],
     },
     analyticsController.handleCashRegister
   );
@@ -99,7 +101,8 @@ async function analyticsRoutes(fastify) {
             notes: { type: 'string' }
           }
         }
-      }
+      },
+      preHandler: [requirePermission('VIEW_FINANCIALS')],
     },
     analyticsController.closeCashRegister
   );

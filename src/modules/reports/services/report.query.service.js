@@ -79,7 +79,7 @@ class ReportQueryService {
 
     const medicineIds = topSellingGroups.map(g => g.medicineId);
     const medicines = await prisma.medicine.findMany({
-      where: { id: { in: medicineIds } },
+      where: { tenantId, id: { in: medicineIds } },
       select: { id: true, name: true }
     });
     const medNameMap = Object.fromEntries(medicines.map(m => [m.id, m.name]));
@@ -158,7 +158,7 @@ class ReportQueryService {
 
     const supplierIds = supplierGroups.map(g => g.supplierId);
     const suppliers = await prisma.supplier.findMany({
-      where: { id: { in: supplierIds } },
+      where: { tenantId, id: { in: supplierIds } },
       select: { id: true, name: true }
     });
     const suppNameMap = Object.fromEntries(suppliers.map(s => [s.id, s.name]));
@@ -226,7 +226,7 @@ class ReportQueryService {
 
     const categoryIds = expenseGroups.map(g => g.categoryId).filter(id => id !== null);
     const categories = await prisma.expenseCategory.findMany({
-      where: { id: { in: categoryIds } },
+      where: { tenantId, id: { in: categoryIds } },
       select: { id: true, name: true }
     });
     const catNameMap = Object.fromEntries(categories.map(c => [c.id, c.name]));

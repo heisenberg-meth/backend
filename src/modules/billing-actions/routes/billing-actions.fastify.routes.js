@@ -5,6 +5,7 @@ import pdfGenerationService from '../services/pdf-generation.service.js';
 import deliveryAuditService from '../services/delivery-audit.service.js';
 import { invoiceDeliveryQueue } from '../queue/invoice-delivery.queue.js';
 import { authenticate, requireTenant } from '../../../middleware/auth.fastify.js';
+import { requirePermission } from '../../../middleware/permission.fastify.js';
 
 async function billingActionsFastifyRoutes(fastify) {
   fastify.addHook('preHandler', authenticate);
@@ -12,6 +13,7 @@ async function billingActionsFastifyRoutes(fastify) {
 
   fastify.post('/invoices/:id/print', {
     schema: { tags: ['Billing'], summary: 'Print invoice' },
+    preHandler: [requirePermission('VIEW_INVENTORY')],
   }, async (request, reply) => {
     const invoice = await prisma.invoice.findUnique({ where: { id: request.params.id }, include: { items: true, tenant: true } });
     if (!invoice) return reply.code(404).send({ success: false, message: 'Invoice not found' });
@@ -25,6 +27,7 @@ async function billingActionsFastifyRoutes(fastify) {
 
   fastify.post('/invoices/:id/pdf', {
     schema: { tags: ['Billing'], summary: 'Generate invoice PDF' },
+    preHandler: [requirePermission('VIEW_INVENTORY')],
   }, async (request, reply) => {
     const invoice = await prisma.invoice.findUnique({
       where: { id: request.params.id },
@@ -47,6 +50,7 @@ async function billingActionsFastifyRoutes(fastify) {
 
   fastify.post('/invoices/:id/whatsapp', {
     schema: { tags: ['Billing'], summary: 'Send invoice via WhatsApp' },
+    preHandler: [requirePermission('VIEW_INVENTORY')],
   }, async (request, reply) => {
     const invoice = await prisma.invoice.findUnique({ where: { id: request.params.id } });
     if (!invoice) return reply.code(404).send({ success: false, message: 'Invoice not found' });
@@ -62,6 +66,7 @@ async function billingActionsFastifyRoutes(fastify) {
 
   fastify.post('/invoices/:id/email', {
     schema: { tags: ['Billing'], summary: 'Send invoice via email' },
+    preHandler: [requirePermission('VIEW_INVENTORY')],
   }, async (request, reply) => {
     const invoice = await prisma.invoice.findUnique({ where: { id: request.params.id } });
     if (!invoice) return reply.code(404).send({ success: false, message: 'Invoice not found' });
@@ -108,6 +113,7 @@ async function billingActionsFastifyRoutes(fastify) {
 
   fastify.post('/invoices/:id/resend', {
     schema: { tags: ['Billing'], summary: 'Resend invoice' },
+    preHandler: [requirePermission('VIEW_INVENTORY')],
   }, async (request, reply) => {
     const invoice = await prisma.invoice.findUnique({ where: { id: request.params.id, tenantId: request.tenantId } });
     if (!invoice) return reply.code(404).send({ success: false, message: 'Invoice not found' });
@@ -125,6 +131,7 @@ async function billingActionsFastifyRoutes(fastify) {
 
   fastify.post('/invoices/bulk-print', {
     schema: { tags: ['Billing'], summary: 'Bulk print invoices' },
+    preHandler: [requirePermission('VIEW_INVENTORY')],
   }, async (request, reply) => {
     let totalQueued = 0;
     for (const invoiceId of request.body.invoiceIds) {
@@ -142,6 +149,7 @@ async function billingActionsFastifyRoutes(fastify) {
 
   fastify.post('/invoices/:id/regenerate-pdf', {
     schema: { tags: ['Billing'], summary: 'Regenerate invoice PDF' },
+    preHandler: [requirePermission('VIEW_INVENTORY')],
   }, async (request, reply) => {
     const invoice = await prisma.invoice.findUnique({ where: { id: request.params.id, tenantId: request.tenantId } });
     if (!invoice) return reply.code(404).send({ success: false, message: 'Invoice not found' });

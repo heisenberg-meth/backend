@@ -1,7 +1,4 @@
 import prisma from "../../../config/prisma.js";
-import { initRedis } from "../../../config/redis.js";
-
-const redisClient = initRedis();
 
 class AuthPrismaRepository {
   async findUserByEmail(email) {
@@ -50,24 +47,6 @@ class AuthPrismaRepository {
         branchId: userData.branchId,
       },
     });
-  }
-
-  async saveRefreshToken(token, userId, expiresAt) {
-    const ttlSeconds = Math.floor((expiresAt.getTime() - Date.now()) / 1000);
-    const key = `refresh_token:${token}`;
-    await redisClient.set(key, userId, 'EX', ttlSeconds);
-  }
-
-  async findRefreshToken(token) {
-    const key = `refresh_token:${token}`;
-    const userId = await redisClient.get(key);
-    if (!userId) return null;
-    return { userId, token };
-  }
-
-  async deleteRefreshToken(token) {
-    const key = `refresh_token:${token}`;
-    await redisClient.del(key);
   }
 
   async logRegistrationAttempt(ip, fingerprint) {

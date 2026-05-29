@@ -1,6 +1,7 @@
 import controller from '../fastify/prescription.fastify.controller.js';
 import doctorController from '../fastify/doctor.fastify.controller.js';
 import { authenticate, requireTenant } from '../../../middleware/auth.fastify.js';
+import { requirePermission } from '../../../middleware/permission.fastify.js';
 
 export default async function (fastify) {
   fastify.addHook('preHandler', authenticate);
@@ -13,6 +14,7 @@ export default async function (fastify) {
 
   fastify.post('/', {
     schema: { tags: ['Prescriptions'], summary: 'Create prescription' },
+    preHandler: [requirePermission('VIEW_INVENTORY')],
     handler: controller.createPrescription,
   });
 
@@ -23,11 +25,13 @@ export default async function (fastify) {
 
   fastify.post('/:id/verify', {
     schema: { tags: ['Prescriptions'], summary: 'Verify prescription' },
+    preHandler: [requirePermission('VIEW_INVENTORY')],
     handler: controller.verifyPrescription,
   });
 
   fastify.post('/:id/reject', {
     schema: { tags: ['Prescriptions'], summary: 'Reject prescription' },
+    preHandler: [requirePermission('VIEW_INVENTORY')],
     handler: controller.rejectPrescription,
   });
 
@@ -38,6 +42,7 @@ export default async function (fastify) {
 
   fastify.post('/:id/convert-to-invoice', {
     schema: { tags: ['Prescriptions'], summary: 'Convert prescription to invoice' },
+    preHandler: [requirePermission('VIEW_INVENTORY')],
     handler: controller.convertToInvoice,
   });
 
@@ -58,6 +63,7 @@ export default async function (fastify) {
 
   fastify.post('/doctors', {
     schema: { tags: ['Doctors'], summary: 'Create doctor' },
+    preHandler: [requirePermission('VIEW_INVENTORY')],
     handler: doctorController.createDoctor,
   });
 }

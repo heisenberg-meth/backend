@@ -1,6 +1,7 @@
 import medicineController from '../controllers/medicine.fastify.controller.js';
 import prisma from '../../../config/prisma.js';
 import { authenticate, requireTenant } from '../../../middleware/auth.fastify.js';
+import { requirePermission } from '../../../middleware/permission.fastify.js';
 
 async function medicineIntelligenceRoutes(fastify) {
   fastify.addHook('preHandler', authenticate);
@@ -88,7 +89,8 @@ async function medicineIntelligenceRoutes(fastify) {
             }
           }
         }
-      }
+      },
+      preHandler: [requirePermission('CREATE_INVENTORY')],
     },
     medicineController.createMedicine
   );
@@ -102,7 +104,8 @@ async function medicineIntelligenceRoutes(fastify) {
           type: 'object',
           properties: { id: { type: 'string', format: 'uuid' } }
         }
-      }
+      },
+      preHandler: [requirePermission('UPDATE_INVENTORY')],
     },
     medicineController.updateMedicine
   );
@@ -116,7 +119,8 @@ async function medicineIntelligenceRoutes(fastify) {
           type: 'object',
           properties: { id: { type: 'string', format: 'uuid' } }
         }
-      }
+      },
+      preHandler: [requirePermission('DELETE_INVENTORY')],
     },
     medicineController.deleteMedicine
   );

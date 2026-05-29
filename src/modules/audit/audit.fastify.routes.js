@@ -1,11 +1,13 @@
 import prisma from '../../config/prisma.js';
 import { authenticate, requireTenant } from '../../middleware/auth.fastify.js';
+import { requirePermission } from '../../middleware/permission.fastify.js';
 
 async function auditRoutes(fastify) {
   fastify.addHook('preHandler', authenticate);
   fastify.addHook('preHandler', requireTenant);
 
   fastify.get('/', {
+    preHandler: requirePermission('audit:read'),
     schema: {
       tags: ['Audit'],
       summary: 'List audit logs',

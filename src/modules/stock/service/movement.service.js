@@ -55,6 +55,15 @@ class MovementService {
         createdBy: userId,
       }, tx);
 
+      await tx.inventory.update({
+        where: {
+          tenantId_branchId_medicineId: { tenantId, branchId, medicineId },
+        },
+        data: {
+          currentStock: { decrement: totalDeducted },
+        },
+      });
+
       logger.info({ tenantId, medicineId, quantity: totalDeducted, type }, 'Stock out completed');
 
       return { totalDeducted, batches: deductions };
@@ -96,6 +105,26 @@ class MovementService {
         notes: data.notes,
       }, client);
 
+      await client.inventory.upsert({
+        where: {
+          tenantId_branchId_medicineId: {
+            tenantId,
+            branchId: data.branchId,
+            medicineId: data.medicineId,
+          },
+        },
+        update: {
+          currentStock: { increment: data.quantity },
+        },
+        create: {
+          tenantId,
+          branchId: data.branchId,
+          medicineId: data.medicineId,
+          currentStock: data.quantity,
+          reorderPoint: 10,
+        },
+      });
+
       logger.info({ tenantId, medicineId: data.medicineId, quantity: data.quantity, batchId: newBatch.id }, 'Stock in completed');
 
       return newBatch;
@@ -103,6 +132,59 @@ class MovementService {
 
     if (tx) return run(tx);
     return prisma.$transaction(run);
+  }
+
+  async recordMovement(tenantId, data, userId, tx) {
+    const { medicineId, batchId, branchId, movementType, quantity, referenceType, referenceId, idempotencyKey, notes } = data;
+
+    const execute = async (client) => {
+      if (idempotencyKey) {
+        const existing = await client.stockMovement.findUnique({
+          where: { idempotencyKey }
+        });
+        if (existing) {
+          logger.info({ idempotencyKey }, '[MOVEMENT_SERVICE] Duplicate movement ignored');
+          return existing;
+        }
+      }
+
+      const updatedBatch = await client.inventoryBatch.update({
+        where: { id: batchId },
+        data: {
+          quantity: { increment: quantity },
+          availableQuantity: { increment: quantity },
+        },
+      });
+
+      await ledgerRepository.createTransaction({
+        tenantId,
+        medicineId,
+        batchId,
+        branchId,
+        type: movementType,
+        quantity: Math.abs(quantity),
+        previousStock: updatedBatch.quantity - quantity,
+        newStock: updatedBatch.quantity,
+        createdBy: userId,
+        referenceType,
+        referenceId,
+        notes,
+      }, client);
+
+      await client.inventory.update({
+        where: {
+          tenantId_branchId_medicineId: { tenantId, branchId, medicineId },
+        },
+        data: {
+          currentStock: { increment: quantity },
+        },
+      });
+
+      logger.info({ tenantId, medicineId, batchId, movementType, quantity }, 'Stock movement recorded');
+    };
+
+    if (tx) return execute(tx);
+    return prisma.$transaction(execute);
   }
 }
 

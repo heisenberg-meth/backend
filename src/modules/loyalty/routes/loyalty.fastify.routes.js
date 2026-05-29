@@ -1,5 +1,6 @@
 import controller from '../fastify/loyalty.fastify.controller.js';
 import { authenticate, requireTenant } from '../../../middleware/auth.fastify.js';
+import { requirePermission } from '../../../middleware/permission.fastify.js';
 
 export default async function (fastify) {
   fastify.addHook('preHandler', authenticate);
@@ -24,16 +25,19 @@ export default async function (fastify) {
 
   fastify.post('/:id/redeem', {
     schema: { tags: ['Loyalty'], summary: 'Redeem points for discount' },
+    preHandler: [requirePermission('VIEW_INVENTORY')],
     handler: controller.redeemPoints,
   });
 
   fastify.post('/:id/credit', {
     schema: { tags: ['Loyalty'], summary: 'Issue credit / outstanding dues' },
+    preHandler: [requirePermission('VIEW_INVENTORY')],
     handler: controller.addCredit,
   });
 
   fastify.post('/:id/credit-payment', {
     schema: { tags: ['Loyalty'], summary: 'Record payment against credit balance' },
+    preHandler: [requirePermission('VIEW_INVENTORY')],
     handler: controller.makePayment,
   });
 

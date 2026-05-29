@@ -1,5 +1,6 @@
 import metadataController from '../controllers/metadata.fastify.controller.js';
 import { authenticate, requireTenant } from '../../../middleware/auth.fastify.js';
+import { requirePermission } from '../../../middleware/permission.fastify.js';
 
 async function metadataRoutes(fastify) {
   fastify.addHook('preHandler', authenticate);
@@ -33,7 +34,8 @@ async function metadataRoutes(fastify) {
             leadDays: { type: 'integer' }
           }
         }
-      }
+      },
+      preHandler: [requirePermission('VIEW_INVENTORY')],
     },
     metadataController.addSupplier
   );

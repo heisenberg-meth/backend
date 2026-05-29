@@ -16,3 +16,9 @@ test-results/tests-e2e-auth-Auth-API-E2-e5547-login-with-invalid-password/error-
 docs/plans/schema-remediation.md
 routes.txt
 all-routes.txt
+0
+permissions.txt
+all_routes.txt
+auth_routes.txt
+permission_routes.txt
+all_queries.txt

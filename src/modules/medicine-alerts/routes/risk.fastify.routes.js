@@ -1,5 +1,6 @@
 import riskController from '../controllers/risk.fastify.controller.js';
 import { authenticate, requireTenant } from '../../../middleware/auth.fastify.js';
+import { requirePermission } from '../../../middleware/permission.fastify.js';
 
 async function riskAlertRoutes(fastify) {
   fastify.addHook('preHandler', authenticate);
@@ -117,7 +118,8 @@ async function riskAlertRoutes(fastify) {
       schema: {
         tags: ['Medicines', 'Alerts'],
         summary: 'Manually trigger a comprehensive pharmaceutical risk scan'
-      }
+      },
+      preHandler: [requirePermission('VIEW_INVENTORY')],
     },
     riskController.triggerExpiryScan
   );

@@ -134,7 +134,6 @@ class AuthPrismaService {
       subscription.status = 'EXPIRED';
     }
 
-    const accessToken = this._signAccessToken(user);
     const refreshToken = sessionService.generateDeviceToken();
 
     const session = await sessionService.createSession({
@@ -147,6 +146,8 @@ class AuthPrismaService {
     });
 
     await sessionService.revokeOtherSessions(user.id, session.id);
+
+    const accessToken = this._signAccessToken(user, session.id);
 
     const isExpired = subscription?.status === 'EXPIRED';
     const subscriptionStatus = subscription?.status || 'PENDING';
@@ -188,7 +189,7 @@ class AuthPrismaService {
     const newRefreshToken = sessionService.generateDeviceToken();
     await sessionService.rotateRefreshToken(session.id, newRefreshToken);
 
-    const accessToken = this._signAccessToken(user);
+    const accessToken = this._signAccessToken(user, session.id);
     const subscription = user.tenant?.subscription;
 
     if (subscription && subscription.status === 'TRIAL' && subscription.endDate && new Date() > subscription.endDate) {
@@ -275,6 +276,8 @@ class AuthPrismaService {
       data: { password: hashedPassword },
     });
 
+    await sessionService.revokeAllUserSessions(userId);
+
     return { message: 'Password changed successfully' };
   }
 
@@ -333,9 +336,9 @@ class AuthPrismaService {
     };
   }
 
-  _signAccessToken(user) {
+  _signAccessToken(user, sessionId) {
     return jwt.sign(
-      { userId: user.id, tenantId: user.tenantId, role: user.role, branchId: user.branchId },
+      { userId: user.id, tenantId: user.tenantId, role: user.role, branchId: user.branchId, sessionId },
       secretManager.getPrimarySecret(),
       { expiresIn: '15m', algorithm: 'HS256' },
     );

@@ -1,5 +1,6 @@
 import controller from '../fastify/storefront.fastify.controller.js';
 import { authenticate, requireTenant } from '../../../middleware/auth.fastify.js';
+import { requirePermission } from '../../../middleware/permission.fastify.js';
 
 export default async function (fastify) {
   fastify.get('/storefront/:tenantId/catalog', {
@@ -9,7 +10,7 @@ export default async function (fastify) {
 
   fastify.post('/sync/reconcile', {
     schema: { tags: ['Ecommerce'], summary: 'Reconcile inventory' },
-    preHandler: [authenticate, requireTenant],
+    preHandler: [authenticate, requireTenant, requirePermission('VIEW_INVENTORY')],
     handler: controller.reconcile,
   });
 }

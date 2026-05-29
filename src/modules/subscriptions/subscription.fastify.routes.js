@@ -1,6 +1,7 @@
 import controller from './fastify/subscription.fastify.controller.js';
 import trialController from './fastify/subscription-trial.fastify.controller.js';
 import { authenticate, requireTenant } from '../../middleware/auth.fastify.js';
+import { requirePermission } from '../../middleware/permission.fastify.js';
 
 export default async function (fastify) {
   fastify.addHook('preHandler', authenticate);
@@ -27,6 +28,7 @@ export default async function (fastify) {
         }
       }
     },
+    preHandler: [requirePermission('MANAGE_SETTINGS')],
     handler: controller.createSubscription
   });
 
@@ -35,6 +37,7 @@ export default async function (fastify) {
       tags: ['Subscriptions'],
       summary: 'Activate trial subscription'
     },
+    preHandler: [requirePermission('MANAGE_SETTINGS')],
     handler: trialController.activateTrial
   });
 
@@ -43,6 +46,7 @@ export default async function (fastify) {
       tags: ['Subscriptions'],
       summary: 'Activate/reactivate subscription'
     },
+    preHandler: [requirePermission('MANAGE_SETTINGS')],
     handler: controller.activateSubscription
   });
 
@@ -51,6 +55,7 @@ export default async function (fastify) {
       tags: ['Subscriptions'], 
       summary: 'Cancel subscription' 
     },
+    preHandler: [requirePermission('MANAGE_SETTINGS')],
     handler: controller.cancelSubscription
   });
 }

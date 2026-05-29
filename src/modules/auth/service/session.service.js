@@ -3,6 +3,10 @@ import CryptoJS from 'crypto-js';
 import prisma from '../../../config/prisma.js';
 
 class SessionService {
+  hashToken(raw) {
+    return crypto.createHash('sha256').update(raw).digest('hex');
+  }
+
   hashFingerprint(fingerprint) {
     if (!fingerprint) return null;
     const raw = typeof fingerprint === 'string' ? fingerprint : JSON.stringify(fingerprint);
@@ -15,6 +19,7 @@ class SessionService {
 
   async createSession({ userId, refreshToken, fingerprint, deviceName, userAgent, ipAddress }) {
     const fingerprintHash = this.hashFingerprint(fingerprint);
+    const tokenHash = this.hashToken(refreshToken);
 
     const expiresAt = new Date();
     expiresAt.setDate(expiresAt.getDate() + 30);
@@ -22,7 +27,7 @@ class SessionService {
     return prisma.userSession.create({
       data: {
         userId,
-        refreshToken,
+        refreshToken: tokenHash,
         fingerprintHash,
         deviceName: deviceName || null,
         userAgent: userAgent || null,
@@ -59,7 +64,7 @@ class SessionService {
 
   async findSessionByRefreshToken(refreshToken) {
     return prisma.userSession.findUnique({
-      where: { refreshToken },
+      where: { refreshToken: this.hashToken(refreshToken) },
     });
   }
 
@@ -77,7 +82,7 @@ class SessionService {
     return prisma.userSession.update({
       where: { id: sessionId },
       data: {
-        refreshToken: newRefreshToken,
+        refreshToken: this.hashToken(newRefreshToken),
         expiresAt,
       },
     });
