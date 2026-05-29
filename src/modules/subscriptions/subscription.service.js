@@ -126,7 +126,7 @@ class SubscriptionService {
         id: TRIAL_PLAN_ID,
         name: SUBSCRIPTION_PLANS[TRIAL_PLAN_ID]?.name || 'Free Trial',
         price: SUBSCRIPTION_PLANS[TRIAL_PLAN_ID]?.price ?? 0,
-        billingCycle: SUBSCRIPTION_PLANS[TRIAL_PLAN_ID]?.billingCycle || 'one-time',
+        billingCycle: 'MONTHLY',
         features: SUBSCRIPTION_PLANS[TRIAL_PLAN_ID]?.features || ['Free trial'],
       },
     });
