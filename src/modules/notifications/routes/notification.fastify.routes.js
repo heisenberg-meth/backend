@@ -6,6 +6,27 @@ export default async function (fastify) {
   fastify.addHook('preHandler', authenticate);
   fastify.addHook('preHandler', requireTenant);
 
+  // ── User Notification List ────────────────────────────────────
+  fastify.get('/', {
+    schema: { tags: ['Notifications'], summary: 'Get notifications for current user' },
+    handler: controller.getUserNotifications,
+  });
+
+  fastify.put('/read-all', {
+    schema: { tags: ['Notifications'], summary: 'Mark all notifications as read' },
+    handler: controller.markAllNotificationsRead,
+  });
+
+  fastify.put('/:id/read', {
+    schema: { tags: ['Notifications'], summary: 'Mark a notification as read' },
+    handler: controller.markNotificationRead,
+  });
+
+  fastify.delete('/:id', {
+    schema: { tags: ['Notifications'], summary: 'Delete a notification' },
+    handler: controller.deleteUserNotification,
+  });
+
   // ── Unified Send ──────────────────────────────────────────────
   fastify.post('/send', {
     schema: { tags: ['Notifications'], summary: 'Unified notification send - dispatches to any channel via orchestrator' },

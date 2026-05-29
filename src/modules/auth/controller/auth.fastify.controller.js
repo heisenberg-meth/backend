@@ -339,6 +339,36 @@ class AuthFastifyController {
     }
   }
 
+  async updateProfile(request, reply) {
+    try {
+      const result = await authService.updateProfile(request.user.id, request.body);
+      return reply.send(success(result));
+    } catch (error) {
+      request.log.error(error);
+      return reply.code(400).send(errorResponse(error?.message || 'Profile update failed', 'PROFILE_UPDATE_ERROR'));
+    }
+  }
+
+  async changePassword(request, reply) {
+    try {
+      const { currentPassword, newPassword } = request.body;
+      if (!currentPassword || !newPassword) {
+        return reply.code(400).send(errorResponse('Current password and new password are required', 'VALIDATION_ERROR'));
+      }
+      if (newPassword.length < 6) {
+        return reply.code(400).send(errorResponse('Password must be at least 6 characters', 'VALIDATION_ERROR'));
+      }
+      const result = await authService.changePassword(request.user.id, currentPassword, newPassword);
+      return reply.send(success(result));
+    } catch (error) {
+      request.log.error(error);
+      if (error?.message === 'Current password is incorrect') {
+        return reply.code(400).send(errorResponse(error.message, 'INVALID_PASSWORD'));
+      }
+      return reply.code(400).send(errorResponse(error?.message || 'Password change failed', 'PASSWORD_CHANGE_ERROR'));
+    }
+  }
+
   async getMe(request, reply) {
     try {
       const result = await authService.getMe(request.user.id);

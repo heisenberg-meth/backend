@@ -9,6 +9,7 @@ import csrf from '@fastify/csrf-protection';
 import metrics from 'fastify-metrics';
 import redis from '@fastify/redis';
 import fastifyJwt from '@fastify/jwt';
+import multipart from '@fastify/multipart';
 import client from 'prom-client';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -18,6 +19,8 @@ import { connectRedis } from './config/redis.js';
 import env from './config/env.js';
 import authRoutes from './modules/auth/routes/auth.fastify.routes.js';
 import usersRoutes from './modules/users/users.fastify.routes.js';
+import twoFactorRoutes from './modules/users/2fa.fastify.routes.js';
+import uploadsRoutes from './modules/uploads/uploads.fastify.routes.js';
 import purchaseOrderRoutes from './modules/purchase-orders/purchase-order.fastify.routes.js';
 import subscriptionRoutes from './modules/subscriptions/subscription.fastify.routes.js';
 import paymentRoutes from './modules/payments/payment.fastify.routes.js';
@@ -27,12 +30,14 @@ import teamRoutes from './modules/team/team.fastify.routes.js';
 import billingRoutes from './modules/billing/billing.fastify.routes.js';
 import { subscriptionGuard } from './middleware/subscription.guard.fastify.js';
 import billingAnalyticsRoutes from './modules/billing-analytics/routes/analytics.fastify.routes.js';
+import billingActionsRoutes from './modules/billing-actions/routes/billing-actions.fastify.routes.js';
 import inventoryRoutes from './modules/inventory/medicine.fastify.routes.js';
 import medicineIntelligenceRoutes from './modules/medicines/routes/medicine.fastify.routes.js';
 import batchFastifyRoutes from './modules/batches/routes/batch.fastify.routes.js';
 import medicineMetadataRoutes from './modules/medicine-metadata/routes/metadata.fastify.routes.js';
 import medicineAlertRoutes from './modules/medicine-alerts/routes/risk.fastify.routes.js';
 import medicineConfigurationRoutes from './modules/medicine-configuration/routes/configuration.fastify.routes.js';
+import medicineSearchFastifyRoutes from './modules/medicine-search/routes/medicine-search.fastify.routes.js';
 import patientFeaturesRoutes from './modules/patient-features/routes/patient-features.fastify.routes.js';
 import notificationSettingsRoutes from './modules/notification-settings/notification-settings.fastify.routes.js';
 import alertSettingsRoutes from './modules/alert-settings/alert-settings.fastify.routes.js';
@@ -55,6 +60,7 @@ import deliveryRoutes from './modules/delivery/routes/delivery.fastify.routes.js
 import ecommerceRoutes from './modules/ecommerce/routes/ecommerce.fastify.routes.js';
 import importRoutes from './modules/import/routes/import.fastify.routes.js';
 import stockRoutes from './modules/stock/routes/stock.fastify.routes.js';
+import auditRoutes from './modules/audit/audit.fastify.routes.js';
 import communicationsRoutes from './modules/communications/routes/communications.fastify.routes.js';
 import loyaltyRoutes from './modules/loyalty/routes/loyalty.fastify.routes.js';
 
@@ -107,6 +113,12 @@ const setupFastify = async () => {
       sameSite: 'none',
       secure: true,
       path: '/',
+    },
+  });
+
+  await fastify.register(multipart, {
+    limits: {
+      fileSize: 2 * 1024 * 1024,
     },
   });
 
@@ -245,6 +257,8 @@ const setupFastify = async () => {
 
   await fastify.register(authRoutes, { prefix: '/api/auth' });
   await fastify.register(usersRoutes, { prefix: '/api/users' });
+  await fastify.register(twoFactorRoutes, { prefix: '/api/users' });
+  await fastify.register(uploadsRoutes, { prefix: '/api/uploads' });
   await fastify.register(purchaseOrderRoutes, { prefix: '/api/purchase-orders' });
   await fastify.register(subscriptionRoutes, { prefix: '/api/subscriptions' });
   await fastify.register(paymentRoutes, { prefix: '/api/payments' });
@@ -256,12 +270,14 @@ const setupFastify = async () => {
   await fastify.register(teamRoutes, { prefix: '/api/team' });
   await fastify.register(billingRoutes, { prefix: '/api/billing' });
   await fastify.register(billingAnalyticsRoutes, { prefix: '/api/billing' });
+  await fastify.register(billingActionsRoutes, { prefix: '/api/billing' });
   await fastify.register(inventoryRoutes, { prefix: '/api/inventory' });
   await fastify.register(medicineIntelligenceRoutes, { prefix: '/api/medicines' });
   await fastify.register(batchFastifyRoutes, { prefix: '/api/batches' });
   await fastify.register(medicineMetadataRoutes, { prefix: '/api/medicines' });
   await fastify.register(medicineAlertRoutes, { prefix: '/api/medicines' });
   await fastify.register(medicineConfigurationRoutes, { prefix: '/api/medicines' });
+  await fastify.register(medicineSearchFastifyRoutes, { prefix: '/api/medicines' });
   await fastify.register(patientFeaturesRoutes, { prefix: '/api/patients' });
   await fastify.register(supplierRoutes, { prefix: '/api/suppliers' });
   await fastify.register(returnsRoutes, { prefix: '/api/billing' });
@@ -284,6 +300,7 @@ const setupFastify = async () => {
     prefix: '/api/import',
     bodyLimit: 50 * 1024 * 1024
   });
+  await fastify.register(auditRoutes, { prefix: '/api/audit' });
   await fastify.register(communicationsRoutes, { prefix: '/api/communications' });
   await fastify.register(loyaltyRoutes, { prefix: '/api/loyalty' });
 

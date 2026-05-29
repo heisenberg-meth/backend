@@ -646,6 +646,98 @@ class NotificationFastifyController {
       return reply.code(500).send({ success: false, message: error.message });
     }
   }
+
+  async getUserNotifications(request, reply) {
+    try {
+      const { tenantId, id: userId } = request.user;
+      const { page = 1, limit = 50, isRead } = request.query;
+      const skip = (parseInt(page) - 1) * parseInt(limit);
+      const take = parseInt(limit);
+
+      const where = { tenantId, userId };
+      if (isRead !== undefined) where.isRead = isRead === 'true';
+
+      const [notifications, total] = await Promise.all([
+        prisma.notification.findMany({
+          where,
+          orderBy: { createdAt: 'desc' },
+          skip,
+          take,
+        }),
+        prisma.notification.count({ where }),
+      ]);
+
+      return reply.send({
+        success: true,
+        data: notifications,
+        pagination: { total, page: parseInt(page), limit: take, totalPages: Math.ceil(total / take) },
+      });
+    } catch (error) {
+      logger.error({ error, userId: request.user?.id }, 'Failed to fetch user notifications');
+      return reply.code(500).send({ success: false, message: error.message });
+    }
+  }
+
+  async markNotificationRead(request, reply) {
+    try {
+      const { id } = request.params;
+      const { tenantId, id: userId } = request.user;
+
+      const notification = await prisma.notification.findFirst({
+        where: { id, tenantId, userId },
+      });
+      if (!notification) {
+        return reply.code(404).send({ success: false, message: 'Notification not found' });
+      }
+
+      await prisma.notification.update({
+        where: { id },
+        data: { isRead: true },
+      });
+
+      return reply.send({ success: true, data: { message: 'Notification marked as read' } });
+    } catch (error) {
+      logger.error({ error }, 'Failed to mark notification as read');
+      return reply.code(500).send({ success: false, message: error.message });
+    }
+  }
+
+  async markAllNotificationsRead(request, reply) {
+    try {
+      const { tenantId, id: userId } = request.user;
+
+      await prisma.notification.updateMany({
+        where: { tenantId, userId, isRead: false },
+        data: { isRead: true },
+      });
+
+      return reply.send({ success: true, data: { message: 'All notifications marked as read' } });
+    } catch (error) {
+      logger.error({ error }, 'Failed to mark all notifications as read');
+      return reply.code(500).send({ success: false, message: error.message });
+    }
+  }
+
+  async deleteUserNotification(request, reply) {
+    try {
+      const { id } = request.params;
+      const { tenantId, id: userId } = request.user;
+
+      const notification = await prisma.notification.findFirst({
+        where: { id, tenantId, userId },
+      });
+      if (!notification) {
+        return reply.code(404).send({ success: false, message: 'Notification not found' });
+      }
+
+      await prisma.notification.delete({ where: { id } });
+
+      return reply.send({ success: true, data: { message: 'Notification deleted' } });
+    } catch (error) {
+      logger.error({ error }, 'Failed to delete notification');
+      return reply.code(500).send({ success: false, message: error.message });
+    }
+  }
 }
 
 export default new NotificationFastifyController();

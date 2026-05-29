@@ -35,6 +35,16 @@ class SubscriptionFastifyController {
       return reply.code(500).send({ success: false, message: 'Failed to cancel subscription' });
     }
   }
+
+  async activateSubscription(request, reply) {
+    try {
+      const status = await subscriptionService.activateSubscription(request.tenantId);
+      return { success: true, data: status };
+    } catch (error) {
+      request.log.error(error);
+      return reply.code(500).send({ success: false, message: 'Failed to activate subscription' });
+    }
+  }
 }
 
 export default new SubscriptionFastifyController();

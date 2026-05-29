@@ -101,6 +101,18 @@ class SubscriptionService {
     return subscription;
   }
 
+  async activateSubscription(tenantId) {
+    const subscription = await prisma.subscription.findUnique({ where: { tenantId } });
+    if (!subscription) {
+      return this.activateTrial(tenantId);
+    }
+    const updated = await prisma.subscription.update({
+      where: { tenantId },
+      data: { status: 'ACTIVE' }
+    });
+    return this.getSubscriptionStatus(tenantId);
+  }
+
   async activateTrial(tenantId) {
     const existing = await prisma.subscription.findUnique({ where: { tenantId } });
     if (existing && existing.status !== 'EXPIRED' && existing.status !== 'CANCELLED') {

@@ -176,6 +176,26 @@ async function authRoutes(fastify) {
     },
     authController.revokeSession,
   );
+
+  fastify.put(
+    '/change-password',
+    {
+      preHandler: [authenticate],
+      schema: {
+        tags: ['Auth'],
+        summary: 'Change password for authenticated user',
+        body: {
+          type: 'object',
+          required: ['currentPassword', 'newPassword'],
+          properties: {
+            currentPassword: { type: 'string' },
+            newPassword: { type: 'string', minLength: 6 },
+          },
+        },
+      },
+    },
+    authController.changePassword,
+  );
 }
 
 export default authRoutes;

@@ -164,6 +164,76 @@ async function settingsRoutes(fastify) {
       },
     },
   }, settingsController.getGstVersionHistory);
+
+  // ── Settings Sub-modules (delegate to main settings) ────────────
+
+  fastify.get('/inventory', {
+    schema: { tags: ['Settings'], summary: 'Get inventory settings' },
+  }, settingsController.getSettings);
+
+  fastify.put('/inventory', {
+    schema: { tags: ['Settings'], summary: 'Update inventory settings' },
+  }, settingsController.updateSettings);
+
+  fastify.get('/billing', {
+    schema: { tags: ['Settings'], summary: 'Get billing settings' },
+  }, settingsController.getSettings);
+
+  fastify.put('/billing', {
+    schema: { tags: ['Settings'], summary: 'Update billing settings' },
+  }, settingsController.updateSettings);
+
+  fastify.get('/tax', {
+    schema: { tags: ['Settings'], summary: 'Get tax settings' },
+  }, settingsController.getSettings);
+
+  fastify.put('/tax', {
+    schema: { tags: ['Settings'], summary: 'Update tax settings' },
+  }, settingsController.updateSettings);
+
+  fastify.get('/loyalty', {
+    schema: { tags: ['Settings'], summary: 'Get loyalty settings' },
+  }, settingsController.getSettings);
+
+  fastify.put('/loyalty', {
+    schema: { tags: ['Settings'], summary: 'Update loyalty settings' },
+  }, settingsController.updateSettings);
+
+  fastify.get('/security', {
+    schema: { tags: ['Settings'], summary: 'Get security settings' },
+  }, settingsController.getSettings);
+
+  fastify.put('/security', {
+    schema: { tags: ['Settings'], summary: 'Update security settings' },
+  }, settingsController.updateSettings);
+
+  fastify.get('/store-profile', {
+    schema: { tags: ['Settings'], summary: 'Get store profile' },
+  }, settingsController.getSettings);
+
+  fastify.put('/store-profile', {
+    schema: { tags: ['Settings'], summary: 'Update store profile' },
+  }, settingsController.updateSettings);
+
+  fastify.get('/audit', {
+    schema: { tags: ['Settings'], summary: 'Get settings audit logs' },
+  }, settingsController.getSettings);
+
+  fastify.get('/alerts', {
+    schema: { tags: ['Settings'], summary: 'Get alert thresholds' },
+  }, settingsController.getSettings);
+
+  fastify.put('/alerts', {
+    schema: { tags: ['Settings'], summary: 'Update alert thresholds' },
+  }, settingsController.updateSettings);
+
+  fastify.get('/integrations', {
+    schema: { tags: ['Settings'], summary: 'Get integrations' },
+  }, settingsController.getSettings);
+
+  fastify.put('/integrations', {
+    schema: { tags: ['Settings'], summary: 'Update integrations' },
+  }, settingsController.updateSettings);
 }
 
 export default settingsRoutes;

@@ -241,6 +241,43 @@ class AuthPrismaService {
     await sessionService.revokeSession(sessionId);
   }
 
+  async updateProfile(userId, data) {
+    const { fullName, phone, shopName } = data;
+    const updateData = {};
+    if (fullName !== undefined) updateData.fullName = fullName;
+    if (phone !== undefined) updateData.phone = phone;
+
+    const user = await prisma.user.update({
+      where: { id: userId },
+      data: updateData,
+    });
+
+    if (shopName !== undefined && user.tenantId) {
+      await prisma.tenant.update({
+        where: { id: user.tenantId },
+        data: { name: shopName },
+      });
+    }
+
+    return { message: 'Profile updated successfully' };
+  }
+
+  async changePassword(userId, currentPassword, newPassword) {
+    const user = await authRepository.findUserById(userId);
+    if (!user) throw new Error('User not found');
+
+    const isMatch = await bcrypt.compare(currentPassword, user.password);
+    if (!isMatch) throw new Error('Current password is incorrect');
+
+    const hashedPassword = await bcrypt.hash(newPassword, 10);
+    await prisma.user.update({
+      where: { id: userId },
+      data: { password: hashedPassword },
+    });
+
+    return { message: 'Password changed successfully' };
+  }
+
   async getMe(userId) {
     const user = await authRepository.findUserById(userId);
     if (!user) {

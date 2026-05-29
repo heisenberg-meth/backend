@@ -8,7 +8,7 @@ const ENV_PATTERNS = {
   RAZORPAY_KEY_SECRET: /^[A-Za-z0-9]{10,}$/,
 };
 
-const sanitizeEnv = (val) => (val ? String(val).trim().replace(/^["']|["']$/g, '') : undefined);
+const sanitizeEnv = (val) => (val ? String(val).trim().replace(/^["']|["']$/g, '').replace(/[\r\n]/g, '') : undefined);
 
 let validated = false;
 let validationErrors = [];

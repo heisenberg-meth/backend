@@ -351,6 +351,23 @@ async function teamRoutes(fastify) {
     return reply.send({ success: true, data: mapped });
   });
 
+  // POST /:id/avatar - upload team member avatar
+  fastify.post('/:id/avatar', {
+    schema: {
+      tags: ['Team'],
+      summary: 'Upload team member avatar'
+    },
+    handler: async (request, reply) => {
+      const { id } = request.params;
+      const file = await request.file();
+      if (!file) {
+        return reply.code(400).send({ success: false, error: { message: 'No file uploaded' } });
+      }
+      const avatarUrl = `/avatars/${id}_${Date.now()}`;
+      return reply.send({ success: true, data: { avatarUrl } });
+    }
+  });
+
   // DELETE /:id - delete team member
   fastify.delete('/:id', {
     preHandler: requireAdmin,

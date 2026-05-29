@@ -38,6 +38,14 @@ export default async function (fastify) {
     handler: trialController.activateTrial
   });
 
+  fastify.post('/activate', {
+    schema: {
+      tags: ['Subscriptions'],
+      summary: 'Activate/reactivate subscription'
+    },
+    handler: controller.activateSubscription
+  });
+
   fastify.post('/cancel', {
     schema: { 
       tags: ['Subscriptions'], 
