@@ -63,10 +63,19 @@ class SessionService {
   }
 
   async findSessionByRefreshToken(refreshToken) {
-    return prisma.userSession.findUnique({
-      where: { refreshToken: this.hashToken(refreshToken) },
-    });
-  }
+  const hash = this.hashToken(refreshToken);
+
+  console.log("COOKIE TOKEN:", refreshToken);
+  console.log("TOKEN HASH:", hash);
+
+  const session = await prisma.userSession.findUnique({
+    where: { refreshToken: hash },
+  });
+
+  console.log("SESSION FOUND:", !!session);
+
+  return session;
+}
 
   async findActiveSessionByUser(userId) {
     return prisma.userSession.findFirst({

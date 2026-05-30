@@ -6,11 +6,23 @@ import authService from '../service/auth.prisma.service.js';
 import authRepository from '../repository/auth.prisma.repository.js';
 import sessionService from '../service/session.service.js';
 import secretManager from '../../../config/secrets.js';
-import { registerSchema, loginSchema, forgotPasswordSchema, verifyResetOtpSchema, resetPasswordSchema, resendResetOtpSchema } from '../validators/auth.validator.js';
+import {
+  registerSchema,
+  loginSchema,
+  forgotPasswordSchema,
+  verifyResetOtpSchema,
+  resetPasswordSchema,
+  resendResetOtpSchema,
+} from '../validators/auth.validator.js';
 import { success, error as errorResponse } from '../../../shared/helpers/response.js';
 import { queueEmail } from '../../../shared/services/email.service.js';
 import { RESET_OTP_TEMPLATE } from '../../notifications/templates/email.templates.js';
-import { OTP_EXPIRY_MS, RESEND_COOLDOWN_MS, MAX_OTP_ATTEMPTS, RESET_TOKEN_EXPIRY_MS } from '../auth.constants.js';
+import {
+  OTP_EXPIRY_MS,
+  RESEND_COOLDOWN_MS,
+  MAX_OTP_ATTEMPTS,
+  RESET_TOKEN_EXPIRY_MS,
+} from '../auth.constants.js';
 
 const COOKIE_OPTIONS = {
   path: '/',
@@ -36,12 +48,16 @@ class AuthFastifyController {
       request.log.error(error);
       if (error instanceof ZodError) {
         const firstIssue = error.issues?.[0];
-        return reply.code(400).send(errorResponse(firstIssue?.message || 'Validation failed', 'VALIDATION_ERROR'));
+        return reply
+          .code(400)
+          .send(errorResponse(firstIssue?.message || 'Validation failed', 'VALIDATION_ERROR'));
       }
       if (error?.message === 'User already exists') {
         return reply.code(409).send(errorResponse(error.message, 'USER_EXISTS'));
       }
-      return reply.code(400).send(errorResponse(error?.message || 'Registration failed', 'REGISTRATION_ERROR'));
+      return reply
+        .code(400)
+        .send(errorResponse(error?.message || 'Registration failed', 'REGISTRATION_ERROR'));
     }
   }
 
@@ -63,7 +79,9 @@ class AuthFastifyController {
       request.log.error(error);
       if (error instanceof ZodError) {
         const firstIssue = error.issues?.[0];
-        return reply.code(400).send(errorResponse(firstIssue?.message || 'Validation failed', 'VALIDATION_ERROR'));
+        return reply
+          .code(400)
+          .send(errorResponse(firstIssue?.message || 'Validation failed', 'VALIDATION_ERROR'));
       }
       if (error?.message === 'Invalid credentials') {
         return reply.code(401).send(errorResponse(error.message, 'INVALID_CREDENTIALS'));
@@ -71,16 +89,25 @@ class AuthFastifyController {
       if (error?.message?.includes('active on another device')) {
         return reply.code(403).send(errorResponse(error.message, 'SESSION_LIMIT'));
       }
-      return reply.code(500).send(errorResponse(error?.message || 'Internal server error', 'INTERNAL_ERROR'));
+      return reply
+        .code(500)
+        .send(errorResponse(error?.message || 'Internal server error', 'INTERNAL_ERROR'));
     }
   }
 
   async refreshToken(request, reply) {
     try {
+      console.log('REFRESH COOKIES:', request.cookies);
+
       const refreshToken = request.cookies?.refreshToken || request.body?.refreshToken;
+
+      console.log('REFRESH TOKEN:', refreshToken);
       if (!refreshToken) {
-        return reply.code(401).send(errorResponse('Refresh token required', 'REFRESH_TOKEN_REQUIRED'));
+        return reply
+          .code(401)
+          .send(errorResponse('Refresh token required', 'REFRESH_TOKEN_REQUIRED'));
       }
+      console.log('REFRESH COOKIE:', request.cookies?.refreshToken);
 
       const result = await authService.refreshSession(refreshToken);
 
@@ -89,11 +116,16 @@ class AuthFastifyController {
       return reply.send(success(result));
     } catch (error) {
       request.log.error(error);
-      if (error?.message === 'Invalid refresh token' || error?.message === 'Refresh token expired') {
+      if (
+        error?.message === 'Invalid refresh token' ||
+        error?.message === 'Refresh token expired'
+      ) {
         reply.clearCookie('refreshToken', { path: '/' });
         return reply.code(401).send(errorResponse(error.message, 'REFRESH_INVALID'));
       }
-      return reply.code(401).send(errorResponse(error?.message || 'Session refresh failed', 'REFRESH_FAILED'));
+      return reply
+        .code(401)
+        .send(errorResponse(error?.message || 'Session refresh failed', 'REFRESH_FAILED'));
     }
   }
 
@@ -117,7 +149,9 @@ class AuthFastifyController {
       return reply.send(success({ message: 'All sessions revoked' }));
     } catch (error) {
       request.log.error(error);
-      return reply.code(400).send(errorResponse(error?.message || 'Session revocation failed', 'LOGOUT_ALL_ERROR'));
+      return reply
+        .code(400)
+        .send(errorResponse(error?.message || 'Session revocation failed', 'LOGOUT_ALL_ERROR'));
     }
   }
 
@@ -127,7 +161,9 @@ class AuthFastifyController {
       return reply.send(success({ sessions }));
     } catch (error) {
       request.log.error(error);
-      return reply.code(400).send(errorResponse(error?.message || 'Failed to fetch sessions', 'SESSIONS_ERROR'));
+      return reply
+        .code(400)
+        .send(errorResponse(error?.message || 'Failed to fetch sessions', 'SESSIONS_ERROR'));
     }
   }
 
@@ -138,7 +174,9 @@ class AuthFastifyController {
       return reply.send(success({ message: 'Session revoked' }));
     } catch (error) {
       request.log.error(error);
-      return reply.code(400).send(errorResponse(error?.message || 'Failed to revoke session', 'REVOKE_ERROR'));
+      return reply
+        .code(400)
+        .send(errorResponse(error?.message || 'Failed to revoke session', 'REVOKE_ERROR'));
     }
   }
 
@@ -168,16 +206,22 @@ class AuthFastifyController {
         await queueEmail(email, 'Password Reset OTP', RESET_OTP_TEMPLATE(otp));
       }
 
-      return reply.send(success({
-        message: 'If the account exists, a recovery code has been sent.',
-      }));
+      return reply.send(
+        success({
+          message: 'If the account exists, a recovery code has been sent.',
+        }),
+      );
     } catch (error) {
       request.log.error(error);
       if (error instanceof ZodError) {
         const firstIssue = error.issues?.[0];
-        return reply.code(400).send(errorResponse(firstIssue?.message || 'Validation failed', 'VALIDATION_ERROR'));
+        return reply
+          .code(400)
+          .send(errorResponse(firstIssue?.message || 'Validation failed', 'VALIDATION_ERROR'));
       }
-      return reply.code(500).send(errorResponse(error?.message || 'Internal server error', 'INTERNAL_ERROR'));
+      return reply
+        .code(500)
+        .send(errorResponse(error?.message || 'Internal server error', 'INTERNAL_ERROR'));
     }
   }
 
@@ -191,7 +235,9 @@ class AuthFastifyController {
       }
 
       if (user.resetOtpAttempts >= MAX_OTP_ATTEMPTS) {
-        return reply.code(429).send(errorResponse('Too many failed attempts. Request a new OTP.', 'OTP_LOCKED'));
+        return reply
+          .code(429)
+          .send(errorResponse('Too many failed attempts. Request a new OTP.', 'OTP_LOCKED'));
       }
 
       if (new Date() > user.resetOtpExpiry) {
@@ -222,17 +268,23 @@ class AuthFastifyController {
         },
       });
 
-      return reply.send(success({
-        message: 'OTP verified successfully',
-        resetToken,
-      }));
+      return reply.send(
+        success({
+          message: 'OTP verified successfully',
+          resetToken,
+        }),
+      );
     } catch (error) {
       request.log.error(error);
       if (error instanceof ZodError) {
         const firstIssue = error.issues?.[0];
-        return reply.code(400).send(errorResponse(firstIssue?.message || 'Validation failed', 'VALIDATION_ERROR'));
+        return reply
+          .code(400)
+          .send(errorResponse(firstIssue?.message || 'Validation failed', 'VALIDATION_ERROR'));
       }
-      return reply.code(500).send(errorResponse(error?.message || 'Internal server error', 'INTERNAL_ERROR'));
+      return reply
+        .code(500)
+        .send(errorResponse(error?.message || 'Internal server error', 'INTERNAL_ERROR'));
     }
   }
 
@@ -244,7 +296,9 @@ class AuthFastifyController {
       try {
         payload = jwt.verify(resetToken, secretManager.getPrimarySecret());
       } catch {
-        return reply.code(400).send(errorResponse('Invalid or expired reset token.', 'INVALID_RESET_TOKEN'));
+        return reply
+          .code(400)
+          .send(errorResponse('Invalid or expired reset token.', 'INVALID_RESET_TOKEN'));
       }
 
       if (payload.type !== 'password-reset' || !payload.userId) {
@@ -257,7 +311,11 @@ class AuthFastifyController {
       }
 
       if (!user.resetTokenExpiry || new Date() > user.resetTokenExpiry) {
-        return reply.code(400).send(errorResponse('Reset session expired. Request a new OTP.', 'RESET_SESSION_EXPIRED'));
+        return reply
+          .code(400)
+          .send(
+            errorResponse('Reset session expired. Request a new OTP.', 'RESET_SESSION_EXPIRED'),
+          );
       }
 
       const hashedPassword = await bcrypt.hash(newPassword, 10);
@@ -283,9 +341,13 @@ class AuthFastifyController {
       request.log.error(error);
       if (error instanceof ZodError) {
         const firstIssue = error.issues?.[0];
-        return reply.code(400).send(errorResponse(firstIssue?.message || 'Validation failed', 'VALIDATION_ERROR'));
+        return reply
+          .code(400)
+          .send(errorResponse(firstIssue?.message || 'Validation failed', 'VALIDATION_ERROR'));
       }
-      return reply.code(500).send(errorResponse(error?.message || 'Internal server error', 'INTERNAL_ERROR'));
+      return reply
+        .code(500)
+        .send(errorResponse(error?.message || 'Internal server error', 'INTERNAL_ERROR'));
     }
   }
 
@@ -300,10 +362,14 @@ class AuthFastifyController {
           const elapsed = Date.now() - new Date(user.resetOtpLastSentAt).getTime();
           const remaining = Math.ceil((RESEND_COOLDOWN_MS - elapsed) / 1000);
           if (elapsed < RESEND_COOLDOWN_MS) {
-            return reply.code(429).send(errorResponse(
-              `Please wait ${remaining} seconds before requesting a new OTP.`,
-              'RESEND_COOLDOWN',
-            ));
+            return reply
+              .code(429)
+              .send(
+                errorResponse(
+                  `Please wait ${remaining} seconds before requesting a new OTP.`,
+                  'RESEND_COOLDOWN',
+                ),
+              );
           }
         }
 
@@ -326,16 +392,22 @@ class AuthFastifyController {
         await queueEmail(email, 'Resend Password Reset OTP', RESET_OTP_TEMPLATE(otp));
       }
 
-      return reply.send(success({
-        message: 'If the account exists, a recovery code has been sent.',
-      }));
+      return reply.send(
+        success({
+          message: 'If the account exists, a recovery code has been sent.',
+        }),
+      );
     } catch (error) {
       request.log.error(error);
       if (error instanceof ZodError) {
         const firstIssue = error.issues?.[0];
-        return reply.code(400).send(errorResponse(firstIssue?.message || 'Validation failed', 'VALIDATION_ERROR'));
+        return reply
+          .code(400)
+          .send(errorResponse(firstIssue?.message || 'Validation failed', 'VALIDATION_ERROR'));
       }
-      return reply.code(500).send(errorResponse(error?.message || 'Internal server error', 'INTERNAL_ERROR'));
+      return reply
+        .code(500)
+        .send(errorResponse(error?.message || 'Internal server error', 'INTERNAL_ERROR'));
     }
   }
 
@@ -345,7 +417,9 @@ class AuthFastifyController {
       return reply.send(success(result));
     } catch (error) {
       request.log.error(error);
-      return reply.code(400).send(errorResponse(error?.message || 'Profile update failed', 'PROFILE_UPDATE_ERROR'));
+      return reply
+        .code(400)
+        .send(errorResponse(error?.message || 'Profile update failed', 'PROFILE_UPDATE_ERROR'));
     }
   }
 
@@ -353,19 +427,31 @@ class AuthFastifyController {
     try {
       const { currentPassword, newPassword } = request.body;
       if (!currentPassword || !newPassword) {
-        return reply.code(400).send(errorResponse('Current password and new password are required', 'VALIDATION_ERROR'));
+        return reply
+          .code(400)
+          .send(
+            errorResponse('Current password and new password are required', 'VALIDATION_ERROR'),
+          );
       }
       if (newPassword.length < 6) {
-        return reply.code(400).send(errorResponse('Password must be at least 6 characters', 'VALIDATION_ERROR'));
+        return reply
+          .code(400)
+          .send(errorResponse('Password must be at least 6 characters', 'VALIDATION_ERROR'));
       }
-      const result = await authService.changePassword(request.user.id, currentPassword, newPassword);
+      const result = await authService.changePassword(
+        request.user.id,
+        currentPassword,
+        newPassword,
+      );
       return reply.send(success(result));
     } catch (error) {
       request.log.error(error);
       if (error?.message === 'Current password is incorrect') {
         return reply.code(400).send(errorResponse(error.message, 'INVALID_PASSWORD'));
       }
-      return reply.code(400).send(errorResponse(error?.message || 'Password change failed', 'PASSWORD_CHANGE_ERROR'));
+      return reply
+        .code(400)
+        .send(errorResponse(error?.message || 'Password change failed', 'PASSWORD_CHANGE_ERROR'));
     }
   }
 
@@ -378,7 +464,9 @@ class AuthFastifyController {
       if (error?.message === 'User not found') {
         return reply.code(404).send(errorResponse(error.message, 'USER_NOT_FOUND'));
       }
-      return reply.code(500).send(errorResponse(error?.message || 'Internal server error', 'INTERNAL_ERROR'));
+      return reply
+        .code(500)
+        .send(errorResponse(error?.message || 'Internal server error', 'INTERNAL_ERROR'));
     }
   }
 }
