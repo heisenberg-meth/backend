@@ -97,17 +97,14 @@ class AuthFastifyController {
 
   async refreshToken(request, reply) {
     try {
-      console.log('REFRESH COOKIES:', request.cookies);
 
       const refreshToken = request.cookies?.refreshToken || request.body?.refreshToken;
 
-      console.log('REFRESH TOKEN:', refreshToken);
       if (!refreshToken) {
         return reply
           .code(401)
           .send(errorResponse('Refresh token required', 'REFRESH_TOKEN_REQUIRED'));
       }
-      console.log('REFRESH COOKIE:', request.cookies?.refreshToken);
 
       const result = await authService.refreshSession(refreshToken);
 
