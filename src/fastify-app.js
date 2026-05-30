@@ -224,6 +224,11 @@ const setupFastify = async () => {
   await fastify.register(fastifyStatic, {
     root: avatarsRoot,
     prefix: '/avatars/',
+    decorateReply: false,
+    setHeaders: (res) => {
+      res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
+      res.setHeader('Access-Control-Allow-Origin', '*');
+    },
   });
 
   await fastify.register(metrics, {
