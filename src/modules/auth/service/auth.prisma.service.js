@@ -87,6 +87,7 @@ class AuthPrismaService {
         fullName: user.fullName,
         tenantId: user.tenantId,
         branchId: user.branchId,
+        avatar: user.avatar,
       });
     } catch (eventError) {
       logger.warn({ err: eventError?.message }, '[AUTH] Event bus publish failed (non-critical)');
@@ -163,6 +164,7 @@ class AuthPrismaService {
         role: user.role,
         tenantId: user.tenantId,
         branchId: user.branchId,
+        avatar: user.avatar,
         subscriptionStatus,
         currentPeriodEnd: subscription?.endDate,
       },
@@ -213,6 +215,7 @@ class AuthPrismaService {
         role: user.role,
         tenantId: user.tenantId,
         branchId: user.branchId,
+        avatar: user.avatar,
         subscriptionStatus: subscription?.status || 'PENDING',
         currentPeriodEnd: subscription?.endDate,
       },
@@ -299,6 +302,7 @@ class AuthPrismaService {
         role: user.role,
         tenantId: user.tenantId,
         branchId: user.branchId,
+        avatar: user.avatar,
         subscriptionStatus: subscription?.status || 'PENDING',
         currentPeriodEnd: subscription?.endDate,
       },
