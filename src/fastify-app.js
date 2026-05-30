@@ -221,6 +221,8 @@ const setupFastify = async () => {
       ? '/tmp/uploads/avatars'
       : path.join(__dirname, '../uploads/avatars');
 
+      console.log("AVATARS ROOT:", avatarsRoot);
+
   await fastify.register(fastifyStatic, {
     root: avatarsRoot,
     prefix: '/avatars/',

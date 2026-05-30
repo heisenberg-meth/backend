@@ -17,6 +17,7 @@ const COOKIE_OPTIONS = {
   httpOnly: true,
   sameSite: 'none',
   secure: true,
+  partitioned: true,
   maxAge: 30 * 24 * 60 * 60,
 };
 
