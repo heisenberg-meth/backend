@@ -67,6 +67,10 @@ async function uploadsRoutes(fastify) {
         }
 
         await fs.writeFile(filePath, buffer);
+        console.log('AVATAR SAVED:', filePath);
+
+        const files = await fs.readdir(uploadsDir);
+        console.log('FILES IN AVATAR DIR:', files);
 
         const avatarUrl = `/avatars/${filename}`;
 

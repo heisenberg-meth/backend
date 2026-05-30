@@ -222,6 +222,8 @@ const setupFastify = async () => {
       ? '/tmp/uploads/avatars'
       : path.join(__dirname, '../uploads/avatars');
   await fs.mkdir(avatarsRoot, { recursive: true });
+  const files = await fs.readdir(avatarsRoot);
+  console.log('BOOT AVATAR FILES:', files);
 
   await fastify.register(fastifyStatic, {
     root: avatarsRoot,
@@ -230,7 +232,7 @@ const setupFastify = async () => {
     setHeaders: (res) => {
       res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
       res.setHeader('Access-Control-Allow-Origin', '*');
-      res.setHeader('Access-Control-Allow-Headers', 'GET')
+      res.setHeader('Access-Control-Allow-Headers', 'GET');
     },
   });
 
