@@ -80,15 +80,16 @@ const redisHealthGauge = new client.Gauge({
 const fastify = Fastify({
   bodyLimit: 50 * 1024 * 1024, // 50MB limit for bulk import JSON payloads
   logger: {
-    transport: process.env.NODE_ENV === 'development'
-      ? {
-          target: 'pino-pretty',
-          options: {
-            translateTime: 'HH:MM:ss Z',
-            ignore: 'pid,hostname',
-          },
-        }
-      : undefined,
+    transport:
+      process.env.NODE_ENV === 'development'
+        ? {
+            target: 'pino-pretty',
+            options: {
+              translateTime: 'HH:MM:ss Z',
+              ignore: 'pid,hostname',
+            },
+          }
+        : undefined,
   },
 });
 
@@ -118,7 +119,7 @@ const setupFastify = async () => {
 
   await fastify.register(multipart, {
     limits: {
-      fileSize: 2 * 1024 * 1024,
+      fileSize: 10 * 1024 * 1024,
     },
   });
 
@@ -143,7 +144,14 @@ const setupFastify = async () => {
     ],
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
     credentials: true,
-    allowedHeaders: ['Content-Type', 'Authorization', 'x-auth-token', 'X-Idempotency-Key', 'x-session-id', 'ngrok-skip-browser-warning'],
+    allowedHeaders: [
+      'Content-Type',
+      'Authorization',
+      'x-auth-token',
+      'X-Idempotency-Key',
+      'x-session-id',
+      'ngrok-skip-browser-warning',
+    ],
     exposedHeaders: ['set-cookie'],
   });
 
@@ -208,8 +216,13 @@ const setupFastify = async () => {
     staticCSP: true,
   });
 
+  const avatarsRoot =
+    process.env.NODE_ENV === 'production'
+      ? '/tmp/uploads/avatars'
+      : path.join(__dirname, '../uploads/avatars');
+
   await fastify.register(fastifyStatic, {
-    root: path.join(__dirname, '../uploads/avatars'),
+    root: avatarsRoot,
     prefix: '/avatars/',
   });
 
@@ -296,9 +309,9 @@ const setupFastify = async () => {
   await fastify.register(deliveryRoutes, { prefix: '/api/delivery' });
   await fastify.register(ecommerceRoutes, { prefix: '/api/ecommerce' });
   await fastify.register(stockRoutes, { prefix: '/api/stock' });
-  await fastify.register(importRoutes, { 
+  await fastify.register(importRoutes, {
     prefix: '/api/import',
-    bodyLimit: 50 * 1024 * 1024
+    bodyLimit: 50 * 1024 * 1024,
   });
   await fastify.register(auditRoutes, { prefix: '/api/audit' });
   await fastify.register(communicationsRoutes, { prefix: '/api/communications' });
