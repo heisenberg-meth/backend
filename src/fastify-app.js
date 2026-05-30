@@ -3,6 +3,7 @@ import cors from '@fastify/cors';
 import helmet from '@fastify/helmet';
 import swagger from '@fastify/swagger';
 import swaggerUi from '@fastify/swagger-ui';
+import fs from 'fs/promises';
 import fastifyStatic from '@fastify/static';
 import cookie from '@fastify/cookie';
 import csrf from '@fastify/csrf-protection';
@@ -220,8 +221,9 @@ const setupFastify = async () => {
     process.env.NODE_ENV === 'production'
       ? '/tmp/uploads/avatars'
       : path.join(__dirname, '../uploads/avatars');
+  await fs.mkdir(avatarsRoot, { recursive: true });
 
-      console.log("AVATARS ROOT:", avatarsRoot);
+  console.log('AVATARS ROOT:', avatarsRoot);
 
   await fastify.register(fastifyStatic, {
     root: avatarsRoot,
