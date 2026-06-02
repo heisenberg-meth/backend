@@ -79,7 +79,7 @@ const redisHealthGauge = new client.Gauge({
 });
 
 const fastify = Fastify({
-  bodyLimit: 50 * 1024 * 1024, // 50MB limit for bulk import JSON payloads
+  bodyLimit: 50 * 1024 * 1024,
   logger: {
     transport:
       process.env.NODE_ENV === 'development'

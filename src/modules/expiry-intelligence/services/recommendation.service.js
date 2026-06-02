@@ -2,24 +2,17 @@ import recommendationRepository from '../repositories/recommendation.repository.
 import batchRepository from '../repositories/batch.repository.js';
 
 class RecommendationService {
-  /**
-   * Generate suggestions to reduce expiry loss
-   */
   async generateRecommendations(tenantId) {
-    // 1. Clear old ones
     await recommendationRepository.clearRecommendations(tenantId);
 
-    // 2. Get near-expiry batches
     const batches = await batchRepository.getNearExpiry(tenantId, 90);
     const now = new Date();
 
     const recommendations = [];
     for (const batch of batches) {
       const diffTime = batch.expiryDate - now;
-      const daysRemaining = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) || 1; // Avoid div by zero
+      const daysRemaining = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) || 1;
 
-      // Priority Score = Qty / Days Remaining
-      // High Qty + Soon Expiry = High Priority
       const priorityScore = batch.quantity / daysRemaining;
 
       let type = 'PROMOTE';

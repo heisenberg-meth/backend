@@ -3,18 +3,13 @@ import redisClient from '../../../config/redis.js';
 import { scanKeys } from '../../../shared/utils/scan-keys.js';
 
 class CatalogService {
-  /**
-   * Gets public medicine catalog with caching.
-   */
   async getPublicCatalog(tenantId, filters = {}) {
     const { categoryId, search, page = 1, limit = 20 } = filters;
     const cacheKey = `catalog:${tenantId}:${JSON.stringify(filters)}`;
 
-    // 1. Try Cache
     const cached = await redisClient.get(cacheKey);
     if (cached) return JSON.parse(cached);
 
-    // 2. Query DB
     const where = {
       tenantId,
       isPublished: true,
@@ -46,7 +41,6 @@ class CatalogService {
           prescriptionRequired: true,
           category: { select: { name: true } },
           manufacturer: { select: { name: true } },
-          // Filtered stock status (not exact numbers for security)
           inventoryBatches: {
             where: { status: 'ACTIVE', deletedAt: null },
             select: { quantity: true, reservedQuantity: true },
@@ -65,22 +59,18 @@ class CatalogService {
           m.inventoryBatches.reduce((acc, b) => acc + (b.quantity - b.reservedQuantity), 0) > 0
             ? 'IN_STOCK'
             : 'OUT_OF_STOCK',
-        inventoryBatches: undefined, // Remove internal batch details
+        inventoryBatches: undefined,
       })),
       total,
       page,
       pages: Math.ceil(total / limit),
     };
 
-    // 3. Set Cache (5 minutes)
     await redisClient.set(cacheKey, JSON.stringify(result), 'EX', 300);
 
     return result;
   }
 
-  /**
-   * Invalidates catalog cache for a tenant.
-   */
   async invalidateCatalogCache(tenantId) {
     const keys = await scanKeys(`catalog:${tenantId}:*`);
     if (keys.length > 0) {

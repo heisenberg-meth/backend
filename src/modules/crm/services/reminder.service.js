@@ -10,19 +10,20 @@ class ReminderService {
   async scheduleRefillReminder(tenantId, patientId, medicineId, purchaseDate, durationDays) {
     const medicine = await prisma.medicine.findFirst({
       where: { id: medicineId, tenantId },
-      include: { category: true }
+      include: { category: true },
     });
 
     if (!medicine || !medicine.category) return;
 
     const chronicKeywords = ['diabetes', 'cardiac', 'thyroid', 'bp', 'blood pressure'];
-    const isChronic = chronicKeywords.some(kw => medicine.category.name.toLowerCase().includes(kw));
+    const isChronic = chronicKeywords.some((kw) =>
+      medicine.category.name.toLowerCase().includes(kw),
+    );
 
     if (isChronic && durationDays > 0) {
       const refillDate = new Date(purchaseDate);
-      refillDate.setDate(refillDate.getDate() + durationDays - 3); // 3 days before they run out
+      refillDate.setDate(refillDate.getDate() + durationDays - 3);
 
-      // Upsert to avoid duplicate reminders for the same medicine cycle
       await prisma.medicineReminder.create({
         data: {
           tenantId,
@@ -30,7 +31,7 @@ class ReminderService {
           medicineId,
           reminderType: 'REFILL',
           nextReminderAt: refillDate,
-          reminderChannel: 'SMS', // Default channel
+          reminderChannel: 'SMS',
         },
       });
       logger.info(
@@ -50,36 +51,34 @@ class ReminderService {
     const dueReminders = await prisma.medicineReminder.findMany({
       where: {
         status: 'PENDING',
-        nextReminderAt: { lte: endOfDay }
+        nextReminderAt: { lte: endOfDay },
       },
       include: {
         patient: true,
-        medicine: true
-      }
+        medicine: true,
+      },
     });
 
     for (const reminder of dueReminders) {
       if (!reminder.patient.phone) {
         await prisma.medicineReminder.update({
           where: { id: reminder.id },
-          data: { status: 'FAILED' }
+          data: { status: 'FAILED' },
         });
         continue;
       }
 
-      // Dispatch to Notification System
       await notificationQueue.add('send-sms', {
         tenantId: reminder.tenantId,
         recipient: reminder.patient.phone,
         message: `Hi ${reminder.patient.fullName}, it's time to refill your ${reminder.medicine.name}. Reply YES to automate your next delivery.`,
         subject: 'Medicine Refill Reminder',
-        notificationId: `crm-reminder-${reminder.id}` // Temporary ref for the generic notification system
+        notificationId: `crm-reminder-${reminder.id}`,
       });
 
-      // Update local status
       await prisma.medicineReminder.update({
         where: { id: reminder.id },
-        data: { status: 'SENT' }
+        data: { status: 'SENT' },
       });
     }
 

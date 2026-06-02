@@ -6,6 +6,7 @@ class SalesRepository {
     return client.sale.create({
       data: {
         tenantId: data.tenantId,
+        branchId: data.branchId,
         invoiceId: data.invoiceId,
         patientId: data.patientId,
         totalItems: data.totalItems,

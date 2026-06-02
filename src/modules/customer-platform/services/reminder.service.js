@@ -1,13 +1,9 @@
 import prisma from '../../../config/prisma.js';
 
 class ReminderService {
-  /**
-   * Schedule medication reminders for a patient
-   */
   async scheduleReminders(tenantId, patientId, medicineId, scheduleData) {
     const { reminderTimes, frequency } = scheduleData;
-    
-    // Create individual reminders
+
     const reminders = reminderTimes.map((time) => ({
       tenantId,
       patientId,
@@ -17,7 +13,7 @@ class ReminderService {
     }));
 
     return await prisma.medicationReminder.createMany({
-      data: reminders
+      data: reminders,
     });
   }
 }

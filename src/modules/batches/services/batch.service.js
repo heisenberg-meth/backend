@@ -13,11 +13,10 @@ class BatchService {
   async getBatch(id) {
     const batch = await batchRepository.findById(id);
     if (!batch) throw new Error('Batch not found');
-    
-    // Include audit logs and traceability in the detailed view
+
     const auditLogs = await batchAuditRepository.findByBatchId(id);
     const traceability = await batchRepository.getTraceability(id);
-    
+
     return {
       ...batch,
       auditLogs,
@@ -36,12 +35,15 @@ class BatchService {
       throw new Error(`Batch number '${data.batchNumber}' already exists for this medicine`);
     }
 
-    // Use movementService to ensure ledger-driven integrity
-    const batch = await movementService.stockIn(tenantId, {
-      ...data,
-      referenceType: 'MANUAL_ENTRY',
-      notes: data.notes || `Manual batch creation for ${medicine.name}`
-    }, userId);
+    const batch = await movementService.stockIn(
+      tenantId,
+      {
+        ...data,
+        referenceType: 'MANUAL_ENTRY',
+        notes: data.notes || `Manual batch creation for ${medicine.name}`,
+      },
+      userId,
+    );
 
     await batchAuditRepository.log({
       tenantId,
@@ -66,12 +68,15 @@ class BatchService {
     const batch = await batchRepository.findById(id);
     if (!batch) throw new Error('Batch not found');
 
-    // Block sensitive field updates if not allowed
     const sensitiveFields = ['quantity', 'availableQuantity', 'reservedQuantity', 'purchasePrice'];
-    const hasSensitiveUpdate = sensitiveFields.some(f => data[f] !== undefined && data[f] !== batch[f]);
-    
+    const hasSensitiveUpdate = sensitiveFields.some(
+      (f) => data[f] !== undefined && data[f] !== batch[f],
+    );
+
     if (hasSensitiveUpdate) {
-      throw new Error('Direct updates to quantity or purchase price are blocked. Use stock movements or price adjustments.');
+      throw new Error(
+        'Direct updates to quantity or purchase price are blocked. Use stock movements or price adjustments.',
+      );
     }
 
     const updated = await batchRepository.update(id, data);
@@ -98,7 +103,9 @@ class BatchService {
     }
 
     if (batch.quantity > 0) {
-      throw new Error('Cannot delete batch with active stock. Quarantine or adjust stock to zero first.');
+      throw new Error(
+        'Cannot delete batch with active stock. Quarantine or adjust stock to zero first.',
+      );
     }
 
     await batchRepository.softDelete(id);
@@ -162,13 +169,12 @@ class BatchService {
       userAgent: reqInfo.userAgent,
     });
 
-    // Trigger emergency events for other systems
-    await eventBus.publish('BATCH_RECALLED', { 
-      batchId: id, 
+    await eventBus.publish('BATCH_RECALLED', {
+      batchId: id,
       medicineName: batch.medicine.name,
       batchNumber: batch.batchNumber,
-      reason, 
-      tenantId 
+      reason,
+      tenantId,
     });
 
     return recalled;
@@ -207,20 +213,22 @@ class BatchService {
     }
 
     const usage = await batchRepository.getTraceability(id);
-    
+
     return {
       batchInfo: {
         batchNumber: batch.batchNumber,
         medicineName: batch.medicine.name,
         expiryDate: batch.expiryDate,
       },
-      affectedInvoices: usage.map(item => ({
+      affectedInvoices: usage.map((item) => ({
         invoiceNumber: item.invoice.invoiceNumber,
         date: item.invoice.createdAt,
         quantitySold: item.quantity,
         patient: item.invoice.patient,
       })),
-      totalPatientsAffected: new Set(usage.filter(i => i.invoice.patientId).map(i => i.invoice.patientId)).size,
+      totalPatientsAffected: new Set(
+        usage.filter((i) => i.invoice.patientId).map((i) => i.invoice.patientId),
+      ).size,
     };
   }
 

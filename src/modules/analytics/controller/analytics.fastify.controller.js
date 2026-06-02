@@ -69,25 +69,24 @@ class AnalyticsFastifyController {
   }
 
   async getHourlySales(request, reply) {
-    // Basic implementation: get sales from today and group by hour
     const startOfDay = new Date();
     startOfDay.setHours(0, 0, 0, 0);
-    
+
     const sales = await prisma.sale.findMany({
       where: {
         tenantId: request.tenantId,
-        soldAt: { gte: startOfDay }
-      }
+        soldAt: { gte: startOfDay },
+      },
     });
 
     const hourly = Array.from({ length: 24 }, (_, i) => ({
       hour: i,
       label: `${i % 12 || 12} ${i < 12 ? 'AM' : 'PM'}`,
       revenue: 0,
-      count: 0
+      count: 0,
     }));
 
-    sales.forEach(s => {
+    sales.forEach((s) => {
       const h = new Date(s.soldAt).getHours();
       hourly[h].revenue += Number(s.totalAmount || 0);
       hourly[h].count += 1;
@@ -96,15 +95,11 @@ class AnalyticsFastifyController {
     return reply.send({ success: true, data: hourly });
   }
 
-  // ===================== FRAUD SIGNALS =====================
-
   async getFraudSignals(request, reply) {
     const { tenantId } = request;
     const data = await analyticsService.getFraudSignals(tenantId);
     return reply.send({ success: true, data });
   }
-
-  // ===================== FORECAST DASHBOARD =====================
 
   async getForecastDashboard(request, reply) {
     const { tenantId } = request;
@@ -112,15 +107,11 @@ class AnalyticsFastifyController {
     return reply.send({ success: true, data });
   }
 
-  // ===================== BRANCH PERFORMANCE =====================
-
   async getBranchPerformance(request, reply) {
     const { tenantId } = request;
     const data = await analyticsService.getBranchPerformance(tenantId);
     return reply.send({ success: true, data });
   }
-
-  // ===================== ADVANCED BI ENDPOINTS =====================
 
   async getFastMoving(request, reply) {
     const { tenantId } = request;

@@ -5,7 +5,7 @@ const sessionCache = new Map();
 const SESSION_CACHE_TTL_MS = 30_000;
 const SESSION_CACHE_MAX = 500;
 
-async function verifySession(sessionId, userId) {
+async function verifySession(sessionId) {
   const session = await prisma.userSession.findUnique({
     where: { id: sessionId },
     select: { revoked: true, expiresAt: true },
@@ -48,9 +48,10 @@ export const authenticate = async (request, reply) => {
   }
 
   const cached = sessionCache.get(sessionId);
-  const sessionValid = cached && cached.expiresAt > Date.now()
-    ? cached.valid
-    : (await verifySession(sessionId, request.user.userId)) !== null;
+  const sessionValid =
+    cached && cached.expiresAt > Date.now()
+      ? cached.valid
+      : (await verifySession(sessionId, request.user.userId)) !== null;
 
   if (!sessionValid) {
     return reply.code(401).send({

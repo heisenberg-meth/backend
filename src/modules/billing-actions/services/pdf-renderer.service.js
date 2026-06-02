@@ -90,7 +90,6 @@ class PdfRendererService {
   addHeader(doc, tenant, invoice, templateConfig = {}) {
     const showLogo = templateConfig.showLogo !== false && templateConfig.logoUrl;
 
-    // Note: We don't fetch remote logo URLs in this POC, but we leave the logic space
     const headerX = showLogo ? 110 : 50;
 
     doc

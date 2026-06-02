@@ -40,10 +40,9 @@ class PdfGenerationService {
     const renderOptions = {
       watermark: invoice.status === 'CANCELLED' ? 'CANCELLED INVOICE' : watermark,
       duplicateCopy,
-      templateConfig
+      templateConfig,
     };
 
-    // Choose renderer based on template type if needed
     const pdfBuffer = await pdfRenderer.renderA4(invoice, tenant, renderOptions);
 
     const pdfKey = s3Storage.generatePDFKey(tenantId, invoiceId, watermark);

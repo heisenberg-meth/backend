@@ -1,17 +1,13 @@
 import prisma from '../../../config/prisma.js';
 
 class AnomalyDetectionService {
-  /**
-   * Detect operational anomalies for a tenant
-   */
   async detectAnomalies(tenantId) {
     const anomalies = [];
 
-    // 1. Detect Suspicious Refunds
     const recentRefunds = await prisma.refundPayment.findMany({
       where: {
         invoice: { tenantId },
-        createdAt: { gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) } // last 7 days
+        createdAt: { gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) }
       },
       include: { user: true }
     });
@@ -25,7 +21,7 @@ class AnomalyDetectionService {
     });
 
     for (const [userId, stats] of Object.entries(refundsByUser)) {
-      if (stats.count > 10) { // Threshold: > 10 refunds a week is suspicious
+      if (stats.count > 10) {
         anomalies.push({
           type: 'SUSPICIOUS_REFUND_VOLUME',
           userId,
@@ -36,7 +32,6 @@ class AnomalyDetectionService {
       }
     }
 
-    // 2. Detect Inventory Shrinkage (Adjustments vs Sales)
     const stockAdjustments = await prisma.stockMovement.aggregate({
       where: {
         tenantId,

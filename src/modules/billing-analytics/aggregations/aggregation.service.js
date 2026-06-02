@@ -3,9 +3,6 @@ import dashboardService from '../services/dashboard.service.js';
 import logger from '../../../shared/utils/logger.js';
 
 class AggregationService {
-  /**
-   * Update daily sales summary upon invoice generation
-   */
   async handleInvoiceGenerated(invoice) {
     const salesDate = new Date(invoice.createdAt);
     salesDate.setHours(0, 0, 0, 0);
@@ -14,7 +11,6 @@ class AggregationService {
     const totalItemsSold = invoice.items?.reduce((sum, item) => sum + item.quantity, 0) || 0;
 
     try {
-      // 1. Update pre-aggregated summary
       await prisma.dailySalesSummary.upsert({
         where: {
           tenantId_branchId_salesDate: {
@@ -42,37 +38,35 @@ class AggregationService {
         },
       });
 
-      // 2. Refresh realtime feed cache
       await dashboardService.refreshSalesFeed(tenantId, branchId);
 
-      logger.info({ invoiceId: invoice.id, tenantId }, 'DailySalesSummary updated for invoice generation');
+      logger.info(
+        { invoiceId: invoice.id, tenantId },
+        'DailySalesSummary updated for invoice generation',
+      );
     } catch (error) {
       logger.error({ error, invoiceId: invoice.id }, 'Failed to update DailySalesSummary');
     }
   }
 
-  /**
-   * Update payment analytics upon payment settlement
-   */
   async handlePaymentSettled(payload) {
     const { tenantId, branchId, amount, paymentMethod, settledAt } = payload;
     const paymentDate = new Date(settledAt);
     paymentDate.setHours(0, 0, 0, 0);
 
     try {
-      // 1. Update PaymentMethodAnalytics
       await prisma.paymentMethodAnalytics.upsert({
         where: {
           tenantId_branchId_paymentDate_paymentMethod: {
             tenantId,
             branchId,
             paymentDate,
-            paymentMethod
-          }
+            paymentMethod,
+          },
         },
         update: {
           totalAmount: { increment: amount },
-          totalCount: { increment: 1 }
+          totalCount: { increment: 1 },
         },
         create: {
           tenantId,
@@ -80,11 +74,10 @@ class AggregationService {
           paymentDate,
           paymentMethod,
           totalAmount: amount,
-          totalCount: 1
-        }
+          totalCount: 1,
+        },
       });
 
-      // 2. Update DailySalesSummary (specific payment columns)
       const updateData = {};
       if (paymentMethod === 'CASH') updateData.cashSales = { increment: amount };
       else if (paymentMethod === 'CARD') updateData.cardSales = { increment: amount };
@@ -96,10 +89,10 @@ class AggregationService {
             tenantId_branchId_salesDate: {
               tenantId,
               branchId,
-              salesDate: paymentDate
-            }
+              salesDate: paymentDate,
+            },
           },
-          data: updateData
+          data: updateData,
         });
       }
 
@@ -123,12 +116,12 @@ class AggregationService {
           tenantId_branchId_salesDate: {
             tenantId,
             branchId,
-            salesDate: date
-          }
+            salesDate: date,
+          },
         },
         data: {
-          totalReturns: { increment: refundAmount }
-        }
+          totalReturns: { increment: refundAmount },
+        },
       });
       logger.info({ tenantId, refundAmount }, 'DailySalesSummary updated for refund');
     } catch (error) {

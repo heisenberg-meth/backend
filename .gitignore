@@ -22,3 +22,4 @@ all_routes.txt
 auth_routes.txt
 permission_routes.txt
 all_queries.txt
+docs/auth-api-specification.md

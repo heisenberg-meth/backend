@@ -5,7 +5,6 @@ import logger from './shared/utils/logger.js';
 async function main() {
   logger.info('Starting idempotency and cache purge...');
   
-  // 1. Delete all payment idempotency records from PostgreSQL
   try {
     const deletedCount = await prisma.paymentIdempotency.deleteMany({});
     logger.info(`Deleted ${deletedCount.count} payment idempotency keys from DB.`);
@@ -13,7 +12,6 @@ async function main() {
     logger.error('Error deleting payment idempotency keys:', err.message);
   }
 
-  // 2. Clear all payment-related keys from Redis
   try {
     const keys = await redisClientProxy.keys('idempotency:*');
     if (keys.length > 0) {
@@ -26,7 +24,6 @@ async function main() {
     logger.error('Error flushing Redis:', err.message);
   }
 
-  // 3. Close connections
   await prisma.$disconnect();
   logger.info('Purge completed.');
 }

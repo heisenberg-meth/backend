@@ -22,7 +22,6 @@ async function updateProgress(jobId, data) {
 }
 
 class CsvImportService {
-
   async run(filePath, { jobId, tenantId, branchId, userId, duplicateStrategy, barcodeOptions }) {
     logger.info({ jobId, filePath }, '[CSV-Import] Starting bulk import');
 
@@ -32,7 +31,10 @@ class CsvImportService {
     const medicineMap = await this._preloadMedicines(tenantId);
     const batchMap = await this._preloadBatches(tenantId, branchId);
     const inventoryMap = await this._preloadInventory(tenantId, branchId);
-    logger.info({ jobId, elapsed: Date.now() - preloadStart, size: medicineMap.size }, '[CSV-Import] Preload complete');
+    logger.info(
+      { jobId, elapsed: Date.now() - preloadStart, size: medicineMap.size },
+      '[CSV-Import] Preload complete',
+    );
 
     await updateProgress(jobId, { processed: 0, total: 0, status: 'parsing' });
 
@@ -46,12 +48,15 @@ class CsvImportService {
     let importedCount = 0;
 
     await new Promise((resolve, reject) => {
-      const stream = fs.createReadStream(filePath, { encoding: 'utf-8' })
-        .pipe(csv({
-          mapHeaders: ({ header }) => header.trim(),
-          mapValues: ({ value }) => value ? value.trim() : '',
-          skipLines: 0,
-        }))
+      const stream = fs
+        .createReadStream(filePath, { encoding: 'utf-8' })
+        .pipe(
+          csv({
+            mapHeaders: ({ header }) => header.trim(),
+            mapValues: ({ value }) => (value ? value.trim() : ''),
+            skipLines: 0,
+          }),
+        )
         .on('data', (row) => {
           totalRows++;
           chunk.push(row);
@@ -59,13 +64,27 @@ class CsvImportService {
             stream.pause();
             try {
               this._processChunk(chunk, {
-                tenantId, branchId, userId, duplicateStrategy, barcodeOptions,
-                medicineMap, batchMap, inventoryMap,
-                newMedicines, newBatches, newMovements, inventoryUpdates, errors,
+                tenantId,
+                branchId,
+                userId,
+                duplicateStrategy,
+                barcodeOptions,
+                medicineMap,
+                batchMap,
+                inventoryMap,
+                newMedicines,
+                newBatches,
+                newMovements,
+                inventoryUpdates,
+                errors,
               });
               importedCount += chunk.length;
               chunk = [];
-              updateProgress(jobId, { processed: importedCount, total: totalRows, status: 'processing' });
+              updateProgress(jobId, {
+                processed: importedCount,
+                total: totalRows,
+                status: 'processing',
+              });
             } catch (err) {
               logger.error({ err, jobId }, '[CSV-Import] Chunk process error');
             }
@@ -76,9 +95,19 @@ class CsvImportService {
           if (chunk.length > 0) {
             try {
               this._processChunk(chunk, {
-                tenantId, branchId, userId, duplicateStrategy, barcodeOptions,
-                medicineMap, batchMap, inventoryMap,
-                newMedicines, newBatches, newMovements, inventoryUpdates, errors,
+                tenantId,
+                branchId,
+                userId,
+                duplicateStrategy,
+                barcodeOptions,
+                medicineMap,
+                batchMap,
+                inventoryMap,
+                newMedicines,
+                newBatches,
+                newMovements,
+                inventoryUpdates,
+                errors,
               });
               importedCount += chunk.length;
             } catch (err) {
@@ -90,12 +119,22 @@ class CsvImportService {
         .on('error', (err) => reject(err));
     });
 
-    await updateProgress(jobId, { processed: importedCount, total: totalRows, status: 'committing' });
+    await updateProgress(jobId, {
+      processed: importedCount,
+      total: totalRows,
+      status: 'committing',
+    });
 
     const commitStart = Date.now();
     await this._commitAll({
-      tenantId, branchId, jobId,
-      newMedicines, newBatches, newMovements, inventoryUpdates, errors,
+      tenantId,
+      branchId,
+      jobId,
+      newMedicines,
+      newBatches,
+      newMovements,
+      inventoryUpdates,
+      errors,
     });
     logger.info({ jobId, elapsed: Date.now() - commitStart }, '[CSV-Import] Commit complete');
 
@@ -113,11 +152,19 @@ class CsvImportService {
       logger.warn({ filePath }, '[CSV-Import] Cleanup failed');
     }
 
-    await updateProgress(jobId, { processed: importedCount, total: totalRows, status: 'complete', summary });
+    await updateProgress(jobId, {
+      processed: importedCount,
+      total: totalRows,
+      status: 'complete',
+      summary,
+    });
 
     await auditService.log({
-      tenantId, userId, action: 'BULK_IMPORT_COMPLETED',
-      target: jobId, type: 'INVENTORY',
+      tenantId,
+      userId,
+      action: 'BULK_IMPORT_COMPLETED',
+      target: jobId,
+      type: 'INVENTORY',
       metadata: summary,
     });
 
@@ -174,7 +221,8 @@ class CsvImportService {
   }
 
   _processChunk(rows, ctx) {
-    const { tenantId, branchId, userId, duplicateStrategy, barcodeOptions, medicineMap, batchMap } = ctx;
+    const { tenantId, branchId, userId, duplicateStrategy, barcodeOptions, medicineMap, batchMap } =
+      ctx;
 
     for (const row of rows) {
       const name = this._getColumn(row, ['name', 'med', 'medicine', 'drug', 'item']);
@@ -185,19 +233,30 @@ class CsvImportService {
       const barcode = this._getColumn(row, ['barcode', 'upc', 'ean', 'sku']);
 
       if (!name) {
-        ctx.errors.push({ row: ctx.importedCount + ctx.newMedicines.length + 1, reason: 'Medicine name is required' });
+        ctx.errors.push({
+          row: ctx.importedCount + ctx.newMedicines.length + 1,
+          reason: 'Medicine name is required',
+        });
         continue;
       }
 
       const qty = parseInt(qtyStr, 10);
-      if (isNaN(qty) || qty < 0) {
-        ctx.errors.push({ row: ctx.importedCount + ctx.newMedicines.length + 1, name, reason: 'Invalid quantity' });
+      if (isNaN(qty) || qty <= 0) {
+        ctx.errors.push({
+          row: ctx.importedCount + ctx.newMedicines.length + 1,
+          name,
+          reason: 'Quantity must be greater than zero',
+        });
         continue;
       }
 
       const price = parseFloat(priceStr);
       if (isNaN(price) || price < 0) {
-        ctx.errors.push({ row: ctx.importedCount + ctx.newMedicines.length + 1, name, reason: 'Invalid price' });
+        ctx.errors.push({
+          row: ctx.importedCount + ctx.newMedicines.length + 1,
+          name,
+          reason: 'Invalid price',
+        });
         continue;
       }
 
@@ -239,10 +298,12 @@ class CsvImportService {
         newMed._tempId = medicineId;
         ctx.newMedicines.push(newMed);
         medicineMap.set(normalizedName, { id: medicineId, name: name.trim(), barcode });
-        if (barcode) medicineMap.set(`barcode:${barcode}`, { id: medicineId, name: name.trim(), barcode });
+        if (barcode)
+          medicineMap.set(`barcode:${barcode}`, { id: medicineId, name: name.trim(), barcode });
       }
 
-      const finalBarcode = barcode || (barcodeOptions?.autoGen ? `BC-${crypto.randomUUID()}` : null);
+      const finalBarcode =
+        barcode || (barcodeOptions?.autoGen ? `BC-${crypto.randomUUID()}` : null);
       const finalBatchNo = batchNo || `IMP-${crypto.randomUUID().toUpperCase()}`;
 
       const batchKey = `${medicineId}:${finalBatchNo}`.toLowerCase();
@@ -282,7 +343,16 @@ class CsvImportService {
   }
 
   async _commitAll(ctx) {
-    const { tenantId, branchId, jobId, newMedicines, newBatches, newMovements, inventoryUpdates, errors } = ctx;
+    const {
+      tenantId,
+      branchId,
+      jobId,
+      newMedicines,
+      newBatches,
+      newMovements,
+      inventoryUpdates,
+      errors,
+    } = ctx;
     const medicineIdMap = new Map();
 
     await prisma.$transaction(async (tx) => {
@@ -311,8 +381,11 @@ class CsvImportService {
           },
           update: { currentStock: { increment: inv.qty } },
           create: {
-            tenantId, branchId, medicineId: resolvedMedId,
-            currentStock: inv.qty, reorderPoint: 10,
+            tenantId,
+            branchId,
+            medicineId: resolvedMedId,
+            currentStock: inv.qty,
+            reorderPoint: 10,
           },
         });
       }
@@ -356,7 +429,9 @@ class CsvImportService {
     if (!isNaN(d.getTime())) return d;
     const parts = trimmed.split(/[-/.\s]/);
     if (parts.length === 3) {
-      const a = parseInt(parts[0], 10), b = parseInt(parts[1], 10), c = parseInt(parts[2], 10);
+      const a = parseInt(parts[0], 10),
+        b = parseInt(parts[1], 10),
+        c = parseInt(parts[2], 10);
       if (a > 1000 && b >= 1 && b <= 12 && c >= 1 && c <= 31) return new Date(a, b - 1, c);
       if (c > 1000 && a >= 1 && a <= 31 && b >= 1 && b <= 12) return new Date(c, b - 1, a);
     }

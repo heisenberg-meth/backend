@@ -1,5 +1,5 @@
-import { Decimal } from "@prisma/client/runtime/library";
-import prisma from "../../../config/prisma.js";
+import { Decimal } from '@prisma/client/runtime/library';
+import prisma from '../../../config/prisma.js';
 import sequenceService from '../../../shared/services/sequence.service.js';
 import movementService from '../../stock/service/movement.service.js';
 import gstService from '../services/gst.service.js';
@@ -21,15 +21,15 @@ class InvoiceEngine {
    * Create an invoice in DRAFT state. No inventory is deducted yet.
    */
   async createDraft(tenantId, userId, data, tx = null) {
-    const { 
-      items, 
-      patientId, 
-      branchId, 
-      notes, 
-      discountAmount = 0, 
+    const {
+      items,
+      patientId,
+      branchId,
+      notes,
+      discountAmount = 0,
       discountPercentage = 0,
       patientName,
-      patientPhone 
+      patientPhone,
     } = data;
 
     if (!branchId) {
@@ -39,13 +39,12 @@ class InvoiceEngine {
     const execute = async (t) => {
       const invoiceNumber = await this._generateInvoiceNumber(tenantId, t);
 
-      // Get GST contexts
       const branchProfile = await t.storeProfile.findFirst({
         where: { tenantId, branchId },
         select: { gstin: true },
       });
       const sourceGst = branchProfile?.gstin || '';
-      
+
       let targetGst = '';
       let defaultPatientName = null;
       let defaultPatientPhone = null;
@@ -59,8 +58,15 @@ class InvoiceEngine {
         defaultPatientPhone = patient?.phone || null;
       }
 
-      // GST Calculation
-      const totals = await this._calculateTotals(tenantId, branchId, patientId, items, discountAmount, t, discountPercentage);
+      const totals = await this._calculateTotals(
+        tenantId,
+        branchId,
+        patientId,
+        items,
+        discountAmount,
+        t,
+        discountPercentage,
+      );
 
       const invoice = await t.invoice.create({
         data: {
@@ -85,7 +91,6 @@ class InvoiceEngine {
         },
       });
 
-      // Create draft items
       for (const item of items) {
         const unitPrice = this._safeNumber(item.unitPrice);
         const quantity = this._safeNumber(item.quantity);
@@ -96,14 +101,14 @@ class InvoiceEngine {
           itemSubtotal,
           gstPercentage,
           sourceGst,
-          targetGst
+          targetGst,
         );
 
         await t.invoiceItem.create({
           data: {
             invoiceId: invoice.id,
             medicineId: item.medicineId,
-            batchId: item.batchId || '', // Might not be known yet in draft
+            batchId: item.batchId || '',
             quantity,
             unitPrice,
             gstPercentage,
@@ -111,7 +116,7 @@ class InvoiceEngine {
             sgst: this._safeNumber(gstResult.sgst),
             igst: this._safeNumber(gstResult.igst),
             totalPrice: this._safeNumber(itemSubtotal + gstResult.amount),
-          }
+          },
         });
       }
 
@@ -121,49 +126,47 @@ class InvoiceEngine {
     return tx ? execute(tx) : prisma.$transaction(execute);
   }
 
-  /**
-   * Finalize a DRAFT invoice. Deducts inventory and locks the record.
-   */
   async finalize(invoiceId, tenantId, userId, tx = null) {
     const execute = async (t) => {
       const invoice = await t.invoice.findFirst({
         where: { id: invoiceId, tenantId, status: 'DRAFT' },
-        include: { items: true }
+        include: { items: true },
       });
 
       if (!invoice) throw new Error('Draft invoice not found or already finalized');
 
-      // 1. Allocate batches and deduct inventory
       for (const item of invoice.items) {
         await this._processItemDeduction(tenantId, invoice, item, userId, t);
       }
 
-      // 2. Update status and save immutable snapshot
       const snapshot = await t.invoice.findUnique({
         where: { id: invoiceId },
-        include: { items: { include: { medicine: true, batch: true } }, patient: true }
+        include: { items: { include: { medicine: true, batch: true } }, patient: true },
       });
 
       const updated = await t.invoice.update({
         where: { id: invoiceId },
-        data: { 
-          status: 'FINALIZED', 
+        data: {
+          status: 'FINALIZED',
           updatedAt: new Date(),
-          storedSnapshot: JSON.parse(JSON.stringify(snapshot))
-        }
+          storedSnapshot: JSON.parse(JSON.stringify(snapshot)),
+        },
       });
 
-      // 3. Earn loyalty points
       if (invoice.patientId) {
-        await pointsService.earnPoints(tenantId, invoice.patientId, invoice.totalAmount, invoice.id, t);
+        await pointsService.earnPoints(
+          tenantId,
+          invoice.patientId,
+          invoice.totalAmount,
+          invoice.id,
+          t,
+        );
       }
 
-      // 4. Audit
       await this._audit(invoiceId, 'FINALIZED', userId, t);
 
-      // 5. Events
       emitLocalEvent(DOMAIN_EVENTS.INVOICE_FINALIZED, { invoiceId, tenantId });
-      
+
       return updated;
     };
 
@@ -188,8 +191,8 @@ class InvoiceEngine {
           paymentMode: paymentData.paymentMode,
           amount: this._safeNumber(paymentData.amount),
           transactionReference: paymentData.transactionReference,
-          paymentStatus: 'PAID'
-        }
+          paymentStatus: 'PAID',
+        },
       });
 
       const newPaidAmount = Decimal.add(invoice.paidAmount, this._safeNumber(paymentData.amount));
@@ -200,11 +203,10 @@ class InvoiceEngine {
         data: {
           paidAmount: newPaidAmount,
           paymentStatus: isFullyPaid ? 'PAID' : 'PARTIAL',
-          status: isFullyPaid && invoice.status === 'FINALIZED' ? 'PAID' : invoice.status
-        }
+          status: isFullyPaid && invoice.status === 'FINALIZED' ? 'PAID' : invoice.status,
+        },
       });
 
-      // Handle Credit issuance if payment mode is CREDIT
       if (paymentData.paymentMode === 'CREDIT' && invoice.patientId) {
         await creditService.issueCredit(
           tenantId,
@@ -213,7 +215,7 @@ class InvoiceEngine {
           invoice.id,
           `Credit for Invoice ${invoice.invoiceNumber}`,
           null,
-          t
+          t,
         );
       }
 
@@ -225,42 +227,42 @@ class InvoiceEngine {
     return tx ? execute(tx) : prisma.$transaction(execute);
   }
 
-  /**
-   * Cancel an invoice. Restocks inventory if it was finalized/paid.
-   */
   async cancel(invoiceId, tenantId, userId, reason) {
     return prisma.$transaction(async (tx) => {
       const invoice = await tx.invoice.findFirst({
         where: { id: invoiceId, tenantId },
-        include: { items: true, payments: true }
+        include: { items: true, payments: true },
       });
 
       if (!invoice) throw new Error('Invoice not found');
       if (invoice.status === 'CANCELLED') throw new Error('Invoice already cancelled');
       if (invoice.status === 'REFUNDED') throw new Error('Cannot cancel refunded invoice');
 
-      // 1. If finalized or paid, we must restock
       if (['FINALIZED', 'PAID', 'PARTIALLY_REFUNDED'].includes(invoice.status)) {
         for (const item of invoice.items) {
           if (item.batchId) {
-            await movementService.recordMovement(tenantId, {
-              medicineId: item.medicineId,
-              batchId: item.batchId,
-              branchId: invoice.branchId,
-              movementType: 'RETURN',
-              quantity: item.quantity, // Positive to restock
-              referenceType: 'INVOICE_CANCEL',
-              referenceId: invoice.id,
-              notes: `Restock from cancelled invoice ${invoice.invoiceNumber}. Reason: ${reason}`
-            }, userId, tx);
+            await movementService.recordMovement(
+              tenantId,
+              {
+                medicineId: item.medicineId,
+                batchId: item.batchId,
+                branchId: invoice.branchId,
+                movementType: 'RETURN',
+                quantity: item.quantity,
+                referenceType: 'INVOICE_CANCEL',
+                referenceId: invoice.id,
+                notes: `Restock from cancelled invoice ${invoice.invoiceNumber}. Reason: ${reason}`,
+              },
+              userId,
+              tx,
+            );
           }
         }
       }
 
-      // 2. Update status
       const updated = await tx.invoice.update({
         where: { id: invoiceId },
-        data: { status: 'CANCELLED', notes: `Cancelled: ${reason}` }
+        data: { status: 'CANCELLED', notes: `Cancelled: ${reason}` },
       });
 
       await this._audit(invoiceId, 'CANCELLED', userId, tx, reason);
@@ -269,9 +271,15 @@ class InvoiceEngine {
     });
   }
 
-  // --- Internal Helpers ---
-
-  async _calculateTotals(tenantId, branchId, patientId, items, discountAmount, tx, discountPercentage = 0) {
+  async _calculateTotals(
+    tenantId,
+    branchId,
+    patientId,
+    items,
+    discountAmount,
+    tx,
+    discountPercentage = 0,
+  ) {
     let sourceGst = '';
     let targetGst = '';
 
@@ -299,16 +307,16 @@ class InvoiceEngine {
       const price = this._safeNumber(item.unitPrice);
       const qty = this._safeNumber(item.quantity);
       const itemSubtotal = price * qty;
-      
+
       subtotal += itemSubtotal;
 
       const gstResult = gstService.calculateGst(
         itemSubtotal,
         this._safeNumber(item.gstPercentage),
         sourceGst,
-        targetGst
+        targetGst,
       );
-      
+
       totalGst += this._safeNumber(gstResult.amount);
       totalCgst += this._safeNumber(gstResult.cgst);
       totalSgst += this._safeNumber(gstResult.sgst);
@@ -328,13 +336,13 @@ class InvoiceEngine {
       totalSgst,
       totalIgst,
       discountAmount: finalDiscountAmount,
-      totalAmount: grandTotal
+      totalAmount: grandTotal,
     };
   }
 
   async _processItemDeduction(tenantId, invoice, item, userId, tx) {
     let batchesToUse = [];
-    
+
     if (item.batchId) {
       const batch = await tx.inventoryBatch.findUnique({ where: { id: item.batchId } });
       if (!batch || batch.availableQuantity < item.quantity) {
@@ -343,9 +351,12 @@ class InvoiceEngine {
       if (batch.status !== 'ACTIVE') {
         throw new Error(`Batch ${batch.batchNumber} is ${batch.status}. Dispensing blocked.`);
       }
-      batchesToUse.push({ id: item.batchId, quantity: item.quantity, batchNumber: batch.batchNumber });
+      batchesToUse.push({
+        id: item.batchId,
+        quantity: item.quantity,
+        batchNumber: batch.batchNumber,
+      });
     } else {
-      // FEFO
       const availableBatches = await tx.inventoryBatch.findMany({
         where: {
           tenantId,
@@ -354,9 +365,9 @@ class InvoiceEngine {
           availableQuantity: { gt: 0 },
           deletedAt: null,
           expiryDate: { gt: new Date() },
-          status: 'ACTIVE'
+          status: 'ACTIVE',
         },
-        orderBy: { expiryDate: 'asc' }
+        orderBy: { expiryDate: 'asc' },
       });
 
       let remaining = item.quantity;
@@ -371,16 +382,21 @@ class InvoiceEngine {
     }
 
     for (const bUsage of batchesToUse) {
-      await movementService.recordMovement(tenantId, {
-        medicineId: item.medicineId,
-        batchId: bUsage.id,
-        branchId: invoice.branchId,
-        movementType: 'SALE',
-        quantity: -bUsage.quantity,
-        referenceType: 'INVOICE',
-        referenceId: invoice.id,
-        notes: `Sale via invoice ${invoice.invoiceNumber}`,
-      }, userId, tx);
+      await movementService.recordMovement(
+        tenantId,
+        {
+          medicineId: item.medicineId,
+          batchId: bUsage.id,
+          branchId: invoice.branchId,
+          movementType: 'SALE',
+          quantity: -bUsage.quantity,
+          referenceType: 'INVOICE',
+          referenceId: invoice.id,
+          notes: `Sale via invoice ${invoice.invoiceNumber}`,
+        },
+        userId,
+        tx,
+      );
     }
   }
 
@@ -390,8 +406,8 @@ class InvoiceEngine {
         invoiceId,
         action,
         performedBy: userId,
-        notes
-      }
+        notes,
+      },
     });
   }
 

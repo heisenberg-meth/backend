@@ -1,31 +1,25 @@
 import prisma from '../../../config/prisma.js';
 
 class ExpiryAIService {
-  /**
-   * Run nightly analysis to score expiry risks for all active batches
-   */
   async analyzeExpiryRisks(tenantId) {
     const batches = await prisma.inventoryBatch.findMany({
-      where: { 
+      where: {
         status: 'ACTIVE',
-        expiryDate: { lte: new Date(new Date().getTime() + 90 * 24 * 60 * 60 * 1000) } // 90 days
+        expiryDate: { lte: new Date(new Date().getTime() + 90 * 24 * 60 * 60 * 1000) },
       },
-      include: { medicine: true }
+      include: { medicine: true },
     });
 
     for (const batch of batches) {
-      // 1. Get predicted demand
       const forecast = await prisma.demandForecast.findFirst({
         where: { medicineId: batch.medicineId, branchId: batch.branchId },
-        orderBy: { forecastDate: 'desc' }
+        orderBy: { forecastDate: 'desc' },
       });
 
       const predictedSales = forecast ? forecast.predictedQuantity : 0;
-      
-      // 2. Compute Risk Score: Current Qty / Predicted Sales (as a proxy)
-      const riskScore = predictedSales > 0 ? (batch.quantity / Number(predictedSales)) : 2.0;
 
-      // 3. Persist Risk
+      const riskScore = predictedSales > 0 ? batch.quantity / Number(predictedSales) : 2.0;
+
       if (riskScore > 1.0) {
         await prisma.expiryRiskPrediction.create({
           data: {
@@ -35,8 +29,8 @@ class ExpiryAIService {
             branchId: batch.branchId,
             riskScore: riskScore,
             predictedUnsoldQty: Math.max(0, batch.quantity - Number(predictedSales)),
-            recommendation: this.getRecommendation(riskScore)
-          }
+            recommendation: this.getRecommendation(riskScore),
+          },
         });
       }
     }

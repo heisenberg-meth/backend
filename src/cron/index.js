@@ -4,8 +4,7 @@ import logger from '../shared/utils/logger.js';
 const cronManager = {
   init: async () => {
     logger.info('Initializing scheduled tasks...');
-    
-    // Add repeatable job for daily stock snapshot at 11:59 PM
+
     await mainQueue.add(
       'daily-stock-snapshot',
       {},
@@ -14,7 +13,6 @@ const cronManager = {
       },
     );
 
-    // Add repeatable job for daily sales summary at 11:50 PM
     await mainQueue.add(
       'daily-sales-summary',
       {},
@@ -23,7 +21,6 @@ const cronManager = {
       },
     );
 
-    // Add repeatable job for expiry scan every 6 hours
     await mainQueue.add(
       'expiry-scan',
       {},
@@ -32,7 +29,6 @@ const cronManager = {
       },
     );
 
-    // Add repeatable job for recommendation generation at midnight
     await mainQueue.add(
       'expiry-recommendation',
       {},
@@ -41,7 +37,6 @@ const cronManager = {
       },
     );
 
-    // Add repeatable job for daily expiry check at midnight
     await mainQueue.add(
       'daily-expiry-check',
       {},
@@ -50,7 +45,6 @@ const cronManager = {
       },
     );
 
-    // Add repeatable job for supplier overdue scan at 1:00 AM
     await mainQueue.add(
       'supplier-overdue-scan',
       {},
@@ -59,7 +53,6 @@ const cronManager = {
       },
     );
 
-    // Add repeatable job for refill reminders at 9:00 AM
     await mainQueue.add(
       'refill-reminders',
       {},
@@ -68,7 +61,6 @@ const cronManager = {
       },
     );
 
-    // Add repeatable job for inventory reconciliation at 2:00 AM
     await mainQueue.add(
       'inventory-reconciliation',
       {},
@@ -77,25 +69,12 @@ const cronManager = {
       },
     );
 
-    // Patient feature cron jobs
-    await mainQueue.add(
-      'patient-refill-reminders',
-      {},
-      { repeat: { pattern: '0 */6 * * *' } },
-    );
+    await mainQueue.add('patient-refill-reminders', {}, { repeat: { pattern: '0 */6 * * *' } });
 
-    await mainQueue.add(
-      'patient-adherence-scoring',
-      {},
-      { repeat: { pattern: '0 2 * * *' } },
-    );
+    await mainQueue.add('patient-adherence-scoring', {}, { repeat: { pattern: '0 2 * * *' } });
 
-    await mainQueue.add(
-      'patient-prescription-expiry',
-      {},
-      { repeat: { pattern: '0 3 * * *' } },
-    );
-  }
+    await mainQueue.add('patient-prescription-expiry', {}, { repeat: { pattern: '0 3 * * *' } });
+  },
 };
 
 export default cronManager;

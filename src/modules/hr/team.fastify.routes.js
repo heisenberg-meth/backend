@@ -18,7 +18,7 @@ async function teamRoutes(fastify) {
         avatar: true,
       },
     });
-    return team.map(u => ({ ...u, _id: u.id }));
+    return team.map((u) => ({ ...u, _id: u.id }));
   });
 
   fastify.post('/', {
@@ -35,7 +35,7 @@ async function teamRoutes(fastify) {
           tenantId: request.tenantId,
         },
       });
-      const { password: _, ...safe } = user;
+      const { ...safe } = user;
       return { ...safe, _id: safe.id };
     },
   });
@@ -53,7 +53,7 @@ async function teamRoutes(fastify) {
         where: { id, tenantId: request.tenantId },
         data: allowed,
       });
-      const { password: _, ...safe } = user;
+      const { ...safe } = user;
       return { ...safe, _id: safe.id };
     },
   });

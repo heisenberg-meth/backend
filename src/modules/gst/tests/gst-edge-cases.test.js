@@ -327,7 +327,6 @@ describe('GstComplianceService', () => {
 
   it('returns overdue when past due without summary', async () => {
     mockPrisma.invoice.count.mockResolvedValue(5);
-    // No summary exists for any period
     mockPrisma.gstSummary.findUnique.mockResolvedValue(null);
 
     const result = await gstComplianceService.checkReturnFilingCompliance('tenant-1');

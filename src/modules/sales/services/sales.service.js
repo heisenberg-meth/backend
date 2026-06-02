@@ -5,37 +5,42 @@ import anomalyService from '../../fraud-detection/services/anomaly.service.js';
 import { normalizeInvoice } from '../../billing/helpers/invoice-dto.js';
 
 class SalesService {
-  /**
-   * Record a business sale event (usually called after invoice completion)
-   */
   async recordSale(tenantId, data, tx) {
     const client = tx || prisma;
 
-    // Compliance Check: Validate Schedule drugs
     for (const item of data.items) {
       const validation = await scheduleService.canDispense(item.medicineId, null, data.userId);
       if (!validation.allowed) {
         throw new Error(`Compliance Violation: ${validation.reason}`);
       }
     }
-    
-    const sale = await salesRepository.createSale({
-      tenantId,
+    console.log('[SALE] recordSale called', {
       invoiceId: data.invoiceId,
-      patientId: data.patientId,
-      totalItems: data.totalItems,
-      subtotal: data.subtotal,
-      discountAmount: data.discountAmount,
-      gstAmount: data.gstAmount,
+      branchId: data.branchId,
       totalAmount: data.totalAmount,
-      paymentMethod: data.paymentMethod,
-      paymentStatus: 'PAID',
-      status: 'COMPLETED',
-      soldBy: data.userId,
-      items: data.items 
-    }, client);
+    });
 
-    // Fraud Check: Post-sale anomaly detection
+    const sale = await salesRepository.createSale(
+      {
+        tenantId,
+        invoiceId: data.invoiceId,
+        branchId: data.branchId,
+        patientId: data.patientId,
+        totalItems: data.totalItems,
+        subtotal: data.subtotal,
+        discountAmount: data.discountAmount,
+        gstAmount: data.gstAmount,
+        totalAmount: data.totalAmount,
+        paymentMethod: data.paymentMethod,
+        paymentStatus: 'PAID',
+        status: 'COMPLETED',
+        soldBy: data.userId,
+        items: data.items,
+      },
+      client,
+    );
+    console.log('[SALE] Created', sale.id);
+
     await anomalyService.detectSalesAnomaly(tenantId, sale);
 
     return normalizeInvoice(sale);
@@ -45,14 +50,14 @@ class SalesService {
     const skip = (page - 1) * limit;
     const [sales, total] = await Promise.all([
       salesRepository.findAll(tenantId, skip, limit),
-      salesRepository.countAll(tenantId)
+      salesRepository.countAll(tenantId),
     ]);
 
-    return { 
-      sales: sales.map(normalizeInvoice), 
-      total, 
-      page, 
-      limit 
+    return {
+      sales: sales.map(normalizeInvoice),
+      total,
+      page,
+      limit,
     };
   }
 

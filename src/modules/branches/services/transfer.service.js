@@ -9,7 +9,6 @@ class TransferService {
     const transfer = await prisma.$transaction(async (tx) => {
       const transferNumber = await transferRepository.getNextTransferNumber(tenantId);
 
-      // 1. Reserve stock in source branch
       for (const item of data.items) {
         const [batch] = await tx.$queryRaw`
           SELECT * FROM "InventoryBatch"
@@ -23,7 +22,6 @@ class TransferService {
           throw new Error(`Insufficient stock in source branch for batch ${item.batchId}`);
         }
 
-        // Deduct from available quantity, add to reserved
         const updatedBatch = await tx.inventoryBatch.update({
           where: { id: batch.id },
           data: {
@@ -32,7 +30,6 @@ class TransferService {
           },
         });
 
-        // Real-time Ledger
         await inventoryService.recordTransaction(
           tx,
           tenantId,
@@ -51,7 +48,6 @@ class TransferService {
         );
       }
 
-      // 2. Create Transfer Record
       return transferRepository.createTransfer({
         tenantId,
         sourceBranchId: data.sourceBranchId,
@@ -99,7 +95,6 @@ class TransferService {
       for (const item of transfer.items) {
         const sourceBatch = item.batch;
 
-        // 1. Remove from source reserved quantity
         await tx.inventoryBatch.update({
           where: { id: sourceBatch.id },
           data: {
@@ -107,7 +102,6 @@ class TransferService {
           }
         });
 
-        // Ledger: Source Branch TRANSFER_OUT
         const sourceBatches = await tx.inventoryBatch.findMany({ where: { medicineId: sourceBatch.medicineId, branchId: transfer.sourceBranchId }});
         const prevSourceStock = sourceBatches.reduce((sum, b) => sum + b.quantity, 0); 
 
@@ -125,7 +119,6 @@ class TransferService {
           createdBy: userId
         }, tx);
 
-        // StockMovement: Source Branch TRANSFER_OUT
         await tx.stockMovement.create({
           data: {
             tenantId,
@@ -142,7 +135,6 @@ class TransferService {
           },
         });
 
-        // Inventory Aggregate: Source Branch
         await tx.inventory.upsert({
           where: {
             tenantId_branchId_medicineId: { tenantId, branchId: transfer.sourceBranchId, medicineId: sourceBatch.medicineId },
@@ -154,8 +146,6 @@ class TransferService {
           },
         });
 
-        // 2. Add to destination branch
-        // Check if destination already has this batch
         const destBatch = await tx.inventoryBatch.findFirst({
           where: {
             medicineId: sourceBatch.medicineId,
@@ -193,7 +183,6 @@ class TransferService {
           currentDestQty = item.quantity;
         }
 
-        // Ledger: Dest Branch TRANSFER_IN
         const destBatches = await tx.inventoryBatch.findMany({ where: { medicineId: sourceBatch.medicineId, branchId: transfer.destinationBranchId }});
         const prevDestStock = destBatches.reduce((sum, b) => sum + b.quantity, 0) - item.quantity;
 
@@ -211,7 +200,6 @@ class TransferService {
           createdBy: userId
         }, tx);
 
-        // StockMovement: Destination Branch TRANSFER_IN
         await tx.stockMovement.create({
           data: {
             tenantId,
@@ -228,7 +216,6 @@ class TransferService {
           },
         });
 
-        // Inventory Aggregate: Destination Branch
         await tx.inventory.upsert({
           where: {
             tenantId_branchId_medicineId: { tenantId, branchId: transfer.destinationBranchId, medicineId: sourceBatch.medicineId },
@@ -240,7 +227,6 @@ class TransferService {
           },
         });
 
-        // Real-time Ledger (Destination)
         await inventoryService.recordTransaction(tx, tenantId, {
           medicineId: sourceBatch.medicineId,
           batchId: newBatchId,
@@ -254,7 +240,6 @@ class TransferService {
         }, userId);
       }
 
-      // Update transfer status
       return transferRepository.updateStatus(transferId, tenantId, 'RECEIVED', null, tx);
     });
 

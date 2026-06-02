@@ -1,7 +1,18 @@
 import prisma from '../../../config/prisma.js';
 
 class BatchRepository {
-  async findAll({ tenantId, status, branchId, supplierId, expiryBefore, expiryAfter, sortBy, order, skip, take }) {
+  async findAll({
+    tenantId,
+    status,
+    branchId,
+    supplierId,
+    expiryBefore,
+    expiryAfter,
+    sortBy,
+    order,
+    skip,
+    take,
+  }) {
     const where = {
       deletedAt: null,
       medicine: { tenantId },
@@ -72,7 +83,8 @@ class BatchRepository {
   async update(id, data) {
     const updateData = { ...data };
     if (updateData.expiryDate) updateData.expiryDate = new Date(updateData.expiryDate);
-    if (updateData.manufacturingDate) updateData.manufacturingDate = new Date(updateData.manufacturingDate);
+    if (updateData.manufacturingDate)
+      updateData.manufacturingDate = new Date(updateData.manufacturingDate);
 
     return prisma.inventoryBatch.update({
       where: { id },
@@ -83,9 +95,9 @@ class BatchRepository {
   async softDelete(id) {
     return prisma.inventoryBatch.update({
       where: { id },
-      data: { 
+      data: {
         status: 'ARCHIVED',
-        deletedAt: new Date() 
+        deletedAt: new Date(),
       },
     });
   }
@@ -154,7 +166,7 @@ class BatchRepository {
       where: {
         medicine: { tenantId },
         expiryDate: { lt: currentDate },
-        quantity: { gt: 0 }, // physical stock still there
+        quantity: { gt: 0 },
         deletedAt: null,
       },
       include: {
@@ -185,9 +197,9 @@ class BatchRepository {
   async recall(id) {
     return prisma.inventoryBatch.update({
       where: { id },
-      data: { 
+      data: {
         status: 'RECALLED',
-        recalled: true
+        recalled: true,
       },
     });
   }

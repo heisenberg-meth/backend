@@ -17,79 +17,79 @@ class AnalyticsWorker {
   setup() {
     if (process.env.NODE_ENV === 'test') return;
 
-    this.worker = new Worker('erp-events', async (job) => {
-      const { name, data } = job;
-      logger.info({ event: name }, '[ANALYTICS-WORKER] Processing event');
+    this.worker = new Worker(
+      'erp-events',
+      async (job) => {
+        const { name, data } = job;
+        logger.info({ event: name }, '[ANALYTICS-WORKER] Processing event');
 
-      try {
-        switch (name) {
-          case DOMAIN_EVENTS.INVOICE_GENERATED: {
-            // Fetch full invoice if only ID was passed, or use data if full object
-            const invoice =
-              data.invoice ||
-              (await prisma.invoice.findUnique({
-                where: { id: data.invoiceId },
-                include: { items: true },
-              }));
-            if (invoice) await aggregationService.handleInvoiceGenerated(invoice);
-            break;
+        try {
+          switch (name) {
+            case DOMAIN_EVENTS.INVOICE_GENERATED: {
+              const invoice =
+                data.invoice ||
+                (await prisma.invoice.findUnique({
+                  where: { id: data.invoiceId },
+                  include: { items: true },
+                }));
+              if (invoice) await aggregationService.handleInvoiceGenerated(invoice);
+              break;
+            }
+
+            case 'PAYMENT_SETTLED':
+            case DOMAIN_EVENTS.PAYMENT_RECEIVED:
+              await aggregationService.handlePaymentSettled(data);
+              break;
+
+            case DOMAIN_EVENTS.REFUND_PROCESSED:
+              await aggregationService.handleRefundProcessed(data);
+              break;
+
+            default:
+              logger.debug({ event: name }, '[ANALYTICS-WORKER] Skipping unhandled event');
+          }
+        } catch (error) {
+          const permanentErrors = [
+            'P2022',
+            'P2025',
+            'P2003',
+            'P2002',
+            'P2014',
+            'ZOD_ERROR',
+            'UNRECOVERABLE',
+          ];
+
+          const errorCode = error.code || '';
+          const isPermanent = permanentErrors.some((code) => errorCode.startsWith(code));
+
+          if (isPermanent) {
+            logger.error(
+              { error: error.message, code: errorCode, event: name, jobId: job.id },
+              '[ANALYTICS-WORKER] Unrecoverable error — will NOT retry',
+            );
+            const unrecoverable = new Error(error.message);
+            unrecoverable.code = 'UNRECOVERABLE';
+            unrecoverable.originalCode = errorCode;
+            throw unrecoverable;
           }
 
-          case 'PAYMENT_SETTLED': // Custom event from SettlementService
-          case DOMAIN_EVENTS.PAYMENT_RECEIVED:
-            await aggregationService.handlePaymentSettled(data);
-            break;
-
-          case DOMAIN_EVENTS.REFUND_PROCESSED:
-            await aggregationService.handleRefundProcessed(data);
-            break;
-
-          default:
-            logger.debug({ event: name }, '[ANALYTICS-WORKER] Skipping unhandled event');
-        }
-      } catch (error) {
-        // Classify errors: permanent (no retry) vs transient (retry)
-        const permanentErrors = [
-          'P2022', // Column does not exist (schema mismatch)
-          'P2025', // Record not found
-          'P2003', // Foreign key constraint violation
-          'P2002', // Unique constraint violation
-          'P2014', // Relation violation
-          'ZOD_ERROR', // Validation error
-          'UNRECOVERABLE', // Explicit unrecoverable error
-        ];
-
-        const errorCode = error.code || '';
-        const isPermanent = permanentErrors.some(code => errorCode.startsWith(code));
-
-        if (isPermanent) {
-          logger.error(
-            { error: error.message, code: errorCode, event: name, jobId: job.id },
-            '[ANALYTICS-WORKER] Unrecoverable error — will NOT retry'
+          logger.warn(
+            { error: error.message, code: errorCode, event: name, attempt: job.attemptsMade },
+            '[ANALYTICS-WORKER] Transient error — will retry',
           );
-          // Throw with special flag to prevent BullMQ retries
-          const unrecoverable = new Error(error.message);
-          unrecoverable.code = 'UNRECOVERABLE';
-          unrecoverable.originalCode = errorCode;
-          throw unrecoverable;
+          throw error;
         }
-
-        // Transient errors: network, deadlock, timeout — safe to retry
-        logger.warn(
-          { error: error.message, code: errorCode, event: name, attempt: job.attemptsMade },
-          '[ANALYTICS-WORKER] Transient error — will retry'
-        );
-        throw error;
-      }
-    }, {
-      connection: getBullRedis(),
-      concurrency: 5,
-      attempts: 3,
-      backoff: {
-        type: 'exponential',
-        delay: 1000,
       },
-    });
+      {
+        connection: getBullRedis(),
+        concurrency: 5,
+        attempts: 3,
+        backoff: {
+          type: 'exponential',
+          delay: 1000,
+        },
+      },
+    );
 
     this.worker.on('completed', (job) => {
       logger.debug({ jobId: job.id }, '[ANALYTICS-WORKER] Job completed');
@@ -106,7 +106,7 @@ class AnalyticsWorker {
           attempts: job.attemptsMade,
           unrecoverable: isUnrecoverable,
         },
-        `[ANALYTICS-WORKER] Job failed ${isUnrecoverable ? 'permanently (no retry)' : 'after all retries'}`
+        `[ANALYTICS-WORKER] Job failed ${isUnrecoverable ? 'permanently (no retry)' : 'after all retries'}`,
       );
     });
 

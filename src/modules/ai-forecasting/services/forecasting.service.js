@@ -16,7 +16,6 @@ class ForecastingService {
 
       const { forecast, confidence, model } = response.data;
 
-      // Store in DB
       await prisma.demandForecast.create({
         data: {
           tenantId,

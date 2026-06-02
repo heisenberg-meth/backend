@@ -1,11 +1,10 @@
-import prisma from "../../../config/prisma.js";
+import prisma from '../../../config/prisma.js';
 
 class AccountingRepository {
-  // Expenses
   async createExpense(data) {
     return prisma.expense.create({
       data,
-      include: { category: true }
+      include: { category: true },
     });
   }
 
@@ -17,13 +16,13 @@ class AccountingRepository {
         deletedAt: null,
         expenseDate: {
           gte: fromDate ? new Date(fromDate) : undefined,
-          lte: toDate ? new Date(toDate) : undefined
+          lte: toDate ? new Date(toDate) : undefined,
         },
         categoryId,
-        branchId
+        branchId,
       },
       include: { category: true, user: { select: { fullName: true } } },
-      orderBy: { expenseDate: 'desc' }
+      orderBy: { expenseDate: 'desc' },
     });
   }
 
@@ -37,19 +36,17 @@ class AccountingRepository {
   async updateExpense(id, tenantId, data) {
     return prisma.expense.update({
       where: { id, tenantId, deletedAt: null },
-      data
+      data,
     });
   }
 
   async deleteExpense(id, tenantId) {
-    // Soft delete — NEVER hard delete financial records
     return prisma.expense.update({
       where: { id, tenantId, deletedAt: null },
-      data: { deletedAt: new Date() }
+      data: { deletedAt: new Date() },
     });
   }
 
-  // Categories
   async createCategory(data) {
     return prisma.expenseCategory.create({ data });
   }
@@ -57,11 +54,10 @@ class AccountingRepository {
   async findCategories(tenantId) {
     return prisma.expenseCategory.findMany({
       where: { tenantId },
-      orderBy: { name: 'asc' }
+      orderBy: { name: 'asc' },
     });
   }
 
-  // GST & HSN Summaries
   async upsertGstSummary(tenantId, reportMonth, data) {
     const month = new Date(reportMonth);
     month.setDate(1);
@@ -69,21 +65,20 @@ class AccountingRepository {
 
     return prisma.gstSummary.upsert({
       where: {
-        tenantId_reportMonth: { tenantId, reportMonth: month }
+        tenantId_reportMonth: { tenantId, reportMonth: month },
       },
       update: data,
-      create: { tenantId, reportMonth: month, ...data }
+      create: { tenantId, reportMonth: month, ...data },
     });
   }
 
   async findGstSummaries(tenantId) {
     return prisma.gstSummary.findMany({
       where: { tenantId },
-      orderBy: { reportMonth: 'desc' }
+      orderBy: { reportMonth: 'desc' },
     });
   }
 
-  // Journal Entries
   async createJournalEntry(data) {
     return prisma.journalEntry.create({ data });
   }
@@ -92,7 +87,7 @@ class AccountingRepository {
     return prisma.journalEntry.findMany({
       where: { tenantId },
       orderBy: { createdAt: 'desc' },
-      take: limit
+      take: limit,
     });
   }
 }

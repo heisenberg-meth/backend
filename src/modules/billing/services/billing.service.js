@@ -5,6 +5,7 @@ import auditService from '../../audit/service/audit.prisma.service.js';
 import patientService from '../../patients/services/patient.service.js';
 import notificationService from '../../patients/services/notification.service.js';
 import prisma from '../../../config/prisma.js';
+import salesService from '../../sales/services/sales.service.js';
 
 class BillingService {
   /**
@@ -39,13 +40,10 @@ class BillingService {
    */
   async checkout(tenantId, data, userId) {
     return await prisma.$transaction(async (tx) => {
-      // 1. Create Draft
       const draft = await invoiceService.createDraft(tenantId, userId, data, tx);
 
-      // 2. Finalize
       const finalized = await invoiceService.finalize(draft.id, tenantId, userId, tx);
 
-      // 3. Record initial payment if any
       const payments = data.payments || [];
       if (payments.length === 0 && data.paymentMode) {
         payments.push({
@@ -60,14 +58,39 @@ class BillingService {
         }
       }
 
-      // Return the complete invoice
-      return invoiceService.getInvoice(finalized.id, tenantId, tx);
+      const completeInvoice = await invoiceService.getInvoice(finalized.id, tenantId, tx);
+      console.log('[CHECKOUT] Creating sale for invoice:', completeInvoice.id);
+      await salesService.recordSale(
+        tenantId,
+        {
+          invoiceId: completeInvoice.id,
+          branchId: data.branchId,
+          patientId: completeInvoice.patient?.id || null,
+          totalItems: completeInvoice.items.reduce((sum, item) => sum + item.qty, 0),
+          subtotal: completeInvoice.subtotal,
+          discountAmount: completeInvoice.discount,
+          gstAmount: completeInvoice.gst,
+          totalAmount: completeInvoice.total,
+          paymentMethod: completeInvoice.paymentMethod,
+          userId,
+          items: completeInvoice.items.map((item) => ({
+            medicineId: item.medicineId,
+            batchId: item.batchId,
+            quantity: item.qty,
+            unitPrice: item.price,
+            discountAmount: 0,
+            gstAmount: item.gstAmount || 0,
+            totalAmount: item.total,
+          })),
+        },
+        tx,
+      );
+      console.log('[CHECKOUT] Sale creation completed');
+
+      return completeInvoice;
     });
   }
 
-  /**
-   * Get paginated invoice history with filters
-   */
   async getInvoices(tenantId, query) {
     const result = await invoiceService.getInvoices(tenantId, query);
 

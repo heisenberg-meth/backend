@@ -21,7 +21,6 @@ class PermissionRepository {
     });
   }
 
-  // Seeding helper
   async upsert(data) {
     return prisma.permission.upsert({
       where: { name: data.name },

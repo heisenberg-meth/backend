@@ -18,7 +18,6 @@ class AlertSettingsService {
     let settings = await repo.getByTenantAndBranch(tenantId, branchId);
 
     if (!settings) {
-      // Create with defaults if not found
       settings = await repo.upsert(tenantId, DEFAULT_SETTINGS, branchId);
     }
 
@@ -30,12 +29,15 @@ class AlertSettingsService {
 
     const oldSettings = await repo.getByTenantAndBranch(tenantId, branchId);
 
-    const settings = await repo.upsert(tenantId, {
-      ...data,
-      updatedBy,
-    }, branchId);
+    const settings = await repo.upsert(
+      tenantId,
+      {
+        ...data,
+        updatedBy,
+      },
+      branchId,
+    );
 
-    // Audit logging
     await auditService.logAction({
       tenantId,
       userId: updatedBy,
@@ -46,7 +48,6 @@ class AlertSettingsService {
       newData: settings,
     });
 
-    // Invalidate cache
     await this._invalidateCache(tenantId, branchId);
 
     logger.info({ tenantId, branchId, updatedBy }, 'Alert settings updated');
@@ -123,7 +124,9 @@ class AlertSettingsService {
       criticalExpiry: override?.criticalExpiryDays ?? settings.criticalExpiryDays,
     };
 
-    const daysToExpiry = Math.ceil((new Date(expiryDate).getTime() - Date.now()) / (1000 * 3600 * 24));
+    const daysToExpiry = Math.ceil(
+      (new Date(expiryDate).getTime() - Date.now()) / (1000 * 3600 * 24),
+    );
 
     const results = {
       thresholds,
@@ -132,24 +135,39 @@ class AlertSettingsService {
     };
 
     if (currentStock <= thresholds.criticalStock) {
-      results.alerts.push({ type: 'CRITICAL_STOCK', severity: 'CRITICAL', message: `Stock level (${currentStock}) is at or below critical threshold (${thresholds.criticalStock})` });
+      results.alerts.push({
+        type: 'CRITICAL_STOCK',
+        severity: 'CRITICAL',
+        message: `Stock level (${currentStock}) is at or below critical threshold (${thresholds.criticalStock})`,
+      });
     } else if (currentStock <= thresholds.lowStock) {
-      results.alerts.push({ type: 'LOW_STOCK', severity: 'WARNING', message: `Stock level (${currentStock}) is at or below low stock threshold (${thresholds.lowStock})` });
+      results.alerts.push({
+        type: 'LOW_STOCK',
+        severity: 'WARNING',
+        message: `Stock level (${currentStock}) is at or below low stock threshold (${thresholds.lowStock})`,
+      });
     }
 
     if (daysToExpiry <= thresholds.criticalExpiry) {
-      results.alerts.push({ type: 'CRITICAL_EXPIRY', severity: 'CRITICAL', message: `Medicine expires in ${daysToExpiry} days (critical threshold: ${thresholds.criticalExpiry})` });
+      results.alerts.push({
+        type: 'CRITICAL_EXPIRY',
+        severity: 'CRITICAL',
+        message: `Medicine expires in ${daysToExpiry} days (critical threshold: ${thresholds.criticalExpiry})`,
+      });
     } else if (daysToExpiry <= thresholds.expiryWarning) {
-      results.alerts.push({ type: 'NEAR_EXPIRY', severity: 'WARNING', message: `Medicine expires in ${daysToExpiry} days (warning threshold: ${thresholds.expiryWarning})` });
+      results.alerts.push({
+        type: 'NEAR_EXPIRY',
+        severity: 'WARNING',
+        message: `Medicine expires in ${daysToExpiry} days (warning threshold: ${thresholds.expiryWarning})`,
+      });
     }
 
     return results;
   }
 
-  // ── Private Helpers ──
-
   _validateThresholds(data) {
-    const { lowStockThreshold, criticalStockThreshold, expiryWarningDays, criticalExpiryDays } = data;
+    const { lowStockThreshold, criticalStockThreshold, expiryWarningDays, criticalExpiryDays } =
+      data;
 
     if (criticalStockThreshold !== undefined && lowStockThreshold !== undefined) {
       if (criticalStockThreshold >= lowStockThreshold) {

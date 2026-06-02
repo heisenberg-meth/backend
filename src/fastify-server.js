@@ -8,7 +8,10 @@ import { initAnalyticsWorker } from './modules/billing-analytics/workers/analyti
 import { initRiskWorker } from './modules/medicine-alerts/workers/risk.worker.js';
 import { startCommunicationWorker } from './modules/communications/workers/communication.worker.js';
 import { initNotificationsModule } from './modules/notifications/index.js';
-import { createInventoryQueue, createInventoryWorker } from './modules/realtime-inventory/workers/inventory.worker.js';
+import {
+  createInventoryQueue,
+  createInventoryWorker,
+} from './modules/realtime-inventory/workers/inventory.worker.js';
 import { seal as sealQueueRegistry } from './config/queue-registry.js';
 import logger from './shared/utils/logger.js';
 
@@ -25,16 +28,28 @@ async function validateDatabaseHealth() {
     logger.info('[BOOT] Database connectivity verified');
 
     try {
-      const dbDetails = await prisma.$queryRaw`SELECT current_database(), current_schema(), current_user`;
+      const dbDetails =
+        await prisma.$queryRaw`SELECT current_database(), current_schema(), current_user`;
       logger.info({ dbDetails }, '[BOOT] Connected database context details');
     } catch (detailsErr) {
       logger.warn({ err: detailsErr.message }, '[BOOT] Failed to retrieve database details');
     }
 
     const criticalTables = [
-      'Patient', 'Invoice', 'Medicine', 'User', 'Settings',
-      'Notification', 'Prescription', 'Payment', 'Tenant', 'Branch',
-      'Inventory', 'InventoryBatch', 'Subscription', 'AccessRole'
+      'Patient',
+      'Invoice',
+      'Medicine',
+      'User',
+      'Settings',
+      'Notification',
+      'Prescription',
+      'Payment',
+      'Tenant',
+      'Branch',
+      'Inventory',
+      'InventoryBatch',
+      'Subscription',
+      'AccessRole',
     ];
 
     for (const table of criticalTables) {
@@ -42,36 +57,44 @@ async function validateDatabaseHealth() {
       const model = prisma[modelName];
       if (model && typeof model.count === 'function') {
         await model.count().catch((err) => {
-          throw new Error(`Schema inconsistency detected: ${table} table query failed - ${err.message}`);
+          throw new Error(
+            `Schema inconsistency detected: ${table} table query failed - ${err.message}`,
+          );
         });
       } else {
-        throw new Error(`Prisma Client error: Model ${modelName} not found in client. Run prisma generate.`);
+        throw new Error(
+          `Prisma Client error: Model ${modelName} not found in client. Run prisma generate.`,
+        );
       }
     }
 
-    // Step 2b: Critical columns verification to prevent silent schema drift
     try {
       await prisma.$queryRaw`SELECT "status", "maxBranches", "maxUsers", "aiEnabled", "whatsappEnabled" FROM "Tenant" LIMIT 1`;
     } catch {
-      throw new Error('Schema inconsistency: "Tenant" table is missing required quota/gate columns');
+      throw new Error(
+        'Schema inconsistency: "Tenant" table is missing required quota/gate columns',
+      );
     }
 
     try {
       await prisma.$queryRaw`SELECT "failureReason", "maxRetries" FROM "Notification" LIMIT 1`;
     } catch {
-      throw new Error('Schema inconsistency: "Notification" table is missing required columns (failureReason or maxRetries)');
+      throw new Error(
+        'Schema inconsistency: "Notification" table is missing required columns (failureReason or maxRetries)',
+      );
     }
 
     logger.info('[BOOT] Relational schema consistency check passed');
 
-    // Step 3: Redis connectivity
     await redisClient.ping();
     logger.info('[BOOT] Redis connectivity verified');
 
     return true;
   } catch (err) {
     logger.error({ err }, '[BOOT] Database validation failed — workers will NOT start');
-    throw new Error(`Database validation failed: ${err.message}. Workers cannot start until schema is consistent.`);
+    throw new Error(
+      `Database validation failed: ${err.message}. Workers cannot start until schema is consistent.`,
+    );
   }
 }
 
@@ -86,23 +109,19 @@ const start = async () => {
     logger.info(`\n[SHUTDOWN] Received ${signal}, shutting down gracefully...`);
 
     try {
-      // Phase 1: Stop accepting new connections
       if (fastify) {
         await fastify.close();
         logger.info('[SHUTDOWN] Fastify server closed');
       }
 
-      // Phase 2: Close RabbitMQ connections
       if (eventBus.connection) {
         await eventBus.connection.close();
         logger.info('[SHUTDOWN] RabbitMQ connection closed');
       }
 
-      // Phase 3: Disconnect Prisma
       await prisma.$disconnect();
       logger.info('[SHUTDOWN] Prisma disconnected');
 
-      // Phase 4: Quit Redis
       if (redisClient && typeof redisClient.quit === 'function') {
         await redisClient.quit();
         logger.info('[SHUTDOWN] Redis disconnected');
@@ -119,7 +138,6 @@ const start = async () => {
   process.on('SIGINT', () => gracefulShutdown('SIGINT'));
   process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
 
-  // Prevent unhandled promise rejections from keeping process alive
   process.on('unhandledRejection', (reason) => {
     console.error('[UNHANDLED REJECTION]', reason);
   });

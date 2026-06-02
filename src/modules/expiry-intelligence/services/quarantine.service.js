@@ -10,7 +10,6 @@ class QuarantineService {
 
     const result = await batchRepository.quarantineBatch(batchId, reason, userId);
 
-    // Real-time Ledger
     await inventoryService.recordTransaction(
       prisma,
       tenantId,

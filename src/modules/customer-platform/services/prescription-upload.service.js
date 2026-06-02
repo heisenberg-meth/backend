@@ -3,11 +3,7 @@ import logger from '../../../shared/utils/logger.js';
 import { mainQueue } from '../../../queue/index.js';
 
 class PrescriptionUploadService {
-  /**
-   * Orchestrate prescription intake and OCR processing
-   */
   async upload(tenantId, patientId, prescriptionUrl) {
-    // 1. Create prescription record (PENDING)
     const prescription = await prisma.patientPrescription.create({
       data: {
         tenantId,
@@ -17,7 +13,6 @@ class PrescriptionUploadService {
       },
     });
 
-    // 2. Queue for OCR extraction pipeline
     await mainQueue.add(
       'process-prescription-ocr',
       {

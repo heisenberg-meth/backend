@@ -18,14 +18,14 @@ class BillingFastifyController {
   async checkout(request, reply) {
     try {
       if (!request.branchId) {
-        throw new Error("User branchId missing");
+        throw new Error('User branchId missing');
       }
-      
+
       const payload = {
         ...request.body,
-        branchId: request.branchId
+        branchId: request.branchId,
       };
-      
+
       const invoice = await billingService.checkout(request.tenantId, payload, request.user.id);
       return reply.code(201).send({ success: true, data: invoice });
     } catch (error) {
@@ -36,14 +36,14 @@ class BillingFastifyController {
   async createDraft(request, reply) {
     try {
       if (!request.branchId) {
-        throw new Error("User branchId missing");
+        throw new Error('User branchId missing');
       }
-      
+
       const payload = {
         ...request.body,
-        branchId: request.branchId
+        branchId: request.branchId,
       };
-      
+
       const invoice = await billingService.createDraft(request.tenantId, payload, request.user.id);
       return reply.code(201).send({ success: true, data: invoice });
     } catch (error) {
@@ -63,7 +63,12 @@ class BillingFastifyController {
   async cancelInvoice(request, reply) {
     try {
       const { reason } = request.body;
-      const result = await invoiceActionService.cancel(request.params.id, request.tenantId, request.user.id, reason);
+      const result = await invoiceActionService.cancel(
+        request.params.id,
+        request.tenantId,
+        request.user.id,
+        reason,
+      );
       return { success: true, data: result };
     } catch (error) {
       return reply.code(400).send({ success: false, message: error.message });
@@ -83,11 +88,12 @@ class BillingFastifyController {
     try {
       const { id } = request.params;
       const { items, reason, refundAmount } = request.body;
-      const result = await billingService.processRefund(
-        request.tenantId,
-        request.user.id,
-        { invoiceId: id, items, reason, refundAmount }
-      );
+      const result = await billingService.processRefund(request.tenantId, request.user.id, {
+        invoiceId: id,
+        items,
+        reason,
+        refundAmount,
+      });
       return reply.send({ success: true, data: result });
     } catch (error) {
       return reply.code(400).send({ success: false, message: error.message });

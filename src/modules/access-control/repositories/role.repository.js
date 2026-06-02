@@ -47,7 +47,6 @@ class RoleRepository {
 
   async update(id, tenantId, data) {
     return prisma.$transaction(async (tx) => {
-      // 1. Update basic info
       const role = await tx.role.update({
         where: { id, tenantId },
         data: {
@@ -56,14 +55,11 @@ class RoleRepository {
         }
       });
 
-      // 2. Update permissions if provided
       if (data.permissions) {
-        // Delete old mappings
         await tx.rolePermission.deleteMany({
           where: { roleId: id }
         });
 
-        // Add new mappings
         await tx.rolePermission.createMany({
           data: data.permissions.map(pId => ({
             roleId: id,

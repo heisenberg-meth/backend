@@ -27,7 +27,7 @@ class DashboardAggregationService {
       this.getLowStockSummary(tenantId, userRole),
       this.getPendingOrders(tenantId, userRole),
       this.getTodaySummary(tenantId, userRole),
-      prisma.stockAlert.count({ where: { tenantId, isResolved: false } })
+      prisma.stockAlert.count({ where: { tenantId, isResolved: false } }),
     ]);
 
     const data = {
@@ -39,13 +39,13 @@ class DashboardAggregationService {
       totalCustomers: today.patients,
       activeAlerts: activeAlerts,
       suppliers: {
-        total: financials.totalSuppliers
+        total: financials.totalSuppliers,
       },
       patients: {
-        total: today.patients
+        total: today.patients,
       },
       alerts: {
-        active: activeAlerts
+        active: activeAlerts,
       },
       generatedAt: new Date().toISOString(),
     };
@@ -66,9 +66,6 @@ class DashboardAggregationService {
     const metrics = await dashboardAggregationRepository.getStockHealthMetrics(tenantId);
     const topRisks = await dashboardAggregationRepository.getTopLowStockMedicines(tenantId, 5);
 
-    // We still need the value (quantity * purchasePrice). 
-    // Since Prisma doesn't support sum of products directly in aggregate, 
-    // we use a raw query for efficiency on large datasets.
     const [valueResult] = await prisma.$queryRaw`
       SELECT SUM("quantity" * COALESCE("purchasePrice", 0)) as "totalValue"
       FROM "InventoryBatch" as "ib"
@@ -84,11 +81,13 @@ class DashboardAggregationService {
       critical: metrics.outOfStockCount,
       low: metrics.lowStockCount,
       outOfStock: metrics.outOfStockCount,
-      totalSku: await prisma.medicine.count({ where: { tenantId, deletedAt: null, isActive: true } }),
+      totalSku: await prisma.medicine.count({
+        where: { tenantId, deletedAt: null, isActive: true },
+      }),
       lowStock: metrics.lowStockCount,
       expiring30d: metrics.expiringCount,
       inventoryValue: inventoryValue,
-      topRisks: topRisks.map(m => ({
+      topRisks: topRisks.map((m) => ({
         medicine: m.name,
         totalStock: m.inventoryBatches.reduce((sum, b) => sum + b.quantity, 0),
       })),
@@ -109,7 +108,7 @@ class DashboardAggregationService {
       dashboardAggregationRepository.getTodaySales(tenantId),
       dashboardAggregationRepository.getMonthSales(tenantId),
       dashboardAggregationRepository.getPendingPurchaseOrders(tenantId),
-      prisma.supplier.count({ where: { tenantId, deletedAt: null } })
+      prisma.supplier.count({ where: { tenantId, deletedAt: null } }),
     ]);
 
     return {
@@ -122,7 +121,6 @@ class DashboardAggregationService {
       computedAt: new Date().toISOString(),
     };
   }
-
 
   async getSalesPerformance(tenantId, branchId = 'today') {
     const [paymentBreakdown, topSelling] = await Promise.all([
@@ -195,11 +193,11 @@ class DashboardAggregationService {
     if (cached) return cached;
 
     const pendingPOs = await dashboardAggregationRepository.getPendingPurchaseOrders(tenantId);
-    
+
     const data = {
       pendingPOs: pendingPOs,
-      delayedDeliveries: 0, // Needs repository implementation
-      awaitingApproval: 0, // Needs repository implementation
+      delayedDeliveries: 0,
+      awaitingApproval: 0,
       computedAt: new Date().toISOString(),
     };
 
@@ -218,13 +216,13 @@ class DashboardAggregationService {
 
     const [todaySales, totalPatients] = await Promise.all([
       dashboardAggregationRepository.getTodaySales(tenantId),
-      prisma.patient.count({ where: { tenantId, deletedAt: null } })
+      prisma.patient.count({ where: { tenantId, deletedAt: null } }),
     ]);
 
     const data = {
       invoices: todaySales._count.id || 0,
       patients: totalPatients,
-      prescriptions: 0, // Needs repository implementation
+      prescriptions: 0,
       revenue: Number(todaySales._sum.totalAmount || 0),
       computedAt: new Date().toISOString(),
     };
@@ -244,7 +242,7 @@ class DashboardAggregationService {
     const snapshot = await dashboardAggregationRepository.getValidSnapshot(
       tenantId,
       'OVERVIEW',
-      branchId
+      branchId,
     );
     if (snapshot) {
       await dashboardCacheManager.set(tenantId, 'overview', snapshot.snapshotData, branchId);
@@ -260,7 +258,7 @@ class DashboardAggregationService {
         'OVERVIEW',
         data,
         branchId,
-        dashboardCacheManager.getTTL('overview')
+        dashboardCacheManager.getTTL('overview'),
       ),
     ]);
 
@@ -278,7 +276,7 @@ class DashboardAggregationService {
     const snapshot = await dashboardAggregationRepository.getValidSnapshot(
       tenantId,
       'SALES_SUMMARY',
-      branchId
+      branchId,
     );
     if (snapshot) {
       await dashboardCacheManager.set(tenantId, 'sales_summary', snapshot.snapshotData, branchId);
@@ -294,7 +292,7 @@ class DashboardAggregationService {
         'SALES_SUMMARY',
         data,
         branchId,
-        dashboardCacheManager.getTTL('sales_summary')
+        dashboardCacheManager.getTTL('sales_summary'),
       ),
     ]);
 
@@ -312,10 +310,15 @@ class DashboardAggregationService {
     const snapshot = await dashboardAggregationRepository.getValidSnapshot(
       tenantId,
       'INVENTORY_HEALTH',
-      branchId
+      branchId,
     );
     if (snapshot) {
-      await dashboardCacheManager.set(tenantId, 'inventory_health', snapshot.snapshotData, branchId);
+      await dashboardCacheManager.set(
+        tenantId,
+        'inventory_health',
+        snapshot.snapshotData,
+        branchId,
+      );
       return snapshot.snapshotData;
     }
 
@@ -328,7 +331,7 @@ class DashboardAggregationService {
         'INVENTORY_HEALTH',
         data,
         branchId,
-        dashboardCacheManager.getTTL('inventory_health')
+        dashboardCacheManager.getTTL('inventory_health'),
       ),
     ]);
 
@@ -346,7 +349,7 @@ class DashboardAggregationService {
     const snapshot = await dashboardAggregationRepository.getValidSnapshot(
       tenantId,
       'ALERTS',
-      branchId
+      branchId,
     );
     if (snapshot) {
       await dashboardCacheManager.set(tenantId, 'alerts', snapshot.snapshotData, branchId);
@@ -362,7 +365,7 @@ class DashboardAggregationService {
         'ALERTS',
         data,
         branchId,
-        dashboardCacheManager.getTTL('alerts')
+        dashboardCacheManager.getTTL('alerts'),
       ),
     ]);
 
@@ -392,7 +395,7 @@ class DashboardAggregationService {
         'OVERVIEW',
         data,
         branchId,
-        dashboardCacheManager.getTTL('overview')
+        dashboardCacheManager.getTTL('overview'),
       );
     } catch (err) {
       logger.error({ err, tenantId, branchId }, 'Failed to compute overview snapshot');
@@ -408,7 +411,7 @@ class DashboardAggregationService {
         'SALES_SUMMARY',
         data,
         branchId,
-        dashboardCacheManager.getTTL('sales_summary')
+        dashboardCacheManager.getTTL('sales_summary'),
       );
     } catch (err) {
       logger.error({ err, tenantId, branchId }, 'Failed to compute sales summary snapshot');
@@ -424,7 +427,7 @@ class DashboardAggregationService {
         'INVENTORY_HEALTH',
         data,
         branchId,
-        dashboardCacheManager.getTTL('inventory_health')
+        dashboardCacheManager.getTTL('inventory_health'),
       );
     } catch (err) {
       logger.error({ err, tenantId, branchId }, 'Failed to compute inventory health snapshot');
@@ -440,7 +443,7 @@ class DashboardAggregationService {
         'ALERTS',
         data,
         branchId,
-        dashboardCacheManager.getTTL('alerts')
+        dashboardCacheManager.getTTL('alerts'),
       );
     } catch (err) {
       logger.error({ err, tenantId, branchId }, 'Failed to compute alerts snapshot');
@@ -459,7 +462,7 @@ class DashboardAggregationService {
     const topSelling = await dashboardAggregationRepository.getTopSellingMedicines(
       tenantId,
       branchId,
-      1
+      1,
     );
 
     let topSellingMedicine = null;
@@ -486,18 +489,18 @@ class DashboardAggregationService {
   async _computeSalesSummary(tenantId, branchId) {
     const dailySummary = await dashboardAggregationRepository.getDailySalesSummary(
       tenantId,
-      branchId
+      branchId,
     );
 
     if (dailySummary) {
       const paymentBreakdown = await dashboardAggregationRepository.getPaymentMethodBreakdown(
         tenantId,
-        branchId
+        branchId,
       );
 
       const topSelling = await dashboardAggregationRepository.getTopSellingMedicines(
         tenantId,
-        branchId
+        branchId,
       );
 
       const medicineIds = topSelling.map((s) => s.medicineId);
@@ -543,12 +546,12 @@ class DashboardAggregationService {
 
     const paymentBreakdown = await dashboardAggregationRepository.getPaymentMethodBreakdown(
       tenantId,
-      branchId
+      branchId,
     );
 
     const topSelling = await dashboardAggregationRepository.getTopSellingMedicines(
       tenantId,
-      branchId
+      branchId,
     );
 
     const medicineIds = topSelling.map((s) => s.medicineId);
@@ -586,16 +589,13 @@ class DashboardAggregationService {
   }
 
   async _computeInventoryHealth(tenantId, branchId) {
-    const metrics = await dashboardAggregationRepository.getStockHealthMetrics(
-      tenantId,
-      branchId
-    );
+    const metrics = await dashboardAggregationRepository.getStockHealthMetrics(tenantId, branchId);
 
     const totalItems = metrics.totalBatches;
-    const healthyItems = totalItems - metrics.expiredCount - metrics.expiringCount - metrics.outOfStockCount;
-    const healthyStockPercentage = totalItems > 0
-      ? Math.round((healthyItems / totalItems) * 100)
-      : 100;
+    const healthyItems =
+      totalItems - metrics.expiredCount - metrics.expiringCount - metrics.outOfStockCount;
+    const healthyStockPercentage =
+      totalItems > 0 ? Math.round((healthyItems / totalItems) * 100) : 100;
 
     return {
       healthyStockPercentage,
@@ -611,7 +611,7 @@ class DashboardAggregationService {
   async _computeAlerts(tenantId, branchId) {
     const { alerts, expiredBatches } = await dashboardAggregationRepository.getAlertsBySeverity(
       tenantId,
-      branchId
+      branchId,
     );
 
     const critical = expiredBatches.map((b) => ({

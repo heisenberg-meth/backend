@@ -8,7 +8,7 @@ const DELIVERY_STATUS = {
   OUT_FOR_DELIVERY: 'OUT_FOR_DELIVERY',
   DELIVERED: 'DELIVERED',
   FAILED: 'FAILED',
-  RETURNED: 'RETURNED'
+  RETURNED: 'RETURNED',
 };
 
 class DeliveryService {
@@ -23,8 +23,8 @@ class DeliveryService {
         tenantId,
         orderId,
         riderId,
-        deliveryStatus: riderId ? DELIVERY_STATUS.ASSIGNED : 'PENDING'
-      }
+        deliveryStatus: riderId ? DELIVERY_STATUS.ASSIGNED : 'PENDING',
+      },
     });
 
     if (riderId) {
@@ -43,13 +43,13 @@ class DeliveryService {
   async updateDeliveryStatus(deliveryId, tenantId, status, proofOfDeliveryUrl = null) {
     const delivery = await prisma.delivery.findFirst({
       where: { id: deliveryId, tenantId },
-      include: { order: true }
+      include: { order: true },
     });
 
     if (!delivery) throw new Error('Delivery not found');
 
     const updateData = { deliveryStatus: status };
-    
+
     if (status === DELIVERY_STATUS.PICKED_UP) updateData.pickupTime = new Date();
     if (status === DELIVERY_STATUS.OUT_FOR_DELIVERY) updateData.outForDeliveryTime = new Date();
     if (status === DELIVERY_STATUS.DELIVERED) {
@@ -59,15 +59,14 @@ class DeliveryService {
 
     const updatedDelivery = await prisma.delivery.update({
       where: { id: deliveryId },
-      data: updateData
+      data: updateData,
     });
 
-    // Notify Patient & Dashboard via Socket
     const io = getIO();
     io.to(`tenant:${tenantId}`).emit('delivery-status-updated', {
       deliveryId,
       orderId: delivery.orderId,
-      status
+      status,
     });
 
     logger.info(`[DeliveryService] Delivery ${deliveryId} updated to ${status}`);
@@ -77,7 +76,7 @@ class DeliveryService {
   async getDeliveryByOrderId(orderId, tenantId) {
     return prisma.delivery.findFirst({
       where: { orderId, tenantId },
-      include: { rider: true }
+      include: { rider: true },
     });
   }
 }

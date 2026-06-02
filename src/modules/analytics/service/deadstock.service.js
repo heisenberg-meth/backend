@@ -7,15 +7,14 @@ class DeadStockService {
    */
   async updateDeadStock(tenantId) {
     logger.info(`[DeadStockService] Analyzing slow/dead stock for tenant ${tenantId}`);
-    
+
     const now = new Date();
     const sixtyDaysAgo = new Date();
     sixtyDaysAgo.setDate(now.getDate() - 60);
-    
+
     const oneTwentyDaysAgo = new Date();
     oneTwentyDaysAgo.setDate(now.getDate() - 120);
 
-    // Get all medicines with current stock
     const medicines = await prisma.medicine.findMany({
       where: { tenantId, deletedAt: null },
       select: {
@@ -36,59 +35,59 @@ class DeadStockService {
 
     for (const med of medicines) {
       const totalStock = med.inventoryBatches.reduce((sum, b) => sum + b.quantity, 0);
-      if (totalStock === 0) continue; // Not slow/dead if we don't have it
+      if (totalStock === 0) continue;
 
       const lastSaleDate = med.saleItems.length > 0 ? med.saleItems[0].sale.soldAt : null;
       let daysSinceLastSale = -1;
-      
+
       if (lastSaleDate) {
         daysSinceLastSale = Math.floor((now - lastSaleDate) / (1000 * 60 * 60 * 24));
       } else {
-        // If never sold, calculate from earliest batch creation date or just set a high number
-        daysSinceLastSale = 999; 
+        daysSinceLastSale = 999;
       }
 
-      // SLOW MOVING: > 60 days
       if (daysSinceLastSale > 60) {
-        const turnoverRatio = 0; // Turnover = Units Sold / Avg Inventory (0 if no sales)
+        const turnoverRatio = 0;
 
         await prisma.slowMovingStock.upsert({
           where: {
             tenantId_branchId_medicineId: {
               tenantId,
               branchId: null,
-              medicineId: med.id
-            }
+              medicineId: med.id,
+            },
           },
           update: {
             daysSinceLastSale,
             currentStock: totalStock,
-            turnoverRatio
+            turnoverRatio,
           },
           create: {
             tenantId,
             medicineId: med.id,
             daysSinceLastSale,
             currentStock: totalStock,
-            turnoverRatio
-          }
+            turnoverRatio,
+          },
         });
       } else {
-         // Clean up if it's no longer slow moving
-         await prisma.slowMovingStock.deleteMany({
-           where: { tenantId, medicineId: med.id }
-         });
+        await prisma.slowMovingStock.deleteMany({
+          where: { tenantId, medicineId: med.id },
+        });
       }
 
-      // DEAD STOCK: > 120 days
       if (daysSinceLastSale > 120) {
-        const stockValue = med.inventoryBatches.reduce((sum, b) => sum + (b.quantity * b.purchasePrice), 0);
-        
-        // Calculate Expiry Risk Score
-        // Higher score if near expiry and large quantity
+        const stockValue = med.inventoryBatches.reduce(
+          (sum, b) => sum + b.quantity * b.purchasePrice,
+          0,
+        );
+
         let expiryRiskScore = 0;
         for (const batch of med.inventoryBatches) {
-          const daysToExpiry = Math.max(1, Math.floor((batch.expiryDate - now) / (1000 * 60 * 60 * 24)));
+          const daysToExpiry = Math.max(
+            1,
+            Math.floor((batch.expiryDate - now) / (1000 * 60 * 60 * 24)),
+          );
           if (daysToExpiry < 90) {
             expiryRiskScore += (batch.quantity / daysToExpiry) * 10;
           }
@@ -100,14 +99,14 @@ class DeadStockService {
             tenantId_branchId_medicineId: {
               tenantId,
               branchId: null,
-              medicineId: med.id
-            }
+              medicineId: med.id,
+            },
           },
           update: {
             currentStock: totalStock,
             stockValue,
             daysDead: daysSinceLastSale,
-            expiryRiskScore
+            expiryRiskScore,
           },
           create: {
             tenantId,
@@ -115,16 +114,16 @@ class DeadStockService {
             currentStock: totalStock,
             stockValue,
             daysDead: daysSinceLastSale,
-            expiryRiskScore
-          }
+            expiryRiskScore,
+          },
         });
       } else {
         await prisma.deadStockAnalysis.deleteMany({
-          where: { tenantId, medicineId: med.id }
+          where: { tenantId, medicineId: med.id },
         });
       }
     }
-    
+
     logger.info(`[DeadStockService] Completed analysis for tenant ${tenantId}`);
   }
 }

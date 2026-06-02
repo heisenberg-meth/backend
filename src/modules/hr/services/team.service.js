@@ -5,9 +5,8 @@ import redisClient from '../../../config/redis.js';
 import { emitEvent } from '../../../shared/events/erp-event-bus.js';
 import { DOMAIN_EVENTS } from '../../../shared/constants/events.js';
 
-const ACTIVE_SHIFTS_CACHE_TTL = 300; // 5 minutes
-const PERFORMANCE_CACHE_TTL = 600; // 10 minutes
-
+const ACTIVE_SHIFTS_CACHE_TTL = 300;
+const PERFORMANCE_CACHE_TTL = 600;
 class TeamService {
   async getTeamMembers({ tenantId, search, role, branchId, skip, take }) {
     const where = {

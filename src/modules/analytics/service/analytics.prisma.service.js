@@ -65,10 +65,10 @@ class AnalyticsPrismaService {
       by: ['supplierId'],
       where: {
         medicine: { tenantId },
-        deletedAt: null
+        deletedAt: null,
       },
       _count: { id: true },
-      _sum: { quantity: true }
+      _sum: { quantity: true },
     });
     return distribution;
   }
@@ -157,7 +157,6 @@ class AnalyticsPrismaService {
       lastPurchaseDate: s.lastPurchaseDate,
     }));
 
-    // Supplier Concentration Risk Detection
     const totalSpendAll = suppliers.reduce((sum, s) => sum + s.totalSpend, 0);
     let concentrationRisk = null;
 
@@ -171,7 +170,6 @@ class AnalyticsPrismaService {
           message: `${suppliers[0].supplierName} accounts for ${Math.round(topSupplierShare)}% of procurement — dangerous single-supplier dependency`,
         };
 
-        // Emit event for downstream systems
         emitEvent(DOMAIN_EVENTS.SUPPLIER_CONCENTRATION_RISK, {
           tenantId,
           supplierId: suppliers[0].supplierId,
@@ -247,9 +245,9 @@ class AnalyticsPrismaService {
       include: {
         inventoryBatches: {
           where: { deletedAt: null, status: 'ACTIVE' },
-          select: { quantity: true }
-        }
-      }
+          select: { quantity: true },
+        },
+      },
     });
 
     return allMedicines
@@ -318,8 +316,6 @@ class AnalyticsPrismaService {
     const totalValue = expiredBatches.reduce((sum, b) => sum + b.quantity * b.purchasePrice, 0);
     const totalRevenue = expiredBatches.reduce((sum, b) => sum + b.quantity * b.sellingPrice, 0);
 
-    // Supplier Shelf-Life Quality Analysis
-    // Group expired batches by supplier to detect suppliers sending low shelf-life stock
     const supplierExpiryMap = {};
     for (const b of expiredBatches) {
       if (b.supplierId) {
@@ -337,7 +333,6 @@ class AnalyticsPrismaService {
       }
     }
 
-    // Enrich with supplier names
     const supplierIds = Object.keys(supplierExpiryMap);
     let supplierExpiryData = [];
     if (supplierIds.length > 0) {
@@ -365,9 +360,7 @@ class AnalyticsPrismaService {
       totalItems: expiredBatches.reduce((sum, b) => sum + b.quantity, 0),
       itemCount: expiredBatches.length,
       expiryLossPercentage:
-        totalValue > 0
-          ? Math.round((totalValue / (totalValue + totalRevenue)) * 10000) / 100
-          : 0,
+        totalValue > 0 ? Math.round((totalValue / (totalValue + totalRevenue)) * 10000) / 100 : 0,
       supplierExpiryAnalysis: supplierExpiryData,
       items: expiredBatches.map((b) => ({
         medicineId: b.medicine.id,
@@ -423,17 +416,16 @@ class AnalyticsPrismaService {
     };
 
     for (const b of batches) {
-      const margin = b.sellingPrice > 0
-        ? ((b.sellingPrice - b.purchasePrice) / b.sellingPrice) * 100
-        : 0;
+      const margin =
+        b.sellingPrice > 0 ? ((b.sellingPrice - b.purchasePrice) / b.sellingPrice) * 100 : 0;
       totalMarginPct += margin * b.quantity;
       totalPotentialProfit += (b.sellingPrice - b.purchasePrice) * b.quantity;
       totalQty += b.quantity;
 
-      // Classify margins
       if (margin < 0) {
         negativeMarginCount += b.quantity;
-        const flagReason = margin < -10 ? 'CRITICAL - Likely pricing error' : 'NEGATIVE - Selling below cost';
+        const flagReason =
+          margin < -10 ? 'CRITICAL - Likely pricing error' : 'NEGATIVE - Selling below cost';
         if (b.quantity > 0) {
           negativeMarginItems.push({
             medicineId: b.medicine.id,
@@ -455,7 +447,6 @@ class AnalyticsPrismaService {
       }
     }
 
-    // Emit alert if negative margins detected
     if (negativeMarginItems.length > 0) {
       emitEvent(DOMAIN_EVENTS.PROFIT_MARGIN_ALERT, {
         tenantId,
@@ -477,7 +468,7 @@ class AnalyticsPrismaService {
         negativeMarginItems.length > 0
           ? `${negativeMarginItems.length} items are being sold below cost — possible pricing errors or discount abuse`
           : null,
-      negativeMarginItems: negativeMarginItems.slice(0, 20), // Limit to top 20
+      negativeMarginItems: negativeMarginItems.slice(0, 20),
       marginDistribution: {
         below10Pct: Math.round((marginRanges.below10 / totalQty) * 10000) / 100,
         between10And20Pct: Math.round((marginRanges.between10and20 / totalQty) * 10000) / 100,
@@ -555,15 +546,9 @@ class AnalyticsPrismaService {
     const ninetyDaysAgo = new Date();
     ninetyDaysAgo.setDate(ninetyDaysAgo.getDate() - 90);
 
-    const [
-      highRefundStaff,
-      cashSpikeDays,
-      abnormalDiscounts,
-      highReturnCustomers,
-      priceAnomalies,
-    ] = await Promise.all([
-      // 1. Abnormally high refunds by staff (fraud indicator)
-      prisma.$queryRaw`
+    const [highRefundStaff, cashSpikeDays, abnormalDiscounts, highReturnCustomers, priceAnomalies] =
+      await Promise.all([
+        prisma.$queryRaw`
         SELECT
           u.id as "userId",
           u."fullName" as "staffName",
@@ -585,8 +570,7 @@ class AnalyticsPrismaService {
         ORDER BY refundCount DESC
       `,
 
-      // 2. Cash payment spikes (potential reconciliation fraud)
-      prisma.$queryRaw`
+        prisma.$queryRaw`
         SELECT
           DATE(s."soldAt") as date,
           COUNT(*) as cashTxCount,
@@ -609,8 +593,7 @@ class AnalyticsPrismaService {
         ORDER BY cashAmount DESC
       `,
 
-      // 3. Abnormal discount patterns
-      prisma.$queryRaw`
+        prisma.$queryRaw`
         SELECT
           u.id as "userId",
           u."fullName" as "staffName",
@@ -627,8 +610,7 @@ class AnalyticsPrismaService {
         LIMIT 10
       `,
 
-      // 4. High return patients
-      prisma.$queryRaw`
+        prisma.$queryRaw`
         SELECT
           c.id as "patientId",
           c."fullName" as "customerName",
@@ -645,8 +627,7 @@ class AnalyticsPrismaService {
         LIMIT 10
       `,
 
-      // 5. Price anomalies (selling significantly below MRP)
-      prisma.$queryRaw`
+        prisma.$queryRaw`
         SELECT
           m.id as "medicineId",
           m.name as "medicineName",
@@ -669,7 +650,7 @@ class AnalyticsPrismaService {
         ORDER BY discountPct DESC
         LIMIT 10
       `,
-    ]);
+      ]);
 
     const result = {
       anomalousRefunds: {
@@ -738,7 +719,6 @@ class AnalyticsPrismaService {
       generatedAt: new Date(),
     };
 
-    // Emit event if fraud signals detected
     const totalSignals =
       (result.anomalousRefunds.signals.length > 0 ? 1 : 0) +
       (result.cashSpikeDays.signals.length > 0 ? 1 : 0) +
@@ -754,7 +734,7 @@ class AnalyticsPrismaService {
       }).catch(() => {});
     }
 
-    await redisClient.set(cacheKey, JSON.stringify(result), 'EX', 1800); // 30 min cache
+    await redisClient.set(cacheKey, JSON.stringify(result), 'EX', 1800);
     return result;
   }
 
@@ -763,22 +743,16 @@ class AnalyticsPrismaService {
     const cached = await redisClient.get(cacheKey);
     if (cached) return JSON.parse(cached);
 
-    const [
-      demandForecasts,
-      recommendedOrders,
-      seasonalTrends,
-      expiryPredictions,
-    ] = await Promise.all([
-      // Get top demand forecasts
-      prisma.demandForecast.findMany({
-        where: { tenantId, branchId: null, forecastDate: { gte: new Date() } },
-        orderBy: { predictedQuantity: 'desc' },
-        take: 20,
-        include: { medicine: { select: { name: true, genericName: true, reorderLevel: true } } },
-      }),
+    const [demandForecasts, recommendedOrders, seasonalTrends, expiryPredictions] =
+      await Promise.all([
+        prisma.demandForecast.findMany({
+          where: { tenantId, branchId: null, forecastDate: { gte: new Date() } },
+          orderBy: { predictedQuantity: 'desc' },
+          take: 20,
+          include: { medicine: { select: { name: true, genericName: true, reorderLevel: true } } },
+        }),
 
-      // Find medicines that need reordering soon based on forecast
-      prisma.$queryRaw`
+        prisma.$queryRaw`
         SELECT
           m.id as "medicineId",
           m.name as "medicineName",
@@ -799,8 +773,7 @@ class AnalyticsPrismaService {
         LIMIT 15
       `,
 
-      // Seasonal demand: medicines trending up vs last month
-      prisma.$queryRaw`
+        prisma.$queryRaw`
         SELECT
           m.id as "medicineId",
           m.name as "medicineName",
@@ -818,14 +791,16 @@ class AnalyticsPrismaService {
         LIMIT 10
       `,
 
-      // Expiry risk predictions
-      prisma.expiryRiskPrediction.findMany({
-        where: { tenantId, branchId: null, riskScore: { gt: 50 } },
-        orderBy: { riskScore: 'desc' },
-        take: 10,
-        include: { medicine: { select: { name: true } }, batch: { select: { batchNumber: true, expiryDate: true } } },
-      }),
-    ]);
+        prisma.expiryRiskPrediction.findMany({
+          where: { tenantId, branchId: null, riskScore: { gt: 50 } },
+          orderBy: { riskScore: 'desc' },
+          take: 10,
+          include: {
+            medicine: { select: { name: true } },
+            batch: { select: { batchNumber: true, expiryDate: true } },
+          },
+        }),
+      ]);
 
     const result = {
       forecastHorizon: '30 days',
@@ -845,8 +820,7 @@ class AnalyticsPrismaService {
         reorderLevel: r.reorderLevel,
         predictedDemand: Number(r.predictedDemand) || 0,
         suggestedOrderQty:
-          Math.max(0, Number(r.predictedDemand) - Number(r.currentStock)) +
-          (r.reorderLevel || 10),
+          Math.max(0, Number(r.predictedDemand) - Number(r.currentStock)) + (r.reorderLevel || 10),
         confidence: Number(r.confidenceScore) || 0,
       })),
       seasonalDemandSpikes: seasonalTrends.map((t) => ({
@@ -899,7 +873,6 @@ class AnalyticsPrismaService {
       };
     }
 
-    // Get branch-level sales aggregates
     const branchSales = await prisma.sale.groupBy({
       by: ['branchId'],
       where: {
@@ -924,8 +897,8 @@ class AnalyticsPrismaService {
       }
     }
 
-    // Get branch-level COGS using parameterized query to avoid SQL injection
-    const branchCogs = await prisma.$queryRawUnsafe(`
+    const branchCogs = await prisma.$queryRawUnsafe(
+      `
       SELECT
         s."branchId",
         COALESCE(SUM(si.quantity * COALESCE(ib."purchasePrice", 0)), 0) as cogs
@@ -936,16 +909,21 @@ class AnalyticsPrismaService {
         AND s."branchId" = ANY($2::uuid[])
         AND s.status = 'COMPLETED'
       GROUP BY s."branchId"
-    `, tenantId, branchIds);
+    `,
+      tenantId,
+      branchIds,
+    );
 
     const branchCogsMap = {};
     for (const bc of branchCogs) {
       branchCogsMap[bc.branchId] = Number(bc.cogs) || 0;
     }
 
-    // Get branch-level metrics from pre-aggregated table
     const branchMetrics = await prisma.branchPerformanceMetric.findMany({
-      where: { branchId: { in: branchIds }, metricDate: { gte: new Date(new Date().setDate(new Date().getDate() - 30)) } },
+      where: {
+        branchId: { in: branchIds },
+        metricDate: { gte: new Date(new Date().setDate(new Date().getDate() - 30)) },
+      },
       orderBy: { metricDate: 'desc' },
     });
 
@@ -997,12 +975,10 @@ class AnalyticsPrismaService {
           metrics && metrics.count > 0
             ? Math.round((metrics.avgStockTurnover / metrics.count) * 100) / 100
             : null,
-        totalExpiryLoss:
-          metrics ? Math.round(metrics.totalExpiryLoss * 100) / 100 : 0,
+        totalExpiryLoss: metrics ? Math.round(metrics.totalExpiryLoss * 100) / 100 : 0,
       };
     });
 
-    // Sort by revenue descending
     result.sort((a, b) => b.totalRevenue - a.totalRevenue);
 
     const totalRevenue = result.reduce((sum, b) => sum + b.totalRevenue, 0);
@@ -1014,16 +990,14 @@ class AnalyticsPrismaService {
         totalRevenue: Math.round(totalRevenue * 100) / 100,
         totalProfit: Math.round(totalProfit * 100) / 100,
         averageProfitMargin:
-          totalRevenue > 0
-            ? Math.round((totalProfit / totalRevenue) * 10000) / 100
-            : 0,
+          totalRevenue > 0 ? Math.round((totalProfit / totalRevenue) * 10000) / 100 : 0,
         branchCount: result.length,
         bestPerformer: result.length > 0 ? result[0].branchName : null,
       },
       generatedAt: new Date(),
     };
 
-    await redisClient.set(cacheKey, JSON.stringify(finalResult), 'EX', 1800); // 30 min
+    await redisClient.set(cacheKey, JSON.stringify(finalResult), 'EX', 1800);
     return finalResult;
   }
 
@@ -1040,7 +1014,7 @@ class AnalyticsPrismaService {
       include: { medicine: { select: { name: true, genericName: true } } },
     });
 
-    await redisClient.set(cacheKey, JSON.stringify(data), 'EX', 3600); // 1 hr cache
+    await redisClient.set(cacheKey, JSON.stringify(data), 'EX', 3600);
     return data;
   }
 

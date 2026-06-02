@@ -6,7 +6,6 @@ async function analyticsRoutes(fastify) {
   fastify.addHook('preHandler', authenticate);
   fastify.addHook('preHandler', requireTenant);
 
-  // --- Daily Intelligence ---
   fastify.get(
     '/daily-summary',
     {
@@ -16,12 +15,12 @@ async function analyticsRoutes(fastify) {
           type: 'object',
           properties: {
             date: { type: 'string', format: 'date' },
-            branchId: { type: 'string', format: 'uuid' }
-          }
-        }
-      }
+            branchId: { type: 'string', format: 'uuid' },
+          },
+        },
+      },
     },
-    analyticsController.getDailySummary
+    analyticsController.getDailySummary,
   );
 
   fastify.get(
@@ -50,23 +49,22 @@ async function analyticsRoutes(fastify) {
           type: 'object',
           properties: {
             limit: { type: 'integer', default: 20 },
-            branchId: { type: 'string', format: 'uuid' }
-          }
-        }
-      }
+            branchId: { type: 'string', format: 'uuid' },
+          },
+        },
+      },
     },
-    analyticsController.getTodaySales
+    analyticsController.getTodaySales,
   );
 
-  // --- Cash Register Reconciliation ---
   fastify.get(
     '/cash-register',
     {
       schema: {
-        tags: ['Analytics', 'Finance']
-      }
+        tags: ['Analytics', 'Finance'],
+      },
     },
-    analyticsController.handleCashRegister
+    analyticsController.handleCashRegister,
   );
 
   fastify.post(
@@ -78,13 +76,13 @@ async function analyticsRoutes(fastify) {
           type: 'object',
           properties: {
             openingCash: { type: 'number' },
-            notes: { type: 'string' }
-          }
-        }
+            notes: { type: 'string' },
+          },
+        },
       },
       preHandler: [requirePermission('VIEW_FINANCIALS')],
     },
-    analyticsController.handleCashRegister
+    analyticsController.handleCashRegister,
   );
 
   fastify.post(
@@ -98,13 +96,13 @@ async function analyticsRoutes(fastify) {
           properties: {
             sessionId: { type: 'string', format: 'uuid' },
             closingCash: { type: 'number' },
-            notes: { type: 'string' }
-          }
-        }
+            notes: { type: 'string' },
+          },
+        },
       },
       preHandler: [requirePermission('VIEW_FINANCIALS')],
     },
-    analyticsController.closeCashRegister
+    analyticsController.closeCashRegister,
   );
 
   fastify.get(
@@ -117,12 +115,12 @@ async function analyticsRoutes(fastify) {
           properties: {
             from: { type: 'string', format: 'date-time' },
             to: { type: 'string', format: 'date-time' },
-            branchId: { type: 'string', format: 'uuid' }
-          }
-        }
-      }
+            branchId: { type: 'string', format: 'uuid' },
+          },
+        },
+      },
     },
-    analyticsController.getRegisterHistory
+    analyticsController.getRegisterHistory,
   );
 }
 

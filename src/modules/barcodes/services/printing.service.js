@@ -36,37 +36,28 @@ class PrintingService {
 
     const job = await printingQueue.add('bulk-print', {
       items,
-      tenantId
+      tenantId,
     });
 
     return { jobId: job.id, status: 'Queued' };
   }
 
-  /**
-   * Worker processor for bulk printing
-   * In a real world scenario, this would format the data into ESC/POS commands
-   * and send them to a thermal printer via network or local print spooler.
-   */
   async processBulkPrint(data) {
     const { items, tenantId } = data;
-    
-    // Simulate processing delay per item
+
     for (const item of items) {
-      logger.info(`[Printer] Generating label for ${item.medicineName} (Batch: ${item.batchNumber})`);
-      
-      // Simulate label generation
+      logger.info(
+        `[Printer] Generating label for ${item.medicineName} (Batch: ${item.batchNumber})`,
+      );
+
       await this.generateCode128(item.barcode);
-      
-      // Simulate sending to network printer
-      await new Promise(resolve => setTimeout(resolve, 50)); 
+
+      await new Promise((resolve) => setTimeout(resolve, 50));
     }
 
     logger.info(`[Printer] Successfully printed ${items.length} labels for tenant ${tenantId}`);
   }
 
-  /**
-   * Retrieve label data for a medicine/batch combination
-   */
   async getLabelData(medicineId, batchId, tenantId) {
     const medicine = await prisma.medicine.findFirst({
       where: { id: medicineId, tenantId, deletedAt: null },
@@ -79,28 +70,27 @@ class PrintingService {
 
     let batch = null;
     if (batchId) {
-       batch = await prisma.inventoryBatch.findFirst({
-           where: { id: batchId, tenantId, deletedAt: null }
-       });
+      batch = await prisma.inventoryBatch.findFirst({
+        where: { id: batchId, tenantId, deletedAt: null },
+      });
     } else {
-       batch = await prisma.inventoryBatch.findFirst({
-          where: { medicineId, tenantId, deletedAt: null },
-          orderBy: { createdAt: 'desc' }
-       });
+      batch = await prisma.inventoryBatch.findFirst({
+        where: { medicineId, tenantId, deletedAt: null },
+        orderBy: { createdAt: 'desc' },
+      });
     }
 
-    // Try to get a specific batch barcode, otherwise fallback to generic
     let barcodeRecord = null;
     if (batch) {
-       barcodeRecord = await prisma.medicineBarcode.findFirst({
-           where: { tenantId, batchId: batch.id }
-       });
+      barcodeRecord = await prisma.medicineBarcode.findFirst({
+        where: { tenantId, batchId: batch.id },
+      });
     }
 
     if (!barcodeRecord) {
-        barcodeRecord = await prisma.medicineBarcode.findFirst({
-            where: { tenantId, medicineId: medicine.id, batchId: null }
-        });
+      barcodeRecord = await prisma.medicineBarcode.findFirst({
+        where: { tenantId, medicineId: medicine.id, batchId: null },
+      });
     }
 
     const barcodeToPrint = barcodeRecord ? barcodeRecord.barcode : medicine.barcode;

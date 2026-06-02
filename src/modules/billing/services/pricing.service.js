@@ -1,20 +1,16 @@
 import gstService from './gst.service.js';
 
 class PricingService {
-  /**
-   * Calculate pricing for a single invoice item
-   */
   calculateItemPricing(item, sourceGst = '', targetGst = '') {
     const { unitPrice, quantity, gstPercentage, discountPercentage = 0 } = item;
 
     const rawTotal = unitPrice * quantity;
-    
-    // Apply discount BEFORE tax
+
     const discountAmount = (rawTotal * discountPercentage) / 100;
     const priceAfterDiscount = rawTotal - discountAmount;
 
     const gst = gstService.calculateGst(priceAfterDiscount, gstPercentage, sourceGst, targetGst);
-    
+
     const totalPrice = priceAfterDiscount + gst.amount;
 
     return {
@@ -23,7 +19,7 @@ class PricingService {
       taxableAmount: parseFloat(priceAfterDiscount.toFixed(2)),
       gstAmount: gst.amount,
       totalPrice: parseFloat(totalPrice.toFixed(2)),
-      gstBreakdown: gst
+      gstBreakdown: gst,
     };
   }
 
@@ -33,20 +29,19 @@ class PricingService {
     let gstAmount = 0;
     let grandTotal = 0;
 
-    const processedItems = items.map(item => {
+    const processedItems = items.map((item) => {
       const pricing = this.calculateItemPricing(item, sourceGst, targetGst);
       subtotal += pricing.subtotal;
       totalDiscount += pricing.discountAmount;
       gstAmount += pricing.gstAmount;
       grandTotal += pricing.totalPrice;
-      
+
       return {
         ...item,
-        ...pricing
+        ...pricing,
       };
     });
 
-    // Apply additional invoice-level discount if any
     grandTotal -= invoiceDiscountAmount;
 
     return {
@@ -55,8 +50,8 @@ class PricingService {
         subtotal: parseFloat(subtotal.toFixed(2)),
         discountAmount: parseFloat(totalDiscount.toFixed(2)),
         gstAmount: parseFloat(gstAmount.toFixed(2)),
-        totalAmount: parseFloat(grandTotal.toFixed(2))
-      }
+        totalAmount: parseFloat(grandTotal.toFixed(2)),
+      },
     };
   }
 }

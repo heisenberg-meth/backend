@@ -43,17 +43,19 @@ function resetInstance() {
   instance = null;
 }
 
-// Lazy export — do NOT auto-initialize on import
-const razorpay = new Proxy({}, {
-  get(target, prop) {
-    const client = getRazorpay();
-    const value = client[prop];
-    if (typeof value === 'function') {
-      return value.bind(client);
-    }
-    return value;
+const razorpay = new Proxy(
+  {},
+  {
+    get(target, prop) {
+      const client = getRazorpay();
+      const value = client[prop];
+      if (typeof value === 'function') {
+        return value.bind(client);
+      }
+      return value;
+    },
   },
-});
+);
 
 export { getRazorpay, healthCheck, resetInstance };
 export default razorpay;

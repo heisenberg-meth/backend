@@ -9,51 +9,48 @@ async function billingFastifyRoutes(fastify) {
   fastify.addHook('preHandler', requireTenant);
   fastify.addHook('preHandler', requireBranch);
 
-  // --- Invoice Lifecycle ---
   fastify.get('/invoices', {
     schema: { tags: ['Billing'], summary: 'List invoices' },
     preHandler: [requirePermission('VIEW_BILL')],
-    handler: billingController.getInvoices
+    handler: billingController.getInvoices,
   });
 
   fastify.post('/invoices', {
     schema: { tags: ['Billing'], summary: 'Create invoice (checkout)' },
     preHandler: [requirePermission('CREATE_BILL')],
-    handler: billingController.checkout
+    handler: billingController.checkout,
   });
 
   fastify.post('/invoices/draft', {
     schema: { tags: ['Billing'], summary: 'Create draft invoice' },
     preHandler: [requirePermission('CREATE_BILL')],
-    handler: billingController.createDraft
+    handler: billingController.createDraft,
   });
 
   fastify.get('/invoices/:id', {
     schema: { tags: ['Billing'], summary: 'Get invoice details' },
     preHandler: [requirePermission('VIEW_BILL')],
-    handler: billingController.getInvoiceById
+    handler: billingController.getInvoiceById,
   });
 
   fastify.post('/invoices/:id/cancel', {
     schema: { tags: ['Billing'], summary: 'Cancel invoice' },
     preHandler: [requirePermission('VOID_BILL')],
-    handler: billingController.cancelInvoice
+    handler: billingController.cancelInvoice,
   });
 
   fastify.post('/invoices/:id/refund', {
     schema: { tags: ['Billing'], summary: 'Process invoice refund' },
     preHandler: [requirePermission('REFUND_BILL')],
-    handler: billingController.processRefund
+    handler: billingController.processRefund,
   });
 
-  // --- POS Utilities ---
   fastify.get('/scan/:barcode', {
     schema: { tags: ['Billing'], summary: 'Scan item by barcode' },
     preHandler: [requirePermission('VIEW_BILL')],
-    handler: billingController.scanItem
+    handler: billingController.scanItem,
   });
 
-  // --- Payment Settlement ---
   fastify.post(
     '/invoices/:id/payment',
     {
@@ -87,9 +84,6 @@ async function billingFastifyRoutes(fastify) {
     },
     paymentController.settleInvoice,
   );
-  
-  // NOTE: Other billing routes (checkout, invoices list) are currently in Express.
-  // They should eventually be migrated here for full Fastify support.
 }
 
 export default billingFastifyRoutes;

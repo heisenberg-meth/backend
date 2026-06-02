@@ -15,47 +15,51 @@ class AlertWorker {
   setup() {
     if (process.env.NODE_ENV === 'test') return;
 
-    this.worker = new Worker('erp-events', async (job) => {
-      const { name, data } = job;
+    this.worker = new Worker(
+      'erp-events',
+      async (job) => {
+        const { name, data } = job;
 
-      try {
-        switch (name) {
-          case 'STOCK_LOW':
-          case 'inventory.stock.low':
-            await this._handleLowStock(data);
-            break;
+        try {
+          switch (name) {
+            case 'STOCK_LOW':
+            case 'inventory.stock.low':
+              await this._handleLowStock(data);
+              break;
 
-          case 'STOCK_EXPIRED':
-          case 'inventory.stock.expired':
-            await this._handleStockExpired(data);
-            break;
+            case 'STOCK_EXPIRED':
+            case 'inventory.stock.expired':
+              await this._handleStockExpired(data);
+              break;
 
-          case 'ALERT_ESCALATION_SCAN': {
-            const totalEscalated = await alertEscalationEngine.processEscalationQueue();
-            logger.info({ totalEscalated }, '[ALERT-WORKER] Escalation scan completed');
-            break;
-          }
-          case 'ALERT_SNOOZE_REACTIVATION': {
-            const tenants = await prisma.tenant.findMany({ where: { deletedAt: null } });
-            let totalReactivated = 0;
-            for (const tenant of tenants) {
-              const count = await alertEscalationEngine.autoReactivateSnoozedAlerts(tenant.id);
-              totalReactivated += count;
+            case 'ALERT_ESCALATION_SCAN': {
+              const totalEscalated = await alertEscalationEngine.processEscalationQueue();
+              logger.info({ totalEscalated }, '[ALERT-WORKER] Escalation scan completed');
+              break;
             }
-            logger.info({ totalReactivated }, '[ALERT-WORKER] Snooze reactivation completed');
-            break;
+            case 'ALERT_SNOOZE_REACTIVATION': {
+              const tenants = await prisma.tenant.findMany({ where: { deletedAt: null } });
+              let totalReactivated = 0;
+              for (const tenant of tenants) {
+                const count = await alertEscalationEngine.autoReactivateSnoozedAlerts(tenant.id);
+                totalReactivated += count;
+              }
+              logger.info({ totalReactivated }, '[ALERT-WORKER] Snooze reactivation completed');
+              break;
+            }
+            default:
+              break;
           }
-          default:
-            break;
+        } catch (error) {
+          logger.error({ error, event: name, jobId: job.id }, '[ALERT-WORKER] Job failed');
+          throw error;
         }
-      } catch (error) {
-        logger.error({ error, event: name, jobId: job.id }, '[ALERT-WORKER] Job failed');
-        throw error;
-      }
-    }, {
-      connection: getBullRedis(),
-      concurrency: 5,
-    });
+      },
+      {
+        connection: getBullRedis(),
+        concurrency: 5,
+      },
+    );
 
     logger.info('[ALERT-WORKER] Alert worker started and listening to erp-events queue');
   }
@@ -77,12 +81,24 @@ class AlertWorker {
     if (alert) {
       await alertNotificationService.dispatchAlert(alert);
 
-      // Auto Procurement Governance
-      const thresholds = await alertSeverityEngine.calculatePredictiveSeverity(medicineId, tenantId, branchId, currentStock);
+      const thresholds = await alertSeverityEngine.calculatePredictiveSeverity(
+        medicineId,
+        tenantId,
+        branchId,
+        currentStock,
+      );
       if (thresholds.thresholds?.autoRaisePO && thresholds.severity === 'CRITICAL') {
         try {
-          const po = await alertWorkflowService.raisePurchaseOrder(alert.id, tenantId, 'SYSTEM_AUTO', { priority: 'URGENT' });
-          logger.info({ poId: po.id, alertId: alert.id }, '[ALERT-WORKER] Auto-PO raised due to critical stock breach');
+          const po = await alertWorkflowService.raisePurchaseOrder(
+            alert.id,
+            tenantId,
+            'SYSTEM_AUTO',
+            { priority: 'URGENT' },
+          );
+          logger.info(
+            { poId: po.id, alertId: alert.id },
+            '[ALERT-WORKER] Auto-PO raised due to critical stock breach',
+          );
         } catch (poError) {
           logger.error({ poError, alertId: alert.id }, '[ALERT-WORKER] Auto-PO failed');
         }

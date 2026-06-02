@@ -27,7 +27,11 @@ class AlertSeverityEngine {
   }
 
   async calculatePredictiveSeverity(medicineId, tenantId, branchId, currentStock) {
-    const thresholds = await alertSettingsService.getEffectiveThresholds(tenantId, medicineId, branchId);
+    const thresholds = await alertSettingsService.getEffectiveThresholds(
+      tenantId,
+      medicineId,
+      branchId,
+    );
     const adu = await this._getAverageDailyUsage(medicineId, tenantId, branchId);
     const daysRemaining = adu > 0 ? Math.floor(currentStock / adu) : 999;
 
@@ -50,7 +54,6 @@ class AlertSeverityEngine {
       baseSeverity = this._escalateSeverity(baseSeverity);
     }
 
-    // Critical threshold override for life-saving medicine
     const lifeSavingCrit = thresholds.criticalStock || 3;
     if (daysRemaining <= lifeSavingCrit && medicine?.prescriptionRequired) {
       baseSeverity = 'CRITICAL';
@@ -68,13 +71,22 @@ class AlertSeverityEngine {
   async calculateExpiryRiskValue(batchId, tenantId = null) {
     const batch = await prisma.inventoryBatch.findUnique({
       where: { id: batchId },
-      select: { quantity: true, purchasePrice: true, expiryDate: true, medicineId: true, tenantId: true },
+      select: {
+        quantity: true,
+        purchasePrice: true,
+        expiryDate: true,
+        medicineId: true,
+        tenantId: true,
+      },
     });
 
     if (!batch) return null;
 
     const effectiveTenantId = tenantId || batch.tenantId;
-    const thresholds = await alertSettingsService.getEffectiveThresholds(effectiveTenantId, batch.medicineId);
+    const thresholds = await alertSettingsService.getEffectiveThresholds(
+      effectiveTenantId,
+      batch.medicineId,
+    );
 
     const riskValue = batch.quantity * batch.purchasePrice;
     const daysRemaining = Math.ceil((batch.expiryDate.getTime() - Date.now()) / (1000 * 3600 * 24));

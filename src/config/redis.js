@@ -27,25 +27,25 @@ const getActiveClient = () => {
   return activeClient;
 };
 
-// Proxy for application cache usage (sessions, dedup, rate limiting)
-const redisClientProxy = new Proxy({}, {
-  get(target, prop) {
-    const client = getActiveClient();
-    const value = client[prop];
-    if (typeof value === 'function') {
-      return value.bind(client);
-    }
-    return value;
+const redisClientProxy = new Proxy(
+  {},
+  {
+    get(target, prop) {
+      const client = getActiveClient();
+      const value = client[prop];
+      if (typeof value === 'function') {
+        return value.bind(client);
+      }
+      return value;
+    },
+    set(target, prop, value) {
+      const client = getActiveClient();
+      client[prop] = value;
+      return true;
+    },
   },
-  set(target, prop, value) {
-    const client = getActiveClient();
-    client[prop] = value;
-    return true;
-  }
-});
+);
 
-// Raw ioredis instance for BullMQ — BullMQ requires direct access to ioredis internals
-// and cannot work through a proxy wrapper.
 const getBullRedis = () => {
   const client = getActiveClient();
   return client;

@@ -1,6 +1,5 @@
 import { jest, describe, it, expect } from '@jest/globals';
 
-// Define mocks first
 const mockPrisma = {
   $transaction: jest.fn((cb) =>
     cb({
@@ -15,7 +14,6 @@ const mockPrisma = {
   ),
 };
 
-// Register unstable mocks
 jest.unstable_mockModule('../../../config/prisma.js', () => ({
   default: mockPrisma,
   __esModule: true,
@@ -59,7 +57,6 @@ jest.unstable_mockModule('../repositories/invoice.repository.js', () => ({
   __esModule: true,
 }));
 
-// Dynamic Imports
 const { default: invoiceEngine } = await import('../invoice-engine/invoice.engine.js');
 const { default: prisma } = await import('../../../config/prisma.js');
 
@@ -85,14 +82,13 @@ describe('InvoiceEngine', () => {
       paymentMethod: 'CASH',
     };
 
-    // Same state (Intrastate)
     const mockTx = {
       branch: {
         findUnique: jest.fn().mockResolvedValue({ id: 'branch-1', gstNumber: '27AAAAA0000A1Z5' }),
-      }, // 27 = Maharashtra
+      },
       patient: {
         findUnique: jest.fn().mockResolvedValue({ id: 'cust-1', gstNumber: '27BBBBB0000A1Z5' }),
-      }, // 27 = Maharashtra
+      },
       storeProfile: { findFirst: jest.fn().mockResolvedValue({ gstin: '27AAAAA0000A1Z5' }) },
       medicine: {
         findFirst: jest.fn().mockResolvedValue({
@@ -122,8 +118,6 @@ describe('InvoiceEngine', () => {
 
     const result = await invoiceEngine.createDraft(tenantId, userId, data);
 
-    // Subtotal = 200, GST = 12% = 24.
-    // Intrastate: CGST = 12, SGST = 12, IGST = 0.
     expect(result.totalAmount).toBe(224);
     expect(result.cgst).toBe(12);
     expect(result.sgst).toBe(12);
@@ -149,14 +143,13 @@ describe('InvoiceEngine', () => {
       paymentMethod: 'UPI',
     };
 
-    // Different state (Interstate)
     const mockTx = {
       branch: {
         findUnique: jest.fn().mockResolvedValue({ id: 'branch-1', gstNumber: '27AAAAA0000A1Z5' }),
-      }, // 27 = Maharashtra
+      },
       patient: {
         findUnique: jest.fn().mockResolvedValue({ id: 'cust-1', gstNumber: '29BBBBB0000A1Z5' }),
-      }, // 29 = Karnataka
+      },
       storeProfile: { findFirst: jest.fn().mockResolvedValue({ gstin: '27AAAAA0000A1Z5' }) },
       medicine: {
         findFirst: jest.fn().mockResolvedValue({

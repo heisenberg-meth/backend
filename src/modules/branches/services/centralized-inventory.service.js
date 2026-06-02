@@ -28,7 +28,6 @@ class CentralizedInventoryService {
     });
 
     return medicines.map(med => {
-      // Aggregate by branch
       const branchSummary = {};
       let totalGlobalQuantity = 0;
 
@@ -56,7 +55,6 @@ class CentralizedInventoryService {
   async getBranchInventory(tenantId, branchId, filters = {}) {
     const { search } = filters;
 
-    // Direct aggregation for a specific branch
     const batches = await prisma.inventoryBatch.findMany({
       where: {
         branchId,

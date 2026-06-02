@@ -10,7 +10,7 @@ class BulkImportService {
       supplier: supplierName = 'None',
       duplicateStrategy = 'Skip',
       barcodeOptions = { autoGen: true, overwrite: false, validate: true },
-      dryRun = true
+      dryRun = true,
     } = payload;
 
     const analysis = {
@@ -21,7 +21,7 @@ class BulkImportService {
       errors: [],
       readyCount: 0,
       validBarcodes: 0,
-      autoGenBarcodes: 0
+      autoGenBarcodes: 0,
     };
 
     const preValidatedRows = [];
@@ -45,10 +45,10 @@ class BulkImportService {
         deletedAt: null,
         OR: [
           { name: { in: Array.from(namesToLookup), mode: 'insensitive' } },
-          { barcode: { in: Array.from(barcodesToLookup) } }
-        ]
+          { barcode: { in: Array.from(barcodesToLookup) } },
+        ],
       },
-      select: { id: true, name: true, barcode: true }
+      select: { id: true, name: true, barcode: true },
     });
 
     const medicineMapByName = new Map();
@@ -63,9 +63,11 @@ class BulkImportService {
       const rowNum = index + 1;
 
       const name = rawRow.name ? String(rawRow.name).trim() : '';
-      const qtyStr = rawRow.qty !== undefined && rawRow.qty !== null ? String(rawRow.qty).trim() : '0';
+      const qtyStr =
+        rawRow.qty !== undefined && rawRow.qty !== null ? String(rawRow.qty).trim() : '0';
       const expiryStr = rawRow.expiry ? String(rawRow.expiry).trim() : '';
-      const priceStr = rawRow.price !== undefined && rawRow.price !== null ? String(rawRow.price).trim() : '0';
+      const priceStr =
+        rawRow.price !== undefined && rawRow.price !== null ? String(rawRow.price).trim() : '0';
       const batch = rawRow.batch ? String(rawRow.batch).trim() : '';
       const barcode = rawRow.barcode ? String(rawRow.barcode).trim() : '';
 
@@ -79,8 +81,8 @@ class BulkImportService {
 
       // Validation 2: Quantity
       const qty = parseInt(qtyStr, 10);
-      if (isNaN(qty) || qty < 0) {
-        validationErrors.push('Invalid quantity (must be non-negative integer)');
+      if (isNaN(qty) || qty <= 0) {
+        validationErrors.push('Invalid quantity (must be greater than zero)');
       }
 
       // Validation 3: Expiry Date
@@ -92,7 +94,9 @@ class BulkImportService {
           validationErrors.push(`Invalid expiry date format: "${expiryStr}"`);
         } else if (expiryDate < new Date()) {
           isExpired = true;
-          validationWarnings.push(`Medicine already expired (${expiryStr}) — importing as expired stock`);
+          validationWarnings.push(
+            `Medicine already expired (${expiryStr}) — importing as expired stock`,
+          );
         }
       }
 
@@ -122,7 +126,7 @@ class BulkImportService {
           name: name || '[blank]',
           reason: validationErrors.join('; '),
           warnings: validationWarnings,
-          action: 'Skip'
+          action: 'Skip',
         });
         continue;
       }
@@ -145,20 +149,22 @@ class BulkImportService {
         expiryDate,
         price,
         batch: batch || `IMP-${crypto.randomUUID().substring(0, 8).toUpperCase()}`,
-        barcode: barcode || (barcodeOptions.autoGen ? `BC-${crypto.randomUUID().substring(0, 8).toUpperCase()}` : null),
+        barcode:
+          barcode ||
+          (barcodeOptions.autoGen
+            ? `BC-${crypto.randomUUID().substring(0, 8).toUpperCase()}`
+            : null),
         matchedMedicine,
         isExpired,
-        warnings: validationWarnings
+        warnings: validationWarnings,
       });
     }
 
     // Fetch latest inventory batches in a single bulk query (to avoid N+1 queries in second pass)
     const matchedMedicineIds = Array.from(
       new Set(
-        preValidatedRows
-          .filter(row => row.matchedMedicine)
-          .map(row => row.matchedMedicine.id)
-      )
+        preValidatedRows.filter((row) => row.matchedMedicine).map((row) => row.matchedMedicine.id),
+      ),
     );
 
     const latestBatchMap = new Map();
@@ -167,9 +173,9 @@ class BulkImportService {
         where: {
           tenantId,
           medicineId: { in: matchedMedicineIds },
-          deletedAt: null
+          deletedAt: null,
         },
-        orderBy: { createdAt: 'desc' }
+        orderBy: { createdAt: 'desc' },
       });
 
       for (const batch of latestBatches) {
@@ -204,13 +210,21 @@ class BulkImportService {
         const existingBatch = latestBatchMap.get(matchedMedicine.id);
 
         // Detect Conflicts (e.g. if the barcode belongs to a different medicine name)
-        if (row.barcode && matchedMedicine.name.toLowerCase() !== row.name.toLowerCase() && matchedMedicine.barcode === row.barcode) {
+        if (
+          row.barcode &&
+          matchedMedicine.name.toLowerCase() !== row.name.toLowerCase() &&
+          matchedMedicine.barcode === row.barcode
+        ) {
           isConflict = true;
           analysis.conflicts++;
           diffDesc = `Barcode ${row.barcode} matches existing medicine "${matchedMedicine.name}" in system`;
         } else if (matchedMedicine.name.toLowerCase() === row.name.toLowerCase()) {
           // Check price difference
-          if (row.price > 0 && existingBatch && Math.abs(row.price - Number(existingBatch.purchasePrice)) > 0.01) {
+          if (
+            row.price > 0 &&
+            existingBatch &&
+            Math.abs(row.price - Number(existingBatch.purchasePrice)) > 0.01
+          ) {
             diffDesc = `Unit price mismatch (Imported: INR ${row.price} vs System: INR ${Number(existingBatch.purchasePrice)})`;
           }
         }
@@ -222,7 +236,7 @@ class BulkImportService {
           type: matchType,
           severity: isConflict ? 'danger' : 'warning',
           diff: diffDesc || 'None (Details match)',
-          conflict: isConflict
+          conflict: isConflict,
         });
       } else {
         analysis.new++;
@@ -233,7 +247,7 @@ class BulkImportService {
       validatedRows.push({
         ...row,
         isDuplicate,
-        isConflict
+        isConflict,
       });
     }
 
@@ -249,7 +263,7 @@ class BulkImportService {
       newBatchesCount: 0,
       skippedCount: 0,
       overwrittenCount: 0,
-      mergedCount: 0
+      mergedCount: 0,
     };
 
     const CHUNK_SIZE = 500;
@@ -257,10 +271,15 @@ class BulkImportService {
     for (let i = 0; i < validatedRows.length; i += CHUNK_SIZE) {
       const chunk = validatedRows.slice(i, i + CHUNK_SIZE);
 
-      logger.info({
-  chunk: i / CHUNK_SIZE + 1,
-  totalChunks: Math.ceil(validatedRows.length / CHUNK_SIZE)
-}, 'Bulk import chunk');
+      const start = Date.now();
+
+      logger.info(
+        {
+          chunk: i / CHUNK_SIZE + 1,
+          totalChunks: Math.ceil(validatedRows.length / CHUNK_SIZE),
+        },
+        'Bulk import chunk',
+      );
 
       await prisma.$transaction(
         async (tx) => {
@@ -392,14 +411,22 @@ class BulkImportService {
               },
               update: { currentStock: { increment: inv.qty } },
               create: {
-                tenantId, branchId, medicineId: inv.medicineId,
-                currentStock: inv.qty, reorderPoint: 10,
+                tenantId,
+                branchId,
+                medicineId: inv.medicineId,
+                currentStock: inv.qty,
+                reorderPoint: 10,
               },
             });
           }
         },
         { timeout: 60000 },
       );
+
+      logger.info({
+        chunk: i / CHUNK_SIZE + 1,
+        durationMs: Date.now() - start
+      }, 'Chunk completed');
     }
 
     // Post-commit side effects: Log audit trail
@@ -413,9 +440,9 @@ class BulkImportService {
         processedAt: new Date(),
         extractedData: {
           strategy: duplicateStrategy,
-          summary: commitSummary
-        }
-      }
+          summary: commitSummary,
+        },
+      },
     });
 
     await auditService.log({
@@ -424,7 +451,7 @@ class BulkImportService {
       action: 'BULK_IMPORT_COMPLETED',
       target: importJob.id,
       type: 'INVENTORY',
-      metadata: commitSummary
+      metadata: commitSummary,
     });
 
     return {
@@ -439,8 +466,8 @@ class BulkImportService {
         readyCount: commitSummary.importedCount,
         importedCount: commitSummary.importedCount,
         skippedCount: analysis.errors.length,
-        newBatchesCount: commitSummary.newBatchesCount
-      }
+        newBatchesCount: commitSummary.newBatchesCount,
+      },
     };
   }
 

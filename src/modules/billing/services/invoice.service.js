@@ -43,14 +43,14 @@ class InvoiceService {
 
     return {
       invoices: result.invoices.map(normalizeInvoice),
-      total: result.total
+      total: result.total,
     };
   }
 
   async updateInvoiceMetadata(id, tenantId, data) {
     const allowedUpdates = {};
     if (data.notes !== undefined) allowedUpdates.notes = data.notes;
-    
+
     if (Object.keys(allowedUpdates).length === 0) {
       throw new Error('No valid fields provided for update');
     }
@@ -72,7 +72,6 @@ class InvoiceService {
         resolve(result);
       });
 
-      // Header
       doc
         .fillColor('#444444')
         .fontSize(20)
@@ -82,10 +81,8 @@ class InvoiceService {
         .text(`Contact: ${tenant.phone || 'N/A'}`, 200, 80, { align: 'right' })
         .moveDown();
 
-      // Divider
       doc.moveTo(50, 100).lineTo(550, 100).stroke();
 
-      // Invoice Details
       doc
         .fontSize(12)
         .text(`Invoice #: ${invoice.invoiceNumber}`, 50, 120)
@@ -93,7 +90,6 @@ class InvoiceService {
         .text(`Status: ${invoice.status}`, 50, 150)
         .moveDown();
 
-      // Table Header
       const tableTop = 200;
       doc
         .fontSize(10)
@@ -109,7 +105,6 @@ class InvoiceService {
         .lineTo(550, tableTop + 15)
         .stroke();
 
-      // Items
       let i = 0;
       invoice.items.forEach((item) => {
         const y = tableTop + 30 + i * 25;
@@ -123,7 +118,6 @@ class InvoiceService {
         i++;
       });
 
-      // Totals
       const subtotalY = tableTop + 30 + i * 25 + 30;
       doc
         .moveTo(350, subtotalY - 10)
@@ -137,13 +131,16 @@ class InvoiceService {
         .text('GST Amount:', 350, subtotalY + 15)
         .text(parseFloat(invoice.gstAmount).toFixed(2), 450, subtotalY + 15, { align: 'right' })
         .text('Discount:', 350, subtotalY + 30)
-        .text(`- ${parseFloat(invoice.discountAmount).toFixed(2)}`, 450, subtotalY + 30, { align: 'right' })
+        .text(`- ${parseFloat(invoice.discountAmount).toFixed(2)}`, 450, subtotalY + 30, {
+          align: 'right',
+        })
         .fontSize(12)
         .fillColor('#000000')
         .text('Grand Total:', 350, subtotalY + 50)
-        .text(`₹ ${parseFloat(invoice.totalAmount).toFixed(2)}`, 450, subtotalY + 50, { align: 'right' });
+        .text(`₹ ${parseFloat(invoice.totalAmount).toFixed(2)}`, 450, subtotalY + 50, {
+          align: 'right',
+        });
 
-      // Footer
       doc
         .fontSize(10)
         .fillColor('#444444')

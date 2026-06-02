@@ -16,13 +16,8 @@ if (process.env.NODE_ENV !== 'production') {
   globalForPrisma.prisma = prisma;
 }
 
-/**
- * Ensures the database connection is active, attempting recovery if it has gone stale.
- * Use this before critical database-heavy operations like payment creation.
- */
 export async function ensureDbConnection() {
   try {
-    // Light-weight check
     await prisma.$queryRaw`SELECT 1`;
   } catch (error) {
     console.warn('[PRISMA] Connection stale or lost, attempting recovery...', error.message);
@@ -36,7 +31,6 @@ export async function ensureDbConnection() {
   }
 }
 
-// Handle graceful shutdown
 const gracefulShutdown = async () => {
   console.info('[PRISMA] Closing database connections...');
   await prisma.$disconnect();

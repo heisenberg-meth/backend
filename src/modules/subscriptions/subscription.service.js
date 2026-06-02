@@ -25,7 +25,7 @@ class SubscriptionService {
     } else {
       endDate.setMonth(endDate.getMonth() + 1);
     }
-    
+
     const graceEndDate = new Date(endDate);
     graceEndDate.setDate(graceEndDate.getDate() + 7); // 7 days grace period
 
@@ -37,7 +37,7 @@ class SubscriptionService {
         startDate,
         endDate,
         graceEndDate,
-        autoRenew: true
+        autoRenew: true,
       },
       create: {
         tenantId,
@@ -46,8 +46,8 @@ class SubscriptionService {
         startDate,
         endDate,
         graceEndDate,
-        autoRenew: true
-      }
+        autoRenew: true,
+      },
     });
 
     return subscription;
@@ -56,7 +56,7 @@ class SubscriptionService {
   async getSubscriptionStatus(tenantId) {
     const subscription = await prisma.subscription.findUnique({
       where: { tenantId },
-      include: { plan: true }
+      include: { plan: true },
     });
 
     if (!subscription) {
@@ -95,8 +95,8 @@ class SubscriptionService {
       where: { tenantId },
       data: {
         status: 'CANCELLED',
-        autoRenew: false
-      }
+        autoRenew: false,
+      },
     });
     return subscription;
   }
@@ -106,9 +106,9 @@ class SubscriptionService {
     if (!subscription) {
       return this.activateTrial(tenantId);
     }
-    const updated = await prisma.subscription.update({
+    await prisma.subscription.update({
       where: { tenantId },
-      data: { status: 'ACTIVE' }
+      data: { status: 'ACTIVE' },
     });
     return this.getSubscriptionStatus(tenantId);
   }

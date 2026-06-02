@@ -9,14 +9,18 @@ export const scheduleAnalyticsJobs = async () => {
     {},
     {
       repeat: {
-        pattern: '0 2 * * *', // 2:00 AM every day
+        pattern: '0 2 * * *',
       },
     },
   );
 
-  await analyticsQueue.add('hourly-revenue-aggregation', {}, {
-    repeat: {
-      pattern: '0 * * * *' // Minute 0 of every hour
-    }
-  });
+  await analyticsQueue.add(
+    'hourly-revenue-aggregation',
+    {},
+    {
+      repeat: {
+        pattern: '0 * * * *',
+      },
+    },
+  );
 };

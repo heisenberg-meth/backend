@@ -1,11 +1,17 @@
 import prisma from '../config/prisma.js';
 import logger from '../shared/utils/logger.js';
 
-const PUBLIC_PREFIXES = ['/api/auth', '/api/payments', '/api/subscriptions', '/health', '/api-docs'];
+const PUBLIC_PREFIXES = [
+  '/api/auth',
+  '/api/payments',
+  '/api/subscriptions',
+  '/health',
+  '/api-docs',
+];
 
 export const subscriptionGuard = async (request, reply) => {
   const url = request.url || '';
-  if (PUBLIC_PREFIXES.some(p => url.startsWith(p))) return;
+  if (PUBLIC_PREFIXES.some((p) => url.startsWith(p))) return;
 
   const tenantId = request.tenantId;
   if (!tenantId) return;
@@ -23,8 +29,15 @@ export const subscriptionGuard = async (request, reply) => {
     const now = new Date();
     let needsUpdate = false;
 
-    if ((subscription.status === 'TRIAL' || subscription.status === 'ACTIVE') && subscription.endDate < now) {
-      if (subscription.status === 'TRIAL' || !subscription.graceEndDate || subscription.graceEndDate < now) {
+    if (
+      (subscription.status === 'TRIAL' || subscription.status === 'ACTIVE') &&
+      subscription.endDate < now
+    ) {
+      if (
+        subscription.status === 'TRIAL' ||
+        !subscription.graceEndDate ||
+        subscription.graceEndDate < now
+      ) {
         await prisma.subscription.update({
           where: { tenantId },
           data: { status: 'EXPIRED' },
@@ -64,7 +77,11 @@ export const subscriptionGuard = async (request, reply) => {
       }
     }
 
-    if (subscription.status === 'EXPIRED' || subscription.status === 'SUSPENDED' || subscription.status === 'CANCELLED') {
+    if (
+      subscription.status === 'EXPIRED' ||
+      subscription.status === 'SUSPENDED' ||
+      subscription.status === 'CANCELLED'
+    ) {
       return reply.code(403).send({
         success: false,
         error: {
@@ -79,6 +96,9 @@ export const subscriptionGuard = async (request, reply) => {
       request.subscriptionStatus = 'GRACE_PERIOD';
     }
   } catch (error) {
-    logger.error({ tenantId: request.tenantId, error: error.message }, '[SUBSCRIPTION GUARD] Error');
+    logger.error(
+      { tenantId: request.tenantId, error: error.message },
+      '[SUBSCRIPTION GUARD] Error',
+    );
   }
 };

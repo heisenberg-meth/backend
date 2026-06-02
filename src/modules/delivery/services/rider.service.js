@@ -37,16 +37,11 @@ class RiderService {
     });
   }
 
-  /**
-   * Mock function to find the nearest rider.
-   * In a real implementation, this would use PostGIS or Haversine formula in a query.
-   */
   async findNearestRider(tenantId) {
     const riders = await this.getAvailableRiders(tenantId);
 
     if (riders.length === 0) return null;
 
-    // Mock: just return the first available one for MVP
     return riders[0];
   }
 }

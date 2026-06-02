@@ -8,7 +8,6 @@ class AggregationService {
   async runNightlyInventoryAnalysis() {
     logger.info('[AggregationService] Starting Nightly Inventory Analysis');
 
-    // Get all active tenants
     const tenants = await prisma.tenant.findMany({
       where: { deletedAt: null },
       select: { id: true },
@@ -28,10 +27,10 @@ class AggregationService {
 
   async runHourlyRevenueAggregation() {
     logger.info('[AggregationService] Starting Hourly Revenue Aggregation');
-    
+
     const tenants = await prisma.tenant.findMany({
       where: { deletedAt: null },
-      select: { id: true }
+      select: { id: true },
     });
 
     for (const tenant of tenants) {
@@ -41,7 +40,7 @@ class AggregationService {
         logger.error(`[AggregationService] Error processing tenant ${tenant.id}: ${error.message}`);
       }
     }
-    
+
     logger.info('[AggregationService] Completed Hourly Revenue Aggregation');
   }
 }

@@ -1,4 +1,4 @@
-import { jest , describe, beforeEach, it, expect } from '@jest/globals';
+import { jest, describe, beforeEach, it, expect } from '@jest/globals';
 
 const mockRedis = {
   get: jest.fn(),
@@ -176,7 +176,6 @@ describe('Alert Severity Engine', () => {
 
       expect(result.riskValue).toBe(550);
       expect(result.daysRemaining).toBe(10);
-      // 10 days: > criticalExpiry(7) but <= expiryWarning(30) → WARNING
       expect(result.severity).toBe('WARNING');
     });
 
@@ -221,7 +220,7 @@ describe('Alert Deduplication Service', () => {
         'alert:dedupe:t1:m1:b1:LOW_STOCK',
         '1',
         'EX',
-        3600
+        3600,
       );
     });
   });
@@ -298,11 +297,11 @@ describe('Alert Workflow Service', () => {
           data: expect.objectContaining({
             alertStatus: 'ACTIVE',
           }),
-        })
+        }),
       );
       expect(mockEmitLocalEvent).toHaveBeenCalledWith(
         'alert.lifecycle.created',
-        expect.any(Object)
+        expect.any(Object),
       );
     });
 
@@ -344,7 +343,7 @@ describe('Alert Workflow Service', () => {
       expect(result.alertStatus).toBe('SNOOZED');
       expect(mockEmitLocalEvent).toHaveBeenCalledWith(
         'alert.lifecycle.snoozed',
-        expect.any(Object)
+        expect.any(Object),
       );
     });
 
@@ -356,7 +355,7 @@ describe('Alert Workflow Service', () => {
       await expect(
         alertWorkflowService.snoozeAlert('alert-1', 't1', 'user-1', {
           snoozedUntil: farFuture.toISOString(),
-        })
+        }),
       ).rejects.toThrow('Maximum snooze duration');
     });
 
@@ -368,7 +367,7 @@ describe('Alert Workflow Service', () => {
       await expect(
         alertWorkflowService.snoozeAlert('alert-1', 't1', 'user-1', {
           snoozedUntil: pastDate.toISOString(),
-        })
+        }),
       ).rejects.toThrow('Snooze date must be in the future');
     });
 
@@ -378,7 +377,7 @@ describe('Alert Workflow Service', () => {
       await expect(
         alertWorkflowService.snoozeAlert('alert-1', 't1', 'user-1', {
           snoozedUntil: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
-        })
+        }),
       ).rejects.toThrow('Cannot snooze resolved alert');
     });
   });
@@ -443,7 +442,7 @@ describe('Alert Workflow Service', () => {
       expect(result.orderNumber).toBeDefined();
       expect(mockEmitLocalEvent).toHaveBeenCalledWith(
         'alert.procurement.raised',
-        expect.any(Object)
+        expect.any(Object),
       );
     });
 
@@ -451,7 +450,7 @@ describe('Alert Workflow Service', () => {
       mockPrisma.stockAlert.findFirst.mockResolvedValue(null);
 
       await expect(
-        alertWorkflowService.raisePurchaseOrder('invalid', 't1', 'user-1')
+        alertWorkflowService.raisePurchaseOrder('invalid', 't1', 'user-1'),
       ).rejects.toThrow('Alert not found');
     });
   });
@@ -515,7 +514,7 @@ describe('Alert Escalation Engine', () => {
       expect(result.alertStatus).toBe('ESCALATED');
       expect(mockEmitLocalEvent).toHaveBeenCalledWith(
         'alert.lifecycle.escalated',
-        expect.any(Object)
+        expect.any(Object),
       );
     });
 
@@ -565,7 +564,7 @@ describe('Alert Escalation Engine', () => {
             alertStatus: 'ACTIVE',
             snoozedUntil: null,
           }),
-        })
+        }),
       );
     });
   });
@@ -587,7 +586,7 @@ describe('Alert Escalation Engine', () => {
             alertStatus: 'ACTIVE',
             purchaseOrderId: null,
           }),
-        })
+        }),
       );
     });
   });

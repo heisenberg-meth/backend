@@ -8,7 +8,13 @@ const ENV_PATTERNS = {
   RAZORPAY_KEY_SECRET: /^[A-Za-z0-9]{10,}$/,
 };
 
-const sanitizeEnv = (val) => (val ? String(val).trim().replace(/^["']|["']$/g, '').replace(/[\r\n]/g, '') : undefined);
+const sanitizeEnv = (val) =>
+  val
+    ? String(val)
+        .trim()
+        .replace(/^["']|["']$/g, '')
+        .replace(/[\r\n]/g, '')
+    : undefined;
 
 let validated = false;
 let validationErrors = [];
@@ -28,7 +34,9 @@ function validateEnvironment() {
   if (keyId) {
     const pattern = ENV_PATTERNS.RAZORPAY_KEY_ID;
     if (!pattern.test(keyId)) {
-      validationErrors.push('RAZORPAY_KEY_ID has invalid format (expected rzp_test_xxx or rzp_live_xxx)');
+      validationErrors.push(
+        'RAZORPAY_KEY_ID has invalid format (expected rzp_test_xxx or rzp_live_xxx)',
+      );
     }
 
     if (nodeEnv === 'production' && keyId.startsWith('rzp_test_')) {
@@ -36,11 +44,15 @@ function validateEnvironment() {
     }
 
     if (nodeEnv !== 'production' && keyId.startsWith('rzp_live_')) {
-      validationErrors.push('LIVE Razorpay key in non-production environment! Use rzp_test_ keys for development.');
+      validationErrors.push(
+        'LIVE Razorpay key in non-production environment! Use rzp_test_ keys for development.',
+      );
     }
 
     if (nodeEnv === 'test' && keyId.startsWith('rzp_live_')) {
-      throw new Error('[PAYMENT_CONFIG] LIVE Razorpay keys are FORBIDDEN in test environment. Use rzp_test_ keys.');
+      throw new Error(
+        '[PAYMENT_CONFIG] LIVE Razorpay keys are FORBIDDEN in test environment. Use rzp_test_ keys.',
+      );
     }
   }
 
@@ -62,7 +74,9 @@ function getConfig() {
   const nodeEnv = process.env.NODE_ENV || 'development';
 
   if (nodeEnv === 'test' && keyId?.startsWith('rzp_live_')) {
-    throw new Error('[PAYMENT_CONFIG] LIVE Razorpay keys are FORBIDDEN in test environment. Use rzp_test_ keys.');
+    throw new Error(
+      '[PAYMENT_CONFIG] LIVE Razorpay keys are FORBIDDEN in test environment. Use rzp_test_ keys.',
+    );
   }
 
   return {
@@ -97,12 +111,6 @@ function isConfigured() {
   return validated && validationErrors.length === 0;
 }
 
-export {
-  validateEnvironment,
-  getConfig,
-  getValidationErrors,
-  isConfigured,
-  PAYMENT_ENV_KEYS,
-};
+export { validateEnvironment, getConfig, getValidationErrors, isConfigured, PAYMENT_ENV_KEYS };
 
 export default { validateEnvironment, getConfig, getValidationErrors, isConfigured };

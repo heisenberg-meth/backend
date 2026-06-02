@@ -3,28 +3,22 @@ import prescriptionService from '../../prescriptions/services/prescription.servi
 import logger from '../../../shared/utils/logger.js';
 
 class PrescriptionSyncService {
-  /**
-   * Syncs a new prescription from an external FHIR source
-   */
   async syncFromExternal(tenantId, externalMedicationRequest, sourceSystem) {
     try {
-      // 1. Resolve Patient
       const externalPatientId = externalMedicationRequest.subject?.reference?.split('/')[1];
       const patient = await patientMappingService.getOrCreateInternalPatient(
         externalPatientId,
         tenantId,
         sourceSystem,
-        { fullName: 'Synced Patient' }, // In production, extract name from FHIR resource
+        { fullName: 'Synced Patient' },
       );
 
-      // 2. Map items
       const items =
         externalMedicationRequest.medicationCodeableConcept?.coding?.map((c) => ({
           medicineName: c.display,
           quantity: externalMedicationRequest.dosageInstruction?.[0]?.doseQuantity?.value || 1,
         })) || [];
 
-      // 3. Create Internal Prescription
       const internalPrescription = await prescriptionService.createPrescription(
         tenantId,
         {

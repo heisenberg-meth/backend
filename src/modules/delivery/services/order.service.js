@@ -12,7 +12,7 @@ const ORDER_STATUS = {
   DELIVERED: 'DELIVERED',
   CANCELLED: 'CANCELLED',
   FAILED: 'FAILED',
-  RETURNED: 'RETURNED'
+  RETURNED: 'RETURNED',
 };
 
 const VALID_TRANSITIONS = {
@@ -25,28 +25,22 @@ const VALID_TRANSITIONS = {
     ORDER_STATUS.FAILED,
     ORDER_STATUS.RETURNED,
   ],
-  [ORDER_STATUS.DELIVERED]: [], // Terminal
-  [ORDER_STATUS.CANCELLED]: [], // Terminal
+  [ORDER_STATUS.DELIVERED]: [],
+  [ORDER_STATUS.CANCELLED]: [],
   [ORDER_STATUS.FAILED]: [ORDER_STATUS.READY_FOR_PICKUP, ORDER_STATUS.RETURNED],
-  [ORDER_STATUS.RETURNED]: [], // Terminal
+  [ORDER_STATUS.RETURNED]: [],
 };
 
 class OrderService {
-  /**
-   * Creates a new online order and reserves inventory.
-   */
   async createOrder(tenantId, patientId, data) {
     logger.info(`[OrderService] Creating online order for patient ${patientId}`);
 
     const { items, deliveryAddress, deliveryLatitude, deliveryLongitude, notes } = data;
 
-    // 1. Pre-calculate total
     const totalAmount = items.reduce((sum, i) => sum + i.unitPrice * i.quantity, 0);
 
-    // 2. Reserve Inventory First (Atomic)
     const reservation = await reservationService.reserveInventory(tenantId, items);
 
-    // 3. Create Order & Items in DB
     const order = await prisma.onlineOrder.create({
       data: {
         tenantId,
@@ -92,21 +86,17 @@ class OrderService {
       throw new Error(`Invalid state transition: ${order.orderStatus} -> ${newStatus}`);
     }
 
-    // Workflow Actions
     if (newStatus === ORDER_STATUS.CANCELLED) {
       if (
         order.orderStatus === ORDER_STATUS.PENDING ||
         order.orderStatus === ORDER_STATUS.CONFIRMED
       ) {
-        // Release reservation (increment reservedQuantity is not needed here as it was just a lock,
-        // wait, releaseReservation decrements reservedQuantity)
         const itemsToRelease = order.orderItems.map((oi) => ({
           batchId: oi.batchId,
           quantity: oi.quantity,
         }));
         await reservationService.releaseReservation(tenantId, itemsToRelease);
       } else {
-        // If already packed/shipped, we need to add back to quantity
         const itemsToReturn = order.orderItems.map((oi) => ({
           batchId: oi.batchId,
           quantity: oi.quantity,
@@ -124,7 +114,6 @@ class OrderService {
     }
 
     if (newStatus === ORDER_STATUS.PACKING) {
-      // Optional: Commit inventory (deduct quantity)
       const itemsToCommit = order.orderItems.map((oi) => ({
         batchId: oi.batchId,
         quantity: oi.quantity,
@@ -133,7 +122,6 @@ class OrderService {
     }
 
     if (newStatus === ORDER_STATUS.READY_FOR_PICKUP) {
-      // Trigger logistics flow
       await dispatchService.handleOrderReady(tenantId, orderId);
     }
 

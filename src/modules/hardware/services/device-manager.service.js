@@ -16,7 +16,6 @@ class DeviceManagerService {
   }
   async printInvoice(deviceId) {
     logger.info({ deviceId }, '[HARDWARE_SERVICE] Queuing print job');
-    // In production, delegate to a specific driver (ESC/POS or Network driver)
   }
 }
 

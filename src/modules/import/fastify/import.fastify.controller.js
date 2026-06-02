@@ -9,7 +9,9 @@ class ImportFastifyController {
   async importPdfInvoice(request, reply) {
     try {
       const job = await importService.createImportJob(
-        { type: 'PDF_INVOICE', ...request.body }, request.tenantId, request.user.id,
+        { type: 'PDF_INVOICE', ...request.body },
+        request.tenantId,
+        request.user.id,
       );
       return reply.code(202).send({ success: true, data: job });
     } catch (error) {
@@ -37,7 +39,11 @@ class ImportFastifyController {
 
   async approveImport(request, reply) {
     try {
-      const job = await importService.approveImport(request.params.id, request.tenantId, request.user.id);
+      const job = await importService.approveImport(
+        request.params.id,
+        request.tenantId,
+        request.user.id,
+      );
       return reply.send({ success: true, data: job });
     } catch (error) {
       return reply.code(400).send({ success: false, message: error.message });
@@ -56,7 +62,9 @@ class ImportFastifyController {
   async reprocessImport(request, reply) {
     try {
       const job = await importService.createImportJob(
-        { type: 'PDF_INVOICE', ...request.body }, request.tenantId, request.user.id,
+        { type: 'PDF_INVOICE', ...request.body },
+        request.tenantId,
+        request.user.id,
       );
       return reply.code(202).send({ success: true, data: job });
     } catch (error) {
@@ -67,7 +75,7 @@ class ImportFastifyController {
   async getImportErrors(request, reply) {
     try {
       const job = await importService.getImportById(request.params.id, request.tenantId);
-      const errors = (job.extractedItems || []).filter(item => item.validationErrors);
+      const errors = (job.extractedItems || []).filter((item) => item.validationErrors);
       return reply.send({ success: true, data: errors });
     } catch (error) {
       return reply.code(404).send({ success: false, message: error.message });
@@ -77,7 +85,9 @@ class ImportFastifyController {
   async importSupplierInvoice(request, reply) {
     try {
       const job = await importService.createImportJob(
-        { type: 'SUPPLIER_INVOICE', ...request.body }, request.tenantId, request.user.id,
+        { type: 'SUPPLIER_INVOICE', ...request.body },
+        request.tenantId,
+        request.user.id,
       );
       return reply.code(202).send({ success: true, data: job });
     } catch (error) {
@@ -91,7 +101,7 @@ class ImportFastifyController {
         request.body,
         request.tenantId,
         request.branchId,
-        request.user.id
+        request.user.id,
       );
       return reply.send(result);
     } catch (error) {
@@ -102,14 +112,22 @@ class ImportFastifyController {
 
   async uploadCsv(request, reply) {
     try {
-      const { fileName, fileContent, duplicateStrategy, barcodeOptions: rawBarcodeOpts } = request.body || {};
+      const {
+        fileName,
+        fileContent,
+        duplicateStrategy,
+        barcodeOptions: rawBarcodeOpts,
+      } = request.body || {};
       if (!fileContent) {
         return reply.code(400).send({ success: false, message: 'fileContent is required' });
       }
 
       const uploadsDir = new URL('../../../uploads/imports', import.meta.url).pathname;
       fs.mkdirSync(uploadsDir, { recursive: true });
-      const filePath = path.join(uploadsDir, `import-${Date.now()}-${Math.random().toString(36).slice(2, 8)}.csv`);
+      const filePath = path.join(
+        uploadsDir,
+        `import-${Date.now()}-${Math.random().toString(36).slice(2, 8)}.csv`,
+      );
       fs.writeFileSync(filePath, fileContent, 'utf-8');
 
       const job = await importService.createImportJob(
@@ -175,4 +193,3 @@ class ImportFastifyController {
 }
 
 export default new ImportFastifyController();
-

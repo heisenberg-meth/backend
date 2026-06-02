@@ -3,15 +3,11 @@ import logger from '../../../shared/utils/logger.js';
 import { notificationQueue } from '../../notifications/queue/notification.queue.js';
 
 class SubscriptionService {
-  /**
-   * Process all subscriptions that are due for delivery today or in the next 2 days.
-   * Generates mock invoice drafts and reserves stock.
-   */
   async processDueSubscriptions() {
     logger.info('[SubscriptionService] Processing due subscriptions');
-    
+
     const lookaheadDate = new Date();
-    lookaheadDate.setDate(lookaheadDate.getDate() + 2); // Process 2 days in advance
+    lookaheadDate.setDate(lookaheadDate.getDate() + 2);
     lookaheadDate.setHours(23, 59, 59, 999);
 
     const subscriptions = await prisma.medicineSubscription.findMany({
@@ -27,14 +23,9 @@ class SubscriptionService {
     });
 
     for (const sub of subscriptions) {
-      // 1. Stock Check & Reservation Logic
-      // For this implementation, we will notify the branch owner to confirm stock.
-      // In a full implementation, this would automatically generate an Invoice draft and deduct inventory.
-
       const newDeliveryDate = new Date(sub.nextDeliveryDate);
       newDeliveryDate.setDate(newDeliveryDate.getDate() + sub.frequencyDays);
 
-      // Notify Pharmacist/Owner
       await notificationQueue.add('send-sms', {
         tenantId: sub.tenantId,
         recipient: sub.patient.phone,
@@ -43,7 +34,6 @@ class SubscriptionService {
         notificationId: `sub-patient-${sub.id}`,
       });
 
-      // Advance the subscription to the next cycle
       await prisma.medicineSubscription.update({
         where: { id: sub.id },
         data: {
@@ -59,7 +49,7 @@ class SubscriptionService {
 
   async createSubscription(tenantId, data) {
     const { patientId, medicineId, frequencyDays, quantity, autoBilling } = data;
-    
+
     const nextDeliveryDate = new Date();
     nextDeliveryDate.setDate(nextDeliveryDate.getDate() + frequencyDays);
 
@@ -71,8 +61,8 @@ class SubscriptionService {
         frequencyDays,
         quantity,
         nextDeliveryDate,
-        autoBilling
-      }
+        autoBilling,
+      },
     });
   }
 }
