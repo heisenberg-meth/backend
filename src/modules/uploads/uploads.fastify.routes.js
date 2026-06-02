@@ -1,11 +1,5 @@
-import path from 'path';
-import fs from 'fs/promises';
-import { fileURLToPath } from 'url';
 import prisma from '../../config/prisma.js';
 import { authenticate } from '../../middleware/auth.fastify.js';
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
 
 async function uploadsRoutes(fastify) {
   fastify.addHook('preHandler', authenticate);
@@ -37,19 +31,6 @@ async function uploadsRoutes(fastify) {
           });
         }
 
-        const originalName = data.filename || 'image';
-
-        const safeName = originalName.replace(/[^a-zA-Z0-9._-]/g, '_');
-
-        const filename = `${Date.now()}-${safeName}`;
-        const uploadsDir =
-          process.env.NODE_ENV === 'production'
-            ? '/tmp/uploads/avatars'
-            : path.join(__dirname, '../../../uploads/avatars');
-        const filePath = path.join(uploadsDir, filename);
-
-        await fs.mkdir(uploadsDir, { recursive: true });
-
         const chunks = [];
         for await (const chunk of data.file) {
           chunks.push(chunk);
@@ -65,21 +46,21 @@ async function uploadsRoutes(fastify) {
             },
           });
         }
-
-        await fs.writeFile(filePath, buffer);
-        console.log('AVATAR SAVED:', filePath);
-
-        const files = await fs.readdir(uploadsDir);
-        console.log('FILES IN AVATAR DIR:', files);
-
-        const avatarUrl = `/avatars/${filename}`;
-
         await prisma.user.update({
           where: { id: request.user.id },
-          data: { avatar: avatarUrl },
+          data: {
+            avatar: `/avatars/${request.user.id}`,
+            avatarData: buffer,
+            avatarMimeType: data.mimetype,
+          },
         });
 
-        return reply.send({ success: true, data: { avatarUrl } });
+        return reply.send({
+          success: true,
+          data: {
+            avatarUrl: `/avatars/${request.user.id}`,
+          },
+        });
       } catch (error) {
         request.log.error(error);
         return reply.code(500).send({

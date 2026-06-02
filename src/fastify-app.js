@@ -3,8 +3,6 @@ import cors from '@fastify/cors';
 import helmet from '@fastify/helmet';
 import swagger from '@fastify/swagger';
 import swaggerUi from '@fastify/swagger-ui';
-import fs from 'fs/promises';
-import fastifyStatic from '@fastify/static';
 import cookie from '@fastify/cookie';
 import csrf from '@fastify/csrf-protection';
 import metrics from 'fastify-metrics';
@@ -12,8 +10,6 @@ import redis from '@fastify/redis';
 import fastifyJwt from '@fastify/jwt';
 import multipart from '@fastify/multipart';
 import client from 'prom-client';
-import path from 'path';
-import { fileURLToPath } from 'url';
 import { Prisma } from '@prisma/client';
 import prisma from './config/prisma.js';
 import { connectRedis } from './config/redis.js';
@@ -22,6 +18,7 @@ import authRoutes from './modules/auth/routes/auth.fastify.routes.js';
 import usersRoutes from './modules/users/users.fastify.routes.js';
 import twoFactorRoutes from './modules/users/2fa.fastify.routes.js';
 import uploadsRoutes from './modules/uploads/uploads.fastify.routes.js';
+import avatarRoutes from './modules/uploads/avatar.fastify.routes.js';
 import purchaseOrderRoutes from './modules/purchase-orders/purchase-order.fastify.routes.js';
 import subscriptionRoutes from './modules/subscriptions/subscription.fastify.routes.js';
 import paymentRoutes from './modules/payments/payment.fastify.routes.js';
@@ -64,9 +61,6 @@ import stockRoutes from './modules/stock/routes/stock.fastify.routes.js';
 import auditRoutes from './modules/audit/audit.fastify.routes.js';
 import communicationsRoutes from './modules/communications/routes/communications.fastify.routes.js';
 import loyaltyRoutes from './modules/loyalty/routes/loyalty.fastify.routes.js';
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
 
 const dbHealthGauge = new client.Gauge({
   name: 'health_db_status',
@@ -217,25 +211,6 @@ const setupFastify = async () => {
     staticCSP: true,
   });
 
-  const avatarsRoot =
-    process.env.NODE_ENV === 'production'
-      ? '/tmp/uploads/avatars'
-      : path.join(__dirname, '../uploads/avatars');
-  await fs.mkdir(avatarsRoot, { recursive: true });
-  const files = await fs.readdir(avatarsRoot);
-  console.log('BOOT AVATAR FILES:', files);
-
-  await fastify.register(fastifyStatic, {
-    root: avatarsRoot,
-    prefix: '/avatars/',
-    decorateReply: false,
-    setHeaders: (res) => {
-      res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
-      res.setHeader('Access-Control-Allow-Origin', '*');
-      res.setHeader('Access-Control-Allow-Headers', 'GET');
-    },
-  });
-
   await fastify.register(metrics, {
     endpoint: '/metrics',
     routeMetrics: {
@@ -282,6 +257,7 @@ const setupFastify = async () => {
   await fastify.register(usersRoutes, { prefix: '/api/users' });
   await fastify.register(twoFactorRoutes, { prefix: '/api/users' });
   await fastify.register(uploadsRoutes, { prefix: '/api/uploads' });
+  await fastify.register(avatarRoutes, { prefix: '/avatars' });
   await fastify.register(purchaseOrderRoutes, { prefix: '/api/purchase-orders' });
   await fastify.register(subscriptionRoutes, { prefix: '/api/subscriptions' });
   await fastify.register(paymentRoutes, { prefix: '/api/payments' });
