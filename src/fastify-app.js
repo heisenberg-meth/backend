@@ -96,9 +96,17 @@ const setupFastify = async () => {
       directives: {
         defaultSrc: ["'self'"],
         styleSrc: ["'self'", "'unsafe-inline'"],
-        imgSrc: ["'self'", 'data:', 'validator.swagger.io'],
+        imgSrc: [
+          "'self'",
+          'data:',
+          'validator.swagger.io',
+          'https://medassist-backend-hryu.onrender.com',
+        ],
         scriptSrc: ["'self'", "https: 'unsafe-inline'"],
       },
+    },
+    crossOriginResourcePolicy: {
+      policy: 'cross-origin',
     },
   });
 
