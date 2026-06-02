@@ -61,7 +61,7 @@ const createServiceApp = async (options = {}) => {
       },
     },
     crossOriginOpenerPolicy: { policy: 'same-origin' },
-    crossOriginResourcePolicy: { policy: 'same-origin' },
+    crossOriginResourcePolicy: { policy: 'cross-origin' },
     referrerPolicy: { policy: 'no-referrer' },
     strictTransportSecurity: {
       maxAge: 31536000,
