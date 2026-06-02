@@ -141,7 +141,7 @@ const setupFastify = async () => {
       'http://localhost:5174',
       'http://localhost:3000',
       'https://medassist-backend-hryu.onrender.com',
-      'https://medassist-indol.vercel.app',
+      'https://medassist.viyaninfo.com',
     ],
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
     credentials: true,

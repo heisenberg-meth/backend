@@ -12,7 +12,7 @@ const handlers = {
   },
   'hourly-revenue-aggregation': async () => {
     await aggregationService.runHourlyRevenueAggregation();
-  }
+  },
 };
 
 export const analyticsWorker = isTest

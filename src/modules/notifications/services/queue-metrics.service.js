@@ -9,20 +9,23 @@ class QueueMetricsService {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 
-    const [totalQueued, totalProcessed, totalFailed, totalDlq, hourlyVolume, todayByChannel] = await Promise.all([
-      prisma.notification.count({ where: { tenantId, deliveryStatus: 'QUEUED' } }),
-      prisma.notification.count({ where: { tenantId, deliveryStatus: { in: ['SENT', 'DELIVERED'] } } }),
-      prisma.notification.count({ where: { tenantId, deliveryStatus: 'FAILED' } }),
-      prisma.notification.count({ where: { tenantId, deliveryStatus: 'DEAD_LETTER' } }),
-      prisma.notification.count({
-        where: { tenantId, createdAt: { gte: recent } },
-      }),
-      prisma.notification.groupBy({
-        by: ['channel'],
-        where: { tenantId, createdAt: { gte: today } },
-        _count: true,
-      }),
-    ]);
+    const [totalQueued, totalProcessed, totalFailed, totalDlq, hourlyVolume, todayByChannel] =
+      await Promise.all([
+        prisma.notification.count({ where: { tenantId, deliveryStatus: 'QUEUED' } }),
+        prisma.notification.count({
+          where: { tenantId, deliveryStatus: { in: ['SENT', 'DELIVERED'] } },
+        }),
+        prisma.notification.count({ where: { tenantId, deliveryStatus: 'FAILED' } }),
+        prisma.notification.count({ where: { tenantId, deliveryStatus: 'DEAD_LETTER' } }),
+        prisma.notification.count({
+          where: { tenantId, createdAt: { gte: recent } },
+        }),
+        prisma.notification.groupBy({
+          by: ['channel'],
+          where: { tenantId, createdAt: { gte: today } },
+          _count: true,
+        }),
+      ]);
 
     const queueDepth = await this.getQueueDepth();
 
@@ -49,8 +52,8 @@ class QueueMetricsService {
   async getQueueDepth() {
     try {
       const keys = await scanKeys('bull:viyan-medassist-notifications:*');
-      const waiting = keys.filter(k => k.includes('wait')).length;
-      const active = keys.filter(k => k.includes('active')).length;
+      const waiting = keys.filter((k) => k.includes('wait')).length;
+      const active = keys.filter((k) => k.includes('active')).length;
       return { waiting, active, total: waiting + active };
     } catch {
       return { waiting: 0, active: 0, total: 0 };

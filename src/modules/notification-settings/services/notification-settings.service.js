@@ -1,7 +1,10 @@
 import redisClient from '../../../config/redis.js';
 import logger from '../../../shared/utils/logger.js';
 import repo from '../repositories/notification-settings.repository.js';
-import { notificationSettingsEventEmitter, NotificationSettingsEvents } from '../events/notification-settings.events.js';
+import {
+  notificationSettingsEventEmitter,
+  NotificationSettingsEvents,
+} from '../events/notification-settings.events.js';
 import auditService from '../../audit/service/audit.service.js';
 import { scanKeys } from '../../../shared/utils/scan-keys.js';
 
@@ -49,10 +52,14 @@ class NotificationSettingsService {
 
     const oldSettings = await repo.getByTenantAndBranch(tenantId, branchId);
 
-    const settings = await repo.upsert(tenantId, {
-      ...validated,
-      ...(updatedBy ? { updatedBy } : {}),
-    }, branchId);
+    const settings = await repo.upsert(
+      tenantId,
+      {
+        ...validated,
+        ...(updatedBy ? { updatedBy } : {}),
+      },
+      branchId,
+    );
 
     await this._invalidateCache(tenantId, branchId);
 
@@ -69,12 +76,12 @@ class NotificationSettingsService {
 
     await notificationSettingsEventEmitter.emit(
       NotificationSettingsEvents.NOTIFICATION_SETTINGS_UPDATED,
-      { tenantId, branchId, updatedBy, changes: validated }
+      { tenantId, branchId, updatedBy, changes: validated },
     );
 
     logger.info(
       { tenantId, branchId, updatedBy, changes: Object.keys(validated) },
-      'Notification settings updated'
+      'Notification settings updated',
     );
 
     return this._sanitizeSettings(settings);
@@ -87,8 +94,9 @@ class NotificationSettingsService {
   }
 
   async upsertChannelConfig(tenantId, data) {
-    const oldConfig = await repo.getChannelConfigs(tenantId, data.channelType)
-      .then(configs => configs.find(c => c.providerName === data.providerName));
+    const oldConfig = await repo
+      .getChannelConfigs(tenantId, data.channelType)
+      .then((configs) => configs.find((c) => c.providerName === data.providerName));
 
     const config = await repo.upsertChannelConfig(tenantId, data);
 
@@ -143,7 +151,7 @@ class NotificationSettingsService {
 
     await notificationSettingsEventEmitter.emit(
       NotificationSettingsEvents.ESCALATION_POLICY_CHANGED,
-      { tenantId, policyId: policy.id, action: 'created' }
+      { tenantId, policyId: policy.id, action: 'created' },
     );
 
     return policy;
@@ -158,7 +166,7 @@ class NotificationSettingsService {
 
     await notificationSettingsEventEmitter.emit(
       NotificationSettingsEvents.ESCALATION_POLICY_CHANGED,
-      { tenantId, policyId, action: 'updated' }
+      { tenantId, policyId, action: 'updated' },
     );
 
     return policy;
@@ -169,7 +177,7 @@ class NotificationSettingsService {
 
     await notificationSettingsEventEmitter.emit(
       NotificationSettingsEvents.ESCALATION_POLICY_CHANGED,
-      { tenantId, policyId, action: 'deleted' }
+      { tenantId, policyId, action: 'deleted' },
     );
   }
 
@@ -182,10 +190,12 @@ class NotificationSettingsService {
   async createReminderRule(tenantId, data) {
     const rule = await repo.createReminderRule(tenantId, data);
 
-    await notificationSettingsEventEmitter.emit(
-      NotificationSettingsEvents.REMINDER_RULE_UPDATED,
-      { tenantId, ruleId: rule.id, action: 'created', reminderType: data.reminderType }
-    );
+    await notificationSettingsEventEmitter.emit(NotificationSettingsEvents.REMINDER_RULE_UPDATED, {
+      tenantId,
+      ruleId: rule.id,
+      action: 'created',
+      reminderType: data.reminderType,
+    });
 
     return rule;
   }
@@ -193,10 +203,11 @@ class NotificationSettingsService {
   async updateReminderRule(tenantId, ruleId, data) {
     const rule = await repo.updateReminderRule(tenantId, ruleId, data);
 
-    await notificationSettingsEventEmitter.emit(
-      NotificationSettingsEvents.REMINDER_RULE_UPDATED,
-      { tenantId, ruleId, action: 'updated' }
-    );
+    await notificationSettingsEventEmitter.emit(NotificationSettingsEvents.REMINDER_RULE_UPDATED, {
+      tenantId,
+      ruleId,
+      action: 'updated',
+    });
 
     return rule;
   }
@@ -204,10 +215,11 @@ class NotificationSettingsService {
   async deleteReminderRule(tenantId, ruleId) {
     await repo.deleteReminderRule(tenantId, ruleId);
 
-    await notificationSettingsEventEmitter.emit(
-      NotificationSettingsEvents.REMINDER_RULE_UPDATED,
-      { tenantId, ruleId, action: 'deleted' }
-    );
+    await notificationSettingsEventEmitter.emit(NotificationSettingsEvents.REMINDER_RULE_UPDATED, {
+      tenantId,
+      ruleId,
+      action: 'deleted',
+    });
   }
 
   // ── Compliance: Opt-Outs ──
@@ -218,10 +230,10 @@ class NotificationSettingsService {
       optedOutBy,
     });
 
-    await notificationSettingsEventEmitter.emit(
-      NotificationSettingsEvents.OPT_OUT_CREATED,
-      { tenantId, optOutId: optOut.id }
-    );
+    await notificationSettingsEventEmitter.emit(NotificationSettingsEvents.OPT_OUT_CREATED, {
+      tenantId,
+      optOutId: optOut.id,
+    });
 
     return optOut;
   }
@@ -229,10 +241,10 @@ class NotificationSettingsService {
   async revokeOptOut(tenantId, optOutId) {
     const optOut = await repo.revokeOptOut(tenantId, optOutId);
 
-    await notificationSettingsEventEmitter.emit(
-      NotificationSettingsEvents.OPT_OUT_REVOKED,
-      { tenantId, optOutId }
-    );
+    await notificationSettingsEventEmitter.emit(NotificationSettingsEvents.OPT_OUT_REVOKED, {
+      tenantId,
+      optOutId,
+    });
 
     return optOut;
   }
@@ -266,10 +278,13 @@ class NotificationSettingsService {
     await redisClient.expire(hourlyKey, 3600);
 
     if (hourlyCount > settings.maxNotificationsPerHour) {
-      await notificationSettingsEventEmitter.emit(
-        NotificationSettingsEvents.THROTTLING_TRIGGERED,
-        { tenantId, channel, reason: 'hourly_limit', count: hourlyCount, limit: settings.maxNotificationsPerHour }
-      );
+      await notificationSettingsEventEmitter.emit(NotificationSettingsEvents.THROTTLING_TRIGGERED, {
+        tenantId,
+        channel,
+        reason: 'hourly_limit',
+        count: hourlyCount,
+        limit: settings.maxNotificationsPerHour,
+      });
       return { allowed: false, reason: 'hourly_limit_exceeded', retryAfter: 3600 };
     }
 
@@ -305,10 +320,11 @@ class NotificationSettingsService {
         dlqReason: `Max retries (${settings.maxRetries}) exhausted`,
       });
 
-      await notificationSettingsEventEmitter.emit(
-        NotificationSettingsEvents.DLQ_ENTRY_CREATED,
-        { tenantId, retryLogId: retryLog.id, notificationId: data.notificationId }
-      );
+      await notificationSettingsEventEmitter.emit(NotificationSettingsEvents.DLQ_ENTRY_CREATED, {
+        tenantId,
+        retryLogId: retryLog.id,
+        notificationId: data.notificationId,
+      });
 
       return { status: 'dlq', retryLog };
     }
@@ -323,10 +339,12 @@ class NotificationSettingsService {
       nextRetryAt,
     });
 
-    await notificationSettingsEventEmitter.emit(
-      NotificationSettingsEvents.RETRY_SCHEDULED,
-      { tenantId, retryLogId: retryLog.id, nextRetryAt, attempt: retryAttempt + 1 }
-    );
+    await notificationSettingsEventEmitter.emit(NotificationSettingsEvents.RETRY_SCHEDULED, {
+      tenantId,
+      retryLogId: retryLog.id,
+      nextRetryAt,
+      attempt: retryAttempt + 1,
+    });
 
     return { status: 'scheduled', retryLog, nextRetryAt };
   }
@@ -438,9 +456,11 @@ class NotificationSettingsService {
     for (const { key, type } of channelsToCheck) {
       if (data[key] === true) {
         const configs = await repo.getChannelConfigs(tenantId, type);
-        const activeConfig = configs.find(c => c.isActive);
+        const activeConfig = configs.find((c) => c.isActive);
         if (!activeConfig) {
-          throw new Error(`${type} channel cannot be enabled without an active provider configuration.`);
+          throw new Error(
+            `${type} channel cannot be enabled without an active provider configuration.`,
+          );
         }
       }
     }

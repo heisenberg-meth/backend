@@ -127,33 +127,42 @@ class GstExportService {
   }
 
   async generateCsv(invoices, month, year) {
-    const lines = ['Invoice #,Date,Customer,Customer GSTIN,Branch GSTIN,HSN,Item,Batch,Qty,Rate,Taxable,GST%,CGST,SGST,IGST,Total'];
+    const lines = [
+      'Invoice #,Date,Customer,Customer GSTIN,Branch GSTIN,HSN,Item,Batch,Qty,Rate,Taxable,GST%,CGST,SGST,IGST,Total',
+    ];
 
     for (const inv of invoices) {
       for (const item of inv.items) {
-        lines.push([
-          inv.invoiceNumber,
-          inv.createdAt.toISOString().slice(0, 10),
-          `"${inv.patient?.fullName || 'Walk-in'}"`,
-          inv.patient?.gstNumber || '',
-          inv.branch?.gstNumber || '',
-          item.medicine?.hsnCode || '',
-          `"${item.medicine?.name || ''}"`,
-          item.batch?.batchNumber || '',
-          item.quantity,
-          Number(item.unitPrice),
-          Number(item.unitPrice) * item.quantity,
-          Number(item.gstPercentage),
-          Number(item.cgst || 0),
-          Number(item.sgst || 0),
-          Number(item.igst || 0),
-          Number(item.totalPrice),
-        ].join(','));
+        lines.push(
+          [
+            inv.invoiceNumber,
+            inv.createdAt.toISOString().slice(0, 10),
+            `"${inv.patient?.fullName || 'Walk-in'}"`,
+            inv.patient?.gstNumber || '',
+            inv.branch?.gstNumber || '',
+            item.medicine?.hsnCode || '',
+            `"${item.medicine?.name || ''}"`,
+            item.batch?.batchNumber || '',
+            item.quantity,
+            Number(item.unitPrice),
+            Number(item.unitPrice) * item.quantity,
+            Number(item.gstPercentage),
+            Number(item.cgst || 0),
+            Number(item.sgst || 0),
+            Number(item.igst || 0),
+            Number(item.totalPrice),
+          ].join(','),
+        );
       }
     }
 
     const csv = lines.join('\n');
-    return { buffer: Buffer.from(csv, 'utf-8'), filename: `gst-filing-${month}-${year}.csv`, contentType: 'text/csv', invoiceCount: invoices.length };
+    return {
+      buffer: Buffer.from(csv, 'utf-8'),
+      filename: `gst-filing-${month}-${year}.csv`,
+      contentType: 'text/csv',
+      invoiceCount: invoices.length,
+    };
   }
 }
 

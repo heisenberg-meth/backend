@@ -17,10 +17,10 @@ import inventorySyncService from '../modules/ecommerce/services/inventory-sync.s
 import insuranceService from '../modules/prescriptions/services/insurance.service.js';
 import derivationService from '../modules/stock/services/derivation.service.js';
 import { registerQueue, registerWorker } from '../config/queue-registry.js';
-import { 
-  processRefillPredictions, 
-  processAdherenceScoring as processRefillAdherence, 
-  processScheduledReminders 
+import {
+  processRefillPredictions,
+  processAdherenceScoring as processRefillAdherence,
+  processScheduledReminders,
 } from '../modules/refill-reminders/scheduling/refill.jobs.js';
 import { processPrescriptionExpiryCheck } from '../modules/patient-features/jobs/prescription-expiry.job.js';
 
@@ -177,9 +177,15 @@ const handlers = {
 
   'bulk-medicines-import': async (data) => {
     const { filePath, jobId, tenantId, branchId, userId, duplicateStrategy, barcodeOptions } = data;
-    const { default: csvImportService } = await import('../modules/import/services/csv-import.service.js');
+    const { default: csvImportService } =
+      await import('../modules/import/services/csv-import.service.js');
     await csvImportService.run(filePath, {
-      jobId, tenantId, branchId, userId, duplicateStrategy, barcodeOptions,
+      jobId,
+      tenantId,
+      branchId,
+      userId,
+      duplicateStrategy,
+      barcodeOptions,
     });
   },
 
@@ -188,15 +194,22 @@ const handlers = {
     const tenants = await prisma.tenant.findMany({ where: { deletedAt: null } });
     for (const tenant of tenants) {
       logger.info(`Reconciling inventory for tenant: ${tenant.id}`);
-      const medicines = await prisma.medicine.findMany({ where: { tenantId: tenant.id, deletedAt: null } });
+      const medicines = await prisma.medicine.findMany({
+        where: { tenantId: tenant.id, deletedAt: null },
+      });
       for (const medicine of medicines) {
         try {
           const result = await derivationService.verifyStockIntegrity(tenant.id, medicine.id);
           if (result.status === 'DRIFT') {
-            logger.warn(`[INVENTORY_DRIFT] Tenant: ${tenant.id}, Medicine: ${medicine.id}, Derived: ${result.derivedQuantity}, Recorded: ${result.recordedQuantity}, Drift: ${result.drift}`);
+            logger.warn(
+              `[INVENTORY_DRIFT] Tenant: ${tenant.id}, Medicine: ${medicine.id}, Derived: ${result.derivedQuantity}, Recorded: ${result.recordedQuantity}, Drift: ${result.drift}`,
+            );
           }
         } catch (error) {
-          logger.error({ error }, `[INVENTORY_RECONCILIATION_ERROR] Tenant: ${tenant.id}, Medicine: ${medicine.id}`);
+          logger.error(
+            { error },
+            `[INVENTORY_RECONCILIATION_ERROR] Tenant: ${tenant.id}, Medicine: ${medicine.id}`,
+          );
         }
       }
     }
@@ -225,7 +238,8 @@ const handlers = {
 
   'daily-subscription-checks': async () => {
     logger.info('[SUBSCRIPTION] Starting daily subscription checks...');
-    const { sendTrialEndingReminder, sendSubscriptionExpiredEmail } = await import('../shared/services/email.service.js');
+    const { sendTrialEndingReminder, sendSubscriptionExpiredEmail } =
+      await import('../shared/services/email.service.js');
 
     const tenants = await prisma.tenant.findMany({
       where: { deletedAt: null },
@@ -252,7 +266,9 @@ const handlers = {
         logger.info(`[SUBSCRIPTION] Expired trial for tenant: ${tenant.id}`);
       } else if (sub.status === 'TRIAL' && [21, 25, 27].includes(daysLeft)) {
         await sendTrialEndingReminder(owner.email, owner.fullName, daysLeft);
-        logger.info(`[SUBSCRIPTION] Sent trial ending reminder (${daysLeft}d) for tenant: ${tenant.id}`);
+        logger.info(
+          `[SUBSCRIPTION] Sent trial ending reminder (${daysLeft}d) for tenant: ${tenant.id}`,
+        );
       }
     }
     logger.info('[SUBSCRIPTION] Daily subscription checks completed.');

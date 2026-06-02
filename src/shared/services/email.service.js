@@ -1,10 +1,14 @@
-import nodemailer from "nodemailer";
+import nodemailer from 'nodemailer';
 import https from 'https';
-import { mainQueue } from "../../queue/index.js";
-import { OTP_TEMPLATE, EXPIRY_ALERT_TEMPLATE, RESET_OTP_TEMPLATE } from "../../modules/notifications/templates/email.templates.js";
+import { mainQueue } from '../../queue/index.js';
+import {
+  OTP_TEMPLATE,
+  EXPIRY_ALERT_TEMPLATE,
+  RESET_OTP_TEMPLATE,
+} from '../../modules/notifications/templates/email.templates.js';
 
 const RESEND_API_KEY = process.env.RESEND_API || '';
-const EMAIL_FROM = process.env.EMAIL_FROM || 'noreply@viyanmedassist.com';
+const EMAIL_FROM = process.env.EMAIL_FROM || 'noreply@medassist.viyaninfo.com';
 
 /**
  * Send email via Resend API directly (preferred)
@@ -21,28 +25,31 @@ const sendViaResend = async (to, subject, html) => {
       html,
     });
 
-    const req = https.request({
-      hostname: 'api.resend.com',
-      path: '/emails',
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${RESEND_API_KEY}`,
-        'Content-Type': 'application/json',
-        'Content-Length': Buffer.byteLength(data),
+    const req = https.request(
+      {
+        hostname: 'api.resend.com',
+        path: '/emails',
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${RESEND_API_KEY}`,
+          'Content-Type': 'application/json',
+          'Content-Length': Buffer.byteLength(data),
+        },
       },
-    }, (res) => {
-      let body = '';
-      res.on('data', chunk => body += chunk);
-      res.on('end', () => {
-        if (res.statusCode === 200) {
-          console.log(`[RESEND_SENT] To: ${to}`);
-          resolve(body);
-        } else {
-          console.error(`[RESEND_ERROR] ${res.statusCode}: ${body}`);
-          resolve(null);
-        }
-      });
-    });
+      (res) => {
+        let body = '';
+        res.on('data', (chunk) => (body += chunk));
+        res.on('end', () => {
+          if (res.statusCode === 200) {
+            console.log(`[RESEND_SENT] To: ${to}`);
+            resolve(body);
+          } else {
+            console.error(`[RESEND_ERROR] ${res.statusCode}: ${body}`);
+            resolve(null);
+          }
+        });
+      },
+    );
 
     req.on('error', (err) => {
       console.error('[RESEND_ERROR]', err.message);
@@ -78,7 +85,7 @@ const sendViaNodemailer = async (to, subject, html) => {
     console.log(`[EMAIL_SENT] To: ${to}`);
     return true;
   } catch (err) {
-    console.error("[EMAIL_ERROR]", err.message);
+    console.error('[EMAIL_ERROR]', err.message);
     return null;
   }
 };
@@ -109,12 +116,12 @@ export const sendEmail = async (to, subject, html) => {
  */
 export const sendOtpEmail = async (to, otp) => {
   const html = OTP_TEMPLATE(otp);
-  return queueEmail(to, "Viyan MedAssist — Verification Code", html);
+  return queueEmail(to, 'Viyan MedAssist — Verification Code', html);
 };
 
 export const sendPasswordResetOtp = async (to, otp) => {
   const html = RESET_OTP_TEMPLATE(otp);
-  return queueEmail(to, "Reset Your Viyan MedAssist Password", html);
+  return queueEmail(to, 'Reset Your Viyan MedAssist Password', html);
 };
 
 export const sendWelcomeEmail = async (to, name) => {
@@ -124,7 +131,7 @@ export const sendWelcomeEmail = async (to, name) => {
     <p>Your 28-day free trial has started. Get started by adding your inventory and exploring the dashboard.</p>
     <p style="margin-top:24px;color:#6b7280;font-size:12px;">&copy; 2026 Viyan MedAssist</p>
   </div>`;
-  return queueEmail(to, "Welcome to Viyan MedAssist — Your 28-Day Trial Awaits", html);
+  return queueEmail(to, 'Welcome to Viyan MedAssist — Your 28-Day Trial Awaits', html);
 };
 
 export const sendSubscriptionExpiredEmail = async (to, name) => {
@@ -134,7 +141,7 @@ export const sendSubscriptionExpiredEmail = async (to, name) => {
     <p>Your Viyan MedAssist trial has ended. Upgrade now to regain access to all features.</p>
     <p style="margin-top:24px;color:#6b7280;font-size:12px;">&copy; 2026 Viyan MedAssist</p>
   </div>`;
-  return queueEmail(to, "Your Viyan MedAssist Trial Has Expired", html);
+  return queueEmail(to, 'Your Viyan MedAssist Trial Has Expired', html);
 };
 
 export const sendTrialEndingReminder = async (to, name, daysLeft) => {
@@ -145,7 +152,11 @@ export const sendTrialEndingReminder = async (to, name, daysLeft) => {
     <p>Upgrade now to keep using all features without interruption.</p>
     <p style="margin-top:24px;color:#6b7280;font-size:12px;">&copy; 2026 Viyan MedAssist</p>
   </div>`;
-  return queueEmail(to, `Your Viyan MedAssist Trial Ends in ${daysLeft} Day${daysLeft > 1 ? 's' : ''}`, html);
+  return queueEmail(
+    to,
+    `Your Viyan MedAssist Trial Ends in ${daysLeft} Day${daysLeft > 1 ? 's' : ''}`,
+    html,
+  );
 };
 
 export const sendExpiryAlertEmail = async (to, shopName, items, daysAhead) => {

@@ -18,25 +18,27 @@ const handlers = {
   'reorder-alert': processReorderAlert,
 };
 
-export const notificationWorker = isTest ? null : registerWorker(
-  new Worker(
-    'viyan-medassist-notifications',
-    async (job) => {
-      const handler = handlers[job.name];
-      if (handler) {
-        logger.info(`[Notification Worker] Started job ${job.id} (${job.name})`);
-        await handler(job.data);
-        logger.info(`[Notification Worker] Finished job ${job.id} (${job.name})`);
-      } else {
-        logger.warn(`[Notification Worker] No handler for job type: ${job.name}`);
-      }
-    },
-    {
-      connection: getBullRedis(),
-      concurrency: 10,
-    },
-  ),
-);
+export const notificationWorker = isTest
+  ? null
+  : registerWorker(
+      new Worker(
+        'viyan-medassist-notifications',
+        async (job) => {
+          const handler = handlers[job.name];
+          if (handler) {
+            logger.info(`[Notification Worker] Started job ${job.id} (${job.name})`);
+            await handler(job.data);
+            logger.info(`[Notification Worker] Finished job ${job.id} (${job.name})`);
+          } else {
+            logger.warn(`[Notification Worker] No handler for job type: ${job.name}`);
+          }
+        },
+        {
+          connection: getBullRedis(),
+          concurrency: 10,
+        },
+      ),
+    );
 
 if (notificationWorker) {
   notificationWorker.on('failed', (job, err) => {

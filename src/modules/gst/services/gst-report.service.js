@@ -50,7 +50,10 @@ class GstReportService {
       { metric: 'IGST Collected', amount: summary.igstTotal },
       { metric: 'Total GST Collected', amount: summary.gstCollected },
       { metric: 'Input Tax Credit', amount: inputTax.totalInputGst },
-      { metric: 'Net GST Payable', amount: parseFloat((summary.gstCollected - inputTax.totalInputGst).toFixed(2)) },
+      {
+        metric: 'Net GST Payable',
+        amount: parseFloat((summary.gstCollected - inputTax.totalInputGst).toFixed(2)),
+      },
     ]);
 
     summarySheet.getRow(1).font = { bold: true };
@@ -115,12 +118,16 @@ class GstReportService {
     lines.push(`IGST Collected,${summary.igstTotal}`);
     lines.push(`Total GST Collected,${summary.gstCollected}`);
     lines.push(`Input Tax Credit,${inputTax.totalInputGst}`);
-    lines.push(`Net GST Payable,${parseFloat((summary.gstCollected - inputTax.totalInputGst).toFixed(2))}`);
+    lines.push(
+      `Net GST Payable,${parseFloat((summary.gstCollected - inputTax.totalInputGst).toFixed(2))}`,
+    );
     lines.push('');
     lines.push('HSN Code,Description,Taxable Value,Total GST,Quantity');
 
     hsnSummaries.forEach((h) => {
-      lines.push(`${h.hsnCode},${h.medicineName || ''},${h.taxableValue},${h.totalGst},${h.totalQuantity}`);
+      lines.push(
+        `${h.hsnCode},${h.medicineName || ''},${h.taxableValue},${h.totalGst},${h.totalQuantity}`,
+      );
     });
 
     const csv = lines.join('\n');

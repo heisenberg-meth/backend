@@ -6,17 +6,19 @@ const isTest = process.env.NODE_ENV === 'test';
 
 export const SUPPLIER_SCORING_QUEUE = 'viyan-medassist-supplier-scoring';
 
-export const supplierScoringQueue = isTest ? null : registerQueue(
-  new Queue(SUPPLIER_SCORING_QUEUE, {
-    connection: getBullRedis(),
-    defaultJobOptions: {
-      attempts: 3,
-      backoff: { type: 'exponential', delay: 60000 },
-      removeOnComplete: 100,
-      removeOnFail: 50,
-    },
-  }),
-);
+export const supplierScoringQueue = isTest
+  ? null
+  : registerQueue(
+      new Queue(SUPPLIER_SCORING_QUEUE, {
+        connection: getBullRedis(),
+        defaultJobOptions: {
+          attempts: 3,
+          backoff: { type: 'exponential', delay: 60000 },
+          removeOnComplete: 100,
+          removeOnFail: 50,
+        },
+      }),
+    );
 
 export const JOB_TYPES = {
   SCORE_ALL_SUPPLIERS: 'score-all-suppliers',

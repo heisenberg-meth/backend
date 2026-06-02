@@ -12,7 +12,7 @@ import { scheduleCrmJobs } from '../../modules/crm/jobs/scheduler.js';
 const start = async () => {
   const app = await createServiceApp({
     name: 'Notification & Reporting Service',
-    description: 'Handles analytics, settings, CRM, and notifications'
+    description: 'Handles analytics, settings, CRM, and notifications',
   });
 
   await app.register(analyticsRoutes, { prefix: '/api/analytics' });
@@ -20,23 +20,19 @@ const start = async () => {
   await app.register(notificationRoutes, { prefix: '/api/notifications' });
   await app.register(crmRoutes, { prefix: '/api/crm' });
 
-  // Setup Event Consumers
   await eventBus.subscribe('notification_queue', 'USER_REGISTERED', async (data) => {
     app.log.info(`[CONSUMER] New user registered: ${data.email}`);
-    // Example: send welcome email
     await queueEmail(data.email, 'Welcome to Viyan MedAssist!', '<h1>Welcome!</h1>');
   });
 
   await eventBus.subscribe('notification_queue', 'LOW_STOCK_DETECTED', async (data) => {
     app.log.info(`[CONSUMER] Low stock detected for ${data.name} in tenant ${data.tenantId}`);
-    // Example: look up tenant owner email and send alert
   });
 
   await eventBus.subscribe('notification_queue', 'PAYMENT_SUCCESS', async (data) => {
     app.log.info(`[CONSUMER] Payment successful for tenant ${data.tenantId}`);
   });
 
-  // Start Cron Jobs
   await scheduleExpiryReminders();
   await scheduleReorderAlerts();
   await scheduleCrmJobs();

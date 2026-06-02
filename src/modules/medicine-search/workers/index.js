@@ -12,25 +12,27 @@ const handlers = {
   'aggregate-search-analytics': processAnalyticsAggregation,
 };
 
-export const medicineSearchWorker = isTest ? null : registerWorker(
-  new Worker(
-    'viyan-medassist-medicine-search',
-    async (job) => {
-      const handler = handlers[job.name];
-      if (handler) {
-        logger.info(`[Medicine Search Worker] Started job ${job.id} (${job.name})`);
-        await handler(job.data);
-        logger.info(`[Medicine Search Worker] Finished job ${job.id} (${job.name})`);
-      } else {
-        logger.warn(`[Medicine Search Worker] No handler for job type: ${job.name}`);
-      }
-    },
-    {
-      connection: getBullRedis(),
-      concurrency: 5,
-    },
-  ),
-);
+export const medicineSearchWorker = isTest
+  ? null
+  : registerWorker(
+      new Worker(
+        'viyan-medassist-medicine-search',
+        async (job) => {
+          const handler = handlers[job.name];
+          if (handler) {
+            logger.info(`[Medicine Search Worker] Started job ${job.id} (${job.name})`);
+            await handler(job.data);
+            logger.info(`[Medicine Search Worker] Finished job ${job.id} (${job.name})`);
+          } else {
+            logger.warn(`[Medicine Search Worker] No handler for job type: ${job.name}`);
+          }
+        },
+        {
+          connection: getBullRedis(),
+          concurrency: 5,
+        },
+      ),
+    );
 
 if (medicineSearchWorker) {
   medicineSearchWorker.on('failed', (job, err) => {

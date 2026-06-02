@@ -406,10 +406,7 @@ class BulkImportService {
 
           const stockMap = new Map();
           for (const inv of inventoryUpdates) {
-            stockMap.set(
-              inv.medicineId,
-              (stockMap.get(inv.medicineId) || 0) + inv.qty
-            );
+            stockMap.set(inv.medicineId, (stockMap.get(inv.medicineId) || 0) + inv.qty);
           }
 
           for (const [medicineId, qty] of stockMap) {

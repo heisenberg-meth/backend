@@ -66,12 +66,15 @@ export const OTP_TEMPLATE = (otp) => `
 
 export const EXPIRY_ALERT_TEMPLATE = (shopName, expiringItems, daysAhead) => {
   const itemList = expiringItems
-    .map(m => `
+    .map(
+      (m) => `
       <li style="margin-bottom: 12px; padding-bottom: 12px; border-bottom: 1px solid #1F2A44;">
         <strong style="color: #FFFFFF;">${m.name}</strong><br/>
         <span style="font-size: 13px;">Qty: ${m.quantity} | Expires: <span style="color: #FFB4AB;">${m.expiry}</span></span>
       </li>
-    `).join('');
+    `,
+    )
+    .join('');
 
   return `
     <div style="${BASE_STYLE}">

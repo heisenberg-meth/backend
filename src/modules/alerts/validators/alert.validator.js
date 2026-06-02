@@ -3,7 +3,9 @@ import { z } from 'zod';
 export const lowStockQuerySchema = z.object({
   branchId: z.string().uuid('Invalid branch ID').optional(),
   severity: z.enum(['LOW', 'MEDIUM', 'HIGH', 'CRITICAL', 'INFO', 'WARNING']).optional(),
-  status: z.enum(['ACTIVE', 'SNOOZED', 'ACKNOWLEDGED', 'RESOLVED', 'ESCALATED', 'ON_ORDER']).optional(),
+  status: z
+    .enum(['ACTIVE', 'SNOOZED', 'ACKNOWLEDGED', 'RESOLVED', 'ESCALATED', 'ON_ORDER'])
+    .optional(),
   page: z.coerce.number().int().min(1).default(1),
   limit: z.coerce.number().int().min(1).max(200).default(50),
 });
@@ -11,7 +13,9 @@ export const lowStockQuerySchema = z.object({
 export const expiringQuerySchema = z.object({
   branchId: z.string().uuid('Invalid branch ID').optional(),
   severity: z.enum(['INFO', 'WARNING', 'CRITICAL']).optional(),
-  status: z.enum(['ACTIVE', 'SNOOZED', 'ACKNOWLEDGED', 'RESOLVED', 'ESCALATED', 'ON_ORDER']).optional(),
+  status: z
+    .enum(['ACTIVE', 'SNOOZED', 'ACKNOWLEDGED', 'RESOLVED', 'ESCALATED', 'ON_ORDER'])
+    .optional(),
   page: z.coerce.number().int().min(1).default(1),
   limit: z.coerce.number().int().min(1).max(200).default(50),
 });

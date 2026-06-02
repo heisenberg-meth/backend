@@ -12,25 +12,27 @@ const handlers = {
   'scan-return-fraud': processFraudScan,
 };
 
-export const returnsWorker = isTest ? null : registerWorker(
-  new Worker(
-    'viyan-medassist-returns',
-    async (job) => {
-      const handler = handlers[job.name];
-      if (handler) {
-        logger.info(`[Returns Worker] Started job ${job.id} (${job.name})`);
-        await handler(job.data);
-        logger.info(`[Returns Worker] Finished job ${job.id} (${job.name})`);
-      } else {
-        logger.warn(`[Returns Worker] No handler for job type: ${job.name}`);
-      }
-    },
-    {
-      connection: getBullRedis(),
-      concurrency: 5,
-    },
-  ),
-);
+export const returnsWorker = isTest
+  ? null
+  : registerWorker(
+      new Worker(
+        'viyan-medassist-returns',
+        async (job) => {
+          const handler = handlers[job.name];
+          if (handler) {
+            logger.info(`[Returns Worker] Started job ${job.id} (${job.name})`);
+            await handler(job.data);
+            logger.info(`[Returns Worker] Finished job ${job.id} (${job.name})`);
+          } else {
+            logger.warn(`[Returns Worker] No handler for job type: ${job.name}`);
+          }
+        },
+        {
+          connection: getBullRedis(),
+          concurrency: 5,
+        },
+      ),
+    );
 
 if (returnsWorker) {
   returnsWorker.on('failed', (job, err) => {

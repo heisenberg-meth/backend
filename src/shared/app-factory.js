@@ -12,15 +12,14 @@ import client from 'prom-client';
 import prisma from '../config/prisma.js';
 import env from '../config/env.js';
 
-
 const dbHealthGauge = new client.Gauge({
   name: 'health_db_status',
-  help: 'Status of database connection (1 for connected, 0 for disconnected)'
+  help: 'Status of database connection (1 for connected, 0 for disconnected)',
 });
 
 const redisHealthGauge = new client.Gauge({
   name: 'health_redis_status',
-  help: 'Status of redis connection (1 for connected, 0 for disconnected)'
+  help: 'Status of redis connection (1 for connected, 0 for disconnected)',
 });
 
 /**
@@ -31,15 +30,16 @@ const createServiceApp = async (options = {}) => {
 
   const fastify = Fastify({
     logger: {
-      transport: process.env.NODE_ENV === 'development'
-        ? {
-            target: 'pino-pretty',
-            options: {
-              translateTime: 'HH:MM:ss Z',
-              ignore: 'pid,hostname',
-            },
-          }
-        : undefined,
+      transport:
+        process.env.NODE_ENV === 'development'
+          ? {
+              target: 'pino-pretty',
+              options: {
+                translateTime: 'HH:MM:ss Z',
+                ignore: 'pid,hostname',
+              },
+            }
+          : undefined,
     },
   });
 
@@ -60,38 +60,48 @@ const createServiceApp = async (options = {}) => {
         upgradeInsecureRequests: [],
       },
     },
-    crossOriginOpenerPolicy: { policy: "same-origin" },
-    crossOriginResourcePolicy: { policy: "same-origin" },
-    referrerPolicy: { policy: "no-referrer" },
+    crossOriginOpenerPolicy: { policy: 'same-origin' },
+    crossOriginResourcePolicy: { policy: 'same-origin' },
+    referrerPolicy: { policy: 'no-referrer' },
     strictTransportSecurity: {
       maxAge: 31536000,
       includeSubDomains: true,
     },
     xContentTypeOptions: true,
     xDnsPrefetchControl: { allow: false },
-    xFrameOptions: { action: "sameorigin" },
-    xPermittedCrossDomainPolicies: { permittedPolicies: "none" },
+    xFrameOptions: { action: 'sameorigin' },
+    xPermittedCrossDomainPolicies: { permittedPolicies: 'none' },
     xXssProtection: true,
   });
-  
+
   await fastify.register(cookie, {
     secret: env.cookieSecret || 'super-secret-cookie-key',
   });
 
   await fastify.register(csrf, {
-    cookieOpts: { 
+    cookieOpts: {
       signed: true,
       httpOnly: true,
       secure: true,
-      sameSite: 'none'
+      sameSite: 'none',
     },
   });
 
   await fastify.register(cors, {
-    origin: env.cors?.origin || ['http://localhost:5173', 'http://localhost:5174', 'https://medassist-indol.vercel.app',],
+    origin: env.cors?.origin || [
+      'http://localhost:5173',
+      'http://localhost:5174',
+      'https://medassist.viyaninfo.com',
+    ],
     credentials: true,
     methods: ['GET', 'PUT', 'POST', 'DELETE', 'OPTIONS', 'PATCH'],
-    allowedHeaders: ['Content-Type', 'Authorization', 'x-csrf-token', 'X-Idempotency-Key', 'ngrok-skip-browser-warning'],
+    allowedHeaders: [
+      'Content-Type',
+      'Authorization',
+      'x-csrf-token',
+      'X-Idempotency-Key',
+      'ngrok-skip-browser-warning',
+    ],
   });
 
   await fastify.register(redis, {

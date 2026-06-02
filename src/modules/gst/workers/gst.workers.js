@@ -35,29 +35,37 @@ const handlers = {
   },
 };
 
-export const gstReportWorker = isTest ? null : registerWorker(new Worker(
-  'viyan-medassist-gst-reports',
-  async (job) => {
-    const handler = handlers[job.name];
-    if (handler) {
-      logger.info(`[GST Worker] Started job ${job.id} (${job.name})`);
-      await handler(job.data);
-      logger.info(`[GST Worker] Finished job ${job.id} (${job.name})`);
-    }
-  },
-  { connection: getBullRedis(), concurrency: 5 },
-));
+export const gstReportWorker = isTest
+  ? null
+  : registerWorker(
+      new Worker(
+        'viyan-medassist-gst-reports',
+        async (job) => {
+          const handler = handlers[job.name];
+          if (handler) {
+            logger.info(`[GST Worker] Started job ${job.id} (${job.name})`);
+            await handler(job.data);
+            logger.info(`[GST Worker] Finished job ${job.id} (${job.name})`);
+          }
+        },
+        { connection: getBullRedis(), concurrency: 5 },
+      ),
+    );
 
-export const gstMonthlyWorker = isTest ? null : registerWorker(new Worker(
-  'viyan-medassist-gst-monthly',
-  async (job) => {
-    const handler = handlers[job.name];
-    if (handler) {
-      await handler(job.data);
-    }
-  },
-  { connection: getBullRedis(), concurrency: 3 },
-));
+export const gstMonthlyWorker = isTest
+  ? null
+  : registerWorker(
+      new Worker(
+        'viyan-medassist-gst-monthly',
+        async (job) => {
+          const handler = handlers[job.name];
+          if (handler) {
+            await handler(job.data);
+          }
+        },
+        { connection: getBullRedis(), concurrency: 3 },
+      ),
+    );
 
 if (gstReportWorker) {
   gstReportWorker.on('failed', (job, err) => {

@@ -42,29 +42,37 @@ const handlers = {
   },
 };
 
-export const refundApprovalWorker = isTest ? null : registerWorker(new Worker(
-  'viyan-medassist-refund-approval',
-  async (job) => {
-    const handler = handlers[job.name];
-    if (handler) {
-      logger.info(`[Refund Worker] Started job ${job.id} (${job.name})`);
-      await handler(job.data);
-      logger.info(`[Refund Worker] Finished job ${job.id} (${job.name})`);
-    }
-  },
-  { connection: getBullRedis(), concurrency: 5 },
-));
+export const refundApprovalWorker = isTest
+  ? null
+  : registerWorker(
+      new Worker(
+        'viyan-medassist-refund-approval',
+        async (job) => {
+          const handler = handlers[job.name];
+          if (handler) {
+            logger.info(`[Refund Worker] Started job ${job.id} (${job.name})`);
+            await handler(job.data);
+            logger.info(`[Refund Worker] Finished job ${job.id} (${job.name})`);
+          }
+        },
+        { connection: getBullRedis(), concurrency: 5 },
+      ),
+    );
 
-export const refundPaymentWorker = isTest ? null : registerWorker(new Worker(
-  'viyan-medassist-refund-payment',
-  async (job) => {
-    const handler = handlers[job.name];
-    if (handler) {
-      await handler(job.data);
-    }
-  },
-  { connection: getBullRedis(), concurrency: 3 },
-));
+export const refundPaymentWorker = isTest
+  ? null
+  : registerWorker(
+      new Worker(
+        'viyan-medassist-refund-payment',
+        async (job) => {
+          const handler = handlers[job.name];
+          if (handler) {
+            await handler(job.data);
+          }
+        },
+        { connection: getBullRedis(), concurrency: 3 },
+      ),
+    );
 
 if (refundApprovalWorker) {
   refundApprovalWorker.on('failed', (job, err) => {

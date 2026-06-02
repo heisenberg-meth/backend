@@ -3,7 +3,7 @@ class AnalyticsService {
     return {
       totalStock: 0,
       expiringSoon: 0,
-      outOfStock: 0
+      outOfStock: 0,
     };
   }
 

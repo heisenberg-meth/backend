@@ -5,7 +5,6 @@ import { initRedis } from '../../../config/redis.js';
 const redisClient = initRedis();
 
 class AnalyticsFastifyController {
-  /** Build branch filter from query param */
   _branchFilter(tenantId, branchId) {
     if (branchId) {
       return { tenantId, branchId };

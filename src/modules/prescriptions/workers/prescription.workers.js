@@ -27,35 +27,47 @@ const handlers = {
   },
 };
 
-export const prescriptionOcrWorker = isTest ? null : registerWorker(new Worker(
-  'viyan-medassist-prescription-ocr',
-  async (job) => {
-    const handler = handlers[job.name];
-    if (handler) {
-      logger.info(`[Prescription Worker] Started ${job.id} (${job.name})`);
-      await handler(job.data);
-    }
-  },
-  { connection: getBullRedis(), concurrency: 3 },
-));
+export const prescriptionOcrWorker = isTest
+  ? null
+  : registerWorker(
+      new Worker(
+        'viyan-medassist-prescription-ocr',
+        async (job) => {
+          const handler = handlers[job.name];
+          if (handler) {
+            logger.info(`[Prescription Worker] Started ${job.id} (${job.name})`);
+            await handler(job.data);
+          }
+        },
+        { connection: getBullRedis(), concurrency: 3 },
+      ),
+    );
 
-export const refillReminderWorker = isTest ? null : registerWorker(new Worker(
-  'viyan-medassist-refill-reminders',
-  async (job) => {
-    const handler = handlers[job.name];
-    if (handler) await handler(job.data);
-  },
-  { connection: getBullRedis(), concurrency: 2 },
-));
+export const refillReminderWorker = isTest
+  ? null
+  : registerWorker(
+      new Worker(
+        'viyan-medassist-refill-reminders',
+        async (job) => {
+          const handler = handlers[job.name];
+          if (handler) await handler(job.data);
+        },
+        { connection: getBullRedis(), concurrency: 2 },
+      ),
+    );
 
-export const prescriptionExpiryWorker = isTest ? null : registerWorker(new Worker(
-  'viyan-medassist-prescription-expiry',
-  async (job) => {
-    const handler = handlers[job.name];
-    if (handler) await handler(job.data);
-  },
-  { connection: getBullRedis(), concurrency: 2 },
-));
+export const prescriptionExpiryWorker = isTest
+  ? null
+  : registerWorker(
+      new Worker(
+        'viyan-medassist-prescription-expiry',
+        async (job) => {
+          const handler = handlers[job.name];
+          if (handler) await handler(job.data);
+        },
+        { connection: getBullRedis(), concurrency: 2 },
+      ),
+    );
 
 if (prescriptionOcrWorker) {
   prescriptionOcrWorker.on('failed', (job, err) => {

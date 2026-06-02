@@ -4,7 +4,7 @@ import { z } from 'zod';
 const envSchema = z.object({
   NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
   PORT: z.string().transform(Number).default('5000'),
-  FRONTEND_URL: z.string().url().default('http://localhost:5173'),
+  FRONTEND_URL: z.string().url().default('https://medassist.viyaninfo.com/'),
   CORS_ORIGIN: z.string().optional(),
   LOG_LEVEL: z.string().default('info'),
   COOKIE_SECRET: z.string().min(10),
@@ -42,7 +42,7 @@ const env = {
       'http://localhost:5174',
       'http://localhost:3000',
       'https://medassist-backend-hryu.onrender.com',
-      'https://medassist-indol.vercel.app',
+      'https://medassist.viyaninfo.com',
     ],
     credentials: true,
   },
