@@ -216,6 +216,8 @@ model User {
   updatedAt                    DateTime                   @updatedAt
   deletedAt                    DateTime?
   avatar                       String?
+  avatarData                   Bytes?
+  avatarMimeType               String?
   phone                        String?
   username                     String?
   pharmacistRegistrationNumber String?
