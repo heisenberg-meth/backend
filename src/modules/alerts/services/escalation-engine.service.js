@@ -115,7 +115,7 @@ class AlertEscalationEngine {
         tenantId,
         alert.medicineId,
         alert.branchId,
-        alert.type
+        alert.type,
       );
 
       logger.info({ alertId: alert.id, purchaseOrderId }, 'Alert reopened due to PO cancellation');

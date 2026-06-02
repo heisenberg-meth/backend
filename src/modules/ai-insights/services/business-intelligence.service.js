@@ -48,7 +48,12 @@ class BusinessIntelligenceService {
       insightType: 'REVENUE',
       insightText: `Monthly revenue is ₹${thisRev.toLocaleString('en-IN')} across ${thisMonth._count.id} invoices (${pctChange >= 0 ? '+' : ''}${pctChange.toFixed(1)}% vs previous month).`,
       confidenceScore: thisRev > 0 ? 0.88 : 0.5,
-      reasoning: { currentRevenue: thisRev, previousRevenue: lastRev, percentageChange: pctChange, invoiceCount: thisMonth._count.id },
+      reasoning: {
+        currentRevenue: thisRev,
+        previousRevenue: lastRev,
+        percentageChange: pctChange,
+        invoiceCount: thisMonth._count.id,
+      },
     };
   }
 
@@ -57,7 +62,11 @@ class BusinessIntelligenceService {
       prisma.slowMovingStock.count({ where: { tenantId } }),
       prisma.deadStockAnalysis.count({ where: { tenantId } }),
       prisma.inventoryBatch.count({
-        where: { tenantId, status: 'ACTIVE', expiryDate: { lte: new Date(Date.now() + 90 * 86400000) } },
+        where: {
+          tenantId,
+          status: 'ACTIVE',
+          expiryDate: { lte: new Date(Date.now() + 90 * 86400000) },
+        },
       }),
       prisma.inventoryBatch.aggregate({
         where: { tenantId, status: 'ACTIVE' },
@@ -72,13 +81,23 @@ class BusinessIntelligenceService {
       insightType: 'INVENTORY',
       insightText: `Inventory has ${totalQty} units across all batches. ${expirySoon} batches expiring within 90 days, ${slowCount} slow-moving items, ${deadCount} dead-stock items identified.`,
       confidenceScore: totalQty > 0 ? 0.92 : 0.6,
-      reasoning: { totalUnits: totalQty, expiringSoon: expirySoon, slowMovingCount: slowCount, deadStockCount: deadCount },
+      reasoning: {
+        totalUnits: totalQty,
+        expiringSoon: expirySoon,
+        slowMovingCount: slowCount,
+        deadStockCount: deadCount,
+      },
     };
   }
 
   async _generateOperationalInsight(tenantId) {
     const [pendingPOs, activePatients, allMeds] = await Promise.all([
-      prisma.purchaseOrder.count({ where: { tenantId, status: { in: [PURCHASE_ORDER_STATUS.PENDING_APPROVAL, PURCHASE_ORDER_STATUS.APPROVED] } } }),
+      prisma.purchaseOrder.count({
+        where: {
+          tenantId,
+          status: { in: [PURCHASE_ORDER_STATUS.PENDING_APPROVAL, PURCHASE_ORDER_STATUS.APPROVED] },
+        },
+      }),
       prisma.patient.count({ where: { tenantId, deletedAt: null } }),
       prisma.medicine.findMany({
         where: { tenantId, deletedAt: null, reorderLevel: { gt: 0 } },
@@ -93,7 +112,11 @@ class BusinessIntelligenceService {
       insightType: 'OPERATIONAL',
       insightText: `${pendingPOs} pending purchase orders, ${activePatients} active patients, ${lowStockMeds} medicines below reorder level.`,
       confidenceScore: 0.85,
-      reasoning: { pendingPurchaseOrders: pendingPOs, activePatients, lowStockMedicines: lowStockMeds },
+      reasoning: {
+        pendingPurchaseOrders: pendingPOs,
+        activePatients,
+        lowStockMedicines: lowStockMeds,
+      },
     };
   }
 }

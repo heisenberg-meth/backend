@@ -31,7 +31,9 @@ class AlertNotificationService {
     await Promise.allSettled([
       this._sendDashboardAlert(alert),
       this._sendEmailAlert(tenantId, severity, message, medicine, branch),
-      severity === 'CRITICAL' ? this._sendWhatsAppAlert(tenantId, message, medicine) : Promise.resolve(),
+      severity === 'CRITICAL'
+        ? this._sendWhatsAppAlert(tenantId, message, medicine)
+        : Promise.resolve(),
       this._broadcastWebSocket(tenantId, branchId, type, {
         alertId,
         medicineName: medicine?.name,

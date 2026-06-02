@@ -41,10 +41,7 @@ class AlertAnalyticsService {
       select: { potentialLoss: true },
     });
 
-    const totalFinancialRisk = financialRisk.reduce(
-      (sum, a) => sum + (a.potentialLoss || 0),
-      0
-    );
+    const totalFinancialRisk = financialRisk.reduce((sum, a) => sum + (a.potentialLoss || 0), 0);
 
     return {
       active: activeAlerts,

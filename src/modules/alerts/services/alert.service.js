@@ -181,21 +181,21 @@ class AlertService {
   async sendEmailNotification(tenantId, data) {
     return notificationService.sendEmail(tenantId, {
       ...data,
-      type: 'ALERT'
+      type: 'ALERT',
     });
   }
 
   async sendSmsNotification(tenantId, data) {
     return notificationService.sendSms(tenantId, {
       ...data,
-      type: 'ALERT'
+      type: 'ALERT',
     });
   }
 
   async sendWhatsAppNotification(tenantId, data) {
     return notificationService.sendWhatsApp(tenantId, {
       ...data,
-      type: 'ALERT'
+      type: 'ALERT',
     });
   }
 }

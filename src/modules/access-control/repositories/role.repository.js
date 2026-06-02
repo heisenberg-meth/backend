@@ -1,4 +1,4 @@
-import prisma from "../../../config/prisma.js";
+import prisma from '../../../config/prisma.js';
 
 class RoleRepository {
   async findAll(tenantId) {
@@ -7,10 +7,10 @@ class RoleRepository {
       include: {
         permissions: {
           include: {
-            permission: true
-          }
-        }
-      }
+            permission: true,
+          },
+        },
+      },
     });
   }
 
@@ -34,14 +34,14 @@ class RoleRepository {
         name: data.name,
         description: data.description,
         permissions: {
-          create: data.permissions?.map(pId => ({
-            permissionId: pId
-          }))
-        }
+          create: data.permissions?.map((pId) => ({
+            permissionId: pId,
+          })),
+        },
       },
       include: {
-        permissions: true
-      }
+        permissions: true,
+      },
     });
   }
 
@@ -51,20 +51,20 @@ class RoleRepository {
         where: { id, tenantId },
         data: {
           name: data.name,
-          description: data.description
-        }
+          description: data.description,
+        },
       });
 
       if (data.permissions) {
         await tx.rolePermission.deleteMany({
-          where: { roleId: id }
+          where: { roleId: id },
         });
 
         await tx.rolePermission.createMany({
-          data: data.permissions.map(pId => ({
+          data: data.permissions.map((pId) => ({
             roleId: id,
-            permissionId: pId
-          }))
+            permissionId: pId,
+          })),
         });
       }
 
@@ -77,16 +77,16 @@ class RoleRepository {
       where: {
         tenantId_name: {
           tenantId,
-          name
-        }
+          name,
+        },
       },
       include: {
         permissions: {
           include: {
-            permission: true
-          }
-        }
-      }
+            permission: true,
+          },
+        },
+      },
     });
   }
 }

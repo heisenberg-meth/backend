@@ -1,23 +1,23 @@
-import prisma from "../../../config/prisma.js";
+import prisma from '../../../config/prisma.js';
 
 class PermissionRepository {
   async findAll() {
     return prisma.permission.findMany({
-      orderBy: { module: 'asc' }
+      orderBy: { module: 'asc' },
     });
   }
 
   async findById(id) {
     return prisma.permission.findUnique({
-      where: { id }
+      where: { id },
     });
   }
 
   async findByNames(names) {
     return prisma.permission.findMany({
       where: {
-        name: { in: names }
-      }
+        name: { in: names },
+      },
     });
   }
 

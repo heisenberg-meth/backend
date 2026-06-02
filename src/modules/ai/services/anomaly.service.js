@@ -7,15 +7,16 @@ class AnomalyDetectionService {
     const recentRefunds = await prisma.refundPayment.findMany({
       where: {
         invoice: { tenantId },
-        createdAt: { gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) }
+        createdAt: { gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) },
       },
-      include: { user: true }
+      include: { user: true },
     });
 
     const refundsByUser = {};
-    recentRefunds.forEach(r => {
+    recentRefunds.forEach((r) => {
       const userId = r.createdBy;
-      if (!refundsByUser[userId]) refundsByUser[userId] = { count: 0, total: 0, name: r.user?.fullName };
+      if (!refundsByUser[userId])
+        refundsByUser[userId] = { count: 0, total: 0, name: r.user?.fullName };
       refundsByUser[userId].count++;
       refundsByUser[userId].total += parseFloat(r.amount);
     });
@@ -27,7 +28,7 @@ class AnomalyDetectionService {
           userId,
           userName: stats.name,
           riskScore: 0.85,
-          explanation: `${stats.name} processed ${stats.count} refunds in 7 days. Industry average is < 3.`
+          explanation: `${stats.name} processed ${stats.count} refunds in 7 days. Industry average is < 3.`,
         });
       }
     }
@@ -37,9 +38,9 @@ class AnomalyDetectionService {
         tenantId,
         movementType: 'ADJUSTMENT',
         quantity: { lt: 0 },
-        createdAt: { gte: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000) }
+        createdAt: { gte: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000) },
       },
-      _sum: { quantity: true }
+      _sum: { quantity: true },
     });
 
     const totalShrinkage = Math.abs(stockAdjustments._sum.quantity || 0);
@@ -47,7 +48,7 @@ class AnomalyDetectionService {
       anomalies.push({
         type: 'INVENTORY_SHRINKAGE',
         riskScore: 0.92,
-        explanation: `Lost ${totalShrinkage} units to "Adjustments" in 30 days. This indicates possible theft or massive process errors.`
+        explanation: `Lost ${totalShrinkage} units to "Adjustments" in 30 days. This indicates possible theft or massive process errors.`,
       });
     }
 
@@ -55,7 +56,7 @@ class AnomalyDetectionService {
       timestamp: new Date(),
       tenantId,
       anomalies,
-      count: anomalies.length
+      count: anomalies.length,
     };
   }
 }

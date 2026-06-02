@@ -21,14 +21,23 @@ class AlertSettingsController {
     const updatedBy = req.user?.email || req.user?.id;
     try {
       const validated = alertSettingsSchema.parse(req.body);
-      const settings = await service.updateSettings(tenantId, validated, updatedBy, branchId || null);
+      const settings = await service.updateSettings(
+        tenantId,
+        validated,
+        updatedBy,
+        branchId || null,
+      );
       return reply.send({ success: true, data: settings, message: 'Alert settings updated' });
     } catch (err) {
       if (err.name === 'ZodError') {
-        return reply.code(400).send({ success: false, error: 'Validation failed', details: err.errors });
+        return reply
+          .code(400)
+          .send({ success: false, error: 'Validation failed', details: err.errors });
       }
       logger.error({ err, tenantId }, 'Failed to update alert settings');
-      return reply.code(500).send({ success: false, error: err.message || 'Failed to update alert settings' });
+      return reply
+        .code(500)
+        .send({ success: false, error: err.message || 'Failed to update alert settings' });
     }
   }
 
@@ -38,10 +47,14 @@ class AlertSettingsController {
     try {
       const validated = overrideSchema.parse(req.body);
       const override = await service.createOverride(tenantId, settingsId, validated);
-      return reply.code(201).send({ success: true, data: override, message: 'Threshold override created' });
+      return reply
+        .code(201)
+        .send({ success: true, data: override, message: 'Threshold override created' });
     } catch (err) {
       if (err.name === 'ZodError') {
-        return reply.code(400).send({ success: false, error: 'Validation failed', details: err.errors });
+        return reply
+          .code(400)
+          .send({ success: false, error: 'Validation failed', details: err.errors });
       }
       return reply.code(400).send({ success: false, error: err.message });
     }
@@ -56,7 +69,9 @@ class AlertSettingsController {
       return reply.send({ success: true, data: override, message: 'Threshold override updated' });
     } catch (err) {
       if (err.name === 'ZodError') {
-        return reply.code(400).send({ success: false, error: 'Validation failed', details: err.errors });
+        return reply
+          .code(400)
+          .send({ success: false, error: 'Validation failed', details: err.errors });
       }
       return reply.code(400).send({ success: false, error: err.message });
     }

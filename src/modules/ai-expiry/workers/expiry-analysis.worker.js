@@ -7,19 +7,25 @@ import prisma from '../../../config/prisma.js';
 
 const isTest = process.env.NODE_ENV === 'test';
 
-const expiryWorker = isTest ? null : new Worker('expiry-queue', async (job) => {
-  if (job.name === 'RUN_EXPIRY_ANALYSIS') {
-    const { tenantId } = job.data;
-    logger.info({ tenantId }, '[EXPIRY_WORKER] Starting analysis');
+const expiryWorker = isTest
+  ? null
+  : new Worker(
+      'expiry-queue',
+      async (job) => {
+        if (job.name === 'RUN_EXPIRY_ANALYSIS') {
+          const { tenantId } = job.data;
+          logger.info({ tenantId }, '[EXPIRY_WORKER] Starting analysis');
 
-    await expiryAIService.analyzeExpiryRisks(tenantId);
+          await expiryAIService.analyzeExpiryRisks(tenantId);
 
-    const risks = await prisma.expiryRiskPrediction.findMany({ where: { tenantId } });
-    for (const risk of risks) {
-      await discountEngineService.generateDiscount(risk);
-    }
-  }
-}, { connection: getBullRedis() });
+          const risks = await prisma.expiryRiskPrediction.findMany({ where: { tenantId } });
+          for (const risk of risks) {
+            await discountEngineService.generateDiscount(risk);
+          }
+        }
+      },
+      { connection: getBullRedis() },
+    );
 
 if (expiryWorker) {
   expiryWorker.on('failed', (job, err) => {

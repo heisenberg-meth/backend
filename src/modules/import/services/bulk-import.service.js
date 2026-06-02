@@ -404,17 +404,25 @@ class BulkImportService {
             await tx.stockMovement.createMany({ data: movementsToCreate });
           }
 
+          const stockMap = new Map();
           for (const inv of inventoryUpdates) {
+            stockMap.set(
+              inv.medicineId,
+              (stockMap.get(inv.medicineId) || 0) + inv.qty
+            );
+          }
+
+          for (const [medicineId, qty] of stockMap) {
             await tx.inventory.upsert({
               where: {
-                tenantId_branchId_medicineId: { tenantId, branchId, medicineId: inv.medicineId },
+                tenantId_branchId_medicineId: { tenantId, branchId, medicineId },
               },
-              update: { currentStock: { increment: inv.qty } },
+              update: { currentStock: { increment: qty } },
               create: {
                 tenantId,
                 branchId,
-                medicineId: inv.medicineId,
-                currentStock: inv.qty,
+                medicineId,
+                currentStock: qty,
                 reorderPoint: 10,
               },
             });
@@ -423,10 +431,13 @@ class BulkImportService {
         { timeout: 60000 },
       );
 
-      logger.info({
-        chunk: i / CHUNK_SIZE + 1,
-        durationMs: Date.now() - start
-      }, 'Chunk completed');
+      logger.info(
+        {
+          chunk: i / CHUNK_SIZE + 1,
+          durationMs: Date.now() - start,
+        },
+        'Chunk completed',
+      );
     }
 
     // Post-commit side effects: Log audit trail

@@ -22,7 +22,7 @@ class DemandForecastService {
     });
 
     const monthlySales = {};
-    historicalSales.forEach(sale => {
+    historicalSales.forEach((sale) => {
       const month = sale.invoice.createdAt.toISOString().slice(0, 7);
       monthlySales[month] = (monthlySales[month] || 0) + sale.quantity;
     });
@@ -39,17 +39,17 @@ class DemandForecastService {
 
     const fourteenDaysAgo = new Date();
     fourteenDaysAgo.setDate(fourteenDaysAgo.getDate() - 14);
-    
+
     const recentTotal = historicalSales
-      .filter(s => s.invoice.createdAt >= fourteenDaysAgo)
+      .filter((s) => s.invoice.createdAt >= fourteenDaysAgo)
       .reduce((sum, s) => sum + s.quantity, 0);
-    
+
     const recentDailyAvg = recentTotal / 14;
 
     const totalQty = historicalSales.reduce((sum, s) => sum + s.quantity, 0);
     const overallDailyAvg = totalQty / (6 * 30);
 
-    const dailyForecast = ((recentDailyAvg * 0.7) + (overallDailyAvg * 0.3)) * trend;
+    const dailyForecast = (recentDailyAvg * 0.7 + overallDailyAvg * 0.3) * trend;
     const predictedDemand = Math.ceil(dailyForecast * forecastDays);
 
     return {

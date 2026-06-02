@@ -24,13 +24,29 @@ class AlertFastifyController {
     const [alerts, total] = await Promise.all([
       prisma.stockAlert.findMany({
         where,
-        include: { medicine: { select: { name: true, genericName: true, prescriptionRequired: true } }, branch: { select: { name: true, code: true } } },
-        orderBy: { createdAt: 'desc' }, skip, take,
+        include: {
+          medicine: { select: { name: true, genericName: true, prescriptionRequired: true } },
+          branch: { select: { name: true, code: true } },
+        },
+        orderBy: { createdAt: 'desc' },
+        skip,
+        take,
       }),
       prisma.stockAlert.count({ where }),
     ]);
 
-    return reply.send({ success: true, data: { alerts, pagination: { total, page: parseInt(page), limit: take, totalPages: Math.ceil(total / take) } } });
+    return reply.send({
+      success: true,
+      data: {
+        alerts,
+        pagination: {
+          total,
+          page: parseInt(page),
+          limit: take,
+          totalPages: Math.ceil(total / take),
+        },
+      },
+    });
   }
 
   async getLowStock(request, reply) {
@@ -38,7 +54,12 @@ class AlertFastifyController {
     const branchId = request.user?.branchId;
     const { severity, status, page = 1, limit = 50 } = request.query;
 
-    const where = { tenantId, branchId: branchId || undefined, type: { in: ['LOW_STOCK', 'OUT_OF_STOCK'] }, isResolved: false };
+    const where = {
+      tenantId,
+      branchId: branchId || undefined,
+      type: { in: ['LOW_STOCK', 'OUT_OF_STOCK'] },
+      isResolved: false,
+    };
     if (severity) where.severity = severity;
     if (status) where.alertStatus = status;
 
@@ -48,13 +69,36 @@ class AlertFastifyController {
     const [alerts, total] = await Promise.all([
       prisma.stockAlert.findMany({
         where,
-        include: { medicine: { select: { name: true, genericName: true, prescriptionRequired: true, reorderLevel: true } }, branch: { select: { name: true, code: true } } },
-        orderBy: [{ severity: 'desc' }, { daysRemaining: 'asc' }], skip, take,
+        include: {
+          medicine: {
+            select: {
+              name: true,
+              genericName: true,
+              prescriptionRequired: true,
+              reorderLevel: true,
+            },
+          },
+          branch: { select: { name: true, code: true } },
+        },
+        orderBy: [{ severity: 'desc' }, { daysRemaining: 'asc' }],
+        skip,
+        take,
       }),
       prisma.stockAlert.count({ where }),
     ]);
 
-    return reply.send({ success: true, data: { alerts, pagination: { total, page: parseInt(page), limit: take, totalPages: Math.ceil(total / take) } } });
+    return reply.send({
+      success: true,
+      data: {
+        alerts,
+        pagination: {
+          total,
+          page: parseInt(page),
+          limit: take,
+          totalPages: Math.ceil(total / take),
+        },
+      },
+    });
   }
 
   async getExpiring(request, reply) {
@@ -72,14 +116,36 @@ class AlertFastifyController {
     const [alerts, total] = await Promise.all([
       prisma.expiryAlert.findMany({
         where,
-        include: { medicine: { select: { name: true, genericName: true } }, batch: { select: { batchNumber: true, quantity: true, expiryDate: true, purchasePrice: true } }, branch: { select: { name: true, code: true } } },
-        orderBy: { daysRemaining: 'asc' }, skip, take,
+        include: {
+          medicine: { select: { name: true, genericName: true } },
+          batch: {
+            select: { batchNumber: true, quantity: true, expiryDate: true, purchasePrice: true },
+          },
+          branch: { select: { name: true, code: true } },
+        },
+        orderBy: { daysRemaining: 'asc' },
+        skip,
+        take,
       }),
       prisma.expiryAlert.count({ where }),
     ]);
 
-    const enriched = alerts.map((a) => ({ ...a, potentialLoss: a.batch?.quantity * a.batch?.purchasePrice || 0 }));
-    return reply.send({ success: true, data: { alerts: enriched, pagination: { total, page: parseInt(page), limit: take, totalPages: Math.ceil(total / take) } } });
+    const enriched = alerts.map((a) => ({
+      ...a,
+      potentialLoss: a.batch?.quantity * a.batch?.purchasePrice || 0,
+    }));
+    return reply.send({
+      success: true,
+      data: {
+        alerts: enriched,
+        pagination: {
+          total,
+          page: parseInt(page),
+          limit: take,
+          totalPages: Math.ceil(total / take),
+        },
+      },
+    });
   }
 
   async getCritical(request, reply) {
@@ -87,11 +153,46 @@ class AlertFastifyController {
     const branchId = request.user?.branchId;
 
     const [criticalStock, criticalExpiry] = await Promise.all([
-      prisma.stockAlert.findMany({ where: { tenantId, branchId: branchId || undefined, severity: 'CRITICAL', alertStatus: { in: ['ACTIVE', 'ESCALATED'] }, isResolved: false }, include: { medicine: { select: { name: true, prescriptionRequired: true } }, branch: { select: { name: true, code: true } } }, orderBy: { createdAt: 'desc' }, take: 50 }),
-      prisma.expiryAlert.findMany({ where: { tenantId, branchId: branchId || undefined, severity: 'CRITICAL', alertStatus: { in: ['ACTIVE', 'ESCALATED'] }, isResolved: false }, include: { medicine: { select: { name: true } }, batch: { select: { batchNumber: true, quantity: true, expiryDate: true } } }, orderBy: { daysRemaining: 'asc' }, take: 50 }),
+      prisma.stockAlert.findMany({
+        where: {
+          tenantId,
+          branchId: branchId || undefined,
+          severity: 'CRITICAL',
+          alertStatus: { in: ['ACTIVE', 'ESCALATED'] },
+          isResolved: false,
+        },
+        include: {
+          medicine: { select: { name: true, prescriptionRequired: true } },
+          branch: { select: { name: true, code: true } },
+        },
+        orderBy: { createdAt: 'desc' },
+        take: 50,
+      }),
+      prisma.expiryAlert.findMany({
+        where: {
+          tenantId,
+          branchId: branchId || undefined,
+          severity: 'CRITICAL',
+          alertStatus: { in: ['ACTIVE', 'ESCALATED'] },
+          isResolved: false,
+        },
+        include: {
+          medicine: { select: { name: true } },
+          batch: { select: { batchNumber: true, quantity: true, expiryDate: true } },
+        },
+        orderBy: { daysRemaining: 'asc' },
+        take: 50,
+      }),
     ]);
 
-    return reply.send({ success: true, data: { stockAlerts: criticalStock, expiryAlerts: criticalExpiry, totalCritical: criticalStock.length + criticalExpiry.length } });
+    return reply.send({
+      success: true,
+      data: {
+        stockAlerts: criticalStock,
+        expiryAlerts: criticalExpiry,
+        totalCritical: criticalStock.length + criticalExpiry.length,
+      },
+    });
   }
 
   async getEscalated(request, reply) {
@@ -103,8 +204,16 @@ class AlertFastifyController {
     since.setDate(since.getDate() - parseInt(days));
 
     const alerts = await prisma.stockAlert.findMany({
-      where: { tenantId, branchId: branchId || undefined, alertStatus: 'ESCALATED', escalatedAt: { gte: since } },
-      include: { medicine: { select: { name: true, prescriptionRequired: true } }, branch: { select: { name: true, code: true } } },
+      where: {
+        tenantId,
+        branchId: branchId || undefined,
+        alertStatus: 'ESCALATED',
+        escalatedAt: { gte: since },
+      },
+      include: {
+        medicine: { select: { name: true, prescriptionRequired: true } },
+        branch: { select: { name: true, code: true } },
+      },
       orderBy: { escalationCount: 'desc' },
     });
 
@@ -112,22 +221,42 @@ class AlertFastifyController {
   }
 
   async snooze(request, reply) {
-    const data = await alertWorkflowService.snoozeAlert(request.params.alertId, request.tenantId, request.user.id, request.body);
+    const data = await alertWorkflowService.snoozeAlert(
+      request.params.alertId,
+      request.tenantId,
+      request.user.id,
+      request.body,
+    );
     return reply.send({ success: true, data });
   }
 
   async markOnOrder(request, reply) {
-    const data = await alertWorkflowService.acknowledgeAlert(request.params.alertId, request.tenantId, request.user.id, request.body);
+    const data = await alertWorkflowService.acknowledgeAlert(
+      request.params.alertId,
+      request.tenantId,
+      request.user.id,
+      request.body,
+    );
     return reply.send({ success: true, data });
   }
 
   async raisePurchaseOrder(request, reply) {
-    const data = await alertWorkflowService.raisePurchaseOrder(request.params.alertId, request.tenantId, request.user.id, request.body);
+    const data = await alertWorkflowService.raisePurchaseOrder(
+      request.params.alertId,
+      request.tenantId,
+      request.user.id,
+      request.body,
+    );
     return reply.send({ success: true, data });
   }
 
   async resolve(request, reply) {
-    const data = await alertWorkflowService.resolveAlert(request.params.alertId, request.tenantId, request.user.id, request.body);
+    const data = await alertWorkflowService.resolveAlert(
+      request.params.alertId,
+      request.tenantId,
+      request.user.id,
+      request.body,
+    );
     return reply.send({ success: true, data });
   }
 

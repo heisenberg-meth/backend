@@ -15,7 +15,7 @@ class AlertWorkflowService {
       tenantId,
       medicineId,
       branchId,
-      type
+      type,
     );
 
     if (isDuplicate) {
@@ -109,7 +109,7 @@ class AlertWorkflowService {
     return updated;
   }
 
-  async acknowledgeAlert(alertId, tenantId, userId, {  purchaseOrderId } = {}) {
+  async acknowledgeAlert(alertId, tenantId, userId, { purchaseOrderId } = {}) {
     const alert = await prisma.stockAlert.findFirst({
       where: { id: alertId, tenantId },
     });
@@ -155,7 +155,7 @@ class AlertWorkflowService {
       tenantId,
       alert.medicineId,
       alert.branchId,
-      alert.type
+      alert.type,
     );
 
     await alertDeduplicationService.clearEscalation(alertId, tenantId);
@@ -200,7 +200,7 @@ class AlertWorkflowService {
     const adu = await alertSeverityEngine._getAverageDailyUsage(
       alert.medicineId,
       tenantId,
-      alert.branchId
+      alert.branchId,
     );
     const safetyStock = Math.ceil(adu * leadTime * 0.5);
     const suggestedQty = quantity || Math.ceil(adu * leadTime + safetyStock);

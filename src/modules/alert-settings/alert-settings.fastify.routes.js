@@ -5,7 +5,6 @@ import { requirePermission } from '../../middleware/permission.fastify.js';
 async function alertSettingsRoutes(fastify) {
   fastify.addHook('preHandler', authenticate);
   fastify.addHook('preHandler', requireTenant);
-
   fastify.get(
     '/alerts',
     {
