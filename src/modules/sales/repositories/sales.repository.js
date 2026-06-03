@@ -1,8 +1,27 @@
-import prisma from "../../../config/prisma.js";
+import prisma from '../../../config/prisma.js';
 
 class SalesRepository {
   async createSale(data, tx) {
     const client = tx || prisma;
+    console.log(
+      '[SALE CREATE PAYLOAD]',
+      JSON.stringify(
+        data.items.map((i) => ({
+          medicineId: i.medicineId,
+          batchId: i.batchId,
+          quantity: i.quantity,
+          unitPrice: i.unitPrice,
+          discountAmount: i.discountAmount,
+          gstAmount: i.gstAmount,
+          cgst: i.cgst,
+          sgst: i.sgst,
+          igst: i.igst,
+          totalAmount: i.totalAmount,
+        })),
+        null,
+        2,
+      ),
+    );
     return client.sale.create({
       data: {
         tenantId: data.tenantId,
@@ -26,9 +45,6 @@ class SalesRepository {
             unitPrice: item.unitPrice,
             discountAmount: item.discountAmount,
             gstAmount: item.gstAmount,
-            cgst: item.cgst || 0,
-            sgst: item.sgst || 0,
-            igst: item.igst || 0,
             totalAmount: item.totalAmount,
           })),
         },
@@ -53,13 +69,13 @@ class SalesRepository {
         items: {
           include: {
             medicine: true,
-            batch: true
-          }
+            batch: true,
+          },
         },
         invoice: true,
         patient: true,
-        returns: true
-      }
+        returns: true,
+      },
     });
   }
 
@@ -68,17 +84,17 @@ class SalesRepository {
       where: { tenantId },
       include: {
         items: true,
-        patient: true
+        patient: true,
       },
       orderBy: { soldAt: 'desc' },
       skip,
-      take
+      take,
     });
   }
 
   async countAll(tenantId) {
     return prisma.sale.count({
-      where: { tenantId }
+      where: { tenantId },
     });
   }
 }
