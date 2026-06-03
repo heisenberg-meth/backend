@@ -1650,13 +1650,14 @@ model InvoiceItem {
   igst           Decimal        @default(0) @db.Decimal(12, 2)
   sgst           Decimal        @default(0) @db.Decimal(12, 2)
   batch          InventoryBatch @relation(fields: [batchId], references: [id])
-  invoice        Invoice        @relation(fields: [invoiceId], references: [id])
+  invoice        Invoice        @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
   medicine       Medicine       @relation(fields: [medicineId], references: [id])
   returnItems    ReturnItem[]
   returns        SalesReturn[]
 
   @@index([invoiceId])
   @@index([batchId])
+  @@index([medicineId])
 }
 
 model InvoicePayment {
@@ -1667,7 +1668,7 @@ model InvoicePayment {
   transactionReference String?              @db.VarChar(255)
   paymentStatus        InvoicePaymentStatus @default(PAID)
   createdAt            DateTime             @default(now())
-  invoice              Invoice              @relation(fields: [invoiceId], references: [id])
+  invoice              Invoice              @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
 
   @@index([invoiceId])
 }
@@ -1679,7 +1680,7 @@ model InvoiceAuditLog {
   performedBy String
   notes       String?
   createdAt   DateTime @default(now())
-  invoice     Invoice  @relation(fields: [invoiceId], references: [id])
+  invoice     Invoice  @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
   user        User     @relation(fields: [performedBy], references: [id])
 
   @@index([invoiceId])
@@ -1698,7 +1699,7 @@ model InvoicePrintJob {
   createdBy       String?
   createdAt       DateTime       @default(now())
   updatedAt       DateTime       @updatedAt
-  invoice         Invoice        @relation(fields: [invoiceId], references: [id])
+  invoice         Invoice        @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
   tenant          Tenant         @relation(fields: [tenantId], references: [id])
 
   @@index([invoiceId])
@@ -1721,7 +1722,7 @@ model InvoiceDeliveryLog {
   expiresAt         DateTime?
   createdAt         DateTime  @default(now())
   updatedAt         DateTime  @updatedAt
-  invoice           Invoice   @relation(fields: [invoiceId], references: [id])
+  invoice           Invoice   @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
   tenant            Tenant    @relation(fields: [tenantId], references: [id])
 
   @@index([invoiceId])

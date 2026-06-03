@@ -28,16 +28,10 @@ class BillingService {
     return invoice;
   }
 
-  /**
-   * Record a payment
-   */
   async recordPayment(id, tenantId, userId, paymentData) {
     return await invoiceService.recordPayment(id, tenantId, userId, paymentData);
   }
 
-  /**
-   * Process a full checkout (Shortcut: Draft + Finalize + Payment)
-   */
   async checkout(tenantId, data, userId) {
     return await prisma.$transaction(async (tx) => {
       const draft = await invoiceService.createDraft(tenantId, userId, data, tx);
@@ -66,21 +60,24 @@ class BillingService {
           invoiceId: completeInvoice.id,
           branchId: data.branchId,
           patientId: completeInvoice.patient?.id || null,
-          totalItems: completeInvoice.items.reduce((sum, item) => sum + item.qty, 0),
+          totalItems: completeInvoice.items.reduce(
+            (sum, item) => sum + (item.qty || item.quantity || 0),
+            0,
+          ),
           subtotal: completeInvoice.subtotal,
-          discountAmount: completeInvoice.discount,
-          gstAmount: completeInvoice.gst,
-          totalAmount: completeInvoice.total,
-          paymentMethod: completeInvoice.paymentMethod,
+          discountAmount: completeInvoice.discount || completeInvoice.discountAmount || 0,
+          gstAmount: completeInvoice.gst || completeInvoice.gstAmount || 0,
+          totalAmount: completeInvoice.total || completeInvoice.totalAmount || 0,
+          paymentMethod: data.paymentMode || completeInvoice.paymentMethod || 'CASH',
           userId,
           items: completeInvoice.items.map((item) => ({
             medicineId: item.medicineId,
             batchId: item.batchId,
-            quantity: item.qty,
-            unitPrice: item.price,
+            quantity: item.qty || item.quantity || 0,
+            unitPrice: item.price || item.unitPrice || 0,
             discountAmount: 0,
             gstAmount: item.gstAmount || 0,
-            totalAmount: item.total,
+            totalAmount: item.total || item.totalAmount || 0,
           })),
         },
         tx,

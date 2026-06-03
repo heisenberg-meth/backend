@@ -1,6 +1,7 @@
 import crypto from 'crypto';
 import CryptoJS from 'crypto-js';
 import prisma from '../../../config/prisma.js';
+import { invalidateSessionCache } from './auth.cache.js';
 
 class SessionService {
   hashToken(raw) {
@@ -38,39 +39,55 @@ class SessionService {
   }
 
   async revokeOtherSessions(userId, currentSessionId) {
-    await prisma.userSession.updateMany({
+    const sessions = await prisma.userSession.findMany({
       where: {
         userId,
         id: { not: currentSessionId },
         revoked: false,
       },
+      select: { id: true },
+    });
+
+    await prisma.userSession.updateMany({
+      where: { id: { in: sessions.map((s) => s.id) } },
       data: { revoked: true },
     });
+
+    sessions.forEach((s) => invalidateSessionCache(s.id));
   }
 
   async revokeSession(sessionId) {
-    return prisma.userSession.update({
+    const result = await prisma.userSession.update({
       where: { id: sessionId },
       data: { revoked: true },
     });
+    invalidateSessionCache(sessionId);
+    return result;
   }
 
   async revokeAllUserSessions(userId) {
-    await prisma.userSession.updateMany({
+    const sessions = await prisma.userSession.findMany({
       where: { userId, revoked: false },
+      select: { id: true },
+    });
+
+    await prisma.userSession.updateMany({
+      where: { id: { in: sessions.map((s) => s.id) } },
       data: { revoked: true },
     });
+
+    sessions.forEach((s) => invalidateSessionCache(s.id));
   }
 
   async findSessionByRefreshToken(refreshToken) {
-  const hash = this.hashToken(refreshToken);
+    const hash = this.hashToken(refreshToken);
 
-  const session = await prisma.userSession.findUnique({
-    where: { refreshToken: hash },
-  });
+    const session = await prisma.userSession.findUnique({
+      where: { refreshToken: hash },
+    });
 
-  return session;
-}
+    return session;
+  }
 
   async findActiveSessionByUser(userId) {
     return prisma.userSession.findFirst({

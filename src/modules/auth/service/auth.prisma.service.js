@@ -112,9 +112,16 @@ class AuthPrismaService {
       throw new Error('Invalid credentials');
     }
 
-    const isBcrypt = user.password && (user.password.startsWith('$2a$') || user.password.startsWith('$2b$') || user.password.startsWith('$2y$'));
+    const isBcrypt =
+      user.password &&
+      (user.password.startsWith('$2a$') ||
+        user.password.startsWith('$2b$') ||
+        user.password.startsWith('$2y$'));
     if (!isBcrypt) {
-      logger.error({ email: normalizedEmail }, 'Login failed: Password is not bcrypt-hashed. Run the password migration utility.');
+      logger.error(
+        { email: normalizedEmail },
+        'Login failed: Password is not bcrypt-hashed. Run the password migration utility.',
+      );
       throw new Error('Invalid credentials');
     }
 
@@ -127,7 +134,12 @@ class AuthPrismaService {
 
     const subscription = user.tenant?.subscription;
 
-    if (subscription && subscription.status === 'TRIAL' && subscription.endDate && new Date() > subscription.endDate) {
+    if (
+      subscription &&
+      subscription.status === 'TRIAL' &&
+      subscription.endDate &&
+      new Date() > subscription.endDate
+    ) {
       await prisma.subscription.update({
         where: { id: subscription.id },
         data: { status: 'EXPIRED' },
@@ -194,7 +206,12 @@ class AuthPrismaService {
     const accessToken = this._signAccessToken(user, session.id);
     const subscription = user.tenant?.subscription;
 
-    if (subscription && subscription.status === 'TRIAL' && subscription.endDate && new Date() > subscription.endDate) {
+    if (
+      subscription &&
+      subscription.status === 'TRIAL' &&
+      subscription.endDate &&
+      new Date() > subscription.endDate
+    ) {
       await prisma.subscription.update({
         where: { id: subscription.id },
         data: { status: 'EXPIRED' },
@@ -263,6 +280,9 @@ class AuthPrismaService {
       });
     }
 
+    const { invalidateUserCache } = await import('./auth.cache.js');
+    invalidateUserCache(userId);
+
     return { message: 'Profile updated successfully' };
   }
 
@@ -306,43 +326,53 @@ class AuthPrismaService {
         subscriptionStatus: subscription?.status || 'PENDING',
         currentPeriodEnd: subscription?.endDate,
       },
-      tenant: tenant ? {
-        id: tenant.id,
-        name: tenant.name,
-        status: tenant.status,
-        gstNumber: tenant.gstNumber,
-      } : null,
-      subscription: subscription ? (() => {
-        const endDate = subscription.endDate;
-        const daysRemaining = endDate
-          ? Math.max(0, Math.ceil((new Date(endDate) - new Date()) / (1000 * 60 * 60 * 24)))
-          : 0;
-        return {
-          planId: plan?.id || null,
-          planName: plan?.name || 'Unknown',
-          price: plan?.price ?? 0,
-          status: subscription.status,
-          isTrial: subscription.status === 'TRIAL',
-          isExpired: subscription.status === 'EXPIRED',
-          expiresAt: endDate,
-          daysRemaining,
-        };
-      })() : {
-        planId: null,
-        planName: 'No Plan',
-        price: 0,
-        status: 'PENDING',
-        isTrial: false,
-        isExpired: false,
-        expiresAt: null,
-        daysRemaining: 0,
-      },
+      tenant: tenant
+        ? {
+            id: tenant.id,
+            name: tenant.name,
+            status: tenant.status,
+            gstNumber: tenant.gstNumber,
+          }
+        : null,
+      subscription: subscription
+        ? (() => {
+            const endDate = subscription.endDate;
+            const daysRemaining = endDate
+              ? Math.max(0, Math.ceil((new Date(endDate) - new Date()) / (1000 * 60 * 60 * 24)))
+              : 0;
+            return {
+              planId: plan?.id || null,
+              planName: plan?.name || 'Unknown',
+              price: plan?.price ?? 0,
+              status: subscription.status,
+              isTrial: subscription.status === 'TRIAL',
+              isExpired: subscription.status === 'EXPIRED',
+              expiresAt: endDate,
+              daysRemaining,
+            };
+          })()
+        : {
+            planId: null,
+            planName: 'No Plan',
+            price: 0,
+            status: 'PENDING',
+            isTrial: false,
+            isExpired: false,
+            expiresAt: null,
+            daysRemaining: 0,
+          },
     };
   }
 
   _signAccessToken(user, sessionId) {
     return jwt.sign(
-      { userId: user.id, tenantId: user.tenantId, role: user.role, branchId: user.branchId, sessionId },
+      {
+        userId: user.id,
+        tenantId: user.tenantId,
+        role: user.role,
+        branchId: user.branchId,
+        sessionId,
+      },
       secretManager.getPrimarySecret(),
       { expiresIn: '15m', algorithm: 'HS256' },
     );

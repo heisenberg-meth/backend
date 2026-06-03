@@ -1,9 +1,11 @@
 import prisma from '../config/prisma.js';
 import logger from '../shared/utils/logger.js';
+import { sessionCache, userCache } from '../modules/auth/service/auth.cache.js';
 
-const sessionCache = new Map();
 const SESSION_CACHE_TTL_MS = 30_000;
+const USER_CACHE_TTL_MS = 60_000; // 1 minute TTL for user cache
 const SESSION_CACHE_MAX = 500;
+const USER_CACHE_MAX = 500;
 
 async function verifySession(sessionId) {
   const session = await prisma.userSession.findUnique({
@@ -14,6 +16,11 @@ async function verifySession(sessionId) {
 }
 
 async function fetchAndCacheUser(userId) {
+  const cached = userCache.get(userId);
+  if (cached && cached.expiresAt > Date.now()) {
+    return cached.user;
+  }
+
   const user = await prisma.user.findUnique({
     where: { id: userId },
     include: {
@@ -25,6 +32,15 @@ async function fetchAndCacheUser(userId) {
       },
     },
   });
+
+  if (user) {
+    if (userCache.size >= USER_CACHE_MAX) {
+      const oldest = userCache.keys().next().value;
+      userCache.delete(oldest);
+    }
+    userCache.set(userId, { user, expiresAt: Date.now() + USER_CACHE_TTL_MS });
+  }
+
   return user;
 }
 

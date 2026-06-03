@@ -5,6 +5,20 @@ import { emitEvent } from '../../../shared/events/erp-event-bus.js';
 import movementService from '../../stock/service/movement.service.js';
 
 class RefundEngine {
+  _findInvoiceItem(invoiceItems, refundItem) {
+    if (refundItem.invoiceItemId) {
+      return invoiceItems.find((i) => i.id === refundItem.invoiceItemId);
+    }
+    if (refundItem.medicineId) {
+      return invoiceItems.find(
+        (i) =>
+          i.medicineId === refundItem.medicineId &&
+          (!refundItem.batchId || i.batchId === refundItem.batchId),
+      );
+    }
+    return null;
+  }
+
   async processRefund(tenantId, userId, data) {
     const { invoiceId, reason, items = [], refundAmount } = data;
 
@@ -16,13 +30,33 @@ class RefundEngine {
 
       if (!invoice || invoice.tenantId !== tenantId) throw new Error('Invoice not found');
       if (invoice.status === 'CANCELLED') throw new Error('Cannot refund a cancelled invoice');
+      if (invoice.status === 'REFUNDED') throw new Error('Invoice has already been fully refunded');
+
+      const previousRefunds = await tx.salesReturn.aggregate({
+        where: { invoiceId: invoice.id, status: 'COMPLETED' },
+        _sum: { refundAmount: true },
+      });
+      const previouslyRefunded = Number(previousRefunds._sum.refundAmount || 0);
+
+      let resolvedSaleId = invoice.saleId;
+      if (!resolvedSaleId) {
+        const sale = await tx.sale.findFirst({
+          where: { invoiceId: invoice.id },
+          select: { id: true },
+        });
+        resolvedSaleId = sale?.id;
+      }
+      if (!resolvedSaleId) {
+        throw new Error('No associated sale record found for this invoice. Cannot process refund.');
+      }
 
       const refundedItems = [];
       let totalCalculatedRefund = 0;
 
       for (const item of items) {
-        const invoiceItem = invoice.items.find((i) => i.id === item.invoiceItemId);
-        if (!invoiceItem) throw new Error(`Invoice item ${item.invoiceItemId} not found`);
+        const invoiceItem = this._findInvoiceItem(invoice.items, item);
+        const itemIdentifier = item.invoiceItemId || item.medicineId || 'unknown';
+        if (!invoiceItem) throw new Error(`Invoice item ${itemIdentifier} not found`);
 
         if (item.quantity > invoiceItem.quantity) {
           throw new Error(
@@ -35,7 +69,7 @@ class RefundEngine {
         totalCalculatedRefund += itemRefundAmount;
 
         if (invoiceItem.batchId) {
-          const idempotencyKey = `refund-${invoiceId}-item-${item.invoiceItemId}`;
+          const idempotencyKey = `refund-${invoiceId}-item-${invoiceItem.id}`;
           await movementService.recordMovement(
             tenantId,
             {
@@ -55,7 +89,7 @@ class RefundEngine {
         }
 
         refundedItems.push({
-          invoiceItemId: item.invoiceItemId,
+          invoiceItemId: invoiceItem.id,
           quantity: item.quantity,
           amount: itemRefundAmount,
         });
@@ -63,12 +97,15 @@ class RefundEngine {
 
       const actualRefundAmount = refundAmount || totalCalculatedRefund;
 
+      const firstMatchedItem = this._findInvoiceItem(invoice.items, items[0]);
+      const returnBatchId = firstMatchedItem?.batchId || invoice.items[0]?.batchId;
+
       const salesReturn = await tx.salesReturn.create({
         data: {
           tenantId,
           invoiceId: invoice.id,
-          saleId: invoice.saleId,
-          batchId: items[0]?.batchId || invoice.items[0]?.batchId,
+          saleId: resolvedSaleId,
+          batchId: returnBatchId,
           quantity: items.reduce((sum, i) => sum + i.quantity, 0),
           reason,
           refundAmount: actualRefundAmount,
@@ -77,8 +114,8 @@ class RefundEngine {
         },
       });
 
-      const isFullRefund =
-        actualRefundAmount >= Number(invoice.totalAmount) - (Number(invoice.refundedAmount) || 0);
+      const totalRefunded = previouslyRefunded + actualRefundAmount;
+      const isFullRefund = totalRefunded >= Number(invoice.totalAmount);
 
       await tx.invoice.update({
         where: { id: invoiceId },

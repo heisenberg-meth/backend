@@ -220,7 +220,7 @@ async function settingsRoutes(fastify) {
     {
       schema: { tags: ['Settings'], summary: 'Update inventory settings' },
     },
-    settingsController.updateSettings,
+    settingsController.updateCategorySettings,
   );
 
   fastify.get(
@@ -236,7 +236,7 @@ async function settingsRoutes(fastify) {
     {
       schema: { tags: ['Settings'], summary: 'Update billing settings' },
     },
-    settingsController.updateSettings,
+    settingsController.updateCategorySettings,
   );
 
   fastify.get(
@@ -252,7 +252,23 @@ async function settingsRoutes(fastify) {
     {
       schema: { tags: ['Settings'], summary: 'Update tax settings' },
     },
-    settingsController.updateSettings,
+    settingsController.updateCategorySettings,
+  );
+
+  fastify.get(
+    '/notifications',
+    {
+      schema: { tags: ['Settings'], summary: 'Get notifications settings' },
+    },
+    settingsController.getSettings,
+  );
+
+  fastify.put(
+    '/notifications',
+    {
+      schema: { tags: ['Settings'], summary: 'Update notifications settings' },
+    },
+    settingsController.updateCategorySettings,
   );
 
   fastify.get(
@@ -268,7 +284,7 @@ async function settingsRoutes(fastify) {
     {
       schema: { tags: ['Settings'], summary: 'Update loyalty settings' },
     },
-    settingsController.updateSettings,
+    settingsController.updateCategorySettings,
   );
 
   fastify.get(
@@ -284,7 +300,7 @@ async function settingsRoutes(fastify) {
     {
       schema: { tags: ['Settings'], summary: 'Update security settings' },
     },
-    settingsController.updateSettings,
+    settingsController.updateCategorySettings,
   );
 
   fastify.get(
@@ -300,7 +316,7 @@ async function settingsRoutes(fastify) {
     {
       schema: { tags: ['Settings'], summary: 'Update store profile' },
     },
-    settingsController.updateSettings,
+    settingsController.updateCategorySettings,
   );
 
   fastify.get(

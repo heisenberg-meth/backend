@@ -97,6 +97,36 @@ class InvoiceEngine {
         const gstPercentage = this._safeNumber(item.gstPercentage);
         const itemSubtotal = unitPrice * quantity;
 
+        let resolvedBatchId = item.batchId;
+
+        if (!resolvedBatchId) {
+          const availableBatch = await t.inventoryBatch.findFirst({
+            where: {
+              tenantId,
+              branchId: branchId, // Use the invoice branchId
+              medicineId: item.medicineId,
+              availableQuantity: { gt: 0 },
+              deletedAt: null,
+              expiryDate: { gt: new Date() },
+              status: 'ACTIVE',
+            },
+            orderBy: { expiryDate: 'asc' },
+          });
+
+          if (!availableBatch) {
+            throw new Error(
+              `Cannot create draft: No available active batches found for medicine ${item.medicineId}`,
+            );
+          }
+          resolvedBatchId = availableBatch.id;
+        } else {
+          // Optionally check if the provided batch exists
+          const batchCount = await t.inventoryBatch.count({ where: { id: resolvedBatchId } });
+          if (batchCount === 0) {
+            throw new Error(`Cannot create draft: Batch ${resolvedBatchId} does not exist`);
+          }
+        }
+
         const gstResult = gstService.calculateGst(
           itemSubtotal,
           gstPercentage,
@@ -108,7 +138,7 @@ class InvoiceEngine {
           data: {
             invoiceId: invoice.id,
             medicineId: item.medicineId,
-            batchId: item.batchId || '',
+            batchId: resolvedBatchId,
             quantity,
             unitPrice,
             gstPercentage,
@@ -135,8 +165,15 @@ class InvoiceEngine {
 
       if (!invoice) throw new Error('Draft invoice not found or already finalized');
 
+      const batchIds = invoice.items.map((i) => i.batchId).filter(Boolean);
+      let batchMap = new Map();
+      if (batchIds.length > 0) {
+        const batches = await t.inventoryBatch.findMany({ where: { id: { in: batchIds } } });
+        batchMap = new Map(batches.map((b) => [b.id, b]));
+      }
+
       for (const item of invoice.items) {
-        await this._processItemDeduction(tenantId, invoice, item, userId, t);
+        await this._processItemDeduction(tenantId, invoice, item, userId, t, batchMap);
       }
 
       const snapshot = await t.invoice.findUnique({
@@ -340,11 +377,13 @@ class InvoiceEngine {
     };
   }
 
-  async _processItemDeduction(tenantId, invoice, item, userId, tx) {
+  async _processItemDeduction(tenantId, invoice, item, userId, tx, batchMap = new Map()) {
     let batchesToUse = [];
 
     if (item.batchId) {
-      const batch = await tx.inventoryBatch.findUnique({ where: { id: item.batchId } });
+      const batch =
+        batchMap.get(item.batchId) ||
+        (await tx.inventoryBatch.findUnique({ where: { id: item.batchId } }));
       if (!batch || batch.availableQuantity < item.quantity) {
         throw new Error(`Insufficient stock in batch ${batch?.batchNumber || 'unknown'}`);
       }

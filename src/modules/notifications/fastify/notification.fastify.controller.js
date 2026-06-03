@@ -626,7 +626,7 @@ class NotificationFastifyController {
 
       return reply.send({
         success: true,
-        data: history
+        data: { notifications: history }
       });
     } catch (error) {
       logger.error({ error, tenantId: request.user?.tenantId }, 'Failed to fetch notification ops history');

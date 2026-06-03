@@ -1,4 +1,4 @@
-import prisma from "../../../config/prisma.js";
+import prisma from '../../../config/prisma.js';
 import sequenceService from '../../../shared/services/sequence.service.js';
 
 class InvoiceRepository {
@@ -10,17 +10,17 @@ class InvoiceRepository {
         items: {
           include: {
             medicine: { select: { name: true, genericName: true, sku: true } },
-            batch: { select: { batchNumber: true, expiryDate: true } }
-          }
+            batch: { select: { batchNumber: true, expiryDate: true } },
+          },
         },
         payments: true,
         auditLogs: {
           include: { user: { select: { fullName: true } } },
-          orderBy: { createdAt: 'desc' }
+          orderBy: { createdAt: 'desc' },
         },
         patient: { select: { fullName: true, phone: true } },
-        cashier: { select: { fullName: true, email: true } }
-      }
+        cashier: { select: { fullName: true, email: true } },
+      },
     });
   }
 
@@ -39,14 +39,33 @@ class InvoiceRepository {
     });
   }
 
-  async findAll(tenantId, { skip = 0, take = 20, branchId, patientId, status } = {}) {
+  async findAll(
+    tenantId,
+    { skip = 0, take = 20, branchId, patientId, status, fromDate, toDate } = {},
+  ) {
     const where = {
       tenantId,
       deletedAt: null,
       ...(branchId && { branchId }),
       ...(patientId && { patientId }),
-      ...(status && { status })
+      ...(status && { status }),
     };
+
+    // BUG 12 FIX: Add date range filtering for "Today's Bills" and date-scoped queries
+    if (fromDate || toDate) {
+      where.createdAt = {};
+      if (fromDate) {
+        where.createdAt.gte = new Date(fromDate);
+      }
+      if (toDate) {
+        // Set to end of day if only date string provided
+        const endDate = new Date(toDate);
+        if (toDate.length <= 10) {
+          endDate.setHours(23, 59, 59, 999);
+        }
+        where.createdAt.lte = endDate;
+      }
+    }
 
     const [invoices, total] = await Promise.all([
       prisma.invoice.findMany({
@@ -55,13 +74,20 @@ class InvoiceRepository {
           patient: { select: { fullName: true, phone: true } },
           cashier: { select: { fullName: true } },
           payments: { select: { paymentMode: true, amount: true } },
-          _count: { select: { items: true } }
+          // BUG 13 FIX: Include items for accurate display in bill cards
+          items: {
+            include: {
+              medicine: { select: { name: true } },
+              batch: { select: { batchNumber: true } },
+            },
+          },
+          _count: { select: { items: true } },
         },
         orderBy: { createdAt: 'desc' },
         skip,
-        take
+        take,
       }),
-      prisma.invoice.count({ where })
+      prisma.invoice.count({ where }),
     ]);
 
     return { invoices, total };
@@ -74,7 +100,7 @@ class InvoiceRepository {
   async update(id, tenantId, data) {
     return prisma.invoice.update({
       where: { id, tenantId },
-      data
+      data,
     });
   }
 }

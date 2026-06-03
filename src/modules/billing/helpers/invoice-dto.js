@@ -1,7 +1,7 @@
 export function normalizeInvoice(invoice) {
   if (!invoice) return null;
 
-  const items = (invoice.items || []).map(item => ({
+  const items = (invoice.items || []).map((item) => ({
     id: item.id || item.medicineId,
     medicineId: item.medicineId,
     name: item.medicine?.name || item.medicineName || 'Unknown',
@@ -12,14 +12,16 @@ export function normalizeInvoice(invoice) {
     gstAmount: Number(item.gstAmount || 0),
     total: Number(item.totalPrice || item.totalAmount || 0),
     batchId: item.batchId,
-    batchNumber: item.batch?.batchNumber || 'N/A'
+    batchNumber: item.batch?.batchNumber || 'N/A',
   }));
 
-  const patient = invoice.patient ? {
-    id: invoice.patient.id,
-    name: invoice.patient.fullName || invoice.patient.name,
-    phone: invoice.patient.phone
-  } : null;
+  const patient = invoice.patient
+    ? {
+        id: invoice.patient.id,
+        name: invoice.patient.fullName || invoice.patient.name,
+        phone: invoice.patient.phone,
+      }
+    : null;
 
   return {
     id: invoice.id,
@@ -27,10 +29,11 @@ export function normalizeInvoice(invoice) {
     date: invoice.createdAt || invoice.soldAt || new Date().toISOString(),
     status: invoice.status,
     paymentStatus: invoice.paymentStatus,
-    paymentMethod: invoice.paymentMethod || (invoice.payments && invoice.payments[0]?.paymentMode) || 'CASH',
+    paymentMethod:
+      invoice.paymentMethod || (invoice.payments && invoice.payments[0]?.paymentMode) || 'CASH',
     patient,
-    patientName: patient?.name || 'Walk-in Customer',
-    patientPhone: patient?.phone || 'N/A',
+    patientName: patient?.name || invoice.patientName || 'Walk-in Customer',
+    patientPhone: patient?.phone || invoice.patientPhone || 'N/A',
     items,
     subtotal: Number(invoice.subtotal || 0),
     discount: Number(invoice.discountAmount || 0),
@@ -39,6 +42,6 @@ export function normalizeInvoice(invoice) {
     paidAmount: Number(invoice.paidAmount || 0),
     balanceAmount: Number(invoice.balanceAmount || 0),
     notes: invoice.notes,
-    pdfUrl: invoice.pdfUrl
+    pdfUrl: invoice.pdfUrl,
   };
 }

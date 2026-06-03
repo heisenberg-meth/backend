@@ -13,6 +13,19 @@ class SettingsFastifyController {
     return reply.send(settings);
   }
 
+  async updateCategorySettings(request, reply) {
+    // The category is extracted from the URL path (e.g. /api/settings/inventory -> inventory)
+    const category = request.url.split('?')[0].split('/').pop();
+    const settings = await settingsService.updateCategorySettings(
+      request.tenantId,
+      category,
+      request.body,
+      request.user?.id || request.tenantId,
+      request.ip,
+    );
+    return reply.send(settings);
+  }
+
   // ── Invoice Template ────────────────────────────────────────
 
   async getInvoiceTemplate(request, reply) {
@@ -22,7 +35,11 @@ class SettingsFastifyController {
 
   async updateInvoiceTemplate(request, reply) {
     const data = request.body.data || request.body;
-    const result = await invoiceTemplateService.updateTemplate(request.tenantId, data, request.user?.id || request.tenantId);
+    const result = await invoiceTemplateService.updateTemplate(
+      request.tenantId,
+      data,
+      request.user?.id || request.tenantId,
+    );
     return reply.send({ success: true, data: result });
   }
 
@@ -46,7 +63,11 @@ class SettingsFastifyController {
     if (!versionId) {
       return reply.code(400).send({ success: false, message: 'Version ID required' });
     }
-    const result = await invoiceTemplateService.restoreVersion(request.tenantId, versionId, request.user?.id || request.tenantId);
+    const result = await invoiceTemplateService.restoreVersion(
+      request.tenantId,
+      versionId,
+      request.user?.id || request.tenantId,
+    );
     return reply.send(result);
   }
 
@@ -70,7 +91,7 @@ class SettingsFastifyController {
       request.tenantId,
       data,
       request.tenantId,
-      request.ip
+      request.ip,
     );
     return reply.send({ success: true, data: updated });
   }
@@ -78,11 +99,7 @@ class SettingsFastifyController {
   async getGstVersionHistory(request, reply) {
     const { category } = request.params;
     const branchId = request.query.branchId || null;
-    const history = await gstService.getGstVersionHistory(
-      request.tenantId,
-      category,
-      branchId
-    );
+    const history = await gstService.getGstVersionHistory(request.tenantId, category, branchId);
     return reply.send({ success: true, data: history });
   }
 }
