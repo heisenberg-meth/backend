@@ -14,9 +14,7 @@ class SecretManager {
     return this.jwtSecrets;
   }
 
-  async refreshSecrets() {
-    console.log('[SECURITY] Refreshing system secrets...');
-  }
+  async refreshSecrets() {}
 }
 
 export default new SecretManager();

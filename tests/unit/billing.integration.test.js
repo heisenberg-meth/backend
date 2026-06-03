@@ -1,4 +1,4 @@
-import { jest , describe, afterEach, it, expect } from '@jest/globals';
+import { jest, describe, afterEach, it, expect } from '@jest/globals';
 
 const mockPrisma = {
   $transaction: jest.fn(async (callback) => {
@@ -22,16 +22,20 @@ const mockPrisma = {
       isActive: true,
       prescriptionRequired: false,
     }),
+    findUnique: jest.fn().mockResolvedValue({
+      id: 'med-1',
+      name: 'Test Medicine',
+      isActive: true,
+      prescriptionRequired: false,
+    }),
   },
   invoice: {
-    create: jest
-      .fn()
-      .mockResolvedValue({
-        id: 'inv-1',
-        invoiceNumber: 'INV-2026-000001',
-        totalAmount: 560,
-        paidAmount: 0,
-      }),
+    create: jest.fn().mockResolvedValue({
+      id: 'inv-1',
+      invoiceNumber: 'INV-2026-000001',
+      totalAmount: 560,
+      paidAmount: 0,
+    }),
     count: jest.fn().mockResolvedValue(0),
     findFirst: jest.fn().mockResolvedValue({
       id: 'inv-1',
@@ -66,19 +70,18 @@ const mockPrisma = {
     }),
   },
   inventoryBatch: {
-    findUnique: jest
-      .fn()
-      .mockResolvedValue({
-        id: 'batch-1',
-        batchNumber: 'B1',
-        availableQuantity: 100,
-        status: 'ACTIVE',
-      }),
+    findUnique: jest.fn().mockResolvedValue({
+      id: 'batch-1',
+      batchNumber: 'B1',
+      availableQuantity: 100,
+      status: 'ACTIVE',
+    }),
     findMany: jest
       .fn()
       .mockResolvedValue([
         { id: 'batch-1', batchNumber: 'B1', availableQuantity: 100, status: 'ACTIVE' },
       ]),
+    count: jest.fn().mockResolvedValue(1),
   },
   invoiceItem: {
     create: jest.fn().mockResolvedValue({ id: 'item-1' }),
@@ -89,29 +92,45 @@ const mockPrisma = {
   invoiceAuditLog: {
     create: jest.fn().mockResolvedValue({ id: 'log-1' }),
   },
+  sale: {
+    create: jest.fn().mockResolvedValue({
+      id: 'sale-1',
+      tenantId: 'tenant-1',
+      invoiceId: 'inv-1',
+      totalAmount: 560,
+      status: 'COMPLETED',
+      items: [],
+    }),
+
+    aggregate: jest.fn().mockResolvedValue({
+      _avg: {
+        totalAmount: 500,
+      },
+    }),
+  },
 };
 
 jest.unstable_mockModule('../../src/config/prisma.js', () => ({
-  default: mockPrisma
+  default: mockPrisma,
 }));
 
 jest.unstable_mockModule('../../src/modules/loyalty/points/points.service.js', () => ({
   default: {
     earnPoints: jest.fn().mockResolvedValue({}),
-  }
+  },
 }));
 
 jest.unstable_mockModule('../../src/modules/loyalty/credits/credit.service.js', () => ({
   default: {
     issueCredit: jest.fn().mockResolvedValue({}),
-  }
+  },
 }));
 
 jest.unstable_mockModule('../../src/modules/stock/service/movement.service.js', () => ({
   default: {
     stockOut: jest.fn(),
     recordMovement: jest.fn().mockResolvedValue({}),
-  }
+  },
 }));
 
 jest.unstable_mockModule('../../src/shared/events/erp-event-bus.js', () => ({
@@ -152,7 +171,7 @@ jest.unstable_mockModule('../../src/shared/constants/events.js', () => ({
     PARTIALLY_PAID: 'PARTIALLY_PAID',
     VOIDED: 'VOIDED',
     REFUNDED: 'REFUNDED',
-  }
+  },
 }));
 
 jest.unstable_mockModule('../../src/config/redis.js', () => ({
@@ -176,7 +195,8 @@ jest.unstable_mockModule('../../src/shared/utils/logger.js', () => ({
   default: { info: jest.fn(), warn: jest.fn(), error: jest.fn() },
 }));
 
-const { default: billingService } = await import('../../src/modules/billing/services/billing.service.js');
+const { default: billingService } =
+  await import('../../src/modules/billing/services/billing.service.js');
 
 describe('BillingService Integration Tests (Checkout)', () => {
   const tenantId = 'tenant-1';
@@ -189,7 +209,14 @@ describe('BillingService Integration Tests (Checkout)', () => {
   it('should process a successful checkout with stock deduction and sale record', async () => {
     const data = {
       items: [
-        { medicineId: 'med-1', quantity: 5, batchId: 'batch-1', medicineName: 'Test Medicine', unitPrice: 100, gstPercentage: 12 }
+        {
+          medicineId: 'med-1',
+          quantity: 5,
+          batchId: 'batch-1',
+          medicineName: 'Test Medicine',
+          unitPrice: 100,
+          gstPercentage: 12,
+        },
       ],
       payments: [{ paymentMode: 'CASH', amount: 560 }],
       paymentMethod: 'CASH',
@@ -203,14 +230,49 @@ describe('BillingService Integration Tests (Checkout)', () => {
 
   it('should fail checkout if stock is insufficient', async () => {
     const data = {
-      items: [{ medicineId: 'med-1', quantity: 100, batchId: 'batch-1', medicineName: 'Test Medicine', unitPrice: 10, gstPercentage: 5 }],
+      items: [
+        {
+          medicineId: 'med-1',
+          quantity: 100,
+          batchId: 'batch-1',
+          medicineName: 'Test Medicine',
+          unitPrice: 10,
+          gstPercentage: 5,
+        },
+      ],
       payments: [{ paymentMode: 'CASH', amount: 1050 }],
       branchId: 'branch-1',
     };
 
-    mockPrisma.inventoryBatch.findUnique.mockResolvedValue(null);
+    mockPrisma.inventoryBatch.findMany.mockResolvedValue([
+      {
+        id: 'batch-1',
+        batchNumber: 'B1',
+        availableQuantity: 10,
+        status: 'ACTIVE',
+      },
+    ]);
 
-    await expect(billingService.checkout(tenantId, data, userId))
-      .rejects.toThrow('Insufficient stock');
+    mockPrisma.invoice.findFirst.mockResolvedValue({
+      id: 'inv-1',
+      invoiceNumber: 'INV-2026-000001',
+      status: 'DRAFT',
+      branchId: 'branch-1',
+      totalAmount: 1050,
+      paidAmount: 0,
+      items: [
+        {
+          id: 'item-1',
+          medicineId: 'med-1',
+          quantity: 100,
+          batchId: 'batch-1',
+          totalPrice: 1000,
+        },
+      ],
+    });
+
+    await expect(billingService.checkout(tenantId, data, userId)).rejects.toThrow(
+      'Insufficient stock',
+    );
   });
 });

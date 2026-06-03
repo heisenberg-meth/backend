@@ -3,25 +3,6 @@ import prisma from '../../../config/prisma.js';
 class SalesRepository {
   async createSale(data, tx) {
     const client = tx || prisma;
-    console.log(
-      '[SALE CREATE PAYLOAD]',
-      JSON.stringify(
-        data.items.map((i) => ({
-          medicineId: i.medicineId,
-          batchId: i.batchId,
-          quantity: i.quantity,
-          unitPrice: i.unitPrice,
-          discountAmount: i.discountAmount,
-          gstAmount: i.gstAmount,
-          cgst: i.cgst,
-          sgst: i.sgst,
-          igst: i.igst,
-          totalAmount: i.totalAmount,
-        })),
-        null,
-        2,
-      ),
-    );
     return client.sale.create({
       data: {
         tenantId: data.tenantId,

@@ -256,22 +256,6 @@ async function settingsRoutes(fastify) {
   );
 
   fastify.get(
-    '/notifications',
-    {
-      schema: { tags: ['Settings'], summary: 'Get notifications settings' },
-    },
-    settingsController.getSettings,
-  );
-
-  fastify.put(
-    '/notifications',
-    {
-      schema: { tags: ['Settings'], summary: 'Update notifications settings' },
-    },
-    settingsController.updateCategorySettings,
-  );
-
-  fastify.get(
     '/loyalty',
     {
       schema: { tags: ['Settings'], summary: 'Get loyalty settings' },

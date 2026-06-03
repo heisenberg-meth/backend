@@ -53,7 +53,6 @@ class BillingService {
       }
 
       const completeInvoice = await invoiceService.getInvoice(finalized.id, tenantId, tx);
-      console.log('[CHECKOUT] Creating sale for invoice:', completeInvoice.id);
       await salesService.recordSale(
         tenantId,
         {
@@ -82,7 +81,6 @@ class BillingService {
         },
         tx,
       );
-      console.log('[CHECKOUT] Sale creation completed');
 
       return completeInvoice;
     });

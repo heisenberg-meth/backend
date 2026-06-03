@@ -3,6 +3,7 @@ import { getNodeAutoInstrumentations } from '@opentelemetry/auto-instrumentation
 import { OTLPTraceExporter } from '@opentelemetry/exporter-trace-otlp-http';
 import { resourceFromAttributes } from '@opentelemetry/resources';
 import { SemanticResourceAttributes } from '@opentelemetry/semantic-conventions';
+import { logger } from '../shared/utils/logger.js';
 
 const otelEndpoint = process.env.OTEL_EXPORTER_OTLP_TRACES_ENDPOINT;
 
@@ -23,9 +24,8 @@ if (sdk) {
   process.on('SIGTERM', async () => {
     try {
       await sdk.shutdown();
-      console.log('Tracing terminated');
     } catch (error) {
-      console.log('Error terminating tracing', error);
+      logger.error('Error terminating tracing', error);
     } finally {
       process.exit(0);
     }

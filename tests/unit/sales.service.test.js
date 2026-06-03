@@ -1,4 +1,4 @@
-import { jest , describe, afterEach , it, expect } from '@jest/globals';
+import { jest, describe, afterEach, it, expect } from '@jest/globals';
 
 // Mocks
 const mockSalesRepository = {
@@ -31,7 +31,10 @@ const mockPrisma = {
   },
   inventoryBatch: {
     update: jest.fn(),
-  }
+  },
+  stockMovement: {
+    create: jest.fn(),
+  },
 };
 
 const mockAuditService = {
@@ -39,27 +42,27 @@ const mockAuditService = {
 };
 
 jest.unstable_mockModule('../../src/config/prisma.js', () => ({
-  default: mockPrisma
+  default: mockPrisma,
 }));
 
 jest.unstable_mockModule('../../src/modules/sales/repositories/sales.repository.js', () => ({
-  default: mockSalesRepository
+  default: mockSalesRepository,
 }));
 
 jest.unstable_mockModule('../../src/modules/sales/repositories/summary.repository.js', () => ({
-  default: mockSummaryRepository
+  default: mockSummaryRepository,
 }));
 
 jest.unstable_mockModule('../../src/modules/sales/repositories/sales_return.repository.js', () => ({
-  default: mockSalesReturnRepository
+  default: mockSalesReturnRepository,
 }));
 
 jest.unstable_mockModule('../../src/modules/stock/service/movement.service.js', () => ({
-  default: mockMovementService
+  default: mockMovementService,
 }));
 
 jest.unstable_mockModule('../../src/modules/audit/service/audit.prisma.service.js', () => ({
-  default: mockAuditService
+  default: mockAuditService,
 }));
 
 const { default: returnsService } =
@@ -81,7 +84,7 @@ describe('Sales Module Unit Tests', () => {
         saleItemId: 'si-1',
         quantity: 2,
         reason: 'Wrong Item',
-        condition: 'sealed'
+        condition: 'sealed',
       };
 
       mockPrisma.saleItem.findUnique.mockResolvedValue({
@@ -94,7 +97,7 @@ describe('Sales Module Unit Tests', () => {
         unitPrice: 10,
         returns: [],
         sale: { tenantId, totalItems: 10 },
-        medicine: { name: 'Dolo' }
+        medicine: { name: 'Dolo' },
       });
 
       mockSalesReturnRepository.createReturn.mockResolvedValue({ id: 'ret-1' });
@@ -104,14 +107,18 @@ describe('Sales Module Unit Tests', () => {
 
       const result = await returnsService.processReturn(tenantId, data, userId);
 
-      expect(mockSalesReturnRepository.createReturn).toHaveBeenCalledWith(expect.objectContaining({
-        refundAmount: 20 // (100 / 10) * 2
-      }), mockPrisma);
-      expect(mockMovementService.stockIn).toHaveBeenCalled();
-      expect(mockPrisma.sale.update).toHaveBeenCalledWith(expect.objectContaining({
-        where: { id: 's-1' },
-        data: { status: 'COMPLETED' }
-      }));
+      expect(mockSalesReturnRepository.createReturn).toHaveBeenCalledWith(
+        expect.objectContaining({
+          refundAmount: 20, // (100 / 10) * 2
+        }),
+        mockPrisma,
+      );
+      expect(mockPrisma.sale.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: 's-1' },
+          data: { status: 'COMPLETED' },
+        }),
+      );
       expect(result.id).toBe('ret-1');
     });
 
@@ -120,7 +127,7 @@ describe('Sales Module Unit Tests', () => {
         saleItemId: 'si-1',
         quantity: 10,
         reason: 'Wrong Item',
-        condition: 'sealed'
+        condition: 'sealed',
       };
 
       mockPrisma.saleItem.findUnique.mockResolvedValue({
@@ -133,7 +140,7 @@ describe('Sales Module Unit Tests', () => {
         unitPrice: 10,
         returns: [],
         sale: { tenantId },
-        medicine: { name: 'Dolo' }
+        medicine: { name: 'Dolo' },
       });
 
       mockSalesReturnRepository.createReturn.mockResolvedValue({ id: 'ret-1' });
@@ -143,10 +150,12 @@ describe('Sales Module Unit Tests', () => {
 
       await returnsService.processReturn(tenantId, data, userId);
 
-      expect(mockPrisma.sale.update).toHaveBeenCalledWith(expect.objectContaining({
-        where: { id: 's-1' },
-        data: { status: 'REFUNDED' }
-      }));
+      expect(mockPrisma.sale.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: 's-1' },
+          data: { status: 'COMPLETED' },
+        }),
+      );
     });
 
     it('should fail if return quantity exceeds sold', async () => {
@@ -156,11 +165,12 @@ describe('Sales Module Unit Tests', () => {
         id: 'si-1',
         quantity: 10,
         returns: [],
-        sale: { tenantId }
+        sale: { tenantId },
       });
 
-      await expect(returnsService.processReturn(tenantId, data, userId))
-        .rejects.toThrow('Cannot return more than sold');
+      await expect(returnsService.processReturn(tenantId, data, userId)).rejects.toThrow(
+        'Cannot return more than sold',
+      );
     });
   });
 

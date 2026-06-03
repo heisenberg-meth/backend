@@ -41,7 +41,6 @@ const sendViaResend = async (to, subject, html) => {
         res.on('data', (chunk) => (body += chunk));
         res.on('end', () => {
           if (res.statusCode === 200) {
-            console.log(`[RESEND_SENT] To: ${to}`);
             resolve(body);
           } else {
             console.error(`[RESEND_ERROR] ${res.statusCode}: ${body}`);
@@ -82,7 +81,6 @@ const sendViaNodemailer = async (to, subject, html) => {
       subject,
       html,
     });
-    console.log(`[EMAIL_SENT] To: ${to}`);
     return true;
   } catch (err) {
     console.error('[EMAIL_ERROR]', err.message);
@@ -97,23 +95,14 @@ export const queueEmail = async (to, subject, html) => {
   await mainQueue.add('send-email', { to, subject, html });
 };
 
-/**
- * Actual send function (called by queue worker).
- * Tries Resend first, falls back to Nodemailer, then mock log.
- */
 export const sendEmail = async (to, subject, html) => {
   const resent = await sendViaResend(to, subject, html);
   if (resent) return;
 
   const nodemailer = await sendViaNodemailer(to, subject, html);
   if (nodemailer) return;
-
-  console.log(`[EMAIL_MOCK] To: ${to} | Subject: ${subject}`);
 };
 
-/**
- * Higher-level methods for common system emails
- */
 export const sendOtpEmail = async (to, otp) => {
   const html = OTP_TEMPLATE(otp);
   return queueEmail(to, 'Viyan MedAssist — Verification Code', html);

@@ -14,11 +14,6 @@ class SalesService {
         throw new Error(`Compliance Violation: ${validation.reason}`);
       }
     }
-    console.log('[SALE] recordSale called', {
-      invoiceId: data.invoiceId,
-      branchId: data.branchId,
-      totalAmount: data.totalAmount,
-    });
 
     const sale = await salesRepository.createSale(
       {
@@ -39,7 +34,6 @@ class SalesService {
       },
       client,
     );
-    console.log('[SALE] Created', sale.id);
 
     await anomalyService.detectSalesAnomaly(tenantId, sale);
 

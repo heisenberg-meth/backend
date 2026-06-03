@@ -1,8 +1,20 @@
-import prisma from "../../../config/prisma.js";
+import prisma from '../../../config/prisma.js';
 
 class MedicinePrismaRepository {
-  async findAll({ tenantId, branchId, search, categoryId, manufacturerId, isActive, lowStock, sortBy, order, skip, take }) {
-    const where = {
+  async findAll({
+    tenantId,
+    branchId,
+    search,
+    categoryId,
+    manufacturerId,
+    isActive,
+    lowStock,
+    sortBy,
+    order,
+    skip,
+    take,
+  }) {
+    const baseWhere = {
       tenantId,
       deletedAt: null,
       ...(search && {
@@ -16,53 +28,69 @@ class MedicinePrismaRepository {
       ...(categoryId && { categoryId }),
       ...(manufacturerId && { manufacturerId }),
       ...(isActive !== undefined && { isActive }),
-      ...(lowStock && {
-        OR: [
-          {
-            inventory: {
-              some: {
-                branchId: branchId || null,
-                currentStock: { lte: 10 } // TODO: Dynamic threshold based on reorderPoint
-              }
-            }
-          },
-          {
-            // Fallback to global reorderLevel if inventory record missing
-            reorderLevel: { gt: 0 },
-            inventory: {
-              none: {}
-            }
-          }
-        ]
-      })
     };
 
-    // Note: Prisma does not support comparing columns (currentStock <= reorderPoint) in where clause directly.
-    // This logic uses a fixed threshold of 10 as a heuristic for 'low stock' when querying.
-    // For precise alerts, the system uses StockAlert records.
+    let medicines = [];
+    let total = 0;
 
-    const [medicines, total] = await Promise.all([
-      prisma.medicine.findMany({
-        where,
+    if (lowStock) {
+      // Application-side filtering for lowStock because Prisma does not support comparing
+      // currentStock <= reorderPoint in a where clause without raw SQL.
+      const allMedicines = await prisma.medicine.findMany({
+        where: baseWhere,
         include: {
           category: true,
           manufacturer: true,
           inventory: {
-            where: { branchId: branchId || null }
+            where: { branchId: branchId || null },
           },
           inventoryBatches: {
             where: { branchId: branchId || null, deletedAt: null },
-            orderBy: { expiryDate: 'asc' }
-          }
+            orderBy: { expiryDate: 'asc' },
+          },
         },
         orderBy: { [sortBy || 'name']: order || 'asc' },
-        skip: skip || 0,
-        take: take || 20,
-      }),
-      prisma.medicine.count({ where }),
-    ]);
+      });
 
-    const formattedMedicines = medicines.map(m => {
+      const filtered = allMedicines.filter((m) => {
+        const inv = m.inventory?.[0];
+        const currentStock = inv?.currentStock ? Number(inv.currentStock) : 0;
+        const reorderPt = inv?.reorderPoint
+          ? Number(inv.reorderPoint)
+          : m.reorderLevel
+            ? Number(m.reorderLevel)
+            : 10;
+        return currentStock <= reorderPt;
+      });
+
+      total = filtered.length;
+      medicines = filtered.slice(skip || 0, (skip || 0) + (take || 20));
+    } else {
+      const results = await Promise.all([
+        prisma.medicine.findMany({
+          where: baseWhere,
+          include: {
+            category: true,
+            manufacturer: true,
+            inventory: {
+              where: { branchId: branchId || null },
+            },
+            inventoryBatches: {
+              where: { branchId: branchId || null, deletedAt: null },
+              orderBy: { expiryDate: 'asc' },
+            },
+          },
+          orderBy: { [sortBy || 'name']: order || 'asc' },
+          skip: skip || 0,
+          take: take || 20,
+        }),
+        prisma.medicine.count({ where: baseWhere }),
+      ]);
+      medicines = results[0];
+      total = results[1];
+    }
+
+    const formattedMedicines = medicines.map((m) => {
       const inv = m.inventory?.[0] || null;
       const latestBatch = m.inventoryBatches?.[0] || null;
 
@@ -78,14 +106,14 @@ class MedicinePrismaRepository {
         reorderLevel: inv?.reorderPoint ?? m.reorderLevel ?? 10,
         rackLocation: inv?.rackLocation ?? null,
         status: inv?.status ?? 'HEALTHY',
-        
+
         // Batch info - convert Decimal to Number for JSON serialization
         batchId: latestBatch?.id ?? null,
         batchNumber: latestBatch?.batchNumber ?? null,
         expiryDate: latestBatch?.expiryDate ?? null,
         mrp: toNum(latestBatch?.mrp),
         purchasePrice: toNum(latestBatch?.purchasePrice),
-        
+
         // Backward compatibility
         currentStock: inv?.currentStock ?? 0,
         reorderPoint: inv?.reorderPoint ?? 10,
@@ -102,12 +130,12 @@ class MedicinePrismaRepository {
         category: true,
         manufacturer: true,
         inventory: {
-          where: { branchId }
+          where: { branchId },
         },
         inventoryBatches: {
           where: { branchId, deletedAt: null },
-          orderBy: { expiryDate: 'asc' }
-        }
+          orderBy: { expiryDate: 'asc' },
+        },
       },
     });
 
@@ -143,8 +171,8 @@ class MedicinePrismaRepository {
       data,
       include: {
         category: true,
-        manufacturer: true
-      }
+        manufacturer: true,
+      },
     });
   }
 
@@ -154,7 +182,7 @@ class MedicinePrismaRepository {
     if (rackLocation !== undefined) {
       await prisma.inventory.updateMany({
         where: { tenantId, medicineId: id },
-        data: { rackLocation }
+        data: { rackLocation },
       });
     }
 
@@ -163,8 +191,8 @@ class MedicinePrismaRepository {
       data: medicineData,
       include: {
         category: true,
-        manufacturer: true
-      }
+        manufacturer: true,
+      },
     });
   }
 
@@ -187,13 +215,13 @@ class MedicinePrismaRepository {
       where: { barcode, tenantId, deletedAt: null },
       include: {
         inventory: {
-          where: { branchId }
+          where: { branchId },
         },
         inventoryBatches: {
           where: { branchId, deletedAt: null },
-          orderBy: { expiryDate: 'asc' }
-        }
-      }
+          orderBy: { expiryDate: 'asc' },
+        },
+      },
     });
 
     if (!medicine) return null;
@@ -202,7 +230,7 @@ class MedicinePrismaRepository {
     return {
       ...medicine,
       currentStock: inv?.currentStock || 0,
-      availableStock: (inv?.currentStock || 0) - (inv?.reservedStock || 0)
+      availableStock: (inv?.currentStock || 0) - (inv?.reservedStock || 0),
     };
   }
 
@@ -210,12 +238,12 @@ class MedicinePrismaRepository {
     return prisma.inventoryBatch.updateMany({
       where: {
         batchNumber,
-        medicine: { tenantId }
+        medicine: { tenantId },
       },
-      data: { 
+      data: {
         recalled: true,
-        status: 'RECALLED'
-      }
+        status: 'RECALLED',
+      },
     });
   }
 }

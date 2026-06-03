@@ -62,6 +62,7 @@
     "exceljs": "^3.10.0",
     "express": "^5.2.1",
     "express-rate-limit": "^8.5.2",
+    "fast-fuzzy": "^1.12.0",
     "fastify": "^5.8.5",
     "fastify-metrics": "^13.2.0",
     "helmet": "^8.1.0",
