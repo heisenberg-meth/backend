@@ -56,24 +56,32 @@ class PrescriptionService {
     }
 
     const result = await prisma.$transaction(async (tx) => {
-      const updated = await prescriptionRepository.updatePrescription(prescriptionId, {
-        verificationStatus: status,
-        verifiedBy: userId,
-        verifiedAt: new Date(),
-        status: status === 'VERIFIED' ? 'VERIFIED' : 'ACTIVE',
-      }, tx);
-
-      await prescriptionRepository.createVerification({
+      const updated = await prescriptionRepository.updatePrescription(
         prescriptionId,
-        verifiedBy: userId,
-        status,
-        rejectionReason: status === 'REJECTED' ? rejectionReason : null,
-      }, tx);
+        {
+          verificationStatus: status,
+          verifiedBy: userId,
+          verifiedAt: new Date(),
+          status: status === 'VERIFIED' ? 'VERIFIED' : 'ACTIVE',
+        },
+        tx,
+      );
+
+      await prescriptionRepository.createVerification(
+        {
+          prescriptionId,
+          verifiedBy: userId,
+          status,
+          rejectionReason: status === 'REJECTED' ? rejectionReason : null,
+        },
+        tx,
+      );
 
       return updated;
     });
 
-    const event = status === 'VERIFIED' ? EVENTS.PRESCRIPTION_VERIFIED : EVENTS.PRESCRIPTION_REJECTED;
+    const event =
+      status === 'VERIFIED' ? EVENTS.PRESCRIPTION_VERIFIED : EVENTS.PRESCRIPTION_REJECTED;
     emitLocalEvent(event, {
       prescriptionId,
       verifiedBy: userId,

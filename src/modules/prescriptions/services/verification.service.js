@@ -10,7 +10,10 @@ class VerificationService {
     const prescription = await prescriptionRepository.findById(prescriptionId, tenantId);
     if (!prescription) throw new Error('Prescription not found');
 
-    const nextStatus = prescriptionStateMachine.transition(prescription.verificationStatus, 'VERIFY');
+    const nextStatus = prescriptionStateMachine.transition(
+      prescription.verificationStatus,
+      'VERIFY',
+    );
 
     await prescriptionRepository.createVerification({
       prescriptionId,
@@ -39,7 +42,10 @@ class VerificationService {
     const prescription = await prescriptionRepository.findById(prescriptionId, tenantId);
     if (!prescription) throw new Error('Prescription not found');
 
-    const nextStatus = prescriptionStateMachine.transition(prescription.verificationStatus, 'REJECT');
+    const nextStatus = prescriptionStateMachine.transition(
+      prescription.verificationStatus,
+      'REJECT',
+    );
 
     await prescriptionRepository.createVerification({
       prescriptionId,

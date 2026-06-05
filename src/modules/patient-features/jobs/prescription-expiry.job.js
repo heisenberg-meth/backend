@@ -20,7 +20,7 @@ export async function processPrescriptionExpiryCheck() {
     });
 
     for (const p of prescriptions) {
-      const maxDuration = Math.max(0, ...p.items.map(i => i.durationDays || 0));
+      const maxDuration = Math.max(0, ...p.items.map((i) => i.durationDays || 0));
       if (maxDuration === 0) continue;
 
       const expiryDate = new Date(p.prescriptionDate);

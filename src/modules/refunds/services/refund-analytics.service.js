@@ -5,9 +5,12 @@ class RefundAnalyticsService {
     const analytics = await refundRepository.getAnalytics(tenantId, options);
     const pendingApprovals = await refundRepository.countPendingApprovals(tenantId);
 
-    const refundRate = analytics.totalSales > 0
-      ? parseFloat(((Number(analytics.totalRefundAmount) / Number(analytics.totalSales)) * 100).toFixed(2))
-      : 0;
+    const refundRate =
+      analytics.totalSales > 0
+        ? parseFloat(
+            ((Number(analytics.totalRefundAmount) / Number(analytics.totalSales)) * 100).toFixed(2),
+          )
+        : 0;
 
     const topReasons = analytics.byReason.map((r) => ({
       reason: r.returnReason,
@@ -62,9 +65,14 @@ class RefundAnalyticsService {
       period: { from, to },
       totalRefunds: analytics.totalRefunds,
       totalRefundAmount: Number(analytics.totalRefundAmount),
-      refundRate: analytics.totalSales > 0
-        ? parseFloat(((Number(analytics.totalRefundAmount) / Number(analytics.totalSales)) * 100).toFixed(2))
-        : 0,
+      refundRate:
+        analytics.totalSales > 0
+          ? parseFloat(
+              ((Number(analytics.totalRefundAmount) / Number(analytics.totalSales)) * 100).toFixed(
+                2,
+              ),
+            )
+          : 0,
     };
   }
 }

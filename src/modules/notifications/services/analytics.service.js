@@ -46,9 +46,10 @@ class NotificationAnalyticsService {
       statusBreakdown[item.deliveryStatus] = item._count;
     }
 
-    const successRate = total > 0
-      ? ((statusBreakdown['DELIVERED'] || 0) + (statusBreakdown['SENT'] || 0)) / total * 100
-      : 0;
+    const successRate =
+      total > 0
+        ? (((statusBreakdown['DELIVERED'] || 0) + (statusBreakdown['SENT'] || 0)) / total) * 100
+        : 0;
 
     return {
       total,
@@ -104,7 +105,7 @@ class NotificationAnalyticsService {
 
     return Object.values(providerMap).map((p) => ({
       ...p,
-      successRate: p.total > 0 ? ((p.delivered + p.sent) / p.total * 100).toFixed(2) : 0,
+      successRate: p.total > 0 ? (((p.delivered + p.sent) / p.total) * 100).toFixed(2) : 0,
     }));
   }
 

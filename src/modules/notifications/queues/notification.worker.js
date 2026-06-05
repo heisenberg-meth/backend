@@ -42,9 +42,12 @@ const processNotification = async (job) => {
       notification.tenantId,
       notification.channel,
       async (provider) => {
-        logger.info({ notificationId, provider: provider.providerName }, 'Attempting delivery via provider');
+        logger.info(
+          { notificationId, provider: provider.providerName },
+          'Attempting delivery via provider',
+        );
         return { messageId: `provider-${Date.now()}` };
-      }
+      },
     );
 
     if (deliveryResult.success) {
@@ -66,7 +69,7 @@ const processNotification = async (job) => {
           providerMessageId: deliveryResult.result.messageId,
         },
       });
-      
+
       logger.info({ notificationId }, 'Notification sent successfully');
     } else {
       throw new Error(JSON.stringify(deliveryResult.errors));
@@ -75,7 +78,10 @@ const processNotification = async (job) => {
     const errorMessage = error.message;
     const retryCount = (notification.retryCount || 0) + 1;
 
-    logger.warn({ notificationId, retryCount, error: errorMessage }, 'Notification processing failed');
+    logger.warn(
+      { notificationId, retryCount, error: errorMessage },
+      'Notification processing failed',
+    );
 
     if (retryCount < notification.maxRetries) {
       await prisma.notification.update({
@@ -86,7 +92,7 @@ const processNotification = async (job) => {
           retryCount,
         },
       });
-      
+
       await prisma.notificationDeliveryEvent.create({
         data: {
           notificationId,
@@ -94,7 +100,7 @@ const processNotification = async (job) => {
           errorMessage,
         },
       });
-      
+
       throw error;
     } else {
       await recoveryService.moveToDLQ(notificationId, errorMessage, job.data);

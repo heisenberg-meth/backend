@@ -5,7 +5,7 @@ class ReservationService {
   /**
    * Reserve stock for a pending transaction.
    * MUST be run within a Prisma transaction 'tx'.
-   * 
+   *
    * @param {Object} tx - Prisma transaction client
    * @param {Object} data - Reservation data
    */
@@ -19,7 +19,7 @@ class ReservationService {
     // 1. Check available quantity
     const batch = await tx.inventoryBatch.findUnique({
       where: { id: batchId, tenantId },
-      select: { availableQuantity: true }
+      select: { availableQuantity: true },
     });
 
     if (!batch) {
@@ -27,7 +27,9 @@ class ReservationService {
     }
 
     if (batch.availableQuantity < quantity) {
-      throw new Error(`[RESERVATION_SERVICE] Insufficient available stock in batch ${batchId}. Requested: ${quantity}, Available: ${batch.availableQuantity}`);
+      throw new Error(
+        `[RESERVATION_SERVICE] Insufficient available stock in batch ${batchId}. Requested: ${quantity}, Available: ${batch.availableQuantity}`,
+      );
     }
 
     // 2. Update InventoryBatch
@@ -35,26 +37,31 @@ class ReservationService {
       where: { id: batchId, tenantId },
       data: {
         availableQuantity: { decrement: quantity },
-        reservedQuantity: { increment: quantity }
-      }
+        reservedQuantity: { increment: quantity },
+      },
     });
 
     // 3. Update Inventory
-    await tx.inventory.update({
-      where: {
-        tenantId_branchId_medicineId: {
-          tenantId,
-          branchId: branchId || null,
-          medicineId
-        }
-      },
-      data: {
-        reservedStock: { increment: quantity }
-      }
-    }).catch(err => {
-      logger.error({ err, medicineId, branchId }, '[RESERVATION_SERVICE] Failed to update inventory aggregate for reservation');
-      throw err;
-    });
+    await tx.inventory
+      .update({
+        where: {
+          tenantId_branchId_medicineId: {
+            tenantId,
+            branchId: branchId || null,
+            medicineId,
+          },
+        },
+        data: {
+          reservedStock: { increment: quantity },
+        },
+      })
+      .catch((err) => {
+        logger.error(
+          { err, medicineId, branchId },
+          '[RESERVATION_SERVICE] Failed to update inventory aggregate for reservation',
+        );
+        throw err;
+      });
 
     return { success: true, reservedQuantity: quantity, batchId: updatedBatch.id };
   }
@@ -62,7 +69,7 @@ class ReservationService {
   /**
    * Release reserved stock back to available pool.
    * MUST be run within a Prisma transaction 'tx'.
-   * 
+   *
    * @param {Object} tx - Prisma transaction client
    * @param {Object} data - Release data
    */
@@ -78,26 +85,31 @@ class ReservationService {
       where: { id: batchId, tenantId },
       data: {
         availableQuantity: { increment: quantity },
-        reservedQuantity: { decrement: quantity }
-      }
+        reservedQuantity: { decrement: quantity },
+      },
     });
 
     // 2. Update Inventory
-    await tx.inventory.update({
-      where: {
-        tenantId_branchId_medicineId: {
-          tenantId,
-          branchId: branchId || null,
-          medicineId
-        }
-      },
-      data: {
-        reservedStock: { decrement: quantity }
-      }
-    }).catch(err => {
-      logger.error({ err, medicineId, branchId }, '[RESERVATION_SERVICE] Failed to update inventory aggregate for release');
-      throw err;
-    });
+    await tx.inventory
+      .update({
+        where: {
+          tenantId_branchId_medicineId: {
+            tenantId,
+            branchId: branchId || null,
+            medicineId,
+          },
+        },
+        data: {
+          reservedStock: { decrement: quantity },
+        },
+      })
+      .catch((err) => {
+        logger.error(
+          { err, medicineId, branchId },
+          '[RESERVATION_SERVICE] Failed to update inventory aggregate for release',
+        );
+        throw err;
+      });
 
     return { success: true, releasedQuantity: quantity, batchId: updatedBatch.id };
   }
@@ -105,13 +117,13 @@ class ReservationService {
   /**
    * Commit reserved stock (convert to actual movement out).
    * MUST be run within a Prisma transaction 'tx'.
-   * 
+   *
    * @param {Object} tx - Prisma transaction client
    * @param {Object} data - Commit data (same as movement data but quantity should be positive, we will convert to negative)
    */
   async commitReservation(tx, data) {
     const { quantity } = data;
-    
+
     if (!quantity || quantity <= 0) {
       throw new Error('[RESERVATION_SERVICE] Invalid commit quantity');
     }
@@ -121,7 +133,7 @@ class ReservationService {
     const movementData = {
       ...data,
       quantity: -quantity, // Movement is going OUT
-      isFromReservation: true
+      isFromReservation: true,
     };
 
     const movement = await MovementService.recordMovement(tx, movementData);

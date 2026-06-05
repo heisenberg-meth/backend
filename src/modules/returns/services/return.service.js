@@ -43,11 +43,12 @@ class ReturnService {
     this.validateReturnQuantities(items, invoice.items, existingReturns);
 
     const fraudResult = await this.runFraudChecks(tenantId, userId, data);
-    const approvalRequired = fraudResult.approvalRequired || invoice.totalAmount >= APPROVAL_THRESHOLD;
+    const approvalRequired =
+      fraudResult.approvalRequired || invoice.totalAmount >= APPROVAL_THRESHOLD;
 
     const returnNumber = await returnRepository.generateReturnNumber(
       tenantId,
-      invoice.branch?.code || 'GEN'
+      invoice.branch?.code || 'GEN',
     );
 
     let totalReturnAmount = 0;
@@ -75,9 +76,7 @@ class ReturnService {
       };
     });
 
-    const initialStatus = approvalRequired
-      ? RETURN_STATUS.REQUESTED
-      : RETURN_STATUS.UNDER_REVIEW;
+    const initialStatus = approvalRequired ? RETURN_STATUS.REQUESTED : RETURN_STATUS.UNDER_REVIEW;
 
     const returnRecord = await returnRepository.createReturn(
       {
@@ -101,7 +100,7 @@ class ReturnService {
           create: returnItems,
         },
       },
-      prisma
+      prisma,
     );
 
     emitLocalEvent(DOMAIN_EVENTS.RETURN_CREATED, {
@@ -148,7 +147,7 @@ class ReturnService {
         approvedAt: new Date(),
         notes: notes ? `${returnRecord.notes}\nApproval: ${notes}` : returnRecord.notes,
       },
-      prisma
+      prisma,
     );
 
     emitLocalEvent(DOMAIN_EVENTS.RETURN_APPROVED, {
@@ -188,7 +187,7 @@ class ReturnService {
         rejectedBy: userId,
         rejectedAt: new Date(),
       },
-      prisma
+      prisma,
     );
 
     emitLocalEvent(DOMAIN_EVENTS.RETURN_REJECTED, {
@@ -249,7 +248,7 @@ class ReturnService {
 
       if (item.quantity > availableQuantity) {
         throw new Error(
-          `Return quantity (${item.quantity}) exceeds available quantity (${availableQuantity}) for item ${invoiceItem.medicine?.name || item.invoiceItemId}`
+          `Return quantity (${item.quantity}) exceeds available quantity (${availableQuantity}) for item ${invoiceItem.medicine?.name || item.invoiceItemId}`,
         );
       }
 

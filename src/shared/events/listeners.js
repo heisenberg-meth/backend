@@ -25,7 +25,13 @@ export const initListeners = () => {
 
     try {
       const existing = await prisma.stockAlert.findFirst({
-        where: { medicineId, tenantId, branchId: branchId || null, isResolved: false, type: 'LOW_STOCK' },
+        where: {
+          medicineId,
+          tenantId,
+          branchId: branchId || null,
+          isResolved: false,
+          type: 'LOW_STOCK',
+        },
       });
 
       if (!existing) {
@@ -45,7 +51,8 @@ export const initListeners = () => {
       }
 
       // Queue dashboard cache refresh for inventory and alerts
-      const { queueDashboardRefresh } = await import('../../modules/dashboard/workers/dashboard.worker.js');
+      const { queueDashboardRefresh } =
+        await import('../../modules/dashboard/workers/dashboard.worker.js');
       await queueDashboardRefresh(tenantId, branchId, 'INVENTORY_HEALTH');
       await queueDashboardRefresh(tenantId, branchId, 'ALERTS');
     } catch (err) {
@@ -72,7 +79,8 @@ export const initListeners = () => {
       });
 
       // Queue dashboard cache refresh for inventory and alerts
-      const { queueDashboardRefresh } = await import('../../modules/dashboard/workers/dashboard.worker.js');
+      const { queueDashboardRefresh } =
+        await import('../../modules/dashboard/workers/dashboard.worker.js');
       await queueDashboardRefresh(tenantId, branchId, 'INVENTORY_HEALTH');
       await queueDashboardRefresh(tenantId, branchId, 'ALERTS');
     } catch (err) {
@@ -99,7 +107,8 @@ export const initListeners = () => {
       });
 
       // Queue dashboard cache refresh for inventory and alerts
-      const { queueDashboardRefresh } = await import('../../modules/dashboard/workers/dashboard.worker.js');
+      const { queueDashboardRefresh } =
+        await import('../../modules/dashboard/workers/dashboard.worker.js');
       await queueDashboardRefresh(tenantId, branchId, 'INVENTORY_HEALTH');
       await queueDashboardRefresh(tenantId, branchId, 'ALERTS');
     } catch (err) {
@@ -172,7 +181,8 @@ export const initListeners = () => {
       });
 
       // Queue dashboard cache refresh for sales-related sections
-      const { queueDashboardRefresh } = await import('../../modules/dashboard/workers/dashboard.worker.js');
+      const { queueDashboardRefresh } =
+        await import('../../modules/dashboard/workers/dashboard.worker.js');
       await queueDashboardRefresh(tenantId, data.branchId, 'SALES_SUMMARY');
       await queueDashboardRefresh(tenantId, data.branchId, 'OVERVIEW');
     } catch (err) {
@@ -231,7 +241,10 @@ export const initListeners = () => {
         data: { verificationStatus: 'FULFILLED' },
       });
     } catch (err) {
-      logger.error({ err, prescriptionId }, '[CLINICAL-LISTENER] Failed to update prescription status');
+      logger.error(
+        { err, prescriptionId },
+        '[CLINICAL-LISTENER] Failed to update prescription status',
+      );
     }
   });
 

@@ -44,7 +44,9 @@ class PurchaseService {
       createdBy: userId,
     });
 
-    logger.info(`[Purchase] Created PO ${poNumber} for supplier ${data.supplierId}: ${totalAmount}`);
+    logger.info(
+      `[Purchase] Created PO ${poNumber} for supplier ${data.supplierId}: ${totalAmount}`,
+    );
     return po;
   }
 }

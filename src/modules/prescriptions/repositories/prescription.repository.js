@@ -23,14 +23,18 @@ class PrescriptionRepository {
         items: { include: { medicine: true } },
         patient: { select: { fullName: true } },
         doctor: true,
-        verifications: { include: { user: { select: { fullName: true } } }, orderBy: { verifiedAt: 'desc' } },
+        verifications: {
+          include: { user: { select: { fullName: true } } },
+          orderBy: { verifiedAt: 'desc' },
+        },
         invoices: { select: { id: true, invoiceNumber: true, totalAmount: true, createdAt: true } },
       },
     });
   }
 
   async findPrescriptions(tenantId, options = {}) {
-    const { status, verificationStatus, patientId, doctorId, verified, from, to, limit, offset } = options;
+    const { status, verificationStatus, patientId, doctorId, verified, from, to, limit, offset } =
+      options;
     const where = { tenantId, deletedAt: null };
 
     if (status) where.status = status;

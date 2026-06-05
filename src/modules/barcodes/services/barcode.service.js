@@ -4,17 +4,20 @@ import prisma from '../../../config/prisma.js';
 class BarcodeService {
   async generateBarcode(text, type = 'code128') {
     return new Promise((resolve, reject) => {
-      bwipjs.toBuffer({
-        bcid: type,
-        text,
-        scale: 3,
-        height: 10,
-        includetext: true,
-        textxalign: 'center',
-      }, (err, png) => {
-        if (err) reject(err);
-        else resolve(png);
-      });
+      bwipjs.toBuffer(
+        {
+          bcid: type,
+          text,
+          scale: 3,
+          height: 10,
+          includetext: true,
+          textxalign: 'center',
+        },
+        (err, png) => {
+          if (err) reject(err);
+          else resolve(png);
+        },
+      );
     });
   }
 
@@ -51,13 +54,15 @@ class BarcodeService {
         category: medicine.category?.name || null,
         manufacturer: medicine.manufacturer?.name || null,
       },
-      fefoBatch: fefoBatch ? {
-        id: fefoBatch.id,
-        batchNumber: fefoBatch.batchNumber,
-        quantity: fefoBatch.quantity,
-        sellingPrice: fefoBatch.sellingPrice,
-        expiryDate: fefoBatch.expiryDate,
-      } : null,
+      fefoBatch: fefoBatch
+        ? {
+            id: fefoBatch.id,
+            batchNumber: fefoBatch.batchNumber,
+            quantity: fefoBatch.quantity,
+            sellingPrice: fefoBatch.sellingPrice,
+            expiryDate: fefoBatch.expiryDate,
+          }
+        : null,
     };
   }
 

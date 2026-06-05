@@ -4,7 +4,7 @@ import logger from './shared/utils/logger.js';
 
 async function main() {
   logger.info('Starting idempotency and cache purge...');
-  
+
   try {
     const deletedCount = await prisma.paymentIdempotency.deleteMany({});
     logger.info(`Deleted ${deletedCount.count} payment idempotency keys from DB.`);

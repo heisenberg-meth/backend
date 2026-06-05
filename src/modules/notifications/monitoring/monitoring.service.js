@@ -47,7 +47,9 @@ class NotificationMonitoringService {
     });
 
     const total = stats.reduce((acc, curr) => acc + curr._count.id, 0);
-    const delivered = stats.find(s => s.deliveryStatus === 'SENT' || s.deliveryStatus === 'DELIVERED')?._count.id || 0;
+    const delivered =
+      stats.find((s) => s.deliveryStatus === 'SENT' || s.deliveryStatus === 'DELIVERED')?._count
+        .id || 0;
 
     return total > 0 ? (delivered / total) * 100 : 100;
   }

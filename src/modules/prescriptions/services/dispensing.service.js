@@ -100,7 +100,10 @@ class PrescriptionDispensingService {
 
     await prescriptionRepository.updatePrescription(prescriptionId, { status: newStatus });
 
-    const event = newStatus === 'DISPENSED' ? EVENTS.PRESCRIPTION_DISPENSED : EVENTS.PRESCRIPTION_PARTIALLY_DISPENSED;
+    const event =
+      newStatus === 'DISPENSED'
+        ? EVENTS.PRESCRIPTION_DISPENSED
+        : EVENTS.PRESCRIPTION_PARTIALLY_DISPENSED;
     emitLocalEvent(event, {
       prescriptionId,
       itemsDispensed: dispensedItems.length,

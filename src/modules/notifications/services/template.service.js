@@ -31,7 +31,7 @@ class TemplateService {
 
   render(templateBody, variables) {
     if (!variables) return templateBody;
-    
+
     let rendered = templateBody;
     for (const [key, value] of Object.entries(variables)) {
       // Replace all occurrences of {{key}} with value

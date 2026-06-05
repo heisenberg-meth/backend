@@ -14,7 +14,9 @@ class RefundInventoryService {
       });
 
       if (!batch) {
-        logger.warn(`[Refund Inventory] Batch ${item.batchId} not found, skipping stock restoration`);
+        logger.warn(
+          `[Refund Inventory] Batch ${item.batchId} not found, skipping stock restoration`,
+        );
         continue;
       }
 

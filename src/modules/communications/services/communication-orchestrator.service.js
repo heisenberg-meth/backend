@@ -10,29 +10,49 @@ import communicationQueue from '../queues/communication.queue.js';
 class CommunicationOrchestratorService {
   async sendRefillReminder(patientId, tenantId, options = {}) {
     const { channel: preferredChannel } = options;
-    const { patient, reminders } = await reminderAnalyzerService.analyzePatientRefills(patientId, tenantId);
+    const { patient, reminders } = await reminderAnalyzerService.analyzePatientRefills(
+      patientId,
+      tenantId,
+    );
 
     if (reminders.length === 0) {
-      return { success: true, message: 'No refill reminders needed at this time', remindersSent: 0 };
+      return {
+        success: true,
+        message: 'No refill reminders needed at this time',
+        remindersSent: 0,
+      };
     }
 
     const results = [];
     for (const reminder of reminders) {
-      const eligibility = await reminderAnalyzerService.getRefillEligibility(patientId, reminder.medicineId, tenantId);
+      const eligibility = await reminderAnalyzerService.getRefillEligibility(
+        patientId,
+        reminder.medicineId,
+        tenantId,
+      );
       if (!eligibility.eligible) {
         results.push({ medicineId: reminder.medicineId, reason: eligibility.reason, sent: false });
         continue;
       }
 
-      const channel = templateSelectorService.selectBestChannel(patient, reminder.reminderType, preferredChannel);
+      const channel = templateSelectorService.selectBestChannel(
+        patient,
+        reminder.reminderType,
+        preferredChannel,
+      );
       if (!channel) {
-        results.push({ medicineId: reminder.medicineId, reason: 'No suitable channel', sent: false });
+        results.push({
+          medicineId: reminder.medicineId,
+          reason: 'No suitable channel',
+          sent: false,
+        });
         continue;
       }
 
       const notification = await prisma.notification.create({
         data: {
-          tenantId, patientId,
+          tenantId,
+          patientId,
           channel,
           notificationType: 'REFILL_REMINDER',
           recipient: channel === 'EMAIL' ? patient.email : patient.phone,
@@ -44,68 +64,117 @@ class CommunicationOrchestratorService {
 
       const refillReminder = await prisma.patientRefillReminder.create({
         data: {
-          tenantId, patientId, medicineId: reminder.medicineId,
-          refillId: '', reminderType: reminder.reminderType,
-          scheduledAt: new Date(), channel,
+          tenantId,
+          patientId,
+          medicineId: reminder.medicineId,
+          refillId: '',
+          reminderType: reminder.reminderType,
+          scheduledAt: new Date(),
+          channel,
           deliveryStatus: 'PENDING',
         },
       });
 
-      const fallbackChain = templateSelectorService.buildFallbackChain(patient, reminder.reminderType, channel);
+      const fallbackChain = templateSelectorService.buildFallbackChain(
+        patient,
+        reminder.reminderType,
+        channel,
+      );
 
       await communicationQueue.add('send-reminder', {
         notificationId: notification.id,
         refillReminderId: refillReminder.id,
-        tenantId, patientId: patient.id,
+        tenantId,
+        patientId: patient.id,
         patientName: patient.fullName,
         recipient: channel === 'EMAIL' ? patient.email : patient.phone,
-        channel, reminderType: reminder.reminderType,
-        medicineName: reminder.medicineName, dosage: reminder.dosage,
-        priority: reminder.priority, isScheduleH: reminder.isScheduleH,
+        channel,
+        reminderType: reminder.reminderType,
+        medicineName: reminder.medicineName,
+        dosage: reminder.dosage,
+        priority: reminder.priority,
+        isScheduleH: reminder.isScheduleH,
         prescriptionEnd: reminder.prescriptionEnd,
         expectedRefillAt: reminder.expectedRefillAt,
         fallbackChain,
       });
 
       await prisma.patientRefill.upsert({
-        where: { tenantId_patientId_medicineId: { tenantId, patientId, medicineId: reminder.medicineId } },
-        create: { tenantId, patientId, medicineId: reminder.medicineId, lastReminderSent: new Date(), reminderChannel: channel },
+        where: {
+          tenantId_patientId_medicineId: { tenantId, patientId, medicineId: reminder.medicineId },
+        },
+        create: {
+          tenantId,
+          patientId,
+          medicineId: reminder.medicineId,
+          lastReminderSent: new Date(),
+          reminderChannel: channel,
+        },
         update: { lastReminderSent: new Date(), reminderChannel: channel },
       });
 
-      emitLocalEvent(DOMAIN_EVENTS.REFILL_DUE, { patientId, medicineId: reminder.medicineId, tenantId, channel, reminderType: reminder.reminderType });
+      emitLocalEvent(DOMAIN_EVENTS.REFILL_DUE, {
+        patientId,
+        medicineId: reminder.medicineId,
+        tenantId,
+        channel,
+        reminderType: reminder.reminderType,
+      });
 
-      results.push({ medicineId: reminder.medicineId, sent: true, channel, notificationId: notification.id });
+      results.push({
+        medicineId: reminder.medicineId,
+        sent: true,
+        channel,
+        notificationId: notification.id,
+      });
     }
 
-    const sent = results.filter(r => r.sent).length;
+    const sent = results.filter((r) => r.sent).length;
     logger.info({ patientId, sent, total: reminders.length }, 'Refill reminders processed');
     return { success: true, remindersSent: sent, total: reminders.length, results };
   }
 
   async sendPrescriptionReminder(patientId, tenantId, options = {}) {
     const { channel: preferredChannel } = options;
-    const { patient, reminders } = await reminderAnalyzerService.analyzePatientRefills(patientId, tenantId);
+    const { patient, reminders } = await reminderAnalyzerService.analyzePatientRefills(
+      patientId,
+      tenantId,
+    );
 
-    const expiring = reminders.filter(r =>
-      r.reminderType === 'PRESCRIPTION_EXPIRING' || r.reminderType === 'PRESCRIPTION_EXPIRED',
+    const expiring = reminders.filter(
+      (r) =>
+        r.reminderType === 'PRESCRIPTION_EXPIRING' || r.reminderType === 'PRESCRIPTION_EXPIRED',
     );
 
     if (expiring.length === 0) {
-      return { success: true, message: 'No prescription reminders needed at this time', remindersSent: 0 };
+      return {
+        success: true,
+        message: 'No prescription reminders needed at this time',
+        remindersSent: 0,
+      };
     }
 
     const results = [];
     for (const reminder of expiring) {
-      const channel = templateSelectorService.selectBestChannel(patient, reminder.reminderType, preferredChannel);
+      const channel = templateSelectorService.selectBestChannel(
+        patient,
+        reminder.reminderType,
+        preferredChannel,
+      );
       if (!channel) {
-        results.push({ medicineId: reminder.medicineId, reason: 'No suitable channel', sent: false });
+        results.push({
+          medicineId: reminder.medicineId,
+          reason: 'No suitable channel',
+          sent: false,
+        });
         continue;
       }
 
       const notification = await prisma.notification.create({
         data: {
-          tenantId, patientId, channel,
+          tenantId,
+          patientId,
+          channel,
           notificationType: 'PRESCRIPTION_REMINDER',
           recipient: channel === 'EMAIL' ? patient.email : patient.phone,
           subject: reminder.reminderType,
@@ -116,20 +185,39 @@ class CommunicationOrchestratorService {
 
       await communicationQueue.add('send-reminder', {
         notificationId: notification.id,
-        tenantId, patientId: patient.id, patientName: patient.fullName,
+        tenantId,
+        patientId: patient.id,
+        patientName: patient.fullName,
         recipient: channel === 'EMAIL' ? patient.email : patient.phone,
-        channel, reminderType: reminder.reminderType,
-        medicineName: reminder.medicineName, isScheduleH: reminder.isScheduleH,
-        prescriptionEnd: reminder.prescriptionEnd, priority: reminder.priority,
-        fallbackChain: templateSelectorService.buildFallbackChain(patient, reminder.reminderType, channel),
+        channel,
+        reminderType: reminder.reminderType,
+        medicineName: reminder.medicineName,
+        isScheduleH: reminder.isScheduleH,
+        prescriptionEnd: reminder.prescriptionEnd,
+        priority: reminder.priority,
+        fallbackChain: templateSelectorService.buildFallbackChain(
+          patient,
+          reminder.reminderType,
+          channel,
+        ),
       });
 
-      emitLocalEvent(DOMAIN_EVENTS.PRESCRIPTION_EXPIRING, { patientId, medicineId: reminder.medicineId, tenantId, channel });
+      emitLocalEvent(DOMAIN_EVENTS.PRESCRIPTION_EXPIRING, {
+        patientId,
+        medicineId: reminder.medicineId,
+        tenantId,
+        channel,
+      });
 
-      results.push({ medicineId: reminder.medicineId, sent: true, channel, notificationId: notification.id });
+      results.push({
+        medicineId: reminder.medicineId,
+        sent: true,
+        channel,
+        notificationId: notification.id,
+      });
     }
 
-    return { success: true, remindersSent: results.filter(r => r.sent).length, results };
+    return { success: true, remindersSent: results.filter((r) => r.sent).length, results };
   }
 
   async sendInvoice(patientId, tenantId, options = {}) {
@@ -189,15 +277,24 @@ class CommunicationOrchestratorService {
       },
     });
 
-    if (notification.notificationType === 'INVOICE' || notification.notificationType?.startsWith('INVOICE')) {
+    if (
+      notification.notificationType === 'INVOICE' ||
+      notification.notificationType?.startsWith('INVOICE')
+    ) {
       await communicationQueue.add('send-invoice', {
-        notificationId, tenantId, patientId: notification.patientId,
-        channel: notification.channel, recipient: notification.recipient,
+        notificationId,
+        tenantId,
+        patientId: notification.patientId,
+        channel: notification.channel,
+        recipient: notification.recipient,
       });
     } else {
       await communicationQueue.add('send-reminder', {
-        notificationId, tenantId, patientId: notification.patientId,
-        channel: notification.channel, recipient: notification.recipient,
+        notificationId,
+        tenantId,
+        patientId: notification.patientId,
+        channel: notification.channel,
+        recipient: notification.recipient,
         reminderType: notification.subject,
       });
     }
@@ -215,7 +312,9 @@ class CommunicationOrchestratorService {
     }
 
     if (Object.keys(data).length === 0) {
-      throw new Error('No valid preference fields provided. Allowed: allowSms, allowWhatsapp, allowEmail');
+      throw new Error(
+        'No valid preference fields provided. Allowed: allowSms, allowWhatsapp, allowEmail',
+      );
     }
 
     const patient = await prisma.patient.update({

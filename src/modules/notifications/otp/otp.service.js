@@ -25,10 +25,14 @@ class OtpService {
     const key = `otp:${tenantId}:${channel}:${recipient}`;
     const attemptsKey = `otp:attempts:${tenantId}:${channel}:${recipient}`;
 
-    const attempts = parseInt(await redisClient.get(attemptsKey) || '0', 10);
+    const attempts = parseInt((await redisClient.get(attemptsKey)) || '0', 10);
     if (attempts >= MAX_VERIFY_ATTEMPTS) {
       await redisClient.del(key);
-      emitLocalEvent(DOMAIN_EVENTS.NOTIFICATION_FAILED, { tenantId, recipient, reason: 'OTP_MAX_ATTEMPTS' });
+      emitLocalEvent(DOMAIN_EVENTS.NOTIFICATION_FAILED, {
+        tenantId,
+        recipient,
+        reason: 'OTP_MAX_ATTEMPTS',
+      });
       return { verified: false, reason: 'MAX_ATTEMPTS_EXCEEDED' };
     }
 
@@ -41,7 +45,11 @@ class OtpService {
     }
 
     if (storedOtp !== otp) {
-      return { verified: false, reason: 'INVALID_OTP', remainingAttempts: MAX_VERIFY_ATTEMPTS - attempts - 1 };
+      return {
+        verified: false,
+        reason: 'INVALID_OTP',
+        remainingAttempts: MAX_VERIFY_ATTEMPTS - attempts - 1,
+      };
     }
 
     await redisClient.del(key);

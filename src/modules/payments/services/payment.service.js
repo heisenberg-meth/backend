@@ -54,7 +54,9 @@ class PaymentService {
       },
     });
 
-    logger.info(`[Webhook] Processed payment ${payment.id} for transaction ${payload.transactionId}`);
+    logger.info(
+      `[Webhook] Processed payment ${payment.id} for transaction ${payload.transactionId}`,
+    );
     return { status: 'processed', payment };
   }
 }

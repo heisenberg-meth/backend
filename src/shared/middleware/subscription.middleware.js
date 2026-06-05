@@ -18,7 +18,11 @@ export const requireActiveSubscription = async (request, reply) => {
     });
   }
 
-  if (subscription.status === 'TRIAL' && subscription.endDate && new Date() > subscription.endDate) {
+  if (
+    subscription.status === 'TRIAL' &&
+    subscription.endDate &&
+    new Date() > subscription.endDate
+  ) {
     await prisma.subscription.update({
       where: { id: subscription.id },
       data: { status: 'EXPIRED' },

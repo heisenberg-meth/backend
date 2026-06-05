@@ -28,7 +28,10 @@ class StoreProfileEventEmitter {
   off(event, callback) {
     const callbacks = this.listeners.get(event);
     if (callbacks) {
-      this.listeners.set(event, callbacks.filter((cb) => cb !== callback));
+      this.listeners.set(
+        event,
+        callbacks.filter((cb) => cb !== callback),
+      );
     }
   }
 

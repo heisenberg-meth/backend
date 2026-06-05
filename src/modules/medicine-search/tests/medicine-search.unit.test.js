@@ -1,4 +1,4 @@
-import { jest , describe, beforeEach, it, expect } from '@jest/globals';
+import { jest, describe, beforeEach, it, expect } from '@jest/globals';
 import path from 'path';
 import { fileURLToPath } from 'url';
 
@@ -84,7 +84,8 @@ jest.unstable_mockModule(cachePath, () => ({
 }));
 
 jest.unstable_mockModule(localEventBusPath, () => ({
-  emitLocalEvent: jest.fn(), localEventBus: { emit: jest.fn(), removeAllListeners: jest.fn() },
+  emitLocalEvent: jest.fn(),
+  localEventBus: { emit: jest.fn(), removeAllListeners: jest.fn() },
 }));
 
 jest.unstable_mockModule(erpEventBusPath, () => ({
@@ -141,9 +142,7 @@ describe('MedicineSearchService', () => {
 
     it('should query database when cache miss', async () => {
       mockCache.getAutocomplete.mockResolvedValue(null);
-      mockSearchRepository.autocomplete.mockResolvedValue([
-        { id: 'med-1', name: 'Dolo 650' },
-      ]);
+      mockSearchRepository.autocomplete.mockResolvedValue([{ id: 'med-1', name: 'Dolo 650' }]);
 
       const { suggestions, source } = await medicineSearchService.autocomplete('tenant-1', 'dol');
 

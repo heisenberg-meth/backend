@@ -4,13 +4,13 @@ class AnalyticsService {
   async getValuation(tenantId) {
     const batches = await prisma.inventoryBatch.findMany({
       where: { tenantId },
-      include: { medicine: true }
+      include: { medicine: true },
     });
 
     let totalInventoryValue = 0;
     const batchExposure = [];
 
-    batches.forEach(batch => {
+    batches.forEach((batch) => {
       const value = batch.quantity * (batch.purchasePrice || 0);
       totalInventoryValue += value;
       batchExposure.push({ medicine: batch.medicine.name, value });
@@ -24,7 +24,7 @@ class AnalyticsService {
     return {
       inventoryTurnoverRate: 6.4,
       fastMoving: ['Paracetamol'],
-      slowMoving: ['Rare Antibiotic']
+      slowMoving: ['Rare Antibiotic'],
     };
   }
 
@@ -33,26 +33,26 @@ class AnalyticsService {
     expiryDate.setDate(expiryDate.getDate() + days);
 
     const batches = await prisma.inventoryBatch.findMany({
-      where: { 
+      where: {
         tenantId,
-        expiryDate: { lte: expiryDate, gte: new Date() }
+        expiryDate: { lte: expiryDate, gte: new Date() },
       },
-      include: { medicine: true }
+      include: { medicine: true },
     });
 
     return {
-      nearExpiry: batches.map(b => ({
+      nearExpiry: batches.map((b) => ({
         medicine: b.medicine.name,
         batchNo: b.batchNumber,
-        daysRemaining: Math.floor((b.expiryDate - new Date()) / (1000 * 60 * 60 * 24))
-      }))
+        daysRemaining: Math.floor((b.expiryDate - new Date()) / (1000 * 60 * 60 * 24)),
+      })),
     };
   }
 
   async getDeadStock() {
     // Placeholder: Need logic to check sales activity over last 180 days
     return {
-      deadStock: [{ medicine: 'Old Antibiotic', daysUnsold: 180 }]
+      deadStock: [{ medicine: 'Old Antibiotic', daysUnsold: 180 }],
     };
   }
 }

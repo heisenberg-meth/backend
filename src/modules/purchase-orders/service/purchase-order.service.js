@@ -1,4 +1,4 @@
-import prisma from "../../../config/prisma.js";
+import prisma from '../../../config/prisma.js';
 import purchaseOrderRepository from '../repository/purchase-order.prisma.repository.js';
 import { PROCUREMENT_STATUS, DOMAIN_EVENTS } from '../../../shared/constants/events.js';
 import { procurementStateMachine } from '../../../shared/constants/state-machines.js';
@@ -19,7 +19,10 @@ class PurchaseOrderService {
   async createOrder(tenantId, userId, data) {
     if (!data.orderNumber) {
       const now = new Date();
-      const dateStr = now.getFullYear() + String(now.getMonth() + 1).padStart(2, '0') + String(now.getDate()).padStart(2, '0');
+      const dateStr =
+        now.getFullYear() +
+        String(now.getMonth() + 1).padStart(2, '0') +
+        String(now.getDate()).padStart(2, '0');
       const random = Math.floor(1000 + Math.random() * 9000);
       data.orderNumber = `PO-${dateStr}-${random}`;
     }
@@ -52,7 +55,7 @@ class PurchaseOrderService {
 
   async approveOrder(tenantId, id, userId, notes) {
     const order = await this.getOrderById(tenantId, id);
-    
+
     const nextStatus = procurementStateMachine.transition(order.status, 'APPROVE');
 
     return prisma.$transaction(async (tx) => {
@@ -97,7 +100,12 @@ class PurchaseOrderService {
       include: { items: true },
     });
 
-    emitLocalEvent(DOMAIN_EVENTS.PURCHASE_ORDER_CANCELLED, { orderId: id, tenantId, userId, reason });
+    emitLocalEvent(DOMAIN_EVENTS.PURCHASE_ORDER_CANCELLED, {
+      orderId: id,
+      tenantId,
+      userId,
+      reason,
+    });
     await emitEvent(DOMAIN_EVENTS.PURCHASE_ORDER_CANCELLED, { orderId: id, tenantId });
 
     return updated;
@@ -109,7 +117,7 @@ class PurchaseOrderService {
    */
   async receiveOrder(tenantId, id, userId, payload) {
     const { receivedItems, notes } = payload;
-    
+
     const order = await purchaseOrderRepository.findById(id, tenantId);
     if (!order) throw new Error('Order not found');
 
@@ -129,12 +137,14 @@ class PurchaseOrderService {
       });
 
       for (const item of receivedItems) {
-        const poItem = order.items.find(i => i.medicineId === item.medicineId);
+        const poItem = order.items.find((i) => i.medicineId === item.medicineId);
         if (!poItem) throw new Error(`Medicine ${item.medicineId} not found in PO`);
 
         const remainingQty = poItem.quantity - poItem.receivedQuantity;
         if (item.receivedQuantity > remainingQty) {
-          throw new Error(`Received quantity (${item.receivedQuantity}) exceeds remaining ordered quantity (${remainingQty}) for ${poItem.medicineName}`);
+          throw new Error(
+            `Received quantity (${item.receivedQuantity}) exceeds remaining ordered quantity (${remainingQty}) for ${poItem.medicineName}`,
+          );
         }
 
         // 2. Create GRN Item
@@ -165,7 +175,7 @@ class PurchaseOrderService {
             sellingPrice: poItem.unitPrice * 1.2, // Default markup
             supplierId: order.supplierId,
             status: 'ACTIVE',
-            purchaseOrderItemId: poItem.id
+            purchaseOrderItemId: poItem.id,
           },
         });
 
@@ -208,7 +218,11 @@ class PurchaseOrderService {
         // 6. Upsert Inventory Aggregate Snapshot
         await tx.inventory.upsert({
           where: {
-            tenantId_branchId_medicineId: { tenantId, branchId: order.branchId, medicineId: item.medicineId },
+            tenantId_branchId_medicineId: {
+              tenantId,
+              branchId: order.branchId,
+              medicineId: item.medicineId,
+            },
           },
           update: {
             currentStock: { increment: item.receivedQuantity },
@@ -240,8 +254,8 @@ class PurchaseOrderService {
         include: { items: true },
       });
 
-      const allReceived = updatedOrder.items.every(i => i.receivedQuantity >= i.quantity);
-      
+      const allReceived = updatedOrder.items.every((i) => i.receivedQuantity >= i.quantity);
+
       // Determine transition action
       let action = allReceived ? 'RECEIVE_FULL' : 'RECEIVE_PARTIAL';
       if (order.status === PROCUREMENT_STATUS.PARTIALLY_RECEIVED) {
@@ -249,7 +263,7 @@ class PurchaseOrderService {
       }
 
       const nextStatus = procurementStateMachine.transition(order.status, action);
-      
+
       await tx.purchaseOrder.update({
         where: { id },
         data: { status: nextStatus },
@@ -261,10 +275,10 @@ class PurchaseOrderService {
         orderBy: { createdAt: 'desc' },
         select: { balanceAfter: true },
       });
-      
+
       const grnTotal = receivedItems.reduce((sum, item) => {
-        const poItem = order.items.find(i => i.medicineId === item.medicineId);
-        return sum + (item.receivedQuantity * (poItem?.unitPrice || 0));
+        const poItem = order.items.find((i) => i.medicineId === item.medicineId);
+        return sum + item.receivedQuantity * (poItem?.unitPrice || 0);
       }, 0);
 
       const currentBalance = lastBalance?.balanceAfter || 0;
@@ -284,12 +298,12 @@ class PurchaseOrderService {
         },
       });
 
-      emitLocalEvent(DOMAIN_EVENTS.PURCHASE_ORDER_RECEIVED, { 
-        orderId: id, 
-        tenantId, 
-        grnId: grn.id, 
+      emitLocalEvent(DOMAIN_EVENTS.PURCHASE_ORDER_RECEIVED, {
+        orderId: id,
+        tenantId,
+        grnId: grn.id,
         allReceived,
-        totalAmount: grnTotal
+        totalAmount: grnTotal,
       });
       emitLocalEvent(DOMAIN_EVENTS.STOCK_UPDATED, { tenantId, type: 'PURCHASE' });
 
@@ -307,10 +321,10 @@ class PurchaseOrderService {
         status: { in: statuses },
         deletedAt: null,
       },
-      include: { 
-        items: true, 
-        supplier: { select: { name: true } }, 
-        user: { select: { fullName: true } } 
+      include: {
+        items: true,
+        supplier: { select: { name: true } },
+        user: { select: { fullName: true } },
       },
       orderBy: { createdAt: 'desc' },
     });

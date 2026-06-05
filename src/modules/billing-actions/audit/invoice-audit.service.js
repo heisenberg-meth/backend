@@ -96,7 +96,8 @@ class InvoiceAuditService {
     };
 
     for (const log of logs) {
-      analytics.byChannel[log.deliveryChannel] = (analytics.byChannel[log.deliveryChannel] || 0) + 1;
+      analytics.byChannel[log.deliveryChannel] =
+        (analytics.byChannel[log.deliveryChannel] || 0) + 1;
       analytics.byStatus[log.deliveryStatus] = (analytics.byStatus[log.deliveryStatus] || 0) + 1;
       analytics.timeline.push({
         channel: log.deliveryChannel,

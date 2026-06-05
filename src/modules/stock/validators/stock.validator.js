@@ -4,7 +4,7 @@ export const stockInSchema = z.object({
   medicineId: z.string().uuid(),
   batchNumber: z.string().min(1),
   quantity: z.number().int().positive(),
-  expiryDate: z.string().refine(val => new Date(val) > new Date(), {
+  expiryDate: z.string().refine((val) => new Date(val) > new Date(), {
     message: 'Expiry date must be in the future',
   }),
   purchasePrice: z.number().min(0),

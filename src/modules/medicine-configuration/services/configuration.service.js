@@ -22,11 +22,20 @@ class ConfigurationService {
     }
 
     const config = await configurationRepository.updateInventoryConfig(medicineId, tenantId, {
-      branchId, reorderPoint, safetyStock, maxStockLimit, updatedBy,
+      branchId,
+      reorderPoint,
+      safetyStock,
+      maxStockLimit,
+      updatedBy,
     });
 
     await emitEvent('MEDICINE_REORDER_UPDATED', {
-      medicineId, tenantId, branchId, reorderPoint, safetyStock, maxStockLimit,
+      medicineId,
+      tenantId,
+      branchId,
+      reorderPoint,
+      safetyStock,
+      maxStockLimit,
     });
 
     await this._invalidateMedicineCache(tenantId, medicineId);
@@ -59,7 +68,10 @@ class ConfigurationService {
     const needsApproval = oldPrice > 0 && priceChangeRatio > PRICE_CHANGE_APPROVAL_THRESHOLD;
 
     const history = await configurationRepository.updatePricing(medicineId, tenantId, {
-      mrp, sellingPrice, purchasePrice, changedBy,
+      mrp,
+      sellingPrice,
+      purchasePrice,
+      changedBy,
     });
 
     await emitEvent('MEDICINE_PRICE_UPDATED', {
@@ -134,7 +146,9 @@ class ConfigurationService {
     }
 
     const history = await configurationRepository.updateStatus(medicineId, tenantId, {
-      status, reason, changedBy,
+      status,
+      reason,
+      changedBy,
     });
 
     await emitEvent('MEDICINE_STATUS_CHANGED', {
@@ -189,9 +203,7 @@ class ConfigurationService {
     const leadTime = recommendations?.leadTime || 7;
     const adu = recommendations?.averageDailyUsage || 0;
 
-    const computedReorderPoint = adu > 0
-      ? Math.ceil(adu * leadTime + safetyStock)
-      : null;
+    const computedReorderPoint = adu > 0 ? Math.ceil(adu * leadTime + safetyStock) : null;
 
     return {
       medicineName: medicine?.name,
@@ -209,11 +221,15 @@ class ConfigurationService {
     try {
       const keys = await scanKeys(`medicine:${tenantId}:${medicineId}:*`);
       if (keys.length > 0) await redisClient.del(...keys);
-    } catch (err) { logger.error({ err }, 'Failed to invalidate medicine cache'); }
+    } catch (err) {
+      logger.error({ err }, 'Failed to invalidate medicine cache');
+    }
   }
 
   async _invalidatePricingCache(tenantId, medicineId) {
-    try { await redisClient.del(`pricing:${tenantId}:${medicineId}`); } catch (err) {
+    try {
+      await redisClient.del(`pricing:${tenantId}:${medicineId}`);
+    } catch (err) {
       logger.error({ err }, 'Failed to invalidate pricing cache');
     }
   }
@@ -228,7 +244,9 @@ class ConfigurationService {
   }
 
   async _invalidateBillingCache(tenantId, medicineId) {
-    try { await redisClient.del(`billing:${tenantId}:${medicineId}`); } catch (err) {
+    try {
+      await redisClient.del(`billing:${tenantId}:${medicineId}`);
+    } catch (err) {
       logger.error({ err }, 'Failed to invalidate billing cache');
     }
   }

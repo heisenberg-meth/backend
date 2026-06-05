@@ -38,7 +38,14 @@ class AlertAuditService {
     });
   }
 
-  async logThresholdChange(tenantId, userId, medicineId, previousThreshold, newThreshold, reason = null) {
+  async logThresholdChange(
+    tenantId,
+    userId,
+    medicineId,
+    previousThreshold,
+    newThreshold,
+    reason = null,
+  ) {
     return prisma.auditLog.create({
       data: {
         tenantId,

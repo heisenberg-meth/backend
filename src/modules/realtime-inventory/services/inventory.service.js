@@ -28,7 +28,7 @@ export class InventoryService {
 
     if (idempotencyKey) {
       const existing = await tx.stockMovement.findUnique({
-        where: { idempotencyKey }
+        where: { idempotencyKey },
       });
       if (existing) return existing;
     }
@@ -45,8 +45,8 @@ export class InventoryService {
         referenceType,
         referenceId,
         idempotencyKey,
-        performedBy: userId
-      }
+        performedBy: userId,
+      },
     });
 
     this.updateCache(tenantId, medicineId, branchId, quantityAfter);
@@ -58,18 +58,26 @@ export class InventoryService {
       branchId,
       newQuantity: quantityAfter,
       movementType,
-      referenceId
+      referenceId,
     });
 
     if (this.inventoryQueue) {
-      this.inventoryQueue.add('refresh-dashboard', {
-        type: 'REFRESH_DASHBOARD',
-        tenantId,
-        branchId
-      }, {
-        removeOnComplete: true,
-        jobId: `dashboard-refresh:${tenantId}:${branchId || 'global'}`
-      }).catch(err => this.logger.error({ err }, '[INVENTORY_SERVICE] Failed to queue dashboard refresh'));
+      this.inventoryQueue
+        .add(
+          'refresh-dashboard',
+          {
+            type: 'REFRESH_DASHBOARD',
+            tenantId,
+            branchId,
+          },
+          {
+            removeOnComplete: true,
+            jobId: `dashboard-refresh:${tenantId}:${branchId || 'global'}`,
+          },
+        )
+        .catch((err) =>
+          this.logger.error({ err }, '[INVENTORY_SERVICE] Failed to queue dashboard refresh'),
+        );
     }
 
     return ledgerEntry;
@@ -88,7 +96,7 @@ export class InventoryService {
     try {
       const io = this.getIO();
       io.to(`tenant:${tenantId}`).emit('INVENTORY_UPDATE', payload);
-      
+
       if (branchId) {
         io.to(`branch:${branchId}`).emit('INVENTORY_UPDATE', payload);
       }
@@ -107,11 +115,11 @@ export class InventoryService {
           medicineId,
           branchId,
           deletedAt: null,
-          status: 'ACTIVE'
+          status: 'ACTIVE',
         },
         _sum: {
-          quantity: true
-        }
+          quantity: true,
+        },
       });
       stock = batchSum._sum.quantity || 0;
       await this.updateCache(tenantId, medicineId, branchId, stock);

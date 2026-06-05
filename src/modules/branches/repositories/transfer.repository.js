@@ -1,4 +1,4 @@
-import prisma from "../../../config/prisma.js";
+import prisma from '../../../config/prisma.js';
 import sequenceService from '../../../shared/services/sequence.service.js';
 
 class TransferRepository {
@@ -42,13 +42,13 @@ class TransferRepository {
         items: {
           include: {
             batch: {
-              include: { medicine: true }
-            }
-          }
+              include: { medicine: true },
+            },
+          },
         },
         sourceBranch: true,
-        destinationBranch: true
-      }
+        destinationBranch: true,
+      },
     });
   }
 
@@ -59,15 +59,15 @@ class TransferRepository {
         tenantId,
         ...(sourceBranchId && { sourceBranchId }),
         ...(destinationBranchId && { destinationBranchId }),
-        ...(status && { status })
+        ...(status && { status }),
       },
       include: {
         sourceBranch: true,
-        destinationBranch: true
+        destinationBranch: true,
       },
       orderBy: { createdAt: 'desc' },
       skip,
-      take
+      take,
     });
   }
 
@@ -79,7 +79,7 @@ class TransferRepository {
     }
     return client.stockTransfer.update({
       where: { id, tenantId },
-      data
+      data,
     });
   }
 

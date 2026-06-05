@@ -36,7 +36,10 @@ class ProviderRegistry {
         },
       });
     } catch (error) {
-      logger.error({ error, tenantId, channelType, providerName }, '[ProviderRegistry] Failed to record delivery');
+      logger.error(
+        { error, tenantId, channelType, providerName },
+        '[ProviderRegistry] Failed to record delivery',
+      );
     }
   }
 

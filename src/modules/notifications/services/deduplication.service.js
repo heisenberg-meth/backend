@@ -4,18 +4,36 @@ const DEDUPE_TTL = 1800;
 
 class NotificationDeduplicationService {
   async checkDuplicate(tenantId, channel, recipient, templateName, notificationType) {
-    const dedupeKey = this._buildDedupeKey(tenantId, channel, recipient, templateName, notificationType);
+    const dedupeKey = this._buildDedupeKey(
+      tenantId,
+      channel,
+      recipient,
+      templateName,
+      notificationType,
+    );
     const exists = await redisClient.get(dedupeKey);
     return !!exists;
   }
 
   async markSent(tenantId, channel, recipient, templateName, notificationType) {
-    const dedupeKey = this._buildDedupeKey(tenantId, channel, recipient, templateName, notificationType);
+    const dedupeKey = this._buildDedupeKey(
+      tenantId,
+      channel,
+      recipient,
+      templateName,
+      notificationType,
+    );
     await redisClient.set(dedupeKey, '1', 'EX', DEDUPE_TTL);
   }
 
   async clearDedupe(tenantId, channel, recipient, templateName, notificationType) {
-    const dedupeKey = this._buildDedupeKey(tenantId, channel, recipient, templateName, notificationType);
+    const dedupeKey = this._buildDedupeKey(
+      tenantId,
+      channel,
+      recipient,
+      templateName,
+      notificationType,
+    );
     await redisClient.del(dedupeKey);
   }
 

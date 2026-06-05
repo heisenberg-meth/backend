@@ -1,4 +1,4 @@
-import prisma from "../../../../config/prisma.js";
+import prisma from '../../../../config/prisma.js';
 
 class PaymentRepository {
   async createPayment(data, tx) {
@@ -11,51 +11,51 @@ class PaymentRepository {
 
   async findAll(tenantId, { skip = 0, take = 20, supplierId } = {}) {
     return prisma.supplierPayment.findMany({
-      where: { 
+      where: {
         tenantId,
-        ...(supplierId && { supplierId })
+        ...(supplierId && { supplierId }),
       },
-      include: { 
+      include: {
         supplier: {
           select: {
             id: true,
             name: true,
-            supplierCode: true
-          }
+            supplierCode: true,
+          },
         },
         user: {
           select: {
             id: true,
-            name: true
-          }
-        }
+            name: true,
+          },
+        },
       },
       orderBy: { paymentDate: 'desc' },
       skip,
-      take
+      take,
     });
   }
 
   async findById(tenantId, id) {
     return prisma.supplierPayment.findFirst({
       where: { id, tenantId },
-      include: { 
+      include: {
         supplier: true,
         allocations: {
           include: {
-            purchaseInvoice: true
-          }
-        }
-      }
+            purchaseInvoice: true,
+          },
+        },
+      },
     });
   }
 
   async count(tenantId, { supplierId } = {}) {
     return prisma.supplierPayment.count({
-      where: { 
+      where: {
         tenantId,
-        ...(supplierId && { supplierId })
-      }
+        ...(supplierId && { supplierId }),
+      },
     });
   }
 }

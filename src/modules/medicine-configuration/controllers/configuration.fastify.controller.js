@@ -17,7 +17,7 @@ class ConfigurationController {
         safetyStock,
         maxStockLimit,
         branchId,
-        updatedBy: userId
+        updatedBy: userId,
       });
 
       return reply.send({ success: true, data: config });
@@ -40,7 +40,7 @@ class ConfigurationController {
         mrp,
         sellingPrice,
         purchasePrice,
-        changedBy: userId
+        changedBy: userId,
       });
 
       return reply.send({ success: true, data: history });
@@ -62,7 +62,7 @@ class ConfigurationController {
       const history = await configurationService.updateStatus(id, tenantId, {
         status,
         reason,
-        changedBy: userId
+        changedBy: userId,
       });
 
       return reply.send({ success: true, data: history });

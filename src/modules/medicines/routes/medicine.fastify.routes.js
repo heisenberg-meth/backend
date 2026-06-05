@@ -20,12 +20,12 @@ async function medicineIntelligenceRoutes(fastify) {
             categoryId: { type: 'string', format: 'uuid' },
             schedule: { type: 'string' },
             page: { type: 'integer', default: 1 },
-            limit: { type: 'integer', default: 50 }
-          }
-        }
-      }
+            limit: { type: 'integer', default: 50 },
+          },
+        },
+      },
     },
-    medicineController.getMedicines
+    medicineController.getMedicines,
   );
 
   fastify.get(
@@ -35,11 +35,11 @@ async function medicineIntelligenceRoutes(fastify) {
         tags: ['Medicines'],
         params: {
           type: 'object',
-          properties: { id: { type: 'string', format: 'uuid' } }
-        }
-      }
+          properties: { id: { type: 'string', format: 'uuid' } },
+        },
+      },
     },
-    medicineController.getMedicine
+    medicineController.getMedicine,
   );
 
   // --- Master Registry ---
@@ -74,8 +74,8 @@ async function medicineIntelligenceRoutes(fastify) {
               properties: {
                 mrp: { type: 'number' },
                 purchasePrice: { type: 'number' },
-                sellingPrice: { type: 'number' }
-              }
+                sellingPrice: { type: 'number' },
+              },
             },
             initialBatch: {
               type: 'object',
@@ -84,15 +84,15 @@ async function medicineIntelligenceRoutes(fastify) {
                 quantity: { type: 'number' },
                 expiryDate: { type: 'string' },
                 mrp: { type: 'number' },
-                purchasePrice: { type: 'number' }
-              }
-            }
-          }
-        }
+                purchasePrice: { type: 'number' },
+              },
+            },
+          },
+        },
       },
       preHandler: [requirePermission('CREATE_INVENTORY')],
     },
-    medicineController.createMedicine
+    medicineController.createMedicine,
   );
 
   fastify.put(
@@ -102,12 +102,12 @@ async function medicineIntelligenceRoutes(fastify) {
         tags: ['Medicines'],
         params: {
           type: 'object',
-          properties: { id: { type: 'string', format: 'uuid' } }
-        }
+          properties: { id: { type: 'string', format: 'uuid' } },
+        },
       },
       preHandler: [requirePermission('UPDATE_INVENTORY')],
     },
-    medicineController.updateMedicine
+    medicineController.updateMedicine,
   );
 
   fastify.delete(
@@ -117,12 +117,12 @@ async function medicineIntelligenceRoutes(fastify) {
         tags: ['Medicines'],
         params: {
           type: 'object',
-          properties: { id: { type: 'string', format: 'uuid' } }
-        }
+          properties: { id: { type: 'string', format: 'uuid' } },
+        },
       },
       preHandler: [requirePermission('DELETE_INVENTORY')],
     },
-    medicineController.deleteMedicine
+    medicineController.deleteMedicine,
   );
 
   fastify.get(

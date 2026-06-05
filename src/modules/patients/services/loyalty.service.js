@@ -28,7 +28,7 @@ class LoyaltyService {
 
     await client.patient.update({
       where: { id: patientId },
-      data: { loyaltyPoints: { increment: points } }
+      data: { loyaltyPoints: { increment: points } },
     });
   }
 
@@ -46,17 +46,20 @@ class LoyaltyService {
 
     const discountValue = (points / 100) * 10;
 
-    await loyaltyRepository.createTransaction({
-      tenantId,
-      patientId,
-      type: 'REDEEM',
-      points: -points,
-      notes: `Redeemed for ₹${discountValue} discount`
-    }, client);
+    await loyaltyRepository.createTransaction(
+      {
+        tenantId,
+        patientId,
+        type: 'REDEEM',
+        points: -points,
+        notes: `Redeemed for ₹${discountValue} discount`,
+      },
+      client,
+    );
 
     await client.patient.update({
       where: { id: patientId },
-      data: { loyaltyPoints: { decrement: points } }
+      data: { loyaltyPoints: { decrement: points } },
     });
 
     return discountValue;
@@ -75,7 +78,7 @@ class LoyaltyService {
   async expireOldPoints() {
     const oneYearAgo = new Date();
     oneYearAgo.setFullYear(oneYearAgo.getFullYear() - 1);
-    
+
     // Find EARN transactions from exactly one year ago that haven't been processed for expiry
     // In a real system, you'd need a way to track which EARN transactions are already expired or redeemed.
     // For this MVP, we'll just find EARN transactions from 1 year ago (start of day to end of day)
@@ -89,9 +92,9 @@ class LoyaltyService {
         type: 'EARN',
         createdAt: {
           gte: startOfDay,
-          lte: endOfDay
-        }
-      }
+          lte: endOfDay,
+        },
+      },
     });
 
     for (const tx of transactions) {
@@ -100,8 +103,8 @@ class LoyaltyService {
         where: {
           patientId: tx.patientId,
           type: 'EXPIRE',
-          referenceId: tx.id
-        }
+          referenceId: tx.id,
+        },
       });
 
       if (alreadyExpired) continue;
@@ -109,7 +112,7 @@ class LoyaltyService {
       // Get current patient points
       const patient = await prisma.patient.findUnique({
         where: { id: tx.patientId },
-        select: { loyaltyPoints: true, tenantId: true }
+        select: { loyaltyPoints: true, tenantId: true },
       });
 
       if (!patient || patient.loyaltyPoints <= 0) continue;
@@ -124,13 +127,13 @@ class LoyaltyService {
             type: 'EXPIRE',
             points: -pointsToExpire,
             referenceType: 'LOYALTY_TRANSACTION',
-            referenceId: tx.id
-          }
+            referenceId: tx.id,
+          },
         });
 
         await p.patient.update({
           where: { id: tx.patientId },
-          data: { loyaltyPoints: { decrement: pointsToExpire } }
+          data: { loyaltyPoints: { decrement: pointsToExpire } },
         });
       });
     }

@@ -8,11 +8,13 @@ class ReconciliationService {
    * Reconcile cache with DB for a tenant/branch
    */
   async reconcileAll(tenantId, branchId = null) {
-    logger.info(`[RECONCILIATION] Starting sync for tenant ${tenantId}, branch: ${branchId || 'ALL'}`);
+    logger.info(
+      `[RECONCILIATION] Starting sync for tenant ${tenantId}, branch: ${branchId || 'ALL'}`,
+    );
 
     const medicines = await prisma.medicine.findMany({
       where: { tenantId, deletedAt: null },
-      select: { id: true }
+      select: { id: true },
     });
 
     const results = [];
@@ -26,7 +28,7 @@ class ReconciliationService {
 
       if (drift || cacheStock === null) {
         await inventoryService.updateCache(tenantId, medicine.id, branchId, dbStock);
-        
+
         await prisma.inventoryReconciliation.create({
           data: {
             tenantId,
@@ -34,8 +36,8 @@ class ReconciliationService {
             branchId,
             dbQuantity: dbStock,
             cacheQuantity: cacheStock !== null ? parseInt(cacheStock) : -1,
-            reconciled: true
-          }
+            reconciled: true,
+          },
         });
 
         results.push({ medicineId: medicine.id, drift: true, dbStock, cacheStock });
@@ -52,11 +54,11 @@ class ReconciliationService {
         medicineId,
         branchId,
         deletedAt: null,
-        status: 'ACTIVE'
+        status: 'ACTIVE',
       },
       _sum: {
-        quantity: true
-      }
+        quantity: true,
+      },
     });
     return batchSum._sum.quantity || 0;
   }

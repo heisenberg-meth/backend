@@ -11,31 +11,37 @@ import logger from '../../../shared/utils/logger.js';
 const isTest = process.env.NODE_ENV === 'test';
 
 if (!isTest) {
-  registerWorker(new Worker(SUPPLIER_SCORING_QUEUE, async (job) => {
-    const { supplierId, tenantId } = job.data || {};
+  registerWorker(
+    new Worker(
+      SUPPLIER_SCORING_QUEUE,
+      async (job) => {
+        const { supplierId, tenantId } = job.data || {};
 
-    switch (job.name) {
-      case JOB_TYPES.SCORE_ALL_SUPPLIERS:
-        await scoreAllSuppliers();
-        break;
+        switch (job.name) {
+          case JOB_TYPES.SCORE_ALL_SUPPLIERS:
+            await scoreAllSuppliers();
+            break;
 
-      case JOB_TYPES.SCORE_SINGLE_SUPPLIER:
-        if (supplierId && tenantId) {
-          await scoreSingleSupplier(supplierId, tenantId);
+          case JOB_TYPES.SCORE_SINGLE_SUPPLIER:
+            if (supplierId && tenantId) {
+              await scoreSingleSupplier(supplierId, tenantId);
+            }
+            break;
+
+          case JOB_TYPES.DAILY_SCORING_SWEEP:
+            await scoreAllSuppliers();
+            break;
+
+          default:
+            logger.warn({ jobName: job.name }, 'Unknown supplier scoring job type');
         }
-        break;
-
-      case JOB_TYPES.DAILY_SCORING_SWEEP:
-        await scoreAllSuppliers();
-        break;
-
-      default:
-        logger.warn({ jobName: job.name }, 'Unknown supplier scoring job type');
-    }
-  }, {
-    connection: getBullRedis(),
-    concurrency: 3,
-  }));
+      },
+      {
+        connection: getBullRedis(),
+        concurrency: 3,
+      },
+    ),
+  );
 
   logger.info('[SUPPLIER-SCORING-WORKER] Initialized supplier scoring worker');
 }
@@ -93,7 +99,10 @@ async function scoreSingleSupplier(supplierId, tenantId) {
   orders.forEach((order) => {
     if (order.expectedDeliveryDate) {
       if (order.approvedAt) {
-        const leadTime = Math.max(0, Math.floor((order.expectedDeliveryDate - order.approvedAt) / (1000 * 60 * 60 * 24)));
+        const leadTime = Math.max(
+          0,
+          Math.floor((order.expectedDeliveryDate - order.approvedAt) / (1000 * 60 * 60 * 24)),
+        );
         totalLeadTime += leadTime;
       }
       if (order.expectedDeliveryDate >= order.createdAt) {
@@ -129,12 +138,14 @@ async function scoreSingleSupplier(supplierId, tenantId) {
   });
   const expiryIssuePct = totalBatches > 0 ? (nearExpiryCount / totalBatches) * 100 : 0;
 
-  const qualityScore = Math.max(0, 100 - (rejectionRate * 2) - (damageRate * 3));
+  const qualityScore = Math.max(0, 100 - rejectionRate * 2 - damageRate * 3);
   const reliabilityScore = Math.max(0, deliveryAccuracy);
 
   const leadTimeReliability = Math.max(0, 100 - (lateDeliveries / Math.max(totalOrders, 1)) * 50);
 
-  const overallScore = parseFloat(((deliveryAccuracy + qualityScore + leadTimeReliability) / 30).toFixed(1));
+  const overallScore = parseFloat(
+    ((deliveryAccuracy + qualityScore + leadTimeReliability) / 30).toFixed(1),
+  );
 
   const avgShelfLife = await _calculateAvgShelfLife(supplierId, tenantId);
 

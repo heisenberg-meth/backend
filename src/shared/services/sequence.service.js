@@ -1,7 +1,6 @@
 import prisma from '../../config/prisma.js';
 
 class SequenceService {
-  
   async getNextValue(tenantId, sequenceType, tx) {
     const client = tx || prisma;
 

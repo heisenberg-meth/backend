@@ -23,7 +23,7 @@ export function initDashboardWorker() {
 
         logger.info(
           { job: job.name, tenantId, branchId, snapshotType },
-          'Dashboard aggregation job started'
+          'Dashboard aggregation job started',
         );
 
         switch (job.name) {
@@ -55,22 +55,19 @@ export function initDashboardWorker() {
             logger.warn({ jobName: job.name }, 'Unknown dashboard aggregation job');
         }
 
-        logger.info(
-          { job: job.name, tenantId, branchId },
-          'Dashboard aggregation job completed'
-        );
+        logger.info({ job: job.name, tenantId, branchId }, 'Dashboard aggregation job completed');
       },
       {
         connection: getBullRedis(),
         concurrency: 3,
-      }
-    )
+      },
+    ),
   );
 
   dashboardWorker.on('failed', (job, err) => {
     logger.error(
       { job: job?.name, jobId: job?.id, err: err.message },
-      'Dashboard aggregation job failed'
+      'Dashboard aggregation job failed',
     );
   });
 
@@ -83,18 +80,20 @@ export async function queueDashboardRefresh(tenantId, branchId = null, snapshotT
     return;
   }
 
-  const jobName = snapshotType
-    ? `REFRESH_${snapshotType.toUpperCase()}`
-    : 'REFRESH_ALL_SNAPSHOTS';
+  const jobName = snapshotType ? `REFRESH_${snapshotType.toUpperCase()}` : 'REFRESH_ALL_SNAPSHOTS';
 
-  await dashboardQueue.add(jobName, {
-    tenantId,
-    branchId,
-    snapshotType,
-  }, {
-    removeOnComplete: true,
-    removeOnFail: 100,
-  });
+  await dashboardQueue.add(
+    jobName,
+    {
+      tenantId,
+      branchId,
+      snapshotType,
+    },
+    {
+      removeOnComplete: true,
+      removeOnFail: 100,
+    },
+  );
 }
 
 export async function queueCacheInvalidation(tenantId, branchId = null) {
@@ -103,13 +102,17 @@ export async function queueCacheInvalidation(tenantId, branchId = null) {
     return;
   }
 
-  await dashboardQueue.add('INVALIDATE_CACHE', {
-    tenantId,
-    branchId,
-  }, {
-    removeOnComplete: true,
-    removeOnFail: 100,
-  });
+  await dashboardQueue.add(
+    'INVALIDATE_CACHE',
+    {
+      tenantId,
+      branchId,
+    },
+    {
+      removeOnComplete: true,
+      removeOnFail: 100,
+    },
+  );
 }
 
 export { dashboardQueue, dashboardWorker };

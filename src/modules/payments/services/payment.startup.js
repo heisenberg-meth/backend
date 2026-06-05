@@ -29,17 +29,21 @@ async function startupPaymentSystem() {
   }
 
   const config = (await import('../../../config/payment.config.js')).getConfig();
-  logger.info({
-    environment: config.environment,
-    keyMode: config.keyMode,
-    isProduction: config.isProduction,
-  }, '[PAYMENT] System initialized');
+  logger.info(
+    {
+      environment: config.environment,
+      keyMode: config.keyMode,
+      isProduction: config.isProduction,
+    },
+    '[PAYMENT] System initialized',
+  );
 }
 
 async function startWorkers() {
   const { createRecoveryWorker } = await import('../workers/recovery.worker.js');
   const { createWebhookWorker } = await import('../workers/webhook.worker.js');
-  const { createReconciliationWorker, createDeadLetterWorker } = await import('../workers/reconciliation.worker.js');
+  const { createReconciliationWorker, createDeadLetterWorker } =
+    await import('../workers/reconciliation.worker.js');
   const { getQueue } = await import('../queue/payment.queue.js');
 
   const recoveryWorker = createRecoveryWorker();
@@ -55,8 +59,8 @@ async function startWorkers() {
       { tenantId: null },
       {
         repeat: { pattern: '*/30 * * * *' },
-        jobId: 'periodic-reconciliation'
-      }
+        jobId: 'periodic-reconciliation',
+      },
     );
     logger.info('[PAYMENT] Scheduled periodic reconciliation (every 30m)');
   }

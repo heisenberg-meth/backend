@@ -1,12 +1,16 @@
 import createServiceApp from '../../shared/app-factory.js';
 import paymentRoutes from '../../modules/payments/payment.fastify.routes.js';
-import { startupPaymentSystem, startWorkers, shutdownWorkers } from '../../modules/payments/services/payment.startup.js';
+import {
+  startupPaymentSystem,
+  startWorkers,
+  shutdownWorkers,
+} from '../../modules/payments/services/payment.startup.js';
 import logger from '../../shared/utils/logger.js';
 
 const start = async () => {
   const app = await createServiceApp({
     name: 'Payment Service',
-    description: 'Handles Razorpay transactions, billing, reconciliation'
+    description: 'Handles Razorpay transactions, billing, reconciliation',
   });
 
   await startupPaymentSystem();

@@ -34,22 +34,23 @@ class MedicineAlertService {
           alert.medicineId,
           tenantId,
           alert.branchId,
-          alert.currentStock
+          alert.currentStock,
         );
 
         const reorderRec = await forecastingService.getReorderRecommendations(
           alert.medicineId,
           tenantId,
-          alert.branchId
+          alert.branchId,
         );
 
         return {
           ...alert,
           daysRemaining,
-          recommendedOrderQuantity: reorderRec?.recommendedOrderQuantity || alert.medicine.reorderLevel * 2,
+          recommendedOrderQuantity:
+            reorderRec?.recommendedOrderQuantity || alert.medicine.reorderLevel * 2,
           averageDailyUsage: reorderRec?.averageDailyUsage || 0,
         };
-      })
+      }),
     );
 
     const response = {
@@ -120,7 +121,7 @@ class MedicineAlertService {
         const avgDailyDemand = await this._getAverageDailyDemand(
           alert.medicineId,
           tenantId,
-          alert.branchId
+          alert.branchId,
         );
 
         const priority = this._calculateOosPriority(alert.medicine, avgDailyDemand);
@@ -131,7 +132,7 @@ class MedicineAlertService {
           priority,
           lastAvailableAt: alert.lastAvailableAt,
         };
-      })
+      }),
     );
 
     const response = {
@@ -217,7 +218,9 @@ class MedicineAlertService {
     };
 
     batches.forEach((batch) => {
-      const daysRemaining = Math.ceil((batch.expiryDate.getTime() - now.getTime()) / (1000 * 3600 * 24));
+      const daysRemaining = Math.ceil(
+        (batch.expiryDate.getTime() - now.getTime()) / (1000 * 3600 * 24),
+      );
       const severity = this._calculateExpirySeverity(daysRemaining);
       const potentialLoss = batch.quantity * batch.medicine.sellingPrice;
 
@@ -262,8 +265,8 @@ class MedicineAlertService {
 
     const recommendations = await Promise.all(
       lowStockAlerts.alerts.map((alert) =>
-        forecastingService.getReorderRecommendations(alert.medicineId, tenantId, alert.branchId)
-      )
+        forecastingService.getReorderRecommendations(alert.medicineId, tenantId, alert.branchId),
+      ),
     );
 
     return recommendations.filter((r) => r !== null);
@@ -398,7 +401,9 @@ class MedicineAlertService {
     let count = 0;
 
     for (const batch of expiringBatches) {
-      const daysRemaining = Math.ceil((batch.expiryDate.getTime() - now.getTime()) / (1000 * 3600 * 24));
+      const daysRemaining = Math.ceil(
+        (batch.expiryDate.getTime() - now.getTime()) / (1000 * 3600 * 24),
+      );
       const severity = this._calculateExpirySeverity(daysRemaining);
 
       await alertRepository.upsertExpiryAlert({
@@ -440,7 +445,8 @@ class MedicineAlertService {
       const threshold = medicine.reorderLevel || 10;
 
       if (totalStock <= threshold) {
-        const severity = totalStock <= 0 ? 'CRITICAL' : medicine.prescriptionRequired ? 'CRITICAL' : 'WARNING';
+        const severity =
+          totalStock <= 0 ? 'CRITICAL' : medicine.prescriptionRequired ? 'CRITICAL' : 'WARNING';
         const alertType = totalStock <= 0 ? 'OUT_OF_STOCK' : 'LOW_STOCK';
 
         await alertRepository.upsertStockAlert({
@@ -455,14 +461,16 @@ class MedicineAlertService {
         });
 
         emitLocalEvent(
-          alertType === 'OUT_OF_STOCK' ? DOMAIN_EVENTS.OUT_OF_STOCK_DETECTED : DOMAIN_EVENTS.LOW_STOCK_DETECTED,
+          alertType === 'OUT_OF_STOCK'
+            ? DOMAIN_EVENTS.OUT_OF_STOCK_DETECTED
+            : DOMAIN_EVENTS.LOW_STOCK_DETECTED,
           {
             medicineId: medicine.id,
             tenantId,
             totalStock,
             threshold,
             timestamp: new Date().toISOString(),
-          }
+          },
         );
 
         count++;

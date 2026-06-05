@@ -38,7 +38,10 @@ class RefundOrchestrationService {
         throw new Error(`Invoice item ${req.invoiceItemId} not found`);
       }
 
-      const quantityValidation = refundEligibility.validateRefundQuantity(invoiceItem, req.quantity);
+      const quantityValidation = refundEligibility.validateRefundQuantity(
+        invoiceItem,
+        req.quantity,
+      );
       if (!quantityValidation.valid) {
         throw new Error(quantityValidation.reason);
       }
@@ -49,10 +52,15 @@ class RefundOrchestrationService {
         returnedQuantity: 0,
       });
       if (!itemEligibility.eligible) {
-        throw new Error(`Item ${invoiceItem.medicine?.name || invoiceItem.id}: ${itemEligibility.reason}`);
+        throw new Error(
+          `Item ${invoiceItem.medicine?.name || invoiceItem.id}: ${itemEligibility.reason}`,
+        );
       }
 
-      const duplicateCheck = refundEligibility.checkDuplicateRefund(existingReturns, req.invoiceItemId);
+      const duplicateCheck = refundEligibility.checkDuplicateRefund(
+        existingReturns,
+        req.invoiceItemId,
+      );
       if (duplicateCheck.duplicate) {
         throw new Error(duplicateCheck.reason);
       }
@@ -85,7 +93,8 @@ class RefundOrchestrationService {
       refundItems.map((r, i) => ({
         ...r,
         invoiceItemId: requestedItems[i].invoiceItemId,
-        medicineName: invoice.items.find((it) => it.id === requestedItems[i].invoiceItemId)?.medicine?.name,
+        medicineName: invoice.items.find((it) => it.id === requestedItems[i].invoiceItemId)
+          ?.medicine?.name,
       })),
       totalRefundAmount,
     );
@@ -152,10 +161,14 @@ class RefundOrchestrationService {
           },
         });
 
-        await refundRepository.updateRefundStatus(created.id, {
-          status: 'COMPLETED',
-          refundStatus: 'COMPLETED',
-        }, tx);
+        await refundRepository.updateRefundStatus(
+          created.id,
+          {
+            status: 'COMPLETED',
+            refundStatus: 'COMPLETED',
+          },
+          tx,
+        );
         created.status = 'COMPLETED';
         created.refundStatus = 'COMPLETED';
       }
@@ -163,7 +176,8 @@ class RefundOrchestrationService {
       return created;
     });
 
-    const eventStatus = refund.status === 'COMPLETED' ? EVENTS.REFUND_COMPLETED : EVENTS.RETURN_CREATED;
+    const eventStatus =
+      refund.status === 'COMPLETED' ? EVENTS.REFUND_COMPLETED : EVENTS.RETURN_CREATED;
     emitLocalEvent(eventStatus, {
       returnId: refund.id,
       returnNumber: refund.returnNumber,
@@ -192,7 +206,9 @@ class RefundOrchestrationService {
       fraudScore: fraudResult.fraudScore,
     });
 
-    logger.info(`[Refund] Created refund ${refund.returnNumber} (status: ${refund.status}), amount: ₹${totalRefundAmount}`);
+    logger.info(
+      `[Refund] Created refund ${refund.returnNumber} (status: ${refund.status}), amount: ₹${totalRefundAmount}`,
+    );
 
     return refund;
   }

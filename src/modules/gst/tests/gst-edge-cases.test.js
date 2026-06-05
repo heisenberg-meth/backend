@@ -45,7 +45,8 @@ const emitLocalEvent = (await import('../../../shared/events/local-event-bus.js'
 
 const gstCalculationService = (await import('../services/gst-calculation.service.js')).default;
 const gstAggregationService = (await import('../services/gst-aggregation.service.js')).default;
-const gstReconciliationService = (await import('../services/gst-reconciliation.service.js')).default;
+const gstReconciliationService = (await import('../services/gst-reconciliation.service.js'))
+  .default;
 const gstReportService = (await import('../services/gst-report.service.js')).default;
 const gstExportService = (await import('../services/gst-export.service.js')).default;
 const gstComplianceService = (await import('../services/gst-compliance.service.js')).default;
@@ -271,12 +272,14 @@ describe('GstAggregationService', () => {
   it('aggregates monthly summaries by period filter', async () => {
     mockPrisma.invoice.findMany.mockResolvedValue([]);
     mockPrisma.purchaseInvoice.findMany.mockResolvedValue([]);
-    mockPrisma.gstSummary.findMany.mockResolvedValue([{
-      reportMonth: '2025-01',
-      outputTax: 5000,
-      inputTaxCredit: 2000,
-      netGstPayable: 3000,
-    }]);
+    mockPrisma.gstSummary.findMany.mockResolvedValue([
+      {
+        reportMonth: '2025-01',
+        outputTax: 5000,
+        inputTaxCredit: 2000,
+        netGstPayable: 3000,
+      },
+    ]);
 
     const result = await gstAggregationService.getGstSummary('tenant-1', { period: 'MONTHLY' });
     expect(result.summaries).toHaveLength(1);
@@ -304,7 +307,10 @@ describe('GstAggregationService', () => {
     mockPrisma.invoice.findMany.mockResolvedValue([mockInvoice()]);
 
     const result = await gstAggregationService.getBranchGstSummary(
-      'tenant-1', 'branch-1', '2025-01-01', '2025-01-31'
+      'tenant-1',
+      'branch-1',
+      '2025-01-01',
+      '2025-01-31',
     );
     expect(result.branchId).toBe('branch-1');
     expect(result.invoiceCount).toBe(1);
@@ -419,7 +425,9 @@ describe('GstExportService', () => {
     mockPrisma.invoice.findMany.mockResolvedValue([mockInvoice()]);
 
     const result = await gstExportService.exportGstFiling('tenant-1', {
-      month: 1, year: 2025, format: 'json',
+      month: 1,
+      year: 2025,
+      format: 'json',
     });
 
     expect(result.data).toHaveLength(1);
@@ -431,7 +439,9 @@ describe('GstExportService', () => {
     mockPrisma.invoice.findMany.mockResolvedValue([mockInvoice()]);
 
     const result = await gstExportService.exportGstFiling('tenant-1', {
-      month: 1, year: 2025, format: 'csv',
+      month: 1,
+      year: 2025,
+      format: 'csv',
     });
 
     expect(result.buffer).toBeInstanceOf(Buffer);
@@ -443,16 +453,16 @@ describe('GstExportService', () => {
     mockPrisma.invoice.findMany.mockResolvedValue([]);
 
     const result = await gstExportService.exportGstFiling('tenant-1', {
-      month: 1, year: 2025, format: 'json',
+      month: 1,
+      year: 2025,
+      format: 'json',
     });
 
     expect(result.data).toHaveLength(0);
   });
 
   it('excludes cancelled invoices', async () => {
-    mockPrisma.invoice.findMany.mockResolvedValue([
-      mockInvoice({ status: 'CANCELLED' }),
-    ]);
+    mockPrisma.invoice.findMany.mockResolvedValue([mockInvoice({ status: 'CANCELLED' })]);
 
     await gstExportService.exportGstFiling('tenant-1', {
       month: 1,
@@ -473,7 +483,9 @@ describe('GstExportService', () => {
     mockPrisma.invoice.findMany.mockResolvedValue([mockInvoice({ patient: null })]);
 
     const result = await gstExportService.exportGstFiling('tenant-1', {
-      month: 1, year: 2025, format: 'json',
+      month: 1,
+      year: 2025,
+      format: 'json',
     });
 
     expect(result.data[0].customerName).toBe('Walk-in');
@@ -491,7 +503,9 @@ describe('GstReportService', () => {
     mockPrisma.purchaseInvoice.findMany.mockResolvedValue([]);
 
     const result = await gstReportService.generateReport('tenant-1', {
-      month: 1, year: 2025, format: 'json',
+      month: 1,
+      year: 2025,
+      format: 'json',
     });
 
     expect(result.reportData).toBeDefined();

@@ -131,7 +131,9 @@ class FraudDetectionService {
   }
 
   async checkReturnRatio(tenantId, userId) {
-    const thirtyDaysAgo = new Date(Date.now() - FRAUD_RULES.HIGH_RETURN_RATIO.windowDays * 24 * 60 * 60 * 1000);
+    const thirtyDaysAgo = new Date(
+      Date.now() - FRAUD_RULES.HIGH_RETURN_RATIO.windowDays * 24 * 60 * 60 * 1000,
+    );
 
     const [returns, sales] = await Promise.all([
       prisma.return.count({
@@ -168,7 +170,9 @@ class FraudDetectionService {
         tenantId,
         createdBy: userId,
         createdAt: {
-          gte: new Date(Date.now() - FRAUD_RULES.CASHIER_EXCESSIVE_RETURNS.windowDays * 24 * 60 * 60 * 1000),
+          gte: new Date(
+            Date.now() - FRAUD_RULES.CASHIER_EXCESSIVE_RETURNS.windowDays * 24 * 60 * 60 * 1000,
+          ),
         },
       },
     });
@@ -199,7 +203,7 @@ class FraudDetectionService {
     });
 
     logger.warn(
-      `[FraudDetection] Return fraud alert: userId=${userId}, flags=${flags.join(',')}, score=${score}`
+      `[FraudDetection] Return fraud alert: userId=${userId}, flags=${flags.join(',')}, score=${score}`,
     );
   }
 

@@ -8,26 +8,47 @@ import logger from '../../../shared/utils/logger.js';
 
 class NotificationOrchestratorService {
   async send(params) {
-    const { tenantId, channel, recipient, templateName, variables, patientId, notificationType, userId } = params;
+    const {
+      tenantId,
+      channel,
+      recipient,
+      templateName,
+      variables,
+      patientId,
+      notificationType,
+      userId,
+    } = params;
 
     // 1. Check patient communication consent
     if (patientId) {
       const consent = await patientPreferenceService.checkPatientConsent(patientId, channel);
       if (!consent.allowed) {
-        logger.info(`[Orchestrator] Skipped ${channel} for patient ${patientId}: ${consent.reason}`);
+        logger.info(
+          `[Orchestrator] Skipped ${channel} for patient ${patientId}: ${consent.reason}`,
+        );
         return { success: false, reason: consent.reason, skipped: true };
       }
     }
 
     // 2. Check duplicates
-    const isDuplicate = await deduplicationService.checkDuplicate(tenantId, channel, recipient, templateName, notificationType);
+    const isDuplicate = await deduplicationService.checkDuplicate(
+      tenantId,
+      channel,
+      recipient,
+      templateName,
+      notificationType,
+    );
     if (isDuplicate) {
       logger.info(`[Orchestrator] Skipped duplicate ${channel} for ${recipient}`);
       return { success: false, reason: 'DUPLICATE', skipped: true };
     }
 
     // 3. Check rate limit (per recipient)
-    const rateLimit = await rateLimitService.checkRateLimit(tenantId, channel.toLowerCase(), recipient);
+    const rateLimit = await rateLimitService.checkRateLimit(
+      tenantId,
+      channel.toLowerCase(),
+      recipient,
+    );
     if (!rateLimit.allowed) {
       return { success: false, reason: 'RATE_LIMITED', retryAfter: rateLimit.retryAfter };
     }
@@ -51,7 +72,13 @@ class NotificationOrchestratorService {
     });
 
     if (result.success) {
-      await deduplicationService.markSent(tenantId, channel, recipient, templateName, notificationType);
+      await deduplicationService.markSent(
+        tenantId,
+        channel,
+        recipient,
+        templateName,
+        notificationType,
+      );
       return { success: true, notificationId: result.notificationId };
     }
 

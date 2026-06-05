@@ -20,12 +20,14 @@ const createQueue = (name) => {
   });
 };
 
-export const queues = isTest ? {} : {
-  sms: registerQueue(createQueue('notification_sms')),
-  email: registerQueue(createQueue('notification_email')),
-  whatsapp: registerQueue(createQueue('notification_whatsapp')),
-  retry: registerQueue(createQueue('notification_retry')),
-};
+export const queues = isTest
+  ? {}
+  : {
+      sms: registerQueue(createQueue('notification_sms')),
+      email: registerQueue(createQueue('notification_email')),
+      whatsapp: registerQueue(createQueue('notification_whatsapp')),
+      retry: registerQueue(createQueue('notification_retry')),
+    };
 
 class NotificationQueueService {
   async enqueue(notificationId, channel, payload = {}) {
@@ -35,12 +37,16 @@ class NotificationQueueService {
       throw new Error(`Unsupported channel: ${channel}`);
     }
 
-    const job = await queue.add('send_notification', {
-      notificationId,
-      ...payload,
-    }, {
-      jobId: notificationId, // Prevent duplicate queuing for same notification
-    });
+    const job = await queue.add(
+      'send_notification',
+      {
+        notificationId,
+        ...payload,
+      },
+      {
+        jobId: notificationId, // Prevent duplicate queuing for same notification
+      },
+    );
 
     logger.info({ notificationId, channel, jobId: job.id }, 'Notification enqueued');
     return job;

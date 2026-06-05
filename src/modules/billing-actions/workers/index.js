@@ -38,25 +38,27 @@ export const invoiceDeliveryWorker = isTest
       ),
     );
 
-export const invoicePrintWorker = isTest ? null : registerWorker(
-  new Worker(
-    'viyan-medassist-invoice-print',
-    async (job) => {
-      const handler = handlers[job.name];
-      if (handler) {
-        logger.info(`[Invoice Print Worker] Started job ${job.id} (${job.name})`);
-        await handler(job.data);
-        logger.info(`[Invoice Print Worker] Finished job ${job.id} (${job.name})`);
-      } else {
-        logger.warn(`[Invoice Print Worker] No handler for job type: ${job.name}`);
-      }
-    },
-    {
-      connection: getBullRedis(),
-      concurrency: 5,
-    },
-  ),
-);
+export const invoicePrintWorker = isTest
+  ? null
+  : registerWorker(
+      new Worker(
+        'viyan-medassist-invoice-print',
+        async (job) => {
+          const handler = handlers[job.name];
+          if (handler) {
+            logger.info(`[Invoice Print Worker] Started job ${job.id} (${job.name})`);
+            await handler(job.data);
+            logger.info(`[Invoice Print Worker] Finished job ${job.id} (${job.name})`);
+          } else {
+            logger.warn(`[Invoice Print Worker] No handler for job type: ${job.name}`);
+          }
+        },
+        {
+          connection: getBullRedis(),
+          concurrency: 5,
+        },
+      ),
+    );
 
 if (invoiceDeliveryWorker) {
   invoiceDeliveryWorker.on('failed', (job, err) => {

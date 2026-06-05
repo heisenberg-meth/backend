@@ -1,4 +1,4 @@
-import { jest , describe, beforeEach, it, expect } from '@jest/globals';
+import { jest, describe, beforeEach, it, expect } from '@jest/globals';
 
 const mockPrisma = {
   medicine: {
@@ -31,19 +31,20 @@ const mockErpEventBus = {
 };
 
 jest.unstable_mockModule('../../../config/prisma.js', () => ({
-  default: mockPrisma
+  default: mockPrisma,
 }));
 
 jest.unstable_mockModule('../../../config/redis.js', () => ({
-  default: mockRedis
+  default: mockRedis,
 }));
 
 jest.unstable_mockModule('../../../shared/events/erp-event-bus.js', () => ({
-  emitEvent: mockErpEventBus.emitEvent
+  emitEvent: mockErpEventBus.emitEvent,
 }));
 
 // Import AFTER mocking
-const { default: alertNotificationService } = await import('../notifications/alert-notification.service.js');
+const { default: alertNotificationService } =
+  await import('../notifications/alert-notification.service.js');
 const { default: prisma } = await import('../../../config/prisma.js');
 const { default: redisClient } = await import('../../../config/redis.js');
 
@@ -55,7 +56,10 @@ describe('AlertNotificationService', () => {
   describe('notifyLowStock', () => {
     it('should send notifications for low stock alerts', async () => {
       redisClient.get.mockResolvedValue(null);
-      prisma.medicine.findUnique.mockResolvedValue({ name: 'Dolo 650', genericName: 'Paracetamol' });
+      prisma.medicine.findUnique.mockResolvedValue({
+        name: 'Dolo 650',
+        genericName: 'Paracetamol',
+      });
       prisma.branch.findUnique.mockResolvedValue({ name: 'Main Branch', code: 'MB01' });
       prisma.stockAlert.create.mockResolvedValue({ id: 'alert-1' });
 
@@ -93,7 +97,10 @@ describe('AlertNotificationService', () => {
         purchasePrice: 10,
         medicine: { name: 'Insulin' },
       });
-      prisma.medicine.findUnique.mockResolvedValue({ name: 'Insulin', genericName: 'Insulin Glargine' });
+      prisma.medicine.findUnique.mockResolvedValue({
+        name: 'Insulin',
+        genericName: 'Insulin Glargine',
+      });
       prisma.stockAlert.create.mockResolvedValue({ id: 'alert-1' });
 
       await alertNotificationService.notifyExpiryWarning({

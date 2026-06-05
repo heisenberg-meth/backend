@@ -47,7 +47,8 @@ class CategoryService {
     const category = await categoryRepository.update(id, tenantId, data);
 
     await auditService.log({
-      tenantId, userId,
+      tenantId,
+      userId,
       action: 'UPDATE_CATEGORY',
       target: category.name,
       type: 'INVENTORY',
@@ -63,7 +64,8 @@ class CategoryService {
     await categoryRepository.softDelete(id, tenantId);
 
     await auditService.log({
-      tenantId, userId,
+      tenantId,
+      userId,
       action: 'DELETE_CATEGORY',
       target: category.name,
       type: 'INVENTORY',

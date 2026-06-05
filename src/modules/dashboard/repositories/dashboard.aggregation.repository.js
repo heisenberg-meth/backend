@@ -114,11 +114,13 @@ class DashboardAggregationRepository {
   async getPendingPurchaseOrders(tenantId, branchId = null) {
     const where = {
       tenantId,
-      status: { in: [
-        PURCHASE_ORDER_STATUS.DRAFT, 
-        PURCHASE_ORDER_STATUS.PENDING_APPROVAL, 
-        PURCHASE_ORDER_STATUS.APPROVED
-      ] },
+      status: {
+        in: [
+          PURCHASE_ORDER_STATUS.DRAFT,
+          PURCHASE_ORDER_STATUS.PENDING_APPROVAL,
+          PURCHASE_ORDER_STATUS.APPROVED,
+        ],
+      },
       deletedAt: null,
     };
     if (branchId) where.branchId = branchId;
@@ -198,10 +200,7 @@ class DashboardAggregationRepository {
       include: {
         medicine: { select: { id: true, name: true } },
       },
-      orderBy: [
-        { severity: 'desc' },
-        { createdAt: 'desc' },
-      ],
+      orderBy: [{ severity: 'desc' }, { createdAt: 'desc' }],
       take: limit,
     });
 

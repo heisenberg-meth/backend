@@ -1,17 +1,21 @@
 import { z } from 'zod';
 
-export const sendEmailSchema = z.object({
-  to: z.array(z.string().email('Invalid email address')).min(1, 'At least one recipient required'),
-  subject: z.string().min(1, 'Subject required').max(255).optional(),
-  template: z.string().min(1, 'Template name required').max(100).optional(),
-  data: z.record(z.string(), z.any()).optional(),
-  notificationType: z.string().max(50).optional(),
-}).refine((data) => {
-  if (!data.template && !data.subject) {
-    return false;
-  }
-  return true;
-});
+export const sendEmailSchema = z
+  .object({
+    to: z
+      .array(z.string().email('Invalid email address'))
+      .min(1, 'At least one recipient required'),
+    subject: z.string().min(1, 'Subject required').max(255).optional(),
+    template: z.string().min(1, 'Template name required').max(100).optional(),
+    data: z.record(z.string(), z.any()).optional(),
+    notificationType: z.string().max(50).optional(),
+  })
+  .refine((data) => {
+    if (!data.template && !data.subject) {
+      return false;
+    }
+    return true;
+  });
 
 export const sendSmsSchema = z.object({
   phoneNumber: z.string().min(10, 'Invalid phone number').max(15),
@@ -50,7 +54,9 @@ export const notificationHistorySchema = z.object({
   skip: z.coerce.number().int().min(0).default(0),
   take: z.coerce.number().int().min(1).max(100).default(20),
   channel: z.enum(['EMAIL', 'SMS', 'WHATSAPP', 'IN_APP', 'PUSH']).optional(),
-  deliveryStatus: z.enum(['PENDING', 'QUEUED', 'PROCESSING', 'SENT', 'DELIVERED', 'FAILED', 'RETRYING']).optional(),
+  deliveryStatus: z
+    .enum(['PENDING', 'QUEUED', 'PROCESSING', 'SENT', 'DELIVERED', 'FAILED', 'RETRYING'])
+    .optional(),
   notificationType: z.string().max(50).optional(),
 });
 

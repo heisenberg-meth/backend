@@ -17,10 +17,14 @@ class RiskMonitoringService {
       const totalStock = await this._calculateTotalStock(medicineId, branchId, tenantId);
 
       // 2. Fetch Medicine Governance Data (Thresholds)
-      const thresholds = await alertSettingsService.getEffectiveThresholds(tenantId, medicineId, branchId);
+      const thresholds = await alertSettingsService.getEffectiveThresholds(
+        tenantId,
+        medicineId,
+        branchId,
+      );
       const medicine = await prisma.medicine.findUnique({
         where: { id: medicineId },
-        select: { name: true, prescriptionRequired: true }
+        select: { name: true, prescriptionRequired: true },
       });
 
       if (!medicine) return;
@@ -29,21 +33,53 @@ class RiskMonitoringService {
 
       // 3. Evaluate Alerts
       if (totalStock <= threshold) {
-        const severity = totalStock <= thresholds.criticalStock ? 'CRITICAL' : (medicine.prescriptionRequired ? 'CRITICAL' : 'WARNING');
+        const severity =
+          totalStock <= thresholds.criticalStock
+            ? 'CRITICAL'
+            : medicine.prescriptionRequired
+              ? 'CRITICAL'
+              : 'WARNING';
         const alertType = totalStock <= 0 ? 'OUT_OF_STOCK' : 'LOW_STOCK';
-        
+
         // Enrichment: Forecast depletion
-        const daysRemaining = await forecastingService.predictDaysRemaining(medicineId, tenantId, branchId, totalStock);
-        
-        await this._createStockAlert(tenantId, branchId, medicineId, alertType, severity, medicine.name, totalStock, threshold, daysRemaining);
-        
+        const daysRemaining = await forecastingService.predictDaysRemaining(
+          medicineId,
+          tenantId,
+          branchId,
+          totalStock,
+        );
+
+        await this._createStockAlert(
+          tenantId,
+          branchId,
+          medicineId,
+          alertType,
+          severity,
+          medicine.name,
+          totalStock,
+          threshold,
+          daysRemaining,
+        );
+
         // Enrichment: Check if other branches or warehouse has stock (Stock Transfer Recommendation)
         const warehouseStock = await this._checkWarehouseStock(medicineId, tenantId, branchId);
         if (warehouseStock > 0) {
-          await this._createTransferRecommendation(tenantId, branchId, medicineId, medicine.name, warehouseStock);
+          await this._createTransferRecommendation(
+            tenantId,
+            branchId,
+            medicineId,
+            medicine.name,
+            warehouseStock,
+          );
         }
 
-        await eventBus.publish(`${alertType}_DETECTED`, { medicineId, branchId, tenantId, totalStock, daysRemaining });
+        await eventBus.publish(`${alertType}_DETECTED`, {
+          medicineId,
+          branchId,
+          tenantId,
+          totalStock,
+          daysRemaining,
+        });
       } else {
         // Resolve existing alerts if stock is above threshold
         await alertRepository.resolveStockAlerts(medicineId, tenantId, branchId);
@@ -51,7 +87,6 @@ class RiskMonitoringService {
 
       // 4. FEFO Intelligence Check: Ensure oldest batches are being used first
       await this.verifyFEFOCompliance(medicineId, tenantId, branchId);
-
     } catch (error) {
       logger.error({ error, medicineId }, 'Failed to monitor risk for stock movement');
     }
@@ -71,15 +106,21 @@ class RiskMonitoringService {
         medicine: { tenantId },
         expiryDate: { lte: scanWindowLater },
         quantity: { gt: 0 },
-        status: 'ACTIVE'
+        status: 'ACTIVE',
       },
-      include: { medicine: true }
+      include: { medicine: true },
     });
 
     for (const batch of expiringBatches) {
-      const thresholds = await alertSettingsService.getEffectiveThresholds(tenantId, batch.medicineId, batch.branchId);
-      const daysRemaining = Math.ceil((batch.expiryDate.getTime() - now.getTime()) / (1000 * 3600 * 24));
-      
+      const thresholds = await alertSettingsService.getEffectiveThresholds(
+        tenantId,
+        batch.medicineId,
+        batch.branchId,
+      );
+      const daysRemaining = Math.ceil(
+        (batch.expiryDate.getTime() - now.getTime()) / (1000 * 3600 * 24),
+      );
+
       let severity = 'INFO';
       if (daysRemaining <= thresholds.criticalExpiry) severity = 'CRITICAL';
       else if (daysRemaining <= thresholds.expiryWarning) severity = 'WARNING';
@@ -96,11 +137,16 @@ class RiskMonitoringService {
           medicineId: batch.medicineId,
           severity,
           daysRemaining,
-          isResolved: false
+          isResolved: false,
         });
 
         if (severity === 'CRITICAL') {
-          await eventBus.publish('EXPIRY_WARNING', { batchId: batch.id, medicineId: batch.medicineId, daysRemaining, tenantId });
+          await eventBus.publish('EXPIRY_WARNING', {
+            batchId: batch.id,
+            medicineId: batch.medicineId,
+            daysRemaining,
+            tenantId,
+          });
         }
       }
     }
@@ -119,9 +165,9 @@ class RiskMonitoringService {
         ...(branchId && { branchId }),
         quantity: { gt: 0 },
         status: 'ACTIVE',
-        expiryDate: { gt: new Date() }
+        expiryDate: { gt: new Date() },
       },
-      orderBy: { expiryDate: 'asc' }
+      orderBy: { expiryDate: 'asc' },
     });
 
     if (activeBatches.length < 2) return;
@@ -130,23 +176,26 @@ class RiskMonitoringService {
     const recentSaleItem = await prisma.saleItem.findFirst({
       where: {
         medicineId,
-        sale: { tenantId, ...(branchId && { branchId }) }
+        sale: { tenantId, ...(branchId && { branchId }) },
       },
       orderBy: { sale: { soldAt: 'desc' } },
-      include: { batch: true }
+      include: { batch: true },
     });
 
     if (recentSaleItem && recentSaleItem.batchId !== activeBatches[0].id) {
       // Potential FEFO violation: Sold from a newer batch
       const oldestBatch = activeBatches[0];
       if (recentSaleItem.batch.expiryDate > oldestBatch.expiryDate) {
-        logger.warn({ medicineId, soldBatchId: recentSaleItem.batchId, oldestBatchId: oldestBatch.id }, 'FEFO Violation Detected');
-        await eventBus.publish('FEFO_VIOLATION_DETECTED', { 
-          medicineId, 
-          tenantId, 
-          branchId, 
+        logger.warn(
+          { medicineId, soldBatchId: recentSaleItem.batchId, oldestBatchId: oldestBatch.id },
+          'FEFO Violation Detected',
+        );
+        await eventBus.publish('FEFO_VIOLATION_DETECTED', {
+          medicineId,
+          tenantId,
+          branchId,
           soldBatchNumber: recentSaleItem.batch.batchNumber,
-          oldestBatchNumber: oldestBatch.batchNumber 
+          oldestBatchNumber: oldestBatch.batchNumber,
         });
       }
     }
@@ -162,9 +211,9 @@ class RiskMonitoringService {
         medicine: { tenantId },
         ...(excludingBranchId && { branchId: { not: excludingBranchId } }),
         status: 'ACTIVE',
-        expiryDate: { gt: new Date() }
+        expiryDate: { gt: new Date() },
       },
-      _sum: { quantity: true }
+      _sum: { quantity: true },
     });
     return result._sum.quantity || 0;
   }
@@ -172,7 +221,13 @@ class RiskMonitoringService {
   /**
    * Private: Create a stock transfer recommendation alert
    */
-  async _createTransferRecommendation(tenantId, branchId, medicineId, medicineName, availableStock) {
+  async _createTransferRecommendation(
+    tenantId,
+    branchId,
+    medicineId,
+    medicineName,
+    availableStock,
+  ) {
     await alertRepository.upsertStockAlert({
       tenantId,
       branchId,
@@ -181,7 +236,7 @@ class RiskMonitoringService {
       severity: 'INFO',
       message: `Stock transfer recommended: ${medicineName} is low here, but ${availableStock} units are available in other branches/warehouse.`,
       currentStock: 0, // Not used for this type of alert message but required by schema
-      isResolved: false
+      isResolved: false,
     });
   }
 
@@ -195,9 +250,9 @@ class RiskMonitoringService {
         ...(branchId && { branchId }),
         medicine: { tenantId },
         status: 'ACTIVE',
-        expiryDate: { gt: new Date() }
+        expiryDate: { gt: new Date() },
       },
-      _sum: { quantity: true }
+      _sum: { quantity: true },
     });
     return result._sum.quantity || 0;
   }
@@ -205,10 +260,21 @@ class RiskMonitoringService {
   /**
    * Private: Create/Update stock alert record
    */
-  async _createStockAlert(tenantId, branchId, medicineId, type, severity, medicineName, currentStock, threshold, daysRemaining) {
-    let message = type === 'OUT_OF_STOCK' 
-      ? `Critical: ${medicineName} is out of stock in this branch.`
-      : `Warning: ${medicineName} stock (${currentStock}) is below the reorder level (${threshold}).`;
+  async _createStockAlert(
+    tenantId,
+    branchId,
+    medicineId,
+    type,
+    severity,
+    medicineName,
+    currentStock,
+    threshold,
+    daysRemaining,
+  ) {
+    let message =
+      type === 'OUT_OF_STOCK'
+        ? `Critical: ${medicineName} is out of stock in this branch.`
+        : `Warning: ${medicineName} stock (${currentStock}) is below the reorder level (${threshold}).`;
 
     if (daysRemaining !== undefined && daysRemaining < 365) {
       message += ` Estimated ${daysRemaining} days of stock remaining.`;
@@ -222,7 +288,7 @@ class RiskMonitoringService {
       severity,
       message,
       currentStock,
-      thresholdValue: threshold
+      thresholdValue: threshold,
     });
   }
 }

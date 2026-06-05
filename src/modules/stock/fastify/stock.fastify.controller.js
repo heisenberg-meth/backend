@@ -25,7 +25,7 @@ class StockFastifyController {
       request.tenantId,
       medicineId,
       parseInt(page) || 1,
-      parseInt(limit) || 20
+      parseInt(limit) || 20,
     );
     return reply.send(history);
   }
@@ -73,7 +73,9 @@ class StockFastifyController {
           medicineId: batch.medicineId,
           batchNumber: batch.batchNumber,
           expiryDate: batch.expiryDate,
-          daysRemaining: Math.ceil((new Date(batch.expiryDate) - new Date()) / (1000 * 60 * 60 * 24)),
+          daysRemaining: Math.ceil(
+            (new Date(batch.expiryDate) - new Date()) / (1000 * 60 * 60 * 24),
+          ),
           name: batch.medicine.name,
         })),
         outOfStock: outOfStock.map((inv) => ({

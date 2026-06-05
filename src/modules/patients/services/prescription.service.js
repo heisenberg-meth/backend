@@ -7,7 +7,7 @@ class PrescriptionService {
     return prescriptionRepository.createPrescription({
       ...data,
       tenantId,
-      createdBy: userId
+      createdBy: userId,
     });
   }
 
@@ -32,25 +32,25 @@ class PrescriptionService {
     for (const tenant of tenants) {
       const prescriptions = await prisma.prescription.findMany({
         where: { tenantId: tenant.id },
-        include: { items: true, patient: true }
+        include: { items: true, patient: true },
       });
 
       for (const p of prescriptions) {
-        const maxDuration = Math.max(...p.items.map(i => i.durationDays || 0));
+        const maxDuration = Math.max(...p.items.map((i) => i.durationDays || 0));
         if (maxDuration === 0) continue;
 
         const refillDate = new Date(p.prescriptionDate);
         refillDate.setDate(refillDate.getDate() + maxDuration);
-        
+
         if (refillDate.toDateString() === targetDate.toDateString()) {
-           if (p.patient.phone) {
-             await notificationService.sendSms(tenant.id, {
-               patientId: p.patientId,
-               phone: p.patient.phone,
-               message: `Hi ${p.patient.fullName}, your medicines from prescription on ${p.prescriptionDate.toLocaleDateString()} are ending soon. Please visit us for a refill.`,
-               type: 'REFILL_REMINDER'
-             });
-           }
+          if (p.patient.phone) {
+            await notificationService.sendSms(tenant.id, {
+              patientId: p.patientId,
+              phone: p.patient.phone,
+              message: `Hi ${p.patient.fullName}, your medicines from prescription on ${p.prescriptionDate.toLocaleDateString()} are ending soon. Please visit us for a refill.`,
+              type: 'REFILL_REMINDER',
+            });
+          }
         }
       }
     }

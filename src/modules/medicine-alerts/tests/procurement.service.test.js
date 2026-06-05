@@ -1,4 +1,4 @@
-import { jest , describe, beforeEach,it, expect } from '@jest/globals';
+import { jest, describe, beforeEach, it, expect } from '@jest/globals';
 
 const mockPrisma = {
   medicineSupplier: {
@@ -27,19 +27,19 @@ const mockErpEventBus = {
 
 // Use unstable_mockModule for ESM mocking
 jest.unstable_mockModule('../../../config/prisma.js', () => ({
-  default: mockPrisma
+  default: mockPrisma,
 }));
 
 jest.unstable_mockModule('../repositories/alert.repository.js', () => ({
-  default: mockAlertRepository
+  default: mockAlertRepository,
 }));
 
 jest.unstable_mockModule('../forecasting/forecasting.service.js', () => ({
-  default: mockForecastingService
+  default: mockForecastingService,
 }));
 
 jest.unstable_mockModule('../../../shared/events/erp-event-bus.js', () => ({
-  emitEvent: mockErpEventBus.emitEvent
+  emitEvent: mockErpEventBus.emitEvent,
 }));
 
 // Import modules AFTER mocking
@@ -101,7 +101,11 @@ describe('ProcurementIntegrationService', () => {
 
       forecastingService.getReorderRecommendations
         .mockResolvedValueOnce({ recommendedOrderQuantity: 50, leadTime: 7, averageDailyUsage: 5 })
-        .mockResolvedValueOnce({ recommendedOrderQuantity: 100, leadTime: 7, averageDailyUsage: 10 })
+        .mockResolvedValueOnce({
+          recommendedOrderQuantity: 100,
+          leadTime: 7,
+          averageDailyUsage: 10,
+        })
         .mockResolvedValueOnce({ recommendedOrderQuantity: 30, leadTime: 7, averageDailyUsage: 3 });
 
       prisma.medicineSupplier.findFirst.mockResolvedValue({

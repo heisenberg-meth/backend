@@ -7,7 +7,10 @@ class CentralInventoryFastifyController {
   }
 
   async getBranchInventory(request, reply) {
-    const inventory = await centralizedInventoryService.getBranchInventory(request.tenantId, request.params.branchId);
+    const inventory = await centralizedInventoryService.getBranchInventory(
+      request.tenantId,
+      request.params.branchId,
+    );
     return reply.send(inventory);
   }
 }

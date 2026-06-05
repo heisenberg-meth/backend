@@ -6,10 +6,13 @@ export const createBatchSchema = z.object({
   quantity: z.number().int().min(0, 'Quantity must be non-negative'),
   purchasePrice: z.number().min(0, 'Purchase price must be non-negative').default(0),
   sellingPrice: z.number().min(0, 'Selling price must be non-negative').default(0),
-  expiryDate: z.string().refine(val => {
-    const d = new Date(val);
-    return !isNaN(d.getTime());
-  }, { message: 'Invalid expiry date' }),
+  expiryDate: z.string().refine(
+    (val) => {
+      const d = new Date(val);
+      return !isNaN(d.getTime());
+    },
+    { message: 'Invalid expiry date' },
+  ),
   manufacturingDate: z.string().optional().nullable(),
   barcode: z.string().optional().default(''),
   rackLocation: z.string().optional().default(''),
@@ -22,13 +25,18 @@ export const updateBatchSchema = z.object({
   quantity: z.number().int().min(0).optional(),
   purchasePrice: z.number().min(0).optional(),
   sellingPrice: z.number().min(0).optional(),
-  expiryDate: z.string().refine(val => !isNaN(new Date(val).getTime()), {
-    message: 'Invalid expiry date',
-  }).optional(),
+  expiryDate: z
+    .string()
+    .refine((val) => !isNaN(new Date(val).getTime()), {
+      message: 'Invalid expiry date',
+    })
+    .optional(),
   manufacturingDate: z.string().optional().nullable(),
   barcode: z.string().optional(),
   rackLocation: z.string().optional(),
-  status: z.enum(['ACTIVE', 'NEAR_EXPIRY', 'EXPIRED', 'QUARANTINED', 'RETURNED', 'DAMAGED']).optional(),
+  status: z
+    .enum(['ACTIVE', 'NEAR_EXPIRY', 'EXPIRED', 'QUARANTINED', 'RETURNED', 'DAMAGED'])
+    .optional(),
 });
 
 export const quarantineBatchSchema = z.object({

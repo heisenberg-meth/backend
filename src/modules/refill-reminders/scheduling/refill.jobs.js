@@ -12,17 +12,17 @@ export async function processRefillPredictions() {
       where: {
         tenantId: tenant.id,
         soldAt: { gte: new Date(Date.now() - 30 * 86400000) },
-        patientId: { not: null }
+        patientId: { not: null },
       },
       select: { patientId: true },
-      distinct: ['patientId']
+      distinct: ['patientId'],
     });
 
     for (const { patientId } of recentPurchasers) {
       const medicines = await prisma.saleItem.findMany({
         where: { sale: { patientId, tenantId: tenant.id } },
         select: { medicineId: true },
-        distinct: ['medicineId']
+        distinct: ['medicineId'],
       });
 
       for (const { medicineId } of medicines) {
@@ -39,7 +39,7 @@ export async function processAdherenceScoring() {
 
   for (const tenant of tenants) {
     const refills = await prisma.patientRefill.findMany({
-      where: { tenantId: tenant.id }
+      where: { tenantId: tenant.id },
     });
 
     for (const refill of refills) {

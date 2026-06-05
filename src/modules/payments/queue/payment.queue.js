@@ -34,7 +34,7 @@ async function enqueuePaymentRecovery(tenantId, orderId) {
       jobId: `recovery:${orderId || tenantId}:${Date.now()}`,
       attempts: 5,
       backoff: { type: 'exponential', delay: 5000 },
-    }
+    },
   );
 }
 
@@ -46,7 +46,7 @@ async function enqueueReconciliation(tenantId = null) {
     {
       jobId: `reconcile:${tenantId || 'all'}:${Date.now()}`,
       attempts: 3,
-    }
+    },
   );
 }
 
@@ -59,7 +59,7 @@ async function enqueueWebhook(event, payload) {
       jobId: `webhook:${payload.event_id || payload.payload?.payment?.entity?.id}:${Date.now()}`,
       attempts: 5,
       backoff: { type: 'exponential', delay: 1000 },
-    }
+    },
   );
 }
 
@@ -70,13 +70,18 @@ async function enqueueDeadLetter(originalQueue, jobData, error) {
     { originalQueue, jobData, error: error.message, failedAt: new Date().toISOString() },
     {
       attempts: 1,
-    }
+    },
   );
 }
 
 async function getQueueMetrics() {
   const metrics = {};
-  const queueNames = ['payment-recovery', 'payment-reconciliation', 'payment-webhook', 'payment-dlq'];
+  const queueNames = [
+    'payment-recovery',
+    'payment-reconciliation',
+    'payment-webhook',
+    'payment-dlq',
+  ];
 
   for (const name of queueNames) {
     try {

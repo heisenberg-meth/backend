@@ -3,16 +3,18 @@ import logger from '../../../shared/utils/logger.js';
 
 class BehaviorService {
   async analyzeBehavior(tenantId, patientId) {
-    logger.info(`[BehaviorService] Analyzing behavior for patient ${patientId} in tenant ${tenantId}`);
+    logger.info(
+      `[BehaviorService] Analyzing behavior for patient ${patientId} in tenant ${tenantId}`,
+    );
 
     const sales = await prisma.sale.findMany({
       where: { tenantId, patientId, status: 'COMPLETED' },
       orderBy: { soldAt: 'asc' },
       include: {
         items: {
-          select: { medicineId: true, quantity: true, totalAmount: true }
-        }
-      }
+          select: { medicineId: true, quantity: true, totalAmount: true },
+        },
+      },
     });
 
     if (sales.length === 0) return;
@@ -27,7 +29,7 @@ class BehaviorService {
         medicineHistory[item.medicineId].push({
           date: new Date(sale.soldAt),
           quantity: item.quantity,
-          amount: item.totalAmount
+          amount: item.totalAmount,
         });
       }
     }
@@ -46,30 +48,33 @@ class BehaviorService {
         }
       }
 
-      const averagePurchaseInterval = frequency > 1 
-        ? Math.round(totalIntervalDays / (frequency - 1)) 
-        : 0;
+      const averagePurchaseInterval =
+        frequency > 1 ? Math.round(totalIntervalDays / (frequency - 1)) : 0;
 
       let adherenceScore = 0;
       if (frequency > 2 && averagePurchaseInterval > 0) {
-          const daysSinceLast = Math.ceil(Math.abs(new Date() - lastPurchaseDate) / (1000 * 60 * 60 * 24));
-          const deviation = Math.abs(daysSinceLast - averagePurchaseInterval);
-          const adherencePct = Math.max(0, 100 - (deviation * (100 / averagePurchaseInterval)));
-          adherenceScore = Math.round(adherencePct * 100) / 100;
+        const daysSinceLast = Math.ceil(
+          Math.abs(new Date() - lastPurchaseDate) / (1000 * 60 * 60 * 24),
+        );
+        const deviation = Math.abs(daysSinceLast - averagePurchaseInterval);
+        const adherencePct = Math.max(0, 100 - deviation * (100 / averagePurchaseInterval));
+        adherenceScore = Math.round(adherencePct * 100) / 100;
       }
 
       await prisma.patientBehavior.upsert({
         where: {
           tenantId_patientId_medicineId: {
-            tenantId, patientId, medicineId
-          }
+            tenantId,
+            patientId,
+            medicineId,
+          },
         },
         update: {
           purchaseFrequency: frequency,
           averagePurchaseInterval,
           totalSpent,
           lastPurchaseDate,
-          adherenceScore
+          adherenceScore,
         },
         create: {
           tenantId,
@@ -79,8 +84,8 @@ class BehaviorService {
           averagePurchaseInterval,
           totalSpent,
           lastPurchaseDate,
-          adherenceScore
-        }
+          adherenceScore,
+        },
       });
     }
 
@@ -89,10 +94,10 @@ class BehaviorService {
 
   async runTenantAnalysis(tenantId) {
     logger.info(`[BehaviorService] Running tenant-wide analysis for tenant ${tenantId}`);
-    
+
     const patients = await prisma.patient.findMany({
       where: { tenantId, deletedAt: null },
-      select: { id: true }
+      select: { id: true },
     });
 
     for (const patient of patients) {

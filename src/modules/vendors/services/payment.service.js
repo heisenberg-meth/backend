@@ -16,15 +16,21 @@ class SupplierPaymentService {
       createdBy: userId,
     });
 
-    await supplierLedgerService.recordEntry(tenantId, {
-      supplierId: data.supplierId,
-      type: 'PAYMENT',
-      creditAmount: data.amount,
-      referenceType: 'PAYMENT',
-      referenceId: payment.id,
-    }, prisma);
+    await supplierLedgerService.recordEntry(
+      tenantId,
+      {
+        supplierId: data.supplierId,
+        type: 'PAYMENT',
+        creditAmount: data.amount,
+        referenceType: 'PAYMENT',
+        referenceId: payment.id,
+      },
+      prisma,
+    );
 
-    logger.info(`[Payment] Recorded payment ${payment.id} for supplier ${data.supplierId}: ${data.amount}`);
+    logger.info(
+      `[Payment] Recorded payment ${payment.id} for supplier ${data.supplierId}: ${data.amount}`,
+    );
     return payment;
   }
 }

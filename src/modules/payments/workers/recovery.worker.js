@@ -29,7 +29,7 @@ function createRecoveryWorker() {
       concurrency: 3,
       removeOnComplete: { age: 3600 },
       removeOnFail: { age: 86400 },
-    }
+    },
   );
 
   recoveryWorker.on('failed', (job, err) => {

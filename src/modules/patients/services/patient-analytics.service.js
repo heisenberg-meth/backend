@@ -15,7 +15,7 @@ class PatientAnalyticsService {
 
     const adherenceEntries = patient.patientAdherence;
     const adherenceRate = adherenceEntries.length
-      ? Math.round(adherenceEntries.filter(a => a.taken).length / adherenceEntries.length * 100)
+      ? Math.round((adherenceEntries.filter((a) => a.taken).length / adherenceEntries.length) * 100)
       : null;
 
     return {
@@ -55,11 +55,13 @@ class PatientAnalyticsService {
       },
     });
 
-    return patients.map(p => {
+    return patients.map((p) => {
       const conditions = p.chronicConditions || [];
       const adherenceEntries = p.patientAdherence;
       const adherenceRate = adherenceEntries.length
-        ? Math.round(adherenceEntries.filter(a => a.taken).length / adherenceEntries.length * 100)
+        ? Math.round(
+            (adherenceEntries.filter((a) => a.taken).length / adherenceEntries.length) * 100,
+          )
         : null;
 
       return {
@@ -72,7 +74,12 @@ class PatientAnalyticsService {
         totalVisits: p.totalVisits,
         lastVisit: p.lastPurchaseDate,
         adherenceRate,
-        risk: adherenceRate !== null && adherenceRate < 60 ? 'HIGH' : adherenceRate !== null && adherenceRate < 80 ? 'MEDIUM' : 'LOW',
+        risk:
+          adherenceRate !== null && adherenceRate < 60
+            ? 'HIGH'
+            : adherenceRate !== null && adherenceRate < 80
+              ? 'MEDIUM'
+              : 'LOW',
       };
     });
   }

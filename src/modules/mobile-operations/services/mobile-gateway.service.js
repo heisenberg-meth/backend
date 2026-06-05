@@ -22,8 +22,12 @@ class MobileGatewayService {
    */
   async getSyncSnapshot(tenantId, branchId) {
     return {
-      medicines: await prisma.medicine.findMany({ where: { tenantId }, take: 100, select: { id: true, name: true, unitPrice: true } }),
-      stock: await prisma.inventoryBatch.findMany({ where: { branchId }, take: 100 })
+      medicines: await prisma.medicine.findMany({
+        where: { tenantId },
+        take: 100,
+        select: { id: true, name: true, unitPrice: true },
+      }),
+      stock: await prisma.inventoryBatch.findMany({ where: { branchId }, take: 100 }),
     };
   }
 }

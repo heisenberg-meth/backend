@@ -4,8 +4,10 @@ import { registerQueue } from '../../../config/queue-registry.js';
 
 const isTest = process.env.NODE_ENV === 'test';
 
-export const webhookQueue = isTest ? null : registerQueue(
-  new Queue('webhook-queue', {
-    connection: getBullRedis(),
-  }),
-);
+export const webhookQueue = isTest
+  ? null
+  : registerQueue(
+      new Queue('webhook-queue', {
+        connection: getBullRedis(),
+      }),
+    );

@@ -29,7 +29,7 @@ export const prescriptionSchema = z.object({
 
 export const redeemLoyaltySchema = z.object({
   patientId: z.string().uuid(),
-  points: z.number().int().positive()
+  points: z.number().int().positive(),
 });
 
 export const insuranceSchema = z.object({

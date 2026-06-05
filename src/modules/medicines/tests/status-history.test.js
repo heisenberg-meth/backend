@@ -1,6 +1,6 @@
 import medicineService from '../services/medicine.service.js';
 import prisma from '../../../config/prisma.js';
-import { describe,beforeAll, afterAll, it, expect } from '@jest/globals';
+import { describe, beforeAll, afterAll, it, expect } from '@jest/globals';
 
 describe('Medicine Status History', () => {
   let tenantId;
@@ -11,7 +11,7 @@ describe('Medicine Status History', () => {
   beforeAll(async () => {
     // Setup tenant and user
     const tenant = await prisma.tenant.create({
-      data: { name: 'Test Tenant Status', email: 'test-status@example.com' }
+      data: { name: 'Test Tenant Status', email: 'test-status@example.com' },
     });
     tenantId = tenant.id;
 
@@ -19,8 +19,8 @@ describe('Medicine Status History', () => {
       data: {
         name: 'Test Branch',
         code: 'BR001',
-        tenantId
-      }
+        tenantId,
+      },
     });
     branchId = branch.id;
 
@@ -31,8 +31,8 @@ describe('Medicine Status History', () => {
         password: 'hashed_password',
         tenantId: tenantId,
         branchId,
-        role: 'OWNER'
-      }
+        role: 'OWNER',
+      },
     });
     userId = user.id;
 
@@ -42,7 +42,7 @@ describe('Medicine Status History', () => {
       barcode: 'STATUS001',
       sku: 'SKU-STATUS-001',
       status: 'ACTIVE',
-      branchId
+      branchId,
     });
   });
 
@@ -60,11 +60,11 @@ describe('Medicine Status History', () => {
   it('should record history when status is updated', async () => {
     await medicineService.updateMedicineMaster(medicine.id, tenantId, userId, 'OWNER', {
       status: 'BLOCKED',
-      statusReason: 'Testing history'
+      statusReason: 'Testing history',
     });
 
     const history = await prisma.medicineStatusHistory.findFirst({
-      where: { medicineId: medicine.id, newStatus: 'BLOCKED' }
+      where: { medicineId: medicine.id, newStatus: 'BLOCKED' },
     });
 
     expect(history).toBeDefined();
@@ -78,7 +78,7 @@ describe('Medicine Status History', () => {
     await medicineService.deactivateMedicine(medicine.id, tenantId, userId);
 
     const history = await prisma.medicineStatusHistory.findFirst({
-      where: { medicineId: medicine.id, newStatus: 'INACTIVE', reason: 'Medicine deactivation' }
+      where: { medicineId: medicine.id, newStatus: 'INACTIVE', reason: 'Medicine deactivation' },
     });
 
     expect(history).toBeDefined();

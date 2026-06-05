@@ -50,7 +50,9 @@ class LoyaltyFastifyController {
 
       const abuse = await fraudService.detectLoyaltyAbuse(id, tenantId);
       if (abuse.suspicious) {
-        return reply.code(403).send({ success: false, message: 'Suspicious activity detected', flags: abuse.flags });
+        return reply
+          .code(403)
+          .send({ success: false, message: 'Suspicious activity detected', flags: abuse.flags });
       }
 
       if (!points || points <= 0) {
@@ -75,10 +77,19 @@ class LoyaltyFastifyController {
 
       const risk = await riskEngine.assessCreditRisk(id, tenantId);
       if (risk.blocked) {
-        return reply.code(403).send({ success: false, message: 'Credit account is blocked', reason: risk.reason });
+        return reply
+          .code(403)
+          .send({ success: false, message: 'Credit account is blocked', reason: risk.reason });
       }
 
-      const result = await creditService.issueCredit(tenantId, id, amount, referenceId, notes, dueDate);
+      const result = await creditService.issueCredit(
+        tenantId,
+        id,
+        amount,
+        referenceId,
+        notes,
+        dueDate,
+      );
       return reply.send({ success: true, data: result });
     } catch (err) {
       return reply.code(400).send({ success: false, message: err.message });

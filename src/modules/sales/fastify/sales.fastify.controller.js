@@ -7,7 +7,11 @@ import { success } from '../../../shared/helpers/response.js';
 class SalesFastifyController {
   async getSalesHistory(request, reply) {
     const { page, limit } = request.query;
-    const history = await salesService.getSalesHistory(request.tenantId, parseInt(page) || 1, parseInt(limit) || 20);
+    const history = await salesService.getSalesHistory(
+      request.tenantId,
+      parseInt(page) || 1,
+      parseInt(limit) || 20,
+    );
     return reply.send(success(history));
   }
 
@@ -24,7 +28,10 @@ class SalesFastifyController {
 
   async triggerManualSummary(request, reply) {
     const { date } = request.body;
-    const summary = await analyticsService.generateDailySummary(request.tenantId, date || new Date());
+    const summary = await analyticsService.generateDailySummary(
+      request.tenantId,
+      date || new Date(),
+    );
     return reply.send(success(summary));
   }
 

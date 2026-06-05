@@ -24,12 +24,12 @@ class StockService {
 
   async recordDamage(tenantId, data, userId) {
     const record = await movementService.recordDamage(tenantId, data, userId);
-    
+
     // Get medicineId from batch for alert checking and cache invalidation
     const batch = await stockRepository.findBatchById(data.batchId, tenantId);
     await this.invalidateStockCache(tenantId, batch.medicineId);
     await this.checkAndTriggerAlerts(tenantId, batch.medicineId);
-    
+
     return record;
   }
 
@@ -45,14 +45,14 @@ class StockService {
         tenantId,
         medicineId,
         'OUT_OF_STOCK',
-        `Medicine ${medicine.name} is out of stock.`
+        `Medicine ${medicine.name} is out of stock.`,
       );
     } else if (totalQty <= medicine.reorderLevel) {
       await alertService.triggerAlert(
         tenantId,
         medicineId,
         'LOW_STOCK',
-        `Medicine ${medicine.name} is low on stock (${totalQty} remaining).`
+        `Medicine ${medicine.name} is low on stock (${totalQty} remaining).`,
       );
     }
   }
@@ -67,7 +67,7 @@ class StockService {
     }
 
     const stock = await stockRepository.getCurrentStock(tenantId, medicineId);
-    
+
     try {
       await redisClient.set(cacheKey, JSON.stringify(stock), 'EX', 300);
     } catch (err) {

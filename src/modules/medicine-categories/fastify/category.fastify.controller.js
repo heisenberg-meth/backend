@@ -21,7 +21,11 @@ class CategoryFastifyController {
 
   async createCategory(request, reply) {
     try {
-      const category = await categoryService.createCategory(request.body, request.tenantId, request.user?.id);
+      const category = await categoryService.createCategory(
+        request.body,
+        request.tenantId,
+        request.user?.id,
+      );
       return reply.code(201).send({ success: true, data: category });
     } catch (error) {
       return reply.code(400).send({ success: false, message: error.message });
@@ -30,7 +34,12 @@ class CategoryFastifyController {
 
   async updateCategory(request, reply) {
     try {
-      const category = await categoryService.updateCategory(request.params.id, request.tenantId, request.body, request.user?.id);
+      const category = await categoryService.updateCategory(
+        request.params.id,
+        request.tenantId,
+        request.body,
+        request.user?.id,
+      );
       return reply.send({ success: true, data: category });
     } catch (error) {
       return reply.code(400).send({ success: false, message: error.message });

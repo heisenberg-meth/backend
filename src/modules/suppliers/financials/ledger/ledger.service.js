@@ -6,34 +6,37 @@ class LedgerService {
   /**
    * Create a new ledger entry with running balance calculation
    */
-  async createEntry(tx, {
-    tenantId,
-    supplierId,
-    type,
-    referenceType,
-    referenceId,
-    debitAmount = 0,
-    creditAmount = 0,
-    notes = ''
-  }) {
+  async createEntry(
+    tx,
+    {
+      tenantId,
+      supplierId,
+      type,
+      referenceType,
+      referenceId,
+      debitAmount = 0,
+      creditAmount = 0,
+      notes = '',
+    },
+  ) {
     // 1. Get last entry for running balance
     const lastEntry = await tx.supplierLedger.findFirst({
       where: { supplierId, tenantId },
       orderBy: { createdAt: 'desc' },
-      select: { balanceAfter: true }
+      select: { balanceAfter: true },
     });
 
     const previousBalance = lastEntry?.balanceAfter || 0;
-    
+
     // In Accounts Payable Ledger (Money you owe):
     // Debit increases what you owe (e.g. Purchase Invoice)
     // Credit decreases what you owe (e.g. Payment)
-    // Wait, typically AP is a Liability. 
+    // Wait, typically AP is a Liability.
     // Credit increases liability, Debit decreases liability.
-    // User logic: Invoice = Debit increases, Payment = Credit increases. 
-    // Balance = Prev + Debit - Credit. 
+    // User logic: Invoice = Debit increases, Payment = Credit increases.
+    // Balance = Prev + Debit - Credit.
     // This means Debit is "Amount Owed" and Credit is "Amount Paid".
-    
+
     const balanceAfter = previousBalance + debitAmount - creditAmount;
 
     const entry = await tx.supplierLedger.create({
@@ -46,13 +49,17 @@ class LedgerService {
         debitAmount,
         creditAmount,
         balanceAfter,
-        notes
-      }
+        notes,
+      },
     });
 
     // Emit event for real-time updates/analytics
-    emitLocalEvent(DOMAIN_EVENTS.SUPPLIER_LEDGER_UPDATED, { supplierId, tenantId, entryId: entry.id });
-    
+    emitLocalEvent(DOMAIN_EVENTS.SUPPLIER_LEDGER_UPDATED, {
+      supplierId,
+      tenantId,
+      entryId: entry.id,
+    });
+
     return entry;
   }
 
@@ -62,12 +69,12 @@ class LedgerService {
       tenantId,
       supplierId,
       ...(type && { type }),
-      ...( (from || to) && {
+      ...((from || to) && {
         createdAt: {
           ...(from && { gte: new Date(from) }),
-          ...(to && { lte: new Date(to) })
-        }
-      })
+          ...(to && { lte: new Date(to) }),
+        },
+      }),
     };
 
     const [entries, total, summary] = await Promise.all([
@@ -75,20 +82,20 @@ class LedgerService {
         where,
         orderBy: { createdAt: 'desc' },
         skip,
-        take: limit
+        take: limit,
       }),
       prisma.supplierLedger.count({ where }),
       prisma.supplierLedger.aggregate({
         where: { tenantId, supplierId },
-        _sum: { debitAmount: true, creditAmount: true }
-      })
+        _sum: { debitAmount: true, creditAmount: true },
+      }),
     ]);
 
     // Get current balance from last entry
     const lastEntry = await prisma.supplierLedger.findFirst({
       where: { tenantId, supplierId },
       orderBy: { createdAt: 'desc' },
-      select: { balanceAfter: true }
+      select: { balanceAfter: true },
     });
 
     return {
@@ -101,8 +108,8 @@ class LedgerService {
         page,
         limit,
         total,
-        totalPages: Math.ceil(total / limit)
-      }
+        totalPages: Math.ceil(total / limit),
+      },
     };
   }
 }

@@ -4,7 +4,7 @@ import prisma from '../../../config/prisma.js';
 class LoyaltyService {
   async getLoyaltyAccount(patientId, tenantId) {
     let account = await loyaltyRepository.findByPatientId(patientId, tenantId);
-    
+
     if (!account) {
       // Lazy creation
       account = await loyaltyRepository.createAccount({
@@ -14,10 +14,10 @@ class LoyaltyService {
     }
 
     const history = await loyaltyRepository.getLoyaltyHistory(patientId, tenantId);
-    
+
     return {
       ...account,
-      history
+      history,
     };
   }
 
@@ -36,16 +36,25 @@ class LoyaltyService {
     const newAvailablePoints = account.availablePoints + points;
     const newLifetimePoints = account.lifetimePoints + points;
 
-    await loyaltyRepository.updatePoints(patientId, tenantId, newAvailablePoints, newLifetimePoints, tx);
-    
-    await loyaltyRepository.createTransaction({
+    await loyaltyRepository.updatePoints(
+      patientId,
       tenantId,
-      patientId: patientId,
-      type: 'EARNED',
-      points,
-      referenceType: 'INVOICE',
-      referenceId: invoiceId,
-    }, tx);
+      newAvailablePoints,
+      newLifetimePoints,
+      tx,
+    );
+
+    await loyaltyRepository.createTransaction(
+      {
+        tenantId,
+        patientId: patientId,
+        type: 'EARNED',
+        points,
+        referenceType: 'INVOICE',
+        referenceId: invoiceId,
+      },
+      tx,
+    );
 
     // Tier update logic could go here
     await this.updateTier(patientId, tenantId, newLifetimePoints, tx);
@@ -58,17 +67,26 @@ class LoyaltyService {
     }
 
     const newAvailablePoints = account.availablePoints - points;
-    
-    await loyaltyRepository.updatePoints(patientId, tenantId, newAvailablePoints, account.lifetimePoints, tx);
-    
-    await loyaltyRepository.createTransaction({
-      tenantId,
-      patientId: patientId,
-      type: 'REDEEMED',
-      points: -points,
-    }, tx);
 
-    return (points / 10); // Example: 10 points = ₹1
+    await loyaltyRepository.updatePoints(
+      patientId,
+      tenantId,
+      newAvailablePoints,
+      account.lifetimePoints,
+      tx,
+    );
+
+    await loyaltyRepository.createTransaction(
+      {
+        tenantId,
+        patientId: patientId,
+        type: 'REDEEMED',
+        points: -points,
+      },
+      tx,
+    );
+
+    return points / 10; // Example: 10 points = ₹1
   }
 
   async updateTier(patientId, tenantId, lifetimePoints, tx) {
@@ -80,7 +98,7 @@ class LoyaltyService {
     const client = tx || prisma;
     await client.patientLoyaltyAccount.update({
       where: { patientId, tenantId },
-      data: { loyaltyTier: tier }
+      data: { loyaltyTier: tier },
     });
   }
 }

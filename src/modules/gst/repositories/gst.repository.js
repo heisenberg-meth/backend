@@ -54,7 +54,7 @@ class GstRepository {
       },
     });
 
-      const result = {
+    const result = {
       taxableAmount: 0,
       cgstTotal: 0,
       sgstTotal: 0,
@@ -108,10 +108,17 @@ class GstRepository {
     for (const item of invoiceItems) {
       const hsn = item.medicine?.hsnCode || 'NA';
       if (!hsnMap[hsn]) {
-        hsnMap[hsn] = { hsnCode: hsn, taxableValue: 0, totalGst: 0, totalQuantity: 0, medicineName: item.medicine?.name };
+        hsnMap[hsn] = {
+          hsnCode: hsn,
+          taxableValue: 0,
+          totalGst: 0,
+          totalQuantity: 0,
+          medicineName: item.medicine?.name,
+        };
       }
       hsnMap[hsn].taxableValue += Number(item.unitPrice) * item.quantity;
-      hsnMap[hsn].totalGst += Number(item.cgst || 0) + Number(item.sgst || 0) + Number(item.igst || 0);
+      hsnMap[hsn].totalGst +=
+        Number(item.cgst || 0) + Number(item.sgst || 0) + Number(item.igst || 0);
       hsnMap[hsn].totalQuantity += item.quantity;
     }
 

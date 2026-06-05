@@ -6,7 +6,7 @@ class ExpenseService {
       ...data,
       tenantId,
       expenseDate: new Date(data.expenseDate),
-      createdBy: userId
+      createdBy: userId,
     });
   }
 
@@ -17,7 +17,7 @@ class ExpenseService {
   async updateExpense(id, tenantId, data) {
     return accountingRepository.updateExpense(id, tenantId, {
       ...data,
-      expenseDate: data.expenseDate ? new Date(data.expenseDate) : undefined
+      expenseDate: data.expenseDate ? new Date(data.expenseDate) : undefined,
     });
   }
 

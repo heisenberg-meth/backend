@@ -25,7 +25,11 @@ class GstCalculationService {
   calculateInvoiceGst(items, sourceGstin = '', targetGstin = '') {
     const sourceStateCode = sourceGstin ? sourceGstin.substring(0, 2) : '';
     const targetStateCode = targetGstin ? targetGstin.substring(0, 2) : '';
-    const isInterstate = !!(sourceStateCode && targetStateCode && sourceStateCode !== targetStateCode);
+    const isInterstate = !!(
+      sourceStateCode &&
+      targetStateCode &&
+      sourceStateCode !== targetStateCode
+    );
 
     let subtotal = 0;
     let totalCgst = 0;
@@ -68,7 +72,10 @@ class GstCalculationService {
   validateGstPercentage(percentage) {
     const validRates = [0, 0.25, 1, 3, 5, 6, 12, 18, 28];
     if (!validRates.includes(percentage)) {
-      return { valid: false, message: `Invalid GST rate: ${percentage}%. Valid rates: ${validRates.join(', ')}` };
+      return {
+        valid: false,
+        message: `Invalid GST rate: ${percentage}%. Valid rates: ${validRates.join(', ')}`,
+      };
     }
     return { valid: true };
   }

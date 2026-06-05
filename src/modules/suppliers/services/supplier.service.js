@@ -89,7 +89,14 @@ class SupplierService {
       if (existing) throw new Error('Supplier with this GST number already exists');
     }
 
-    const { ...sanitizedData } = data;
+    const sanitizedData = {
+      ...data,
+
+      contactPerson: data.contactPerson || data.contact || '',
+      gstNumber: data.gstNumber || data.gst || '',
+      leadTimeDays: data.leadTimeDays || Number(data.leadTime || 7),
+      paymentTermsDays: data.paymentTermsDays || (data.paymentTerms === 'COD' ? 0 : 30),
+    };
     const supplierCode = await supplierRepository.getNextSupplierCode(tenantId);
     const supplier = await supplierRepository.create({ ...sanitizedData, tenantId, supplierCode });
 
@@ -134,17 +141,31 @@ class SupplierService {
 
     // Emit domain events
     const changedFields = Object.keys(data);
-    emitLocalEvent(DOMAIN_EVENTS.SUPPLIER_UPDATED, { supplierId: id, tenantId, userId, changedFields });
-    await emitEvent(DOMAIN_EVENTS.SUPPLIER_UPDATED, { supplierId: id, tenantId, userId, changedFields });
+    emitLocalEvent(DOMAIN_EVENTS.SUPPLIER_UPDATED, {
+      supplierId: id,
+      tenantId,
+      userId,
+      changedFields,
+    });
+    await emitEvent(DOMAIN_EVENTS.SUPPLIER_UPDATED, {
+      supplierId: id,
+      tenantId,
+      userId,
+      changedFields,
+    });
 
     if (data.status && data.status !== existing.status) {
       emitLocalEvent(DOMAIN_EVENTS.SUPPLIER_STATUS_CHANGED, {
-        supplierId: id, tenantId, userId,
+        supplierId: id,
+        tenantId,
+        userId,
         from: existing.status,
         to: data.status,
       });
       await emitEvent(DOMAIN_EVENTS.SUPPLIER_STATUS_CHANGED, {
-        supplierId: id, tenantId, userId,
+        supplierId: id,
+        tenantId,
+        userId,
         from: existing.status,
         to: data.status,
       });
@@ -159,22 +180,24 @@ class SupplierService {
 
     // Check for pending purchase orders before archival
     const pendingPOs = await prisma.purchaseOrder.count({
-      where: { 
-        supplierId: id, 
-        tenantId, 
-        deletedAt: null, 
-        status: { 
+      where: {
+        supplierId: id,
+        tenantId,
+        deletedAt: null,
+        status: {
           in: [
-            PURCHASE_ORDER_STATUS.DRAFT, 
-            PURCHASE_ORDER_STATUS.PENDING_APPROVAL, 
-            PURCHASE_ORDER_STATUS.APPROVED, 
-            PURCHASE_ORDER_STATUS.SENT
-          ] 
-        } 
+            PURCHASE_ORDER_STATUS.DRAFT,
+            PURCHASE_ORDER_STATUS.PENDING_APPROVAL,
+            PURCHASE_ORDER_STATUS.APPROVED,
+            PURCHASE_ORDER_STATUS.SENT,
+          ],
+        },
       },
     });
     if (pendingPOs > 0) {
-      throw new Error(`Cannot archive supplier: ${pendingPOs} pending purchase order(s) exist. Complete or cancel them first.`);
+      throw new Error(
+        `Cannot archive supplier: ${pendingPOs} pending purchase order(s) exist. Complete or cancel them first.`,
+      );
     }
 
     await supplierRepository.softDelete(id, tenantId);
@@ -292,10 +315,18 @@ class SupplierService {
       await this._invalidateCache(tenantId);
 
       // Emit Events
-      emitLocalEvent(DOMAIN_EVENTS.SUPPLIER_PAYMENT_MADE, { supplierId: id, amount: data.amount, tenantId });
+      emitLocalEvent(DOMAIN_EVENTS.SUPPLIER_PAYMENT_MADE, {
+        supplierId: id,
+        amount: data.amount,
+        tenantId,
+      });
       emitLocalEvent(DOMAIN_EVENTS.SUPPLIER_LEDGER_UPDATED, { supplierId: id, tenantId });
-      
-      await emitEvent(DOMAIN_EVENTS.SUPPLIER_PAYMENT_MADE, { supplierId: id, amount: data.amount, tenantId });
+
+      await emitEvent(DOMAIN_EVENTS.SUPPLIER_PAYMENT_MADE, {
+        supplierId: id,
+        amount: data.amount,
+        tenantId,
+      });
       await emitEvent(DOMAIN_EVENTS.SUPPLIER_LEDGER_UPDATED, { supplierId: id, tenantId });
 
       return payment;
@@ -359,7 +390,7 @@ class SupplierService {
           currentStock: 0,
           reorderQty: item.quantity,
         };
-      })
+      }),
     );
 
     const totalAmount = subtotal + gstAmount;

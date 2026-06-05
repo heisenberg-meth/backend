@@ -5,8 +5,8 @@ const redisClient = initRedis();
 class OtpRedisService {
   /**
    * Store OTP in Redis with TTL
-   * @param {string} email 
-   * @param {string} otp 
+   * @param {string} email
+   * @param {string} otp
    * @param {number} ttlSeconds Default 600 (10 minutes)
    */
   async storeOtp(email, otp, ttlSeconds = 600) {
@@ -16,14 +16,14 @@ class OtpRedisService {
 
   /**
    * Verify OTP from Redis
-   * @param {string} email 
-   * @param {string} otp 
+   * @param {string} email
+   * @param {string} otp
    * @returns {boolean}
    */
   async verifyOtp(email, otp) {
     const key = `otp:${email}`;
     const storedOtp = await redisClient.get(key);
-    
+
     if (storedOtp === otp) {
       await redisClient.del(key); // Use once
       return true;

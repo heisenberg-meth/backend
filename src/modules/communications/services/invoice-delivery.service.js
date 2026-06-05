@@ -8,8 +8,13 @@ class InvoiceDeliveryService {
     const patient = await prisma.patient.findUnique({
       where: { id: patientId },
       select: {
-        id: true, fullName: true, phone: true, email: true,
-        allowSms: true, allowWhatsapp: true, allowEmail: true,
+        id: true,
+        fullName: true,
+        phone: true,
+        email: true,
+        allowSms: true,
+        allowWhatsapp: true,
+        allowEmail: true,
       },
     });
     if (!patient) throw new Error('Patient not found');
@@ -20,7 +25,11 @@ class InvoiceDeliveryService {
     });
     if (!invoice) throw new Error('Invoice not found');
 
-    const channel = templateSelectorService.selectBestChannel(patient, 'INVOICE_DELIVERY', preferredChannel);
+    const channel = templateSelectorService.selectBestChannel(
+      patient,
+      'INVOICE_DELIVERY',
+      preferredChannel,
+    );
     if (!channel) throw new Error('No suitable communication channel for invoice delivery');
 
     const notification = await prisma.notification.create({
@@ -40,11 +49,16 @@ class InvoiceDeliveryService {
       data: { notificationId: notification.id, eventType: 'QUEUED', eventTimestamp: new Date() },
     });
 
-    const fallbackChain = templateSelectorService.buildFallbackChain(patient, 'INVOICE_DELIVERY', channel);
+    const fallbackChain = templateSelectorService.buildFallbackChain(
+      patient,
+      'INVOICE_DELIVERY',
+      channel,
+    );
 
     await communicationQueue.add('send-invoice', {
       notificationId: notification.id,
-      tenantId, patientId: patient.id,
+      tenantId,
+      patientId: patient.id,
       patientName: patient.fullName,
       patientEmail: patient.email,
       recipient: channel === 'EMAIL' ? patient.email : patient.phone,

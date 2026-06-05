@@ -7,7 +7,9 @@ class ForecastingService {
    */
   async predictDaysRemaining(medicineId, tenantId, branchId, currentStock, options = {}) {
     const { windowDays = 30 } = options;
-    const adu = await this._calculateAverageDailyUsage(medicineId, tenantId, branchId, { windowDays });
+    const adu = await this._calculateAverageDailyUsage(medicineId, tenantId, branchId, {
+      windowDays,
+    });
 
     if (adu <= 0) return 999;
 
@@ -24,14 +26,16 @@ class ForecastingService {
       include: {
         medicineSuppliers: {
           where: { isPreferred: true },
-          take: 1
-        }
-      }
+          take: 1,
+        },
+      },
     });
 
     if (!medicine) return null;
 
-    const adu = await this._calculateAverageDailyUsage(medicineId, tenantId, branchId, { windowDays });
+    const adu = await this._calculateAverageDailyUsage(medicineId, tenantId, branchId, {
+      windowDays,
+    });
 
     const leadTime = medicine.medicineSuppliers[0]?.leadDays || 7;
     const safetyStock = Math.ceil(adu * leadTime * 0.5);
@@ -45,7 +49,7 @@ class ForecastingService {
       safetyStock,
       recommendedOrderQuantity: Math.max(medicine.reorderLevel || 10, recommendedQty),
       currentReorderLevel: medicine.reorderLevel,
-      windowDays
+      windowDays,
     };
   }
 
@@ -57,12 +61,14 @@ class ForecastingService {
 
     const medicines = await prisma.medicine.findMany({
       where: { tenantId, deletedAt: null },
-      select: { id: true }
+      select: { id: true },
     });
 
     const forecasts = [];
     for (const med of medicines) {
-      const adu = await this._calculateAverageDailyUsage(med.id, tenantId, branchId, { windowDays });
+      const adu = await this._calculateAverageDailyUsage(med.id, tenantId, branchId, {
+        windowDays,
+      });
       if (adu <= 0) continue;
 
       const existing = await prisma.demandForecast.findFirst({
@@ -72,9 +78,9 @@ class ForecastingService {
           branchId: branchId || null,
           forecastDate: {
             gte: new Date(new Date().setHours(0, 0, 0, 0)),
-            lt: new Date(new Date().setHours(23, 59, 59, 999))
-          }
-        }
+            lt: new Date(new Date().setHours(23, 59, 59, 999)),
+          },
+        },
       });
 
       const forecast = existing
@@ -83,8 +89,8 @@ class ForecastingService {
             data: {
               predictedQuantity: Math.ceil(adu * windowDays),
               confidenceScore: Math.min(0.95, adu > 10 ? 0.85 : 0.65),
-              modelVersion
-            }
+              modelVersion,
+            },
           })
         : await prisma.demandForecast.create({
             data: {
@@ -94,8 +100,8 @@ class ForecastingService {
               forecastDate: new Date(),
               predictedQuantity: Math.ceil(adu * windowDays),
               confidenceScore: Math.min(0.95, adu > 10 ? 0.85 : 0.65),
-              modelVersion
-            }
+              modelVersion,
+            },
           });
 
       forecasts.push(forecast);
@@ -120,10 +126,10 @@ class ForecastingService {
         invoice: {
           branchId: branchId || undefined,
           createdAt: { gte: windowStart },
-          status: 'ACTIVE'
-        }
+          status: 'ACTIVE',
+        },
       },
-      _sum: { quantity: true }
+      _sum: { quantity: true },
     });
 
     const totalSold = soldItems._sum.quantity || 0;

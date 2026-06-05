@@ -11,5 +11,5 @@ export const salesReturnSchema = z.object({
   saleItemId: z.string().uuid(),
   quantity: z.number().int().positive(),
   reason: z.string().min(1),
-  condition: z.enum(['sealed', 'damaged', 'expired']).default('sealed')
+  condition: z.enum(['sealed', 'damaged', 'expired']).default('sealed'),
 });

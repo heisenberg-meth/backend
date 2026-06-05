@@ -1,4 +1,4 @@
-import { jest , describe, beforeEach,afterEach, it, expect } from '@jest/globals';
+import { jest, describe, beforeEach, afterEach, it, expect } from '@jest/globals';
 
 const mockRedis = {
   get: jest.fn(),
@@ -105,7 +105,9 @@ describe('MedicineAlertService', () => {
         averageDailyUsage: 10,
       });
 
-      const result = await medicineAlertService.getLowStockAlerts('tenant-1', { branchId: 'branch-1' });
+      const result = await medicineAlertService.getLowStockAlerts('tenant-1', {
+        branchId: 'branch-1',
+      });
 
       expect(result.alerts).toHaveLength(1);
       expect(result.alerts[0].daysRemaining).toBe(2);
@@ -240,7 +242,10 @@ describe('MedicineAlertService', () => {
     it('should assign priority based on average daily demand', async () => {
       mockAlertRepository.findOutOfStockAlerts.mockResolvedValue({
         alerts: [
-          { medicine: { name: 'High Demand', prescriptionRequired: false }, lastAvailableAt: new Date() },
+          {
+            medicine: { name: 'High Demand', prescriptionRequired: false },
+            lastAvailableAt: new Date(),
+          },
         ],
         total: 1,
         pagination: { total: 1, page: 1, limit: 100, totalPages: 1 },
@@ -342,7 +347,11 @@ describe('MedicineAlertService', () => {
   describe('resolveAlert', () => {
     it('should mark alert as resolved and invalidate cache', async () => {
       mockPrisma.stockAlert.findUnique.mockResolvedValue({ id: 'alert-1', tenantId: 'tenant-1' });
-      mockPrisma.stockAlert.update.mockResolvedValue({ id: 'alert-1', isResolved: true, resolvedAt: new Date() });
+      mockPrisma.stockAlert.update.mockResolvedValue({
+        id: 'alert-1',
+        isResolved: true,
+        resolvedAt: new Date(),
+      });
       mockRedis.keys.mockResolvedValue([]);
 
       const result = await medicineAlertService.resolveAlert('alert-1', 'tenant-1', 'user-1');
@@ -354,9 +363,9 @@ describe('MedicineAlertService', () => {
     it('should throw error when alert not found', async () => {
       mockPrisma.stockAlert.findUnique.mockResolvedValue(null);
 
-      await expect(medicineAlertService.resolveAlert('invalid', 'tenant-1', 'user-1')).rejects.toThrow(
-        'Alert not found'
-      );
+      await expect(
+        medicineAlertService.resolveAlert('invalid', 'tenant-1', 'user-1'),
+      ).rejects.toThrow('Alert not found');
     });
   });
 
@@ -368,7 +377,11 @@ describe('MedicineAlertService', () => {
         snoozedUntil: new Date('2026-06-01'),
       });
 
-      const result = await medicineAlertService.snoozeAlert('alert-1', 'tenant-1', new Date('2026-06-01'));
+      const result = await medicineAlertService.snoozeAlert(
+        'alert-1',
+        'tenant-1',
+        new Date('2026-06-01'),
+      );
 
       expect(result.snoozedUntil).toBeDefined();
     });
@@ -407,21 +420,27 @@ describe('MedicineAlertService', () => {
 
   describe('_calculateOosPriority', () => {
     it('should return CRITICAL for prescription required medicines', () => {
-      expect(
-        medicineAlertService._calculateOosPriority({ prescriptionRequired: true }, 5)
-      ).toBe('CRITICAL');
+      expect(medicineAlertService._calculateOosPriority({ prescriptionRequired: true }, 5)).toBe(
+        'CRITICAL',
+      );
     });
 
     it('should return HIGH for high demand (>10 daily)', () => {
-      expect(medicineAlertService._calculateOosPriority({ prescriptionRequired: false }, 15)).toBe('HIGH');
+      expect(medicineAlertService._calculateOosPriority({ prescriptionRequired: false }, 15)).toBe(
+        'HIGH',
+      );
     });
 
     it('should return MEDIUM for medium demand (5-10 daily)', () => {
-      expect(medicineAlertService._calculateOosPriority({ prescriptionRequired: false }, 7)).toBe('MEDIUM');
+      expect(medicineAlertService._calculateOosPriority({ prescriptionRequired: false }, 7)).toBe(
+        'MEDIUM',
+      );
     });
 
     it('should return LOW for low demand (<5 daily)', () => {
-      expect(medicineAlertService._calculateOosPriority({ prescriptionRequired: false }, 2)).toBe('LOW');
+      expect(medicineAlertService._calculateOosPriority({ prescriptionRequired: false }, 2)).toBe(
+        'LOW',
+      );
     });
   });
 

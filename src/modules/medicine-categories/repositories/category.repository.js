@@ -76,12 +76,14 @@ class CategoryRepository {
       },
     });
 
-    return categories.map(c => {
+    return categories.map((c) => {
       const totalStock = c.medicines.reduce(
-        (sum, m) => sum + m.inventoryBatches.reduce((bs, b) => bs + b.quantity, 0), 0
+        (sum, m) => sum + m.inventoryBatches.reduce((bs, b) => bs + b.quantity, 0),
+        0,
       );
       const totalValue = c.medicines.reduce(
-        (sum, m) => sum + m.inventoryBatches.reduce((bv, b) => bv + b.quantity * b.sellingPrice, 0), 0
+        (sum, m) => sum + m.inventoryBatches.reduce((bv, b) => bv + b.quantity * b.sellingPrice, 0),
+        0,
       );
 
       return {

@@ -7,12 +7,20 @@ class ExpenseFastifyController {
   }
 
   async createExpense(request, reply) {
-    const expense = await expenseService.createExpense(request.tenantId, request.body, request.user.id);
+    const expense = await expenseService.createExpense(
+      request.tenantId,
+      request.body,
+      request.user.id,
+    );
     return reply.code(201).send(expense);
   }
 
   async updateExpense(request, reply) {
-    const expense = await expenseService.updateExpense(request.params.id, request.tenantId, request.body);
+    const expense = await expenseService.updateExpense(
+      request.params.id,
+      request.tenantId,
+      request.body,
+    );
     return reply.send(expense);
   }
 

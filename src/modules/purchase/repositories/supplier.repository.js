@@ -1,4 +1,4 @@
-import prisma from "../../../config/prisma.js";
+import prisma from '../../../config/prisma.js';
 
 class SupplierRepository {
   async findAll(tenantId) {
@@ -27,7 +27,7 @@ class SupplierRepository {
     const lastSupplier = await prisma.supplier.findFirst({
       where: { tenantId },
       orderBy: { createdAt: 'desc' },
-      select: { supplierCode: true }
+      select: { supplierCode: true },
     });
 
     if (!lastSupplier || !lastSupplier.supplierCode) {

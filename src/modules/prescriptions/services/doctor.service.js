@@ -5,14 +5,17 @@ class DoctorService {
   async createDoctor(tenantId, data) {
     if (data.registrationNumber) {
       const existing = await prisma.doctor.findFirst({
-        where: { registrationNumber: data.registrationNumber, tenantId }
+        where: { registrationNumber: data.registrationNumber, tenantId },
       });
-      if (existing) throw new Error(`Doctor with registration number ${data.registrationNumber} already exists`);
+      if (existing)
+        throw new Error(
+          `Doctor with registration number ${data.registrationNumber} already exists`,
+        );
     }
 
     return prescriptionRepository.createDoctor({
       ...data,
-      tenantId
+      tenantId,
     });
   }
 

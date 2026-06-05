@@ -29,7 +29,10 @@ export default async function (fastify) {
 
   // ── Unified Send ──────────────────────────────────────────────
   fastify.post('/send', {
-    schema: { tags: ['Notifications'], summary: 'Unified notification send - dispatches to any channel via orchestrator' },
+    schema: {
+      tags: ['Notifications'],
+      summary: 'Unified notification send - dispatches to any channel via orchestrator',
+    },
     preHandler: requirePermission('notifications.send'),
     handler: controller.unifiedSend,
   });
@@ -73,7 +76,10 @@ export default async function (fastify) {
 
   // ── Status & Retry ────────────────────────────────────────────
   fastify.get('/:id/status', {
-    schema: { tags: ['Notifications'], summary: 'Get notification delivery status with event history' },
+    schema: {
+      tags: ['Notifications'],
+      summary: 'Get notification delivery status with event history',
+    },
     handler: controller.getNotificationStatus,
   });
 
@@ -91,7 +97,10 @@ export default async function (fastify) {
 
   // ── Analytics ─────────────────────────────────────────────────
   fastify.get('/analytics', {
-    schema: { tags: ['Notifications'], summary: 'Notification analytics - delivery stats, provider performance, response times' },
+    schema: {
+      tags: ['Notifications'],
+      summary: 'Notification analytics - delivery stats, provider performance, response times',
+    },
     handler: controller.getAnalytics,
   });
 
@@ -145,7 +154,10 @@ export default async function (fastify) {
 
   // ── Settings ──────────────────────────────────────────────────
   fastify.get('/settings', {
-    schema: { tags: ['Notifications'], summary: 'Get tenant notification settings with provider configs' },
+    schema: {
+      tags: ['Notifications'],
+      summary: 'Get tenant notification settings with provider configs',
+    },
     handler: controller.getSettings,
   });
 
@@ -176,13 +188,19 @@ export default async function (fastify) {
 
   // ── Ops Dashboard ─────────────────────────────────────────────
   fastify.get('/ops/history', {
-    schema: { tags: ['Notifications'], summary: 'Get recent notification history for ops dashboard' },
+    schema: {
+      tags: ['Notifications'],
+      summary: 'Get recent notification history for ops dashboard',
+    },
     preHandler: requirePermission('notifications.view'),
     handler: controller.getOpsHistory,
   });
 
   fastify.get('/ops/queues/metrics', {
-    schema: { tags: ['Notifications'], summary: 'Get real-time queue metrics for all notification channels' },
+    schema: {
+      tags: ['Notifications'],
+      summary: 'Get real-time queue metrics for all notification channels',
+    },
     preHandler: requirePermission('notifications.view'),
     handler: controller.getQueueMetrics,
   });

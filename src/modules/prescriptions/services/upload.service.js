@@ -7,7 +7,7 @@ class UploadService {
    */
   async getSignedUrl(fileUrl) {
     logger.info(`[SECURITY] Generating signed URL for: ${fileUrl}`);
-    
+
     // Simulate signed URL with dummy signature and 15 min expiry
     const expiry = Date.now() + 15 * 60 * 1000;
     return `${fileUrl}?signature=v_med_sig_123&expires=${expiry}`;

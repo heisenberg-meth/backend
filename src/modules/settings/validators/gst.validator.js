@@ -70,7 +70,8 @@ export function validateGSTIN(gstin) {
   }
   return {
     valid: false,
-    error: 'Invalid GSTIN format. Must be 15 characters: 2 digit state code + 10 char PAN + 1 entity + Z + checksum.',
+    error:
+      'Invalid GSTIN format. Must be 15 characters: 2 digit state code + 10 char PAN + 1 entity + Z + checksum.',
   };
 }
 

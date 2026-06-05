@@ -1,4 +1,4 @@
-import prisma from "../../../config/prisma.js";
+import prisma from '../../../config/prisma.js';
 import dailySummaryRepository from '../repositories/daily_summary.repository.js';
 
 class ReportQueryService {
@@ -17,11 +17,11 @@ class ReportQueryService {
     let upiSales = 0;
     let cardSales = 0;
 
-    const chart = summaries.map(s => {
+    const chart = summaries.map((s) => {
       const rev = Number(s.totalSales || 0);
       const bills = Number(s.totalInvoices || 0);
       const ret = Number(s.totalReturns || 0);
-      
+
       totalRevenue += rev;
       totalBills += bills;
       totalReturns += ret;
@@ -32,7 +32,7 @@ class ReportQueryService {
       return {
         date: s.salesDate.toISOString().split('T')[0],
         revenue: rev,
-        bills
+        bills,
       };
     });
 
@@ -44,7 +44,7 @@ class ReportQueryService {
       const mid = Math.floor(summaries.length / 2);
       const firstHalf = summaries.slice(0, mid);
       const secondHalf = summaries.slice(mid);
-      
+
       const sumFirst = firstHalf.reduce((sum, d) => sum + Number(d.totalSales || 0), 0);
       const sumSecond = secondHalf.reduce((sum, d) => sum + Number(d.totalSales || 0), 0);
       revenueTrend = sumFirst > 0 ? ((sumSecond - sumFirst) / sumFirst) * 100 : 0;
@@ -62,32 +62,32 @@ class ReportQueryService {
         sale: {
           tenantId,
           soldAt: { gte: fromDate, lte: toDate },
-          status: { in: ['COMPLETED'] }
-        }
+          status: { in: ['COMPLETED'] },
+        },
       },
       _sum: {
         totalAmount: true,
-        quantity: true
+        quantity: true,
       },
       orderBy: {
         _sum: {
-          totalAmount: 'desc'
-        }
+          totalAmount: 'desc',
+        },
       },
-      take: 10
+      take: 10,
     });
 
-    const medicineIds = topSellingGroups.map(g => g.medicineId);
+    const medicineIds = topSellingGroups.map((g) => g.medicineId);
     const medicines = await prisma.medicine.findMany({
       where: { tenantId, id: { in: medicineIds } },
-      select: { id: true, name: true }
+      select: { id: true, name: true },
     });
-    const medNameMap = Object.fromEntries(medicines.map(m => [m.id, m.name]));
+    const medNameMap = Object.fromEntries(medicines.map((m) => [m.id, m.name]));
 
-    const topMedicines = topSellingGroups.map(g => ({
+    const topMedicines = topSellingGroups.map((g) => ({
       medicineName: medNameMap[g.medicineId] || 'Unknown',
       revenue: Number(g._sum.totalAmount || 0),
-      quantitySold: g._sum.quantity || 0
+      quantitySold: g._sum.quantity || 0,
     }));
 
     return {
@@ -95,19 +95,19 @@ class ReportQueryService {
         totalRevenue,
         totalBills,
         avgBillValue,
-        totalReturns
+        totalReturns,
       },
       trend: {
         revenueTrend,
-        avgBillTrend
+        avgBillTrend,
       },
       chart,
       paymentDistribution: {
         cash: cashSales,
         upi: upiSales,
-        card: cardSales
+        card: cardSales,
       },
-      topMedicines
+      topMedicines,
     };
   }
 
@@ -123,16 +123,16 @@ class ReportQueryService {
     const purchaseStats = await prisma.purchaseInvoice.aggregate({
       where: {
         tenantId,
-        invoiceDate: { gte: fromDate, lte: toDate }
+        invoiceDate: { gte: fromDate, lte: toDate },
       },
       _sum: {
         totalAmount: true,
-        balanceAmount: true
+        balanceAmount: true,
       },
       _count: {
         id: true,
-        supplierId: true
-      }
+        supplierId: true,
+      },
     });
 
     const totalAmount = Number(purchaseStats._sum.totalAmount || 0);
@@ -143,31 +143,31 @@ class ReportQueryService {
       by: ['supplierId'],
       where: {
         tenantId,
-        invoiceDate: { gte: fromDate, lte: toDate }
+        invoiceDate: { gte: fromDate, lte: toDate },
       },
       _sum: {
-        totalAmount: true
+        totalAmount: true,
       },
       orderBy: {
         _sum: {
-          totalAmount: 'desc'
-        }
+          totalAmount: 'desc',
+        },
       },
-      take: 10
+      take: 10,
     });
 
-    const supplierIds = supplierGroups.map(g => g.supplierId);
+    const supplierIds = supplierGroups.map((g) => g.supplierId);
     const suppliers = await prisma.supplier.findMany({
       where: { tenantId, id: { in: supplierIds } },
-      select: { id: true, name: true }
+      select: { id: true, name: true },
     });
-    const suppNameMap = Object.fromEntries(suppliers.map(s => [s.id, s.name]));
+    const suppNameMap = Object.fromEntries(suppliers.map((s) => [s.id, s.name]));
 
-    const maxAmt = Math.max(...supplierGroups.map(g => Number(g._sum.totalAmount || 0)), 1);
-    const supplierSpend = supplierGroups.map(g => ({
+    const maxAmt = Math.max(...supplierGroups.map((g) => Number(g._sum.totalAmount || 0)), 1);
+    const supplierSpend = supplierGroups.map((g) => ({
       name: suppNameMap[g.supplierId] || 'Unknown',
       amount: Number(g._sum.totalAmount || 0),
-      percentage: Math.round((Number(g._sum.totalAmount || 0) / maxAmt) * 100)
+      percentage: Math.round((Number(g._sum.totalAmount || 0) / maxAmt) * 100),
     }));
 
     const comparisonData = summaries.slice(-4).map((d) => Number(d.totalPurchase || 0));
@@ -177,10 +177,10 @@ class ReportQueryService {
         totalAmount,
         uniqueSuppliers: supplierGroups.length, // Rough estimate from grouped results
         pendingAmount,
-        pendingSuppliers: 0 // Would need another query or more complex groupBy to get exact count of suppliers with balance > 0
+        pendingSuppliers: 0, // Would need another query or more complex groupBy to get exact count of suppliers with balance > 0
       },
       comparisonData,
-      supplierSpend
+      supplierSpend,
     };
   }
 
@@ -217,36 +217,34 @@ class ReportQueryService {
       by: ['categoryId', 'categoryName'],
       where: {
         tenantId,
-        expenseDate: { gte: fromDate, lte: toDate }
+        expenseDate: { gte: fromDate, lte: toDate },
       },
       _sum: {
-        amount: true
-      }
+        amount: true,
+      },
     });
 
-    const categoryIds = expenseGroups.map(g => g.categoryId).filter(id => id !== null);
+    const categoryIds = expenseGroups.map((g) => g.categoryId).filter((id) => id !== null);
     const categories = await prisma.expenseCategory.findMany({
       where: { tenantId, id: { in: categoryIds } },
-      select: { id: true, name: true }
+      select: { id: true, name: true },
     });
-    const catNameMap = Object.fromEntries(categories.map(c => [c.id, c.name]));
+    const catNameMap = Object.fromEntries(categories.map((c) => [c.id, c.name]));
 
-    const expensesDistribution = expenseGroups.map((group, idx) => {
-      const amount = Number(group._sum.amount || 0);
-      const name = catNameMap[group.categoryId] || group.categoryName || "Operational";
-      const pct = Math.round((amount / (totalExpenses || 1)) * 100);
-      return {
-        name,
-        amount,
-        percentage: pct,
-        color:
-          idx % 3 === 0
-            ? "var(--info)"
-            : idx % 3 === 1
-              ? "var(--warning)"
-              : "var(--success)"
-      };
-    }).sort((a, b) => b.amount - a.amount);
+    const expensesDistribution = expenseGroups
+      .map((group, idx) => {
+        const amount = Number(group._sum.amount || 0);
+        const name = catNameMap[group.categoryId] || group.categoryName || 'Operational';
+        const pct = Math.round((amount / (totalExpenses || 1)) * 100);
+        return {
+          name,
+          amount,
+          percentage: pct,
+          color:
+            idx % 3 === 0 ? 'var(--info)' : idx % 3 === 1 ? 'var(--warning)' : 'var(--success)',
+        };
+      })
+      .sort((a, b) => b.amount - a.amount);
 
     return {
       summary: {
@@ -258,9 +256,9 @@ class ReportQueryService {
         expenses: totalExpenses,
         netProfit,
         netMargin,
-        expensePct
+        expensePct,
       },
-      expensesDistribution
+      expensesDistribution,
     };
   }
 }

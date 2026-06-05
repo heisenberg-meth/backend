@@ -1,4 +1,4 @@
-import { jest , describe, beforeEach, it, expect } from '@jest/globals';
+import { jest, describe, beforeEach, it, expect } from '@jest/globals';
 
 const mockRedis = {
   get: jest.fn(),
@@ -92,7 +92,11 @@ describe('Notification Deduplication Service', () => {
       mockRedis.get.mockResolvedValue('1');
 
       const result = await notificationDeduplicationService.checkDuplicate(
-        't1', 'EMAIL', 'user@test.com', 'LOW_STOCK_ALERT', 'ALERT'
+        't1',
+        'EMAIL',
+        'user@test.com',
+        'LOW_STOCK_ALERT',
+        'ALERT',
       );
 
       expect(result).toBe(true);
@@ -102,7 +106,11 @@ describe('Notification Deduplication Service', () => {
       mockRedis.get.mockResolvedValue(null);
 
       const result = await notificationDeduplicationService.checkDuplicate(
-        't1', 'EMAIL', 'user@test.com', 'LOW_STOCK_ALERT', 'ALERT'
+        't1',
+        'EMAIL',
+        'user@test.com',
+        'LOW_STOCK_ALERT',
+        'ALERT',
       );
 
       expect(result).toBe(false);
@@ -112,14 +120,18 @@ describe('Notification Deduplication Service', () => {
   describe('markSent', () => {
     it('should set dedupe key with TTL', async () => {
       await notificationDeduplicationService.markSent(
-        't1', 'SMS', '+919876543210', 'CRITICAL_ALERT', 'ALERT'
+        't1',
+        'SMS',
+        '+919876543210',
+        'CRITICAL_ALERT',
+        'ALERT',
       );
 
       expect(mockRedis.set).toHaveBeenCalledWith(
         'notification:dedupe:t1:SMS:+919876543210:CRITICAL_ALERT:ALERT',
         '1',
         'EX',
-        1800
+        1800,
       );
     });
   });
@@ -128,12 +140,7 @@ describe('Notification Deduplication Service', () => {
     it('should set cooldown key', async () => {
       await notificationDeduplicationService.setCooldown('notif-1', 3600);
 
-      expect(mockRedis.set).toHaveBeenCalledWith(
-        'notification:cooldown:notif-1',
-        '1',
-        'EX',
-        3600
-      );
+      expect(mockRedis.set).toHaveBeenCalledWith('notification:cooldown:notif-1', '1', 'EX', 3600);
     });
   });
 });
@@ -147,7 +154,11 @@ describe('Notification Rate Limit Service', () => {
     it('should allow notification within limit', async () => {
       mockRedis.incr.mockResolvedValue(3);
 
-      const result = await notificationRateLimitService.checkRateLimit('t1', 'sms', '+919876543210');
+      const result = await notificationRateLimitService.checkRateLimit(
+        't1',
+        'sms',
+        '+919876543210',
+      );
 
       expect(result.allowed).toBe(true);
       expect(result.current).toBe(3);
@@ -157,7 +168,11 @@ describe('Notification Rate Limit Service', () => {
     it('should block notification exceeding SMS limit', async () => {
       mockRedis.incr.mockResolvedValue(6);
 
-      const result = await notificationRateLimitService.checkRateLimit('t1', 'sms', '+919876543210');
+      const result = await notificationRateLimitService.checkRateLimit(
+        't1',
+        'sms',
+        '+919876543210',
+      );
 
       expect(result.allowed).toBe(false);
       expect(result.retryAfter).toBe(60);
@@ -176,9 +191,7 @@ describe('Notification Rate Limit Service', () => {
     it('should delete rate limit key', async () => {
       await notificationRateLimitService.resetRateLimit('t1', 'sms', '+919876543210');
 
-      expect(mockRedis.del).toHaveBeenCalledWith(
-        'notification:ratelimit:t1:sms:+919876543210'
-      );
+      expect(mockRedis.del).toHaveBeenCalledWith('notification:ratelimit:t1:sms:+919876543210');
     });
   });
 });
@@ -206,13 +219,10 @@ describe('Delivery Tracking Service', () => {
             providerName: 'sms-provider',
             providerMessageId: 'msg-123',
           }),
-        })
+        }),
       );
       expect(mockPrisma.notification.update).toHaveBeenCalled();
-      expect(mockEmitLocalEvent).toHaveBeenCalledWith(
-        'NOTIFICATION_SENT',
-        expect.any(Object)
-      );
+      expect(mockEmitLocalEvent).toHaveBeenCalledWith('NOTIFICATION_SENT', expect.any(Object));
     });
 
     it('should emit FAILED event on failure', async () => {
@@ -224,10 +234,7 @@ describe('Delivery Tracking Service', () => {
 
       await deliveryTrackingService.markFailed('notif-1', 'Provider timeout', 'sms-provider');
 
-      expect(mockEmitLocalEvent).toHaveBeenCalledWith(
-        'NOTIFICATION_FAILED',
-        expect.any(Object)
-      );
+      expect(mockEmitLocalEvent).toHaveBeenCalledWith('NOTIFICATION_FAILED', expect.any(Object));
     });
   });
 
@@ -326,7 +333,7 @@ describe('Notification Service', () => {
             deliveryStatus: 'DELIVERED',
             sentAt: expect.any(Date),
           }),
-        })
+        }),
       );
     });
   });

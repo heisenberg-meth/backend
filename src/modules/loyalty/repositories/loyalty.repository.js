@@ -9,9 +9,9 @@ class LoyaltyRepository {
           select: {
             fullName: true,
             loyaltyPoints: true,
-          }
-        }
-      }
+          },
+        },
+      },
     });
   }
 
@@ -28,7 +28,7 @@ class LoyaltyRepository {
       data: {
         availablePoints,
         lifetimePoints,
-      }
+      },
     });
   }
 
@@ -36,7 +36,7 @@ class LoyaltyRepository {
     return prisma.loyaltyTransaction.findMany({
       where: { patientId: patientId, tenantId },
       orderBy: { createdAt: 'desc' },
-      take: 50
+      take: 50,
     });
   }
 

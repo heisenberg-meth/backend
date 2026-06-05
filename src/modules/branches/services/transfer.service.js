@@ -1,4 +1,4 @@
-import prisma from "../../../config/prisma.js";
+import prisma from '../../../config/prisma.js';
 import transferRepository from '../repositories/transfer.repository.js';
 import ledgerRepository from '../../stock/repositories/ledger.repository.js';
 import auditService from '../../audit/service/audit.prisma.service.js';
@@ -48,16 +48,19 @@ class TransferService {
         );
       }
 
-      return transferRepository.createTransfer({
-        tenantId,
-        sourceBranchId: data.sourceBranchId,
-        destinationBranchId: data.destinationBranchId,
-        transferNumber,
-        status: 'PENDING',
-        initiatedBy: userId,
-        notes: data.notes,
-        items: data.items
-      }, tx);
+      return transferRepository.createTransfer(
+        {
+          tenantId,
+          sourceBranchId: data.sourceBranchId,
+          destinationBranchId: data.destinationBranchId,
+          transferNumber,
+          status: 'PENDING',
+          initiatedBy: userId,
+          notes: data.notes,
+          items: data.items,
+        },
+        tx,
+      );
     });
 
     await auditService.log({
@@ -65,21 +68,26 @@ class TransferService {
       userId,
       action: 'REQUEST_TRANSFER',
       target: transfer.transferNumber,
-      type: 'INVENTORY'
+      type: 'INVENTORY',
     });
 
     return transfer;
   }
 
   async approveTransfer(transferId, tenantId, userId) {
-    const transfer = await transferRepository.updateStatus(transferId, tenantId, 'IN_TRANSIT', userId);
-    
+    const transfer = await transferRepository.updateStatus(
+      transferId,
+      tenantId,
+      'IN_TRANSIT',
+      userId,
+    );
+
     await auditService.log({
       tenantId,
       userId,
       action: 'APPROVE_TRANSFER',
       target: transfer.transferNumber,
-      type: 'INVENTORY'
+      type: 'INVENTORY',
     });
 
     return transfer;
@@ -98,26 +106,31 @@ class TransferService {
         await tx.inventoryBatch.update({
           where: { id: sourceBatch.id },
           data: {
-            reservedQuantity: sourceBatch.reservedQuantity - item.quantity
-          }
+            reservedQuantity: sourceBatch.reservedQuantity - item.quantity,
+          },
         });
 
-        const sourceBatches = await tx.inventoryBatch.findMany({ where: { medicineId: sourceBatch.medicineId, branchId: transfer.sourceBranchId }});
-        const prevSourceStock = sourceBatches.reduce((sum, b) => sum + b.quantity, 0); 
+        const sourceBatches = await tx.inventoryBatch.findMany({
+          where: { medicineId: sourceBatch.medicineId, branchId: transfer.sourceBranchId },
+        });
+        const prevSourceStock = sourceBatches.reduce((sum, b) => sum + b.quantity, 0);
 
-        await ledgerRepository.createTransaction({
-          tenantId,
-          medicineId: sourceBatch.medicineId,
-          batchId: sourceBatch.id,
-          type: 'TRANSFER_OUT',
-          quantity: -item.quantity,
-          previousStock: prevSourceStock + item.quantity,
-          newStock: prevSourceStock,
-          referenceType: 'TRANSFER',
-          referenceId: transfer.id,
-          notes: `Transferred to ${transfer.destinationBranch.name}`,
-          createdBy: userId
-        }, tx);
+        await ledgerRepository.createTransaction(
+          {
+            tenantId,
+            medicineId: sourceBatch.medicineId,
+            batchId: sourceBatch.id,
+            type: 'TRANSFER_OUT',
+            quantity: -item.quantity,
+            previousStock: prevSourceStock + item.quantity,
+            newStock: prevSourceStock,
+            referenceType: 'TRANSFER',
+            referenceId: transfer.id,
+            notes: `Transferred to ${transfer.destinationBranch.name}`,
+            createdBy: userId,
+          },
+          tx,
+        );
 
         await tx.stockMovement.create({
           data: {
@@ -137,11 +150,17 @@ class TransferService {
 
         await tx.inventory.upsert({
           where: {
-            tenantId_branchId_medicineId: { tenantId, branchId: transfer.sourceBranchId, medicineId: sourceBatch.medicineId },
+            tenantId_branchId_medicineId: {
+              tenantId,
+              branchId: transfer.sourceBranchId,
+              medicineId: sourceBatch.medicineId,
+            },
           },
           update: { currentStock: { increment: -item.quantity } },
           create: {
-            tenantId, branchId: transfer.sourceBranchId, medicineId: sourceBatch.medicineId,
+            tenantId,
+            branchId: transfer.sourceBranchId,
+            medicineId: sourceBatch.medicineId,
             currentStock: -item.quantity,
           },
         });
@@ -150,8 +169,8 @@ class TransferService {
           where: {
             medicineId: sourceBatch.medicineId,
             batchNumber: sourceBatch.batchNumber,
-            branchId: transfer.destinationBranchId
-          }
+            branchId: transfer.destinationBranchId,
+          },
         });
 
         let newBatchId;
@@ -159,7 +178,7 @@ class TransferService {
         if (destBatch) {
           const updatedDest = await tx.inventoryBatch.update({
             where: { id: destBatch.id },
-            data: { quantity: destBatch.quantity + item.quantity }
+            data: { quantity: destBatch.quantity + item.quantity },
           });
           newBatchId = destBatch.id;
           currentDestQty = updatedDest.quantity;
@@ -176,29 +195,34 @@ class TransferService {
               purchasePrice: sourceBatch.purchasePrice,
               sellingPrice: sourceBatch.sellingPrice,
               supplierId: sourceBatch.supplierId,
-              status: 'ACTIVE'
-            }
+              status: 'ACTIVE',
+            },
           });
           newBatchId = newBatch.id;
           currentDestQty = item.quantity;
         }
 
-        const destBatches = await tx.inventoryBatch.findMany({ where: { medicineId: sourceBatch.medicineId, branchId: transfer.destinationBranchId }});
+        const destBatches = await tx.inventoryBatch.findMany({
+          where: { medicineId: sourceBatch.medicineId, branchId: transfer.destinationBranchId },
+        });
         const prevDestStock = destBatches.reduce((sum, b) => sum + b.quantity, 0) - item.quantity;
 
-        await ledgerRepository.createTransaction({
-          tenantId,
-          medicineId: sourceBatch.medicineId,
-          batchId: newBatchId,
-          type: 'TRANSFER_IN',
-          quantity: item.quantity,
-          previousStock: prevDestStock,
-          newStock: prevDestStock + item.quantity,
-          referenceType: 'TRANSFER',
-          referenceId: transfer.id,
-          notes: `Received from ${transfer.sourceBranch.name}`,
-          createdBy: userId
-        }, tx);
+        await ledgerRepository.createTransaction(
+          {
+            tenantId,
+            medicineId: sourceBatch.medicineId,
+            batchId: newBatchId,
+            type: 'TRANSFER_IN',
+            quantity: item.quantity,
+            previousStock: prevDestStock,
+            newStock: prevDestStock + item.quantity,
+            referenceType: 'TRANSFER',
+            referenceId: transfer.id,
+            notes: `Received from ${transfer.sourceBranch.name}`,
+            createdBy: userId,
+          },
+          tx,
+        );
 
         await tx.stockMovement.create({
           data: {
@@ -218,26 +242,37 @@ class TransferService {
 
         await tx.inventory.upsert({
           where: {
-            tenantId_branchId_medicineId: { tenantId, branchId: transfer.destinationBranchId, medicineId: sourceBatch.medicineId },
+            tenantId_branchId_medicineId: {
+              tenantId,
+              branchId: transfer.destinationBranchId,
+              medicineId: sourceBatch.medicineId,
+            },
           },
           update: { currentStock: { increment: item.quantity } },
           create: {
-            tenantId, branchId: transfer.destinationBranchId, medicineId: sourceBatch.medicineId,
+            tenantId,
+            branchId: transfer.destinationBranchId,
+            medicineId: sourceBatch.medicineId,
             currentStock: item.quantity,
           },
         });
 
-        await inventoryService.recordTransaction(tx, tenantId, {
-          medicineId: sourceBatch.medicineId,
-          batchId: newBatchId,
-          branchId: transfer.destinationBranchId,
-          transactionType: 'TRANSFER_IN',
-          quantityChange: item.quantity,
-          quantityAfter: currentDestQty,
-          referenceType: 'TRANSFER',
-          referenceId: transfer.id,
-          notes: `Received from ${transfer.sourceBranch.name}`
-        }, userId);
+        await inventoryService.recordTransaction(
+          tx,
+          tenantId,
+          {
+            medicineId: sourceBatch.medicineId,
+            batchId: newBatchId,
+            branchId: transfer.destinationBranchId,
+            transactionType: 'TRANSFER_IN',
+            quantityChange: item.quantity,
+            quantityAfter: currentDestQty,
+            referenceType: 'TRANSFER',
+            referenceId: transfer.id,
+            notes: `Received from ${transfer.sourceBranch.name}`,
+          },
+          userId,
+        );
       }
 
       return transferRepository.updateStatus(transferId, tenantId, 'RECEIVED', null, tx);
@@ -248,7 +283,7 @@ class TransferService {
       userId,
       action: 'RECEIVE_TRANSFER',
       target: updatedTransfer.transferNumber,
-      type: 'INVENTORY'
+      type: 'INVENTORY',
     });
 
     return updatedTransfer;

@@ -12,44 +12,44 @@ class DashboardService {
 
     // If cache miss, aggregate from DB
     stats = await this.aggregateStats(tenantId, branchId);
-    
+
     // Cache for short duration (e.g., 1 minute)
     await redisClient.setex(cacheKey, 60, JSON.stringify(stats));
-    
+
     return stats;
   }
 
   async aggregateStats(tenantId, branchId) {
     const [totalSales, lowStockCount, expiringSoon] = await Promise.all([
       prisma.sale.aggregate({
-        where: { tenantId, branchId, soldAt: { gte: new Date(new Date().setHours(0,0,0,0)) } },
-        _sum: { totalAmount: true }
+        where: { tenantId, branchId, soldAt: { gte: new Date(new Date().setHours(0, 0, 0, 0)) } },
+        _sum: { totalAmount: true },
       }),
       prisma.inventoryBatch.count({
-        where: { 
-          medicine: { tenantId }, 
-          branchId, 
+        where: {
+          medicine: { tenantId },
+          branchId,
           quantity: { lte: 10 }, // Hardcoded threshold for demo
-          status: 'ACTIVE' 
-        }
+          status: 'ACTIVE',
+        },
       }),
       prisma.inventoryBatch.count({
         where: {
           medicine: { tenantId },
           branchId,
           expiryDate: {
-            lte: new Date(new Date().setDate(new Date().getDate() + 90))
+            lte: new Date(new Date().setDate(new Date().getDate() + 90)),
           },
-          status: 'ACTIVE'
-        }
-      })
+          status: 'ACTIVE',
+        },
+      }),
     ]);
 
     return {
       todaySales: totalSales._sum.totalAmount || 0,
       lowStockItems: lowStockCount,
       expiringItems: expiringSoon,
-      timestamp: new Date()
+      timestamp: new Date(),
     };
   }
 

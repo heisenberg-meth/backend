@@ -4,12 +4,12 @@ import {
   AddBatchSchema as addBatchSchema,
   CategorySchema as categorySchema,
   ManufacturerSchema as manufacturerSchema,
-} from "../../../packages/medicine.schema.js";
+} from '../../../packages/medicine.schema.js';
 
 export {
   createMedicineSchema,
   updateMedicineSchema,
   addBatchSchema,
   categorySchema,
-  manufacturerSchema
+  manufacturerSchema,
 };

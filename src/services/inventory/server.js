@@ -5,7 +5,7 @@ import purchaseOrderRoutes from '../../modules/purchase-orders/purchase-order.fa
 const start = async () => {
   const app = await createServiceApp({
     name: 'Inventory Service',
-    description: 'Handles medicines, inventory, and purchase orders'
+    description: 'Handles medicines, inventory, and purchase orders',
   });
 
   await app.register(medicineRoutes, { prefix: '/api/inventory' });

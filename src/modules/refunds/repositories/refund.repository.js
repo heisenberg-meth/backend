@@ -47,7 +47,10 @@ class RefundRepository {
     const [data, total] = await Promise.all([
       prisma.return.findMany({
         where,
-        include: include || { invoice: { select: { invoiceNumber: true } }, patient: { select: { fullName: true } } },
+        include: include || {
+          invoice: { select: { invoiceNumber: true } },
+          patient: { select: { fullName: true } },
+        },
         orderBy: { createdAt: 'desc' },
         take: limit || 50,
         skip: offset || 0,
@@ -92,7 +95,12 @@ class RefundRepository {
   async getFraudMetrics(tenantId, patientId, sinceDate) {
     const [recentRefunds, patientTotal] = await Promise.all([
       prisma.return.findMany({
-        where: { tenantId, patientId, createdAt: { gte: sinceDate }, status: { notIn: ['REJECTED', 'CANCELLED'] } },
+        where: {
+          tenantId,
+          patientId,
+          createdAt: { gte: sinceDate },
+          status: { notIn: ['REJECTED', 'CANCELLED'] },
+        },
         select: { totalReturnAmount: true, createdAt: true },
         orderBy: { createdAt: 'desc' },
       }),
@@ -103,7 +111,11 @@ class RefundRepository {
       }),
     ]);
 
-    return { recentRefunds, totalRefunds: patientTotal._count, totalRefundAmount: patientTotal._sum?.totalReturnAmount || 0 };
+    return {
+      recentRefunds,
+      totalRefunds: patientTotal._count,
+      totalRefundAmount: patientTotal._sum?.totalReturnAmount || 0,
+    };
   }
 
   async getAnalytics(tenantId, options = {}) {
@@ -131,14 +143,21 @@ class RefundRepository {
       }),
       prisma.return.groupBy({
         by: ['returnReason'],
-        where: { ...where, createdAt: { gte: new Date(new Date().getFullYear(), new Date().getMonth() - 5, 1) } },
+        where: {
+          ...where,
+          createdAt: { gte: new Date(new Date().getFullYear(), new Date().getMonth() - 5, 1) },
+        },
         _sum: { totalReturnAmount: true },
         _count: true,
       }),
     ]);
 
     const totalSalesAgg = await prisma.invoice.aggregate({
-      where: { tenantId, deletedAt: null, createdAt: { gte: new Date(new Date().getFullYear(), 0, 1) } },
+      where: {
+        tenantId,
+        deletedAt: null,
+        createdAt: { gte: new Date(new Date().getFullYear(), 0, 1) },
+      },
       _sum: { totalAmount: true },
     });
 

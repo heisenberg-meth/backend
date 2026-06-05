@@ -1,4 +1,4 @@
-import prisma from "../../../config/prisma.js";
+import prisma from '../../../config/prisma.js';
 
 class SalesReturnRepository {
   async createReturn(data, tx) {
@@ -34,15 +34,15 @@ class SalesReturnRepository {
         sale: true,
         saleItem: {
           include: {
-            medicine: true
-          }
+            medicine: true,
+          },
         },
         batch: true,
-        user: true
+        user: true,
       },
       orderBy: { createdAt: 'desc' },
       skip,
-      take
+      take,
     });
   }
 }

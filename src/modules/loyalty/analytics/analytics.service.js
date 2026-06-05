@@ -2,27 +2,28 @@ import prisma from '../../../config/prisma.js';
 
 class AnalyticsService {
   async getLoyaltyAnalytics(tenantId) {
-    const [totalPointsEarned, totalPointsRedeemed, topEarners, tierDistribution] = await Promise.all([
-      prisma.loyaltyTransaction.aggregate({
-        where: { tenantId, type: 'EARNED' },
-        _sum: { points: true },
-      }),
-      prisma.loyaltyTransaction.aggregate({
-        where: { tenantId, type: 'REDEEMED' },
-        _sum: { points: true },
-      }),
-      prisma.patientLoyaltyAccount.findMany({
-        where: { tenantId },
-        take: 5,
-        orderBy: { lifetimePoints: 'desc' },
-        include: { patient: { select: { fullName: true, phone: true } } },
-      }),
-      prisma.patientLoyaltyAccount.groupBy({
-        by: ['loyaltyTier'],
-        where: { tenantId },
-        _count: { id: true },
-      }),
-    ]);
+    const [totalPointsEarned, totalPointsRedeemed, topEarners, tierDistribution] =
+      await Promise.all([
+        prisma.loyaltyTransaction.aggregate({
+          where: { tenantId, type: 'EARNED' },
+          _sum: { points: true },
+        }),
+        prisma.loyaltyTransaction.aggregate({
+          where: { tenantId, type: 'REDEEMED' },
+          _sum: { points: true },
+        }),
+        prisma.patientLoyaltyAccount.findMany({
+          where: { tenantId },
+          take: 5,
+          orderBy: { lifetimePoints: 'desc' },
+          include: { patient: { select: { fullName: true, phone: true } } },
+        }),
+        prisma.patientLoyaltyAccount.groupBy({
+          by: ['loyaltyTier'],
+          where: { tenantId },
+          _count: { id: true },
+        }),
+      ]);
 
     return {
       pointsStats: {

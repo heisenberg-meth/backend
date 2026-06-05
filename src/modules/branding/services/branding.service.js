@@ -1,7 +1,6 @@
 import prisma from '../../../config/prisma.js';
 
 class BrandingService {
-
   async getTenantBranding(tenantId) {
     return await prisma.tenantBranding.findUnique({
       where: { tenantId },
@@ -12,7 +11,7 @@ class BrandingService {
     return await prisma.tenantBranding.upsert({
       where: { tenantId },
       update: brandingData,
-      create: { tenantId, ...brandingData }
+      create: { tenantId, ...brandingData },
     });
   }
 }

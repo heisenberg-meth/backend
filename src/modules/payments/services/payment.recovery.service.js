@@ -9,7 +9,14 @@ class PaymentRecoveryService {
   async recoverOrphanedPayments(tenantId = null) {
     const threshold = new Date(Date.now() - 30 * 60 * 1000);
     const where = {
-      status: { in: [VALID_STATES.CREATED, VALID_STATES.INITIATED, VALID_STATES.PENDING, VALID_STATES.RECOVERY_PENDING] },
+      status: {
+        in: [
+          VALID_STATES.CREATED,
+          VALID_STATES.INITIATED,
+          VALID_STATES.PENDING,
+          VALID_STATES.RECOVERY_PENDING,
+        ],
+      },
       createdAt: { lt: threshold },
       ...(tenantId ? { tenantId } : {}),
     };
@@ -35,15 +42,26 @@ class PaymentRecoveryService {
 
             if (gatewayStatus === 'paid' || gatewayStatus === 'captured') {
               const payments = await razorpay.payments.all({ order_id: payment.razorpayOrderId });
-              const capturedPayment = payments.items?.find(p => p.status === 'captured');
+              const capturedPayment = payments.items?.find((p) => p.status === 'captured');
               if (capturedPayment) {
-                await paymentOrchestratorService._transitionPayment(payment.id, VALID_STATES.CAPTURED, {
-                  razorpayPaymentId: capturedPayment.id,
-                  paidAt: new Date(capturedPayment.created_at * 1000),
-                });
-                await paymentOrchestratorService._transitionPayment(payment.id, VALID_STATES.SUCCESS, {});
+                await paymentOrchestratorService._transitionPayment(
+                  payment.id,
+                  VALID_STATES.CAPTURED,
+                  {
+                    razorpayPaymentId: capturedPayment.id,
+                    paidAt: new Date(capturedPayment.created_at * 1000),
+                  },
+                );
+                await paymentOrchestratorService._transitionPayment(
+                  payment.id,
+                  VALID_STATES.SUCCESS,
+                  {},
+                );
                 results.recovered++;
-                logger.info({ paymentId: payment.id, orderId: payment.razorpayOrderId }, '[RECOVERY] Orphan recovered');
+                logger.info(
+                  { paymentId: payment.id, orderId: payment.razorpayOrderId },
+                  '[RECOVERY] Orphan recovered',
+                );
                 return;
               }
             }
@@ -54,10 +72,14 @@ class PaymentRecoveryService {
               });
               results.failed++;
             } else if (gatewayStatus === 'created' || gatewayStatus === 'attempted') {
-              await paymentOrchestratorService._transitionPayment(payment.id, VALID_STATES.PENDING, {});
+              await paymentOrchestratorService._transitionPayment(
+                payment.id,
+                VALID_STATES.PENDING,
+                {},
+              );
             }
           },
-          10000
+          10000,
         );
       } catch (error) {
         if (error.message?.includes('Resource locked')) {

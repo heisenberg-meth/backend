@@ -1,10 +1,10 @@
-import prisma from "../../../config/prisma.js";
+import prisma from '../../../config/prisma.js';
 
 class ExpiryAlertRepository {
   async createAlert(data) {
     return prisma.expiryAlert.create({
       data,
-      include: { batch: { include: { medicine: true } } }
+      include: { batch: { include: { medicine: true } } },
     });
   }
 
@@ -28,7 +28,7 @@ class ExpiryAlertRepository {
 
   async findExistingAlert(tenantId, batchId, severity) {
     return prisma.expiryAlert.findFirst({
-      where: { tenantId, batchId, severity, resolved: false }
+      where: { tenantId, batchId, severity, resolved: false },
     });
   }
 
@@ -58,7 +58,7 @@ class ExpiryAlertRepository {
   async resolveAlert(id, tenantId) {
     return prisma.expiryAlert.update({
       where: { id, tenantId },
-      data: { resolved: true }
+      data: { resolved: true },
     });
   }
 }

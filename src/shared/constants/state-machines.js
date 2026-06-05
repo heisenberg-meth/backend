@@ -8,47 +8,47 @@ export const procurementStateMachine = new StateMachine({
     [PROCUREMENT_STATUS.DRAFT]: {
       on: {
         SUBMIT: PROCUREMENT_STATUS.PENDING_APPROVAL,
-        CANCEL: PROCUREMENT_STATUS.CANCELLED
-      }
+        CANCEL: PROCUREMENT_STATUS.CANCELLED,
+      },
     },
     [PROCUREMENT_STATUS.PENDING_APPROVAL]: {
       on: {
         APPROVE: PROCUREMENT_STATUS.APPROVED,
         REJECT: PROCUREMENT_STATUS.DRAFT,
-        CANCEL: PROCUREMENT_STATUS.CANCELLED
-      }
+        CANCEL: PROCUREMENT_STATUS.CANCELLED,
+      },
     },
     [PROCUREMENT_STATUS.APPROVED]: {
       on: {
         PLACE_ORDER: PROCUREMENT_STATUS.ORDERED,
-        CANCEL: PROCUREMENT_STATUS.CANCELLED
-      }
+        CANCEL: PROCUREMENT_STATUS.CANCELLED,
+      },
     },
     [PROCUREMENT_STATUS.ORDERED]: {
       on: {
         RECEIVE_PARTIAL: PROCUREMENT_STATUS.PARTIALLY_RECEIVED,
         RECEIVE_FULL: PROCUREMENT_STATUS.RECEIVED,
-        CANCEL: PROCUREMENT_STATUS.CANCELLED
-      }
+        CANCEL: PROCUREMENT_STATUS.CANCELLED,
+      },
     },
     [PROCUREMENT_STATUS.PARTIALLY_RECEIVED]: {
       on: {
         RECEIVE_MORE: PROCUREMENT_STATUS.PARTIALLY_RECEIVED,
-        RECEIVE_FINAL: PROCUREMENT_STATUS.RECEIVED
-      }
+        RECEIVE_FINAL: PROCUREMENT_STATUS.RECEIVED,
+      },
     },
     [PROCUREMENT_STATUS.RECEIVED]: {
       on: {
-        RECONCILE: PROCUREMENT_STATUS.RECONCILED
-      }
+        RECONCILE: PROCUREMENT_STATUS.RECONCILED,
+      },
     },
     [PROCUREMENT_STATUS.RECONCILED]: {
-      on: {} // Terminal state
+      on: {}, // Terminal state
     },
     [PROCUREMENT_STATUS.CANCELLED]: {
-      on: {} // Terminal state
-    }
-  }
+      on: {}, // Terminal state
+    },
+  },
 });
 
 export const prescriptionStateMachine = new StateMachine({
@@ -59,28 +59,28 @@ export const prescriptionStateMachine = new StateMachine({
       on: {
         VERIFY: PRESCRIPTION_STATUS.VERIFIED,
         REJECT: PRESCRIPTION_STATUS.REJECTED,
-        CANCEL: PRESCRIPTION_STATUS.CANCELLED
-      }
+        CANCEL: PRESCRIPTION_STATUS.CANCELLED,
+      },
     },
     [PRESCRIPTION_STATUS.VERIFIED]: {
       on: {
         FULFILL: PRESCRIPTION_STATUS.FULFILLED,
         REJECT: PRESCRIPTION_STATUS.REJECTED,
-        CANCEL: PRESCRIPTION_STATUS.CANCELLED
-      }
+        CANCEL: PRESCRIPTION_STATUS.CANCELLED,
+      },
     },
     [PRESCRIPTION_STATUS.REJECTED]: {
       on: {
-        UPLOAD_NEW: PRESCRIPTION_STATUS.UPLOADED
-      }
+        UPLOAD_NEW: PRESCRIPTION_STATUS.UPLOADED,
+      },
     },
     [PRESCRIPTION_STATUS.FULFILLED]: {
-      on: {} // Terminal state
+      on: {}, // Terminal state
     },
     [PRESCRIPTION_STATUS.CANCELLED]: {
-      on: {} // Terminal state
-    }
-  }
+      on: {}, // Terminal state
+    },
+  },
 });
 
 export const billingStateMachine = new StateMachine({
@@ -90,31 +90,31 @@ export const billingStateMachine = new StateMachine({
     [BILLING_STATUS.DRAFT]: {
       on: {
         FINALIZE: BILLING_STATUS.PENDING,
-        VOID: BILLING_STATUS.VOIDED
-      }
+        VOID: BILLING_STATUS.VOIDED,
+      },
     },
     [BILLING_STATUS.PENDING]: {
       on: {
         RECORD_PARTIAL_PAYMENT: BILLING_STATUS.PARTIALLY_PAID,
         RECORD_FULL_PAYMENT: BILLING_STATUS.PAID,
-        VOID: BILLING_STATUS.VOIDED
-      }
+        VOID: BILLING_STATUS.VOIDED,
+      },
     },
     [BILLING_STATUS.PARTIALLY_PAID]: {
       on: {
         RECORD_PAYMENT: BILLING_STATUS.PARTIALLY_PAID,
         RECORD_FINAL_PAYMENT: BILLING_STATUS.PAID,
-        VOID: BILLING_STATUS.VOIDED
-      }
+        VOID: BILLING_STATUS.VOIDED,
+      },
     },
     [BILLING_STATUS.PAID]: {
       on: {
-        REFUND: BILLING_STATUS.REFUNDED
-      }
+        REFUND: BILLING_STATUS.REFUNDED,
+      },
     },
     [BILLING_STATUS.VOIDED]: { on: {} },
-    [BILLING_STATUS.REFUNDED]: { on: {} }
-  }
+    [BILLING_STATUS.REFUNDED]: { on: {} },
+  },
 });
 
 export const RETURN_STATUS = {

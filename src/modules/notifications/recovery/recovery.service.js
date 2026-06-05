@@ -44,7 +44,8 @@ class NotificationRecoveryService {
     });
 
     if (!notification) throw new Error('Notification not found');
-    if (notification.deliveryStatus === 'DELIVERED') throw new Error('Notification already delivered');
+    if (notification.deliveryStatus === 'DELIVERED')
+      throw new Error('Notification already delivered');
 
     // Reset status to RETRYING and increment count
     const updated = await prisma.notification.update({

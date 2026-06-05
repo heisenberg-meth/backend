@@ -20,11 +20,14 @@ function createWebhookWorker() {
       concurrency: 5,
       removeOnComplete: { age: 86400 },
       removeOnFail: { age: 604800 },
-    }
+    },
   );
 
   webhookWorker.on('failed', (job, err) => {
-    logger.error({ jobId: job?.id, error: err.message, attempt: job?.attemptsMade }, '[WEBHOOK_WORKER] Job failed');
+    logger.error(
+      { jobId: job?.id, error: err.message, attempt: job?.attemptsMade },
+      '[WEBHOOK_WORKER] Job failed',
+    );
   });
 
   webhookWorker.on('completed', (job) => {

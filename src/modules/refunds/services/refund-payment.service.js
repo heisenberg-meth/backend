@@ -25,7 +25,9 @@ class RefundPaymentService {
       await this.updateInvoicePaymentState(invoiceId, returnId, payments, client);
     }
 
-    logger.info(`[Refund Payment] Created ${created.length} refund payments for return ${returnId}`);
+    logger.info(
+      `[Refund Payment] Created ${created.length} refund payments for return ${returnId}`,
+    );
     return created;
   }
 

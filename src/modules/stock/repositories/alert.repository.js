@@ -1,10 +1,10 @@
-import prisma from "../../../config/prisma.js";
+import prisma from '../../../config/prisma.js';
 
 class AlertRepository {
   async createAlert(data) {
     return prisma.stockAlert.create({
       data,
-      include: { medicine: true }
+      include: { medicine: true },
     });
   }
 
@@ -24,8 +24,8 @@ class AlertRepository {
       where: { id, tenantId },
       data: {
         isResolved: true,
-        resolvedAt: new Date()
-      }
+        resolvedAt: new Date(),
+      },
     });
   }
 
@@ -35,8 +35,8 @@ class AlertRepository {
         tenantId,
         medicineId,
         type,
-        isResolved: false
-      }
+        isResolved: false,
+      },
     });
   }
 }

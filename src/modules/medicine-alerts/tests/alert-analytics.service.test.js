@@ -15,7 +15,7 @@ const mockPrisma = {
 };
 
 jest.unstable_mockModule('../../../config/prisma.js', () => ({
-  default: mockPrisma
+  default: mockPrisma,
 }));
 
 // Import AFTER mocking
@@ -182,7 +182,7 @@ describe('AlertAnalyticsService', () => {
       const result = await alertAnalyticsService.getAlertHeatmap('tenant-1');
 
       // Service returns entries like { date, LOW_STOCK, OUT_OF_STOCK, CRITICAL, EXPIRING }
-      const day1 = result.find(d => d.date === '2026-05-01');
+      const day1 = result.find((d) => d.date === '2026-05-01');
       expect(day1.LOW_STOCK).toBe(1);
       expect(day1.OUT_OF_STOCK).toBe(1);
       expect(day1.CRITICAL).toBe(1);

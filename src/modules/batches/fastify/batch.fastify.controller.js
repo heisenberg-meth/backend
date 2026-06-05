@@ -38,26 +38,40 @@ class BatchFastifyController {
 
   async quarantineBatch(request, reply) {
     const batch = await batchService.quarantineBatch(
-      request.params.id, request.body.reason, request.tenantId, request.user.id
+      request.params.id,
+      request.body.reason,
+      request.tenantId,
+      request.user.id,
     );
     return reply.send({ success: true, data: batch, message: 'Batch quarantined successfully' });
   }
 
   async recallBatch(request, reply) {
     const batch = await batchService.recallBatch(
-      request.params.id, request.body.reason, request.tenantId, request.user.id
+      request.params.id,
+      request.body.reason,
+      request.tenantId,
+      request.user.id,
     );
     return reply.send({ success: true, data: batch, message: 'Batch recalled successfully' });
   }
 
   async releaseQuarantine(request, reply) {
-    const batch = await batchService.releaseQuarantine(request.params.id, request.tenantId, request.user.id);
+    const batch = await batchService.releaseQuarantine(
+      request.params.id,
+      request.tenantId,
+      request.user.id,
+    );
     return reply.send({ success: true, data: batch, message: 'Batch released from quarantine' });
   }
 
   async getFefoBatches(request, reply) {
     const { quantity } = request.query;
-    const result = await batchService.getFefoBatches(request.params.medicineId, request.tenantId, quantity);
+    const result = await batchService.getFefoBatches(
+      request.params.medicineId,
+      request.tenantId,
+      quantity,
+    );
     return reply.send({ success: true, data: result });
   }
 

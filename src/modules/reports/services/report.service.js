@@ -14,13 +14,29 @@ class ReportService {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 
-    const existingSales = await dailySummaryRepository.getSalesSummaries(tenantId, fromDate, toDate);
-    const existingPurchases = await dailySummaryRepository.getPurchaseSummaries(tenantId, fromDate, toDate);
-    const existingFinances = await dailySummaryRepository.getFinanceSummaries(tenantId, fromDate, toDate);
+    const existingSales = await dailySummaryRepository.getSalesSummaries(
+      tenantId,
+      fromDate,
+      toDate,
+    );
+    const existingPurchases = await dailySummaryRepository.getPurchaseSummaries(
+      tenantId,
+      fromDate,
+      toDate,
+    );
+    const existingFinances = await dailySummaryRepository.getFinanceSummaries(
+      tenantId,
+      fromDate,
+      toDate,
+    );
 
-    const salesDates = new Set(existingSales.map(s => s.salesDate.toISOString().split('T')[0]));
-    const purchaseDates = new Set(existingPurchases.map(p => p.reportDate.toISOString().split('T')[0]));
-    const financeDates = new Set(existingFinances.map(f => f.reportDate.toISOString().split('T')[0]));
+    const salesDates = new Set(existingSales.map((s) => s.salesDate.toISOString().split('T')[0]));
+    const purchaseDates = new Set(
+      existingPurchases.map((p) => p.reportDate.toISOString().split('T')[0]),
+    );
+    const financeDates = new Set(
+      existingFinances.map((f) => f.reportDate.toISOString().split('T')[0]),
+    );
 
     let current = new Date(fromDate);
     const datesToAggregate = [];
@@ -29,7 +45,12 @@ class ReportService {
       const dateStr = current.toISOString().split('T')[0];
       const isToday = current.getTime() === today.getTime();
 
-      if (isToday || !salesDates.has(dateStr) || !purchaseDates.has(dateStr) || !financeDates.has(dateStr)) {
+      if (
+        isToday ||
+        !salesDates.has(dateStr) ||
+        !purchaseDates.has(dateStr) ||
+        !financeDates.has(dateStr)
+      ) {
         datesToAggregate.push(new Date(current));
       }
       current.setDate(current.getDate() + 1);
@@ -132,7 +153,7 @@ class ReportService {
     try {
       const stream = redisClient.scanStream({
         match: `reports:*:${tenantId}:*`,
-        count: 100
+        count: 100,
       });
 
       stream.on('data', async (keys) => {

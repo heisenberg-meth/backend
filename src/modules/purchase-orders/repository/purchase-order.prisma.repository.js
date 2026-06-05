@@ -1,31 +1,33 @@
-import prisma from "../../../config/prisma.js";
+import prisma from '../../../config/prisma.js';
 
 class PurchaseOrderPrismaRepository {
   async findAll(tenantId, filters = {}) {
     const { branchId, supplierId, status, from, to } = filters;
-    
+
     return prisma.purchaseOrder.findMany({
-      where: { 
-        tenantId, 
+      where: {
+        tenantId,
         deletedAt: null,
         ...(branchId ? { branchId } : {}),
         ...(supplierId ? { supplierId } : {}),
         ...(status ? { status } : {}),
-        ...(from || to ? {
-          createdAt: {
-            ...(from ? { gte: new Date(from) } : {}),
-            ...(to ? { lte: new Date(to) } : {}),
-          }
-        } : {}),
+        ...(from || to
+          ? {
+              createdAt: {
+                ...(from ? { gte: new Date(from) } : {}),
+                ...(to ? { lte: new Date(to) } : {}),
+              },
+            }
+          : {}),
       },
       include: {
         items: true,
         supplier: { select: { name: true } },
         user: {
-          select: { fullName: true, email: true }
-        }
+          select: { fullName: true, email: true },
+        },
       },
-      orderBy: { createdAt: 'desc' }
+      orderBy: { createdAt: 'desc' },
     });
   }
 
@@ -55,14 +57,14 @@ class PurchaseOrderPrismaRepository {
   async updateStatus(id, tenantId, status) {
     return prisma.purchaseOrder.update({
       where: { id, tenantId },
-      data: { status }
+      data: { status },
     });
   }
 
   async delete(id, tenantId) {
     return prisma.purchaseOrder.update({
       where: { id, tenantId },
-      data: { deletedAt: new Date() }
+      data: { deletedAt: new Date() },
     });
   }
 }

@@ -84,7 +84,8 @@ class RecallService {
     }
 
     await auditService.log({
-      tenantId, userId,
+      tenantId,
+      userId,
       action: 'CREATE_RECALL',
       target: `${medicine.name} - ${reason || 'Recall'}`,
       type: 'INVENTORY',
@@ -110,7 +111,8 @@ class RecallService {
     });
 
     await auditService.log({
-      tenantId, userId,
+      tenantId,
+      userId,
       action: 'RESOLVE_RECALL',
       target: recall.medicineName,
       type: 'INVENTORY',
@@ -143,7 +145,8 @@ class RecallService {
     }
 
     await auditService.log({
-      tenantId, userId,
+      tenantId,
+      userId,
       action: 'CANCEL_RECALL',
       target: recall.medicineName,
       type: 'INVENTORY',

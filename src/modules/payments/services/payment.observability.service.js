@@ -8,37 +8,46 @@ class PaymentObservabilityService {
   }
 
   logPaymentMutation(event, data) {
-    logger.info({
-      event,
-      correlationId: data.correlationId,
-      paymentId: data.paymentId,
-      orderId: data.orderId,
-      tenantId: data.tenantId,
-      amount: data.amount,
-      status: data.status,
-      prevStatus: data.prevStatus,
-      duration: data.duration ? `${data.duration}ms` : undefined,
-    }, `[PAYMENT:${event}]`);
+    logger.info(
+      {
+        event,
+        correlationId: data.correlationId,
+        paymentId: data.paymentId,
+        orderId: data.orderId,
+        tenantId: data.tenantId,
+        amount: data.amount,
+        status: data.status,
+        prevStatus: data.prevStatus,
+        duration: data.duration ? `${data.duration}ms` : undefined,
+      },
+      `[PAYMENT:${event}]`,
+    );
   }
 
   logGatewayCall(gateway, operation, duration, success, error = null) {
     const level = success ? 'info' : 'error';
-    logger[level]({
-      gateway,
-      operation,
-      duration: `${duration}ms`,
-      success,
-      error: error?.message,
-    }, `[GATEWAY:${gateway}] ${operation} ${success ? 'succeeded' : 'failed'}`);
+    logger[level](
+      {
+        gateway,
+        operation,
+        duration: `${duration}ms`,
+        success,
+        error: error?.message,
+      },
+      `[GATEWAY:${gateway}] ${operation} ${success ? 'succeeded' : 'failed'}`,
+    );
   }
 
   logQueueEvent(queue, action, jobId, data = {}) {
-    logger.info({
-      queue,
-      action,
-      jobId,
-      ...data,
-    }, `[QUEUE:${queue}] ${action}`);
+    logger.info(
+      {
+        queue,
+        action,
+        jobId,
+        ...data,
+      },
+      `[QUEUE:${queue}] ${action}`,
+    );
   }
 
   async getFullPaymentDiagnostics(tenantId, paymentId) {
@@ -55,7 +64,12 @@ class PaymentObservabilityService {
     if (!payment) return null;
 
     const webhookEvents = await prisma.paymentWebhook.findMany({
-      where: { payload: { path: ['payload', 'payment', 'entity', 'id'], equals: payment.razorpayPaymentId } },
+      where: {
+        payload: {
+          path: ['payload', 'payment', 'entity', 'id'],
+          equals: payment.razorpayPaymentId,
+        },
+      },
       orderBy: { processedAt: 'asc' },
     });
 

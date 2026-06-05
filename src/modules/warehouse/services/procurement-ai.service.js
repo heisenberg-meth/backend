@@ -10,23 +10,23 @@ class AutomatedProcurementService {
     const forecasts = await prisma.demandForecast.findMany({
       where: { tenantId, forecastDate: { gte: new Date() } },
       orderBy: { forecastDate: 'asc' },
-      take: 50
+      take: 50,
     });
 
     for (const forecast of forecasts) {
       // 2. Check current stock levels
       const currentStock = await prisma.inventoryBatch.aggregate({
         where: { medicineId: forecast.medicineId, status: 'ACTIVE' },
-        _sum: { quantity: true }
+        _sum: { quantity: true },
       });
 
       const stockQty = currentStock._sum.quantity || 0;
-      
+
       // 3. Logic: If predicted demand > current stock + safety margin
       const safetyMargin = 1.2; // 20% buffer
       if (forecast.predictedQuantity * safetyMargin > stockQty) {
         logger.info({ medicineId: forecast.medicineId }, '[PROCUREMENT_AI] Triggering PO creation');
-        
+
         await this.triggerPurchaseOrder(tenantId, forecast.medicineId, forecast.predictedQuantity);
       }
     }

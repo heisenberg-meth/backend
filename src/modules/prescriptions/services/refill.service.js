@@ -55,7 +55,9 @@ class RefillService {
       timestamp: new Date().toISOString(),
     });
 
-    logger.info(`[Refill] Processed refill for prescription ${prescriptionId}, refill #${updated.refillCount}`);
+    logger.info(
+      `[Refill] Processed refill for prescription ${prescriptionId}, refill #${updated.refillCount}`,
+    );
 
     return {
       ...eligibility,
@@ -71,7 +73,8 @@ class RefillService {
     });
 
     const dueRefills = prescriptions.data.filter((p) => {
-      const daysSincePrescription = (Date.now() - new Date(p.prescriptionDate).getTime()) / (1000 * 60 * 60 * 24);
+      const daysSincePrescription =
+        (Date.now() - new Date(p.prescriptionDate).getTime()) / (1000 * 60 * 60 * 24);
       return daysSincePrescription > 25;
     });
 

@@ -5,11 +5,11 @@ import { notificationQueue } from '../queue/notification.queue.js';
 
 export const processExpiryReminder = async () => {
   logger.info('[Job] Running Expiry Reminder Check');
-  
+
   // Find alerts with high severity that haven't been resolved
   const alerts = await prisma.expiryAlert.findMany({
     where: { resolved: false, daysRemaining: { lte: 30 } },
-    include: { batch: true, medicine: true, tenant: { include: { users: true } } }
+    include: { batch: true, medicine: true, tenant: { include: { users: true } } },
   });
 
   for (const alert of alerts) {
@@ -47,9 +47,13 @@ export const processExpiryReminder = async () => {
 };
 
 export const scheduleExpiryReminders = async () => {
-  await notificationQueue.add('expiry-reminder', {}, {
-    repeat: {
-      pattern: '0 */6 * * *' // Every 6 hours
-    }
-  });
+  await notificationQueue.add(
+    'expiry-reminder',
+    {},
+    {
+      repeat: {
+        pattern: '0 */6 * * *', // Every 6 hours
+      },
+    },
+  );
 };

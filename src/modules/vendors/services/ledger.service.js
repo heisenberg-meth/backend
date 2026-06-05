@@ -15,20 +15,25 @@ class SupplierLedgerService {
       balanceAfter -= data.creditAmount;
     }
 
-    const entry = await ledgerRepository.createEntry({
-      tenantId,
-      supplierId: data.supplierId,
-      type: data.type,
-      debitAmount: data.debitAmount || 0,
-      creditAmount: data.creditAmount || 0,
-      balanceAfter,
-      referenceType: data.referenceType,
-      referenceId: data.referenceId,
-      description: data.description,
-      createdBy: data.createdBy,
-    }, tx);
+    const entry = await ledgerRepository.createEntry(
+      {
+        tenantId,
+        supplierId: data.supplierId,
+        type: data.type,
+        debitAmount: data.debitAmount || 0,
+        creditAmount: data.creditAmount || 0,
+        balanceAfter,
+        referenceType: data.referenceType,
+        referenceId: data.referenceId,
+        description: data.description,
+        createdBy: data.createdBy,
+      },
+      tx,
+    );
 
-    logger.info(`[Ledger] Recorded entry for supplier ${data.supplierId}: type=${data.type}, balance=${balanceAfter}`);
+    logger.info(
+      `[Ledger] Recorded entry for supplier ${data.supplierId}: type=${data.type}, balance=${balanceAfter}`,
+    );
     return entry;
   }
 }

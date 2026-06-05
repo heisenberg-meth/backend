@@ -22,7 +22,7 @@ class NotificationRateLimitService {
     if (current > max) {
       logger.warn(
         { tenantId, channel, recipient, current, max },
-        '[RATE-LIMIT] Notification rate limit exceeded'
+        '[RATE-LIMIT] Notification rate limit exceeded',
       );
       return { allowed: false, current, max, retryAfter: windowSeconds };
     }

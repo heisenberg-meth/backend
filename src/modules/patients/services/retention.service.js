@@ -1,5 +1,5 @@
-import prisma from "../../../config/prisma.js";
-import { subDays } from "date-fns";
+import prisma from '../../../config/prisma.js';
+import { subDays } from 'date-fns';
 
 class RetentionService {
   /**
@@ -31,9 +31,9 @@ class RetentionService {
       where: {
         tenantId,
         deletedAt: null,
-        lastPurchaseDate: { lt: sixtyDaysAgo }
+        lastPurchaseDate: { lt: sixtyDaysAgo },
       },
-      orderBy: { lastPurchaseDate: 'desc' }
+      orderBy: { lastPurchaseDate: 'desc' },
     });
   }
 
@@ -46,11 +46,11 @@ class RetentionService {
       where: {
         tenantId,
         deletedAt: null,
-        prescriptions: { _count: { gt: 2 } }
+        prescriptions: { _count: { gt: 2 } },
       },
       include: {
-        _count: { select: { prescriptions: true } }
-      }
+        _count: { select: { prescriptions: true } },
+      },
     });
   }
 }

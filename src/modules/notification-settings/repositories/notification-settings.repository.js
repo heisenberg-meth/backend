@@ -94,10 +94,12 @@ class NotificationSettingsRepository {
       where: { id: policyId, tenantId },
       data: {
         ...data,
-        rules: data.rules ? {
-          deleteMany: {},
-          create: data.rules,
-        } : undefined,
+        rules: data.rules
+          ? {
+              deleteMany: {},
+              create: data.rules,
+            }
+          : undefined,
       },
       include: { rules: true },
     });
@@ -169,10 +171,7 @@ class NotificationSettingsRepository {
       where: {
         tenantId,
         revokedAt: null,
-        OR: [
-          phoneNumber ? { phoneNumber } : {},
-          email ? { email } : {},
-        ].filter(Boolean),
+        OR: [phoneNumber ? { phoneNumber } : {}, email ? { email } : {}].filter(Boolean),
         ...(channel ? { OR: [{ channel }, { channel: null }] } : {}),
         ...(reminderType ? { OR: [{ reminderType }, { reminderType: null }] } : {}),
       },

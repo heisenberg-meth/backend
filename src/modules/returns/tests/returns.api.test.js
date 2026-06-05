@@ -1,4 +1,4 @@
-import { jest , describe, beforeEach, it, expect } from '@jest/globals';
+import { jest, describe, beforeEach, it, expect } from '@jest/globals';
 import express from 'express';
 import request from 'supertest';
 import path from 'path';
@@ -235,9 +235,7 @@ describe('Returns API Integration', () => {
         pagination: { page: 1, limit: 20, total: 1, totalPages: 1 },
       });
 
-      const response = await request(app)
-        .get('/api/billing/returns')
-        .expect(200);
+      const response = await request(app).get('/api/billing/returns').expect(200);
 
       expect(response.body.success).toBe(true);
       expect(response.body.data).toHaveLength(1);
@@ -249,9 +247,7 @@ describe('Returns API Integration', () => {
         pagination: { page: 1, limit: 20, total: 0, totalPages: 0 },
       });
 
-      const response = await request(app)
-        .get('/api/billing/returns?status=APPROVED')
-        .expect(200);
+      const response = await request(app).get('/api/billing/returns?status=APPROVED').expect(200);
 
       expect(response.body.success).toBe(true);
     });
@@ -270,9 +266,7 @@ describe('Returns API Integration', () => {
         ],
       });
 
-      const response = await request(app)
-        .get('/api/billing/returns/return-1')
-        .expect(200);
+      const response = await request(app).get('/api/billing/returns/return-1').expect(200);
 
       expect(response.body.success).toBe(true);
       expect(response.body.data.return.returnNumber).toBe('RET-GEN-2026-000001');
@@ -282,9 +276,7 @@ describe('Returns API Integration', () => {
     it('should return 404 for non-existent return', async () => {
       mockReturnRepository.findById.mockResolvedValue(null);
 
-      const response = await request(app)
-        .get('/api/billing/returns/nonexistent')
-        .expect(404);
+      const response = await request(app).get('/api/billing/returns/nonexistent').expect(404);
 
       expect(response.body.success).toBe(false);
     });
@@ -398,7 +390,10 @@ describe('Returns API Integration', () => {
         _sum: { totalReturnAmount: 500 },
       });
 
-      mockPrisma.invoice.update.mockResolvedValue({ id: 'invoice-1', status: 'PARTIALLY_REFUNDED' });
+      mockPrisma.invoice.update.mockResolvedValue({
+        id: 'invoice-1',
+        status: 'PARTIALLY_REFUNDED',
+      });
 
       const response = await request(app)
         .post('/api/billing/returns/return-1/refund')

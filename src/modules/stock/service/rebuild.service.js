@@ -1,4 +1,4 @@
-import prisma from "../../../config/prisma.js";
+import prisma from '../../../config/prisma.js';
 import logger from '../../../shared/utils/logger.js';
 
 class InventoryRebuildService {
@@ -17,8 +17,8 @@ class InventoryRebuildService {
           branchId,
         },
         _sum: {
-          quantity: true
-        }
+          quantity: true,
+        },
       });
 
       const totalQuantity = movementSum._sum.quantity || 0;
@@ -26,18 +26,18 @@ class InventoryRebuildService {
       // 2. Update the Inventory (Snapshot) table
       const inventory = await tx.inventory.upsert({
         where: {
-          tenantId_branchId_medicineId: { tenantId, branchId, medicineId }
+          tenantId_branchId_medicineId: { tenantId, branchId, medicineId },
         },
         update: {
-          currentStock: totalQuantity
+          currentStock: totalQuantity,
         },
         create: {
           tenantId,
           branchId,
           medicineId,
           currentStock: totalQuantity,
-          status: totalQuantity > 0 ? 'HEALTHY' : 'OUT_OF_STOCK'
-        }
+          status: totalQuantity > 0 ? 'HEALTHY' : 'OUT_OF_STOCK',
+        },
       });
 
       // 3. Rebuild Batch-level quantities
@@ -46,8 +46,8 @@ class InventoryRebuildService {
           tenantId,
           medicineId,
           branchId,
-          deletedAt: null
-        }
+          deletedAt: null,
+        },
       });
 
       for (const batch of batches) {
@@ -56,17 +56,17 @@ class InventoryRebuildService {
             tenantId,
             medicineId,
             branchId,
-            batchId: batch.id
+            batchId: batch.id,
           },
           _sum: {
-            quantity: true
-          }
+            quantity: true,
+          },
         });
 
         const batchQuantity = batchMovementSum._sum.quantity || 0;
 
         // Note: For availableQuantity, we need to respect reservations.
-        // Since reservations are currently just a number in the batch, 
+        // Since reservations are currently just a number in the batch,
         // we keep the existing reservedQuantity but recalculate availableQuantity.
         const availableQuantity = batchQuantity - batch.reservedQuantity;
 
@@ -74,15 +74,15 @@ class InventoryRebuildService {
           where: { id: batch.id },
           data: {
             quantity: batchQuantity,
-            availableQuantity: availableQuantity
-          }
+            availableQuantity: availableQuantity,
+          },
         });
       }
 
       return {
         totalQuantity,
         inventoryId: inventory.id,
-        batchCount: batches.length
+        batchCount: batches.length,
       };
     });
   }
@@ -94,7 +94,7 @@ class InventoryRebuildService {
   async rebuildTenantInventory(tenantId) {
     const medicines = await prisma.medicine.findMany({
       where: { tenantId, deletedAt: null },
-      select: { id: true }
+      select: { id: true },
     });
 
     const results = [];
@@ -103,7 +103,7 @@ class InventoryRebuildService {
       // In this system, branches are prominent.
       const branches = await prisma.branch.findMany({
         where: { tenantId, deletedAt: null },
-        select: { id: true }
+        select: { id: true },
       });
 
       for (const branch of branches) {
@@ -114,7 +114,7 @@ class InventoryRebuildService {
 
     return {
       medicinesProcessed: medicines.length,
-      branchesProcessed: results.length
+      branchesProcessed: results.length,
     };
   }
 }

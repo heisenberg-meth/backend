@@ -1,7 +1,21 @@
 import prisma from '../../../config/prisma.js';
 
 class MedicineRepository {
-  async findAll({ tenantId, branchId, q, search, categoryId, manufacturerId, isActive, schedule, lowStock, sortBy, order, page = 1, limit = 50 }) {
+  async findAll({
+    tenantId,
+    branchId,
+    q,
+    search,
+    categoryId,
+    manufacturerId,
+    isActive,
+    schedule,
+    lowStock,
+    sortBy,
+    order,
+    page = 1,
+    limit = 50,
+  }) {
     const skip = (page - 1) * limit;
     const take = limit;
     const searchTerm = q || search;
@@ -26,10 +40,10 @@ class MedicineRepository {
         inventory: {
           some: {
             branchId: branchId || null,
-            currentStock: { lte: 10 } // Fallback for simple low stock check
-          }
-        }
-      })
+            currentStock: { lte: 10 }, // Fallback for simple low stock check
+          },
+        },
+      }),
     };
 
     const [medicines, total] = await Promise.all([
@@ -41,8 +55,8 @@ class MedicineRepository {
           inventory: branchId ? { where: { branchId } } : true,
           inventoryBatches: {
             where: { branchId: branchId || null, deletedAt: null },
-            orderBy: { expiryDate: 'asc' }
-          }
+            orderBy: { expiryDate: 'asc' },
+          },
         },
         orderBy: { [sortBy || 'name']: order || 'asc' },
         skip,
@@ -52,7 +66,7 @@ class MedicineRepository {
     ]);
 
     // Flatten for compatibility with legacy UI
-    const formattedMedicines = medicines.map(m => {
+    const formattedMedicines = medicines.map((m) => {
       const inv = m.inventory?.[0] || {};
       const latestBatch = m.inventoryBatches?.[0] || {};
       return {
@@ -106,11 +120,11 @@ class MedicineRepository {
           orderBy: { matchScore: 'desc' },
         },
         inventory: {
-          where: { branchId }
+          where: { branchId },
         },
         inventoryBatches: {
           where: { branchId, deletedAt: null, quantity: { gt: 0 } },
-          orderBy: { expiryDate: 'asc' }
+          orderBy: { expiryDate: 'asc' },
         },
       },
     });
@@ -138,8 +152,8 @@ class MedicineRepository {
       data,
       include: {
         category: true,
-        manufacturer: true
-      }
+        manufacturer: true,
+      },
     });
   }
 
@@ -150,7 +164,7 @@ class MedicineRepository {
     if (rackLocation !== undefined) {
       await db.inventory.updateMany({
         where: { tenantId, medicineId: id },
-        data: { rackLocation }
+        data: { rackLocation },
       });
     }
 
@@ -159,8 +173,8 @@ class MedicineRepository {
       data: medicineData,
       include: {
         category: { select: { id: true, name: true } },
-        manufacturer: { select: { id: true, name: true } }
-      }
+        manufacturer: { select: { id: true, name: true } },
+      },
     });
   }
 
@@ -184,11 +198,11 @@ class MedicineRepository {
       where: { barcode, tenantId, deletedAt: null },
       include: {
         inventory: {
-          where: { branchId }
+          where: { branchId },
         },
         inventoryBatches: {
           where: { branchId, deletedAt: null, quantity: { gt: 0 }, expiryDate: { gt: new Date() } },
-          orderBy: { expiryDate: 'asc' }
+          orderBy: { expiryDate: 'asc' },
         },
       },
     });
@@ -199,7 +213,7 @@ class MedicineRepository {
     return {
       ...medicine,
       currentStock: inv.currentStock || 0,
-      availableStock: (inv.currentStock || 0) - (inv.reservedStock || 0)
+      availableStock: (inv.currentStock || 0) - (inv.reservedStock || 0),
     };
   }
 
@@ -207,12 +221,12 @@ class MedicineRepository {
     return await prisma.inventoryBatch.updateMany({
       where: {
         batchNumber,
-        medicine: { tenantId }
+        medicine: { tenantId },
       },
-      data: { 
+      data: {
         recalled: true,
-        status: 'RECALLED'
-      }
+        status: 'RECALLED',
+      },
     });
   }
 }

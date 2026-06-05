@@ -69,15 +69,15 @@ class RefillService {
       where: { tenantId_patientId_medicineId: { tenantId, patientId, medicineId } },
       include: {
         patient: { select: { fullName: true } },
-        medicine: { select: { fullName: true } }
-      }
+        medicine: { select: { fullName: true } },
+      },
     });
 
     if (!refill || !refill.expectedRefillAt) return null;
 
     const now = new Date();
     const diffDays = Math.floor((now - refill.expectedRefillAt) / (1000 * 60 * 60 * 24));
-    
+
     let status = 'ON_TRACK';
     let score = 100;
 
@@ -97,7 +97,7 @@ class RefillService {
 
     await prisma.patientRefill.update({
       where: { id: refill.id },
-      data: { adherenceStatus: status }
+      data: { adherenceStatus: status },
     });
 
     await repo.createAdherenceLog({
@@ -115,7 +115,7 @@ class RefillService {
         medicineId,
         tenantId,
         status,
-        score
+        score,
       });
 
       if (status === 'CRITICAL') {
@@ -126,7 +126,7 @@ class RefillService {
           channel: 'IN_APP',
           message: `CRITICAL ADHERENCE RISK: Patient ${refill.patient.fullName} has missed refill for ${refill.medicine.name} by more than 14 days. Immediate follow-up required.`,
           type: 'ADHERENCE_ESCALATION',
-          priority: 'HIGH'
+          priority: 'HIGH',
         });
       }
     }
@@ -147,15 +147,15 @@ class RefillService {
       else if (refill.adherenceStatus === 'CRITICAL') type = 'REFILL_OVERDUE';
 
       // Logic to decide channel based on patient preference (mocked for now)
-      const channel = 'WHATSAPP'; 
-      
+      const channel = 'WHATSAPP';
+
       await this.sendReminder(refill, channel, type);
     }
   }
 
   async sendReminder(refill, channel, type = 'REFILL_DUE') {
     const { patient, medicine, tenantId } = refill;
-    
+
     // Create record
     const reminder = await repo.createReminder({
       tenantId,
@@ -165,19 +165,19 @@ class RefillService {
       reminderType: type,
       scheduledAt: new Date(),
       channel,
-      deliveryStatus: 'PENDING'
+      deliveryStatus: 'PENDING',
     });
 
     try {
       // Template Engine
       const templates = {
-        'REFILL_DUE': `Hello ${patient.fullName}, your refill for ${medicine.name} is due on ${refill.expectedRefillAt.toLocaleDateString()}. Please contact the pharmacy to ensure continuity of your treatment.`,
-        'REFILL_OVERDUE': `URGENT: ${patient.fullName}, your refill for ${medicine.name} was due on ${refill.expectedRefillAt.toLocaleDateString()}. Missing doses can impact your health. Please visit us immediately.`,
-        'PRESCRIPTION_EXPIRING': `Hello ${patient.fullName}, your prescription for ${medicine.name} is expiring soon. Please consult your doctor for a new prescription to continue your medication.`
+        REFILL_DUE: `Hello ${patient.fullName}, your refill for ${medicine.name} is due on ${refill.expectedRefillAt.toLocaleDateString()}. Please contact the pharmacy to ensure continuity of your treatment.`,
+        REFILL_OVERDUE: `URGENT: ${patient.fullName}, your refill for ${medicine.name} was due on ${refill.expectedRefillAt.toLocaleDateString()}. Missing doses can impact your health. Please visit us immediately.`,
+        PRESCRIPTION_EXPIRING: `Hello ${patient.fullName}, your prescription for ${medicine.name} is expiring soon. Please consult your doctor for a new prescription to continue your medication.`,
       };
 
       const message = templates[reminder.reminderType] || templates['REFILL_DUE'];
-      
+
       // Emit event for notification module to pick up
       await emitEvent('SEND_NOTIFICATION', {
         tenantId,
@@ -185,27 +185,26 @@ class RefillService {
         channel,
         message,
         type: 'REFILL_REMINDER',
-        referenceId: reminder.id
+        referenceId: reminder.id,
       });
 
       await repo.updateReminderStatus(reminder.id, {
         deliveryStatus: 'SENT',
-        sentAt: new Date()
+        sentAt: new Date(),
       });
 
       await prisma.patientRefill.update({
         where: { id: refill.id },
-        data: { 
+        data: {
           lastReminderSent: new Date(),
-          reminderChannel: channel
-        }
+          reminderChannel: channel,
+        },
       });
-
     } catch (error) {
       logger.error({ error, reminderId: reminder.id }, 'Failed to send refill reminder');
       await repo.updateReminderStatus(reminder.id, {
         deliveryStatus: 'FAILED',
-        errorMessage: error.message
+        errorMessage: error.message,
       });
     }
   }

@@ -36,7 +36,7 @@ class SettingsAuditRepository {
 
       logger.info(
         { tenantId, settingKey, action, category, changedBy },
-        'Settings audit log created'
+        'Settings audit log created',
       );
 
       return auditLog;

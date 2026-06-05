@@ -168,7 +168,9 @@ class SettingsPrismaService {
   async updateCategorySettings(tenantId, category, data, changedBy = null, ipAddress = null) {
     const field = CATEGORY_FIELD_MAP[category];
     if (!field) {
-      throw new Error(`Invalid settings category: ${category}. Valid: ${SETTINGS_CATEGORIES.join(', ')}`);
+      throw new Error(
+        `Invalid settings category: ${category}. Valid: ${SETTINGS_CATEGORIES.join(', ')}`,
+      );
     }
 
     // Get old value

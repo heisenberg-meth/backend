@@ -8,7 +8,6 @@ export const SettingsEvents = {
   GST_CATEGORY_REMOVED: 'settings:gst:category_removed',
   GST_VERSION_CREATED: 'settings:gst:version_created',
   TAX_POLICY_CHANGED: 'settings:tax:policy_changed',
-
   BILLING_SETTINGS_UPDATED: 'settings:billing:updated',
   INVENTORY_SETTINGS_UPDATED: 'settings:inventory:updated',
   NOTIFICATION_SETTINGS_UPDATED: 'settings:notifications:updated',
@@ -17,11 +16,9 @@ export const SettingsEvents = {
   STORE_PROFILE_UPDATED: 'settings:store_profile:updated',
   ALERT_THRESHOLDS_UPDATED: 'settings:alert_thresholds:updated',
   INTEGRATIONS_UPDATED: 'settings:integrations:updated',
-
   SETTINGS_APPROVAL_REQUESTED: 'settings:approval:requested',
   SETTINGS_APPROVAL_APPROVED: 'settings:approval:approved',
   SETTINGS_APPROVAL_REJECTED: 'settings:approval:rejected',
-
   SETTINGS_CACHE_INVALIDATED: 'settings:cache:invalidated',
   SETTINGS_AUDIT_LOG_CREATED: 'settings:audit:log_created',
 };
@@ -46,7 +43,10 @@ class SettingsEventEmitter {
   off(event, callback) {
     const callbacks = this.listeners.get(event);
     if (callbacks) {
-      this.listeners.set(event, callbacks.filter((cb) => cb !== callback));
+      this.listeners.set(
+        event,
+        callbacks.filter((cb) => cb !== callback),
+      );
     }
   }
 

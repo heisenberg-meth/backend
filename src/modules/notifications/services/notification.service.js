@@ -57,7 +57,12 @@ class NotificationService {
       // 2. Render Template if needed
       let finalMessage = message;
       if (templateName) {
-        finalMessage = await templateService.renderTemplate(tenantId, templateName, channel, variables);
+        finalMessage = await templateService.renderTemplate(
+          tenantId,
+          templateName,
+          channel,
+          variables,
+        );
       }
 
       // 3. Save to DB with initial status QUEUED
@@ -92,7 +97,10 @@ class NotificationService {
         message: finalMessage,
       });
 
-      logger.info({ notificationId: notification.id, channel }, 'Notification successfully enqueued');
+      logger.info(
+        { notificationId: notification.id, channel },
+        'Notification successfully enqueued',
+      );
       return { success: true, notificationId: notification.id };
     } catch (error) {
       logger.error({ error, params }, 'Failed to queue notification');

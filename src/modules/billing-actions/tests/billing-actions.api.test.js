@@ -1,4 +1,4 @@
-import { jest , describe, beforeEach, it, expect } from '@jest/globals';
+import { jest, describe, beforeEach, it, expect } from '@jest/globals';
 import express from 'express';
 import request from 'supertest';
 
@@ -78,7 +78,9 @@ jest.unstable_mockModule('../services/pdf-renderer.service.js', () => ({
 
 jest.unstable_mockModule('../services/s3-storage.service.js', () => ({
   default: {
-    uploadPDF: jest.fn().mockResolvedValue({ key: 'invoices/test/original/inv.pdf', url: 's3://bucket/key' }),
+    uploadPDF: jest
+      .fn()
+      .mockResolvedValue({ key: 'invoices/test/original/inv.pdf', url: 's3://bucket/key' }),
     getSignedUrl: jest.fn().mockResolvedValue('https://signed-url.example.com'),
     generatePDFKey: jest.fn().mockReturnValue('invoices/test/original/inv.pdf'),
   },
@@ -148,9 +150,7 @@ describe('Billing Actions API', () => {
         expiresAt: new Date(Date.now() + 3600000),
       });
 
-      const response = await request(app)
-        .post('/api/billing/invoices/invoice-1/pdf')
-        .expect(200);
+      const response = await request(app).post('/api/billing/invoices/invoice-1/pdf').expect(200);
 
       expect(response.body.success).toBe(true);
       expect(response.body.data.pdfUrl).toBe('https://signed-url.example.com');
@@ -345,7 +345,13 @@ describe('Billing Actions API', () => {
     it('should return print history for invoice', async () => {
       mockPrisma.invoice.findUnique.mockResolvedValue({ id: 'invoice-1' });
       mockPrisma.invoicePrintJob.findMany.mockResolvedValue([
-        { id: 'job-1', printerType: 'A4', copies: 1, printStatus: 'PRINTED', createdAt: new Date() },
+        {
+          id: 'job-1',
+          printerType: 'A4',
+          copies: 1,
+          printStatus: 'PRINTED',
+          createdAt: new Date(),
+        },
       ]);
 
       const response = await request(app)

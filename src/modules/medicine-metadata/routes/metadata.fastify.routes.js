@@ -12,10 +12,10 @@ async function metadataRoutes(fastify) {
     {
       schema: {
         tags: ['Medicines'],
-        params: { type: 'object', properties: { id: { type: 'string', format: 'uuid' } } }
-      }
+        params: { type: 'object', properties: { id: { type: 'string', format: 'uuid' } } },
+      },
     },
-    metadataController.getSuppliers
+    metadataController.getSuppliers,
   );
 
   fastify.post(
@@ -31,13 +31,13 @@ async function metadataRoutes(fastify) {
             supplierId: { type: 'string', format: 'uuid' },
             isPreferred: { type: 'boolean', default: false },
             contractPrice: { type: 'number' },
-            leadDays: { type: 'integer' }
-          }
-        }
+            leadDays: { type: 'integer' },
+          },
+        },
       },
       preHandler: [requirePermission('VIEW_INVENTORY')],
     },
-    metadataController.addSupplier
+    metadataController.addSupplier,
   );
 
   // --- Operational Trends ---
@@ -46,10 +46,10 @@ async function metadataRoutes(fastify) {
     {
       schema: {
         tags: ['Medicines'],
-        params: { type: 'object', properties: { id: { type: 'string', format: 'uuid' } } }
-      }
+        params: { type: 'object', properties: { id: { type: 'string', format: 'uuid' } } },
+      },
     },
-    metadataController.getPurchaseHistory
+    metadataController.getPurchaseHistory,
   );
 
   fastify.get(
@@ -57,10 +57,10 @@ async function metadataRoutes(fastify) {
     {
       schema: {
         tags: ['Medicines'],
-        params: { type: 'object', properties: { id: { type: 'string', format: 'uuid' } } }
-      }
+        params: { type: 'object', properties: { id: { type: 'string', format: 'uuid' } } },
+      },
     },
-    metadataController.getStockHistory
+    metadataController.getStockHistory,
   );
 
   // --- Expiry Intelligence ---
@@ -69,10 +69,10 @@ async function metadataRoutes(fastify) {
     {
       schema: {
         tags: ['Medicines'],
-        params: { type: 'object', properties: { id: { type: 'string', format: 'uuid' } } }
-      }
+        params: { type: 'object', properties: { id: { type: 'string', format: 'uuid' } } },
+      },
     },
-    metadataController.getExpiryHistory
+    metadataController.getExpiryHistory,
   );
 }
 

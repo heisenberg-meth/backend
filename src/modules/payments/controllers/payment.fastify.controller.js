@@ -16,11 +16,14 @@ class PaymentFastifyController {
     const tenantId = request.tenantId;
     const userId = request.user?.id;
 
-    request.log.info({ 
-      tenantId,
-      userId,
-      amount
-    }, '[DIAGNOSTIC] Payment order creation initiated');
+    request.log.info(
+      {
+        tenantId,
+        userId,
+        amount,
+      },
+      '[DIAGNOSTIC] Payment order creation initiated',
+    );
 
     if (!amount || amount <= 0) {
       return reply.code(400).send({ success: false, error: 'Invalid amount' });
@@ -30,20 +33,23 @@ class PaymentFastifyController {
       // Ensure DB connection is active before critical payment operation
       await ensureDbConnection();
 
-      const options = { 
-        receipt, 
+      const options = {
+        receipt,
         idempotencyKey,
-        notes: { 
+        notes: {
           planName: request.body.planName,
           planId: request.body.planId,
           billingCycle: request.body.billingCycle,
-          type: 'SUBSCRIPTION_UPGRADE'
-        }
+          type: 'SUBSCRIPTION_UPGRADE',
+        },
       };
       const order = await paymentOrchestratorService.createPaymentOrder(
-        tenantId, userId, Number(amount), options
+        tenantId,
+        userId,
+        Number(amount),
+        options,
       );
-      logger.info({"CONTROLLER RESPONSE =": order});
+      logger.info({ 'CONTROLLER RESPONSE =': order });
       return reply.send({
         success: true,
         key: getConfig().keyId || process.env.RAZORPAY_KEY_ID,
@@ -55,24 +61,27 @@ class PaymentFastifyController {
         status: order.status,
         data: {
           ...order,
-          key: getConfig().keyId || process.env.RAZORPAY_KEY_ID
-        }
+          key: getConfig().keyId || process.env.RAZORPAY_KEY_ID,
+        },
       });
     } catch (error) {
       if (error.message?.includes('Resource locked')) {
         return reply.code(409).send({ success: false, error: 'Request in progress' });
       }
-      logger.error({
-        message: error.message,
-        stack: error.stack,
-        code: error.code,
-        tenantId,
-      }, '[PAYMENT] Create order failed');
-      
+      logger.error(
+        {
+          message: error.message,
+          stack: error.stack,
+          code: error.code,
+          tenantId,
+        },
+        '[PAYMENT] Create order failed',
+      );
+
       // Return descriptive error message for debugging
-      return reply.code(500).send({ 
-        success: false, 
-        error: error.message || 'Failed to create payment order' 
+      return reply.code(500).send({
+        success: false,
+        error: error.message || 'Failed to create payment order',
       });
     }
   }
@@ -91,12 +100,15 @@ class PaymentFastifyController {
       if (error.message?.includes('Invalid payment state transition')) {
         return reply.code(409).send({ success: false, error: error.message });
       }
-      logger.error({
-        message: error.message,
-        stack: error.stack,
-        code: error.code,
-        tenantId,
-      }, '[PAYMENT] Verify failed');
+      logger.error(
+        {
+          message: error.message,
+          stack: error.stack,
+          code: error.code,
+          tenantId,
+        },
+        '[PAYMENT] Verify failed',
+      );
       return reply.code(400).send({ success: false, error: 'Payment verification failed' });
     }
   }
@@ -161,7 +173,11 @@ class PaymentFastifyController {
 
     try {
       const result = await settlementService.settleInvoice({
-        tenantId, userId, invoiceId, payments, idempotencyKey
+        tenantId,
+        userId,
+        invoiceId,
+        payments,
+        idempotencyKey,
       });
       return reply.send({ success: true, data: result });
     } catch (error) {
@@ -178,7 +194,11 @@ class PaymentFastifyController {
 
     try {
       const result = await refundService.refundAllocation({
-        tenantId, userId, allocationId, amount, reason
+        tenantId,
+        userId,
+        allocationId,
+        amount,
+        reason,
       });
       return reply.send({ success: true, data: result });
     } catch (error) {
@@ -198,18 +218,22 @@ class PaymentFastifyController {
         tenantId,
         ...(status ? { status } : {}),
         ...(method ? { paymentMethod: method } : {}),
-        ...(from || to ? {
-          paidAt: {
-            ...(from ? { gte: new Date(from) } : {}),
-            ...(to ? { lte: new Date(to) } : {}),
-          }
-        } : {}),
-        ...(search ? {
-          OR: [
-            { transactionId: { contains: search, mode: 'insensitive' } },
-            { transactionReference: { contains: search, mode: 'insensitive' } },
-          ]
-        } : {}),
+        ...(from || to
+          ? {
+              paidAt: {
+                ...(from ? { gte: new Date(from) } : {}),
+                ...(to ? { lte: new Date(to) } : {}),
+              },
+            }
+          : {}),
+        ...(search
+          ? {
+              OR: [
+                { transactionId: { contains: search, mode: 'insensitive' } },
+                { transactionReference: { contains: search, mode: 'insensitive' } },
+              ],
+            }
+          : {}),
       };
 
       const [payments, total] = await Promise.all([
@@ -217,14 +241,21 @@ class PaymentFastifyController {
           where,
           include: { allocations: { include: { invoice: true } } },
           orderBy: { createdAt: 'desc' },
-          skip, take,
+          skip,
+          take,
         }),
         prisma.payment.count({ where }),
       ]);
 
       return reply.send({
-        success: true, data: payments,
-        pagination: { total, page: parseInt(page), limit: parseInt(limit), totalPages: Math.ceil(total / take) },
+        success: true,
+        data: payments,
+        pagination: {
+          total,
+          page: parseInt(page),
+          limit: parseInt(limit),
+          totalPages: Math.ceil(total / take),
+        },
       });
     } catch (error) {
       logger.error({ error, tenantId }, '[PAYMENT] List failed');
@@ -262,12 +293,14 @@ class PaymentFastifyController {
       const where = {
         tenantId,
         status: 'SUCCESS',
-        ...(from || to ? {
-          paidAt: {
-            ...(from ? { gte: new Date(from) } : {}),
-            ...(to ? { lte: new Date(to) } : {}),
-          }
-        } : {}),
+        ...(from || to
+          ? {
+              paidAt: {
+                ...(from ? { gte: new Date(from) } : {}),
+                ...(to ? { lte: new Date(to) } : {}),
+              },
+            }
+          : {}),
       };
 
       const aggregations = await prisma.payment.groupBy({
@@ -365,7 +398,6 @@ class PaymentFastifyController {
       },
     });
   }
-
 }
 
 export default new PaymentFastifyController();

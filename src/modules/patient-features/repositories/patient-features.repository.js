@@ -89,10 +89,14 @@ class PatientFeaturesRepository {
       include: {
         items: {
           include: {
-            medicine: { select: { id: true, name: true, scheduleType: true, prescriptionRequired: true } },
+            medicine: {
+              select: { id: true, name: true, scheduleType: true, prescriptionRequired: true },
+            },
           },
         },
-        doctor: { select: { id: true, doctorName: true, specialization: true, registrationNumber: true } },
+        doctor: {
+          select: { id: true, doctorName: true, specialization: true, registrationNumber: true },
+        },
         user: { select: { fullName: true } },
       },
       orderBy: { createdAt: 'desc' },

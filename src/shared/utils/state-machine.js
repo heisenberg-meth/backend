@@ -12,13 +12,13 @@ class StateMachine {
 
   /**
    * Validates if a transition is possible
-   * @param {string} currentState 
-   * @param {string} action 
+   * @param {string} currentState
+   * @param {string} action
    * @returns {string} The next state
    */
   transition(currentState, action) {
     const stateConfig = this.states[currentState];
-    
+
     if (!stateConfig) {
       throw new AppError(`Invalid current state: ${currentState} for ${this.name}`, 400);
     }
@@ -27,8 +27,8 @@ class StateMachine {
 
     if (!nextState) {
       throw new AppError(
-        `Invalid transition: cannot perform '${action}' from '${currentState}' in ${this.name}`, 
-        400
+        `Invalid transition: cannot perform '${action}' from '${currentState}' in ${this.name}`,
+        400,
       );
     }
 
@@ -37,8 +37,8 @@ class StateMachine {
 
   /**
    * Checks if target state is reachable from current state (direct jump validation)
-   * @param {string} currentState 
-   * @param {string} targetState 
+   * @param {string} currentState
+   * @param {string} targetState
    */
   canMoveTo(currentState, targetState) {
     const stateConfig = this.states[currentState];

@@ -50,24 +50,29 @@ export const escalationPolicySchema = z.object({
   triggerType: z.enum(['time_based', 'count_based', 'severity_based']),
   isActive: z.boolean().optional(),
   triggerCondition: z.record(z.string(), z.any()),
-  escalationChain: z.array(
-    z.object({
-      level: z.number().int().min(1).max(5),
-      role: z.string(),
-      channels: z.array(z.string()),
-    })
-  ).min(1).max(5),
+  escalationChain: z
+    .array(
+      z.object({
+        level: z.number().int().min(1).max(5),
+        role: z.string(),
+        channels: z.array(z.string()),
+      }),
+    )
+    .min(1)
+    .max(5),
   appliesTo: z.enum(['all', 'stock_alerts', 'refill_reminders', 'critical_only']).optional(),
-  rules: z.array(
-    z.object({
-      level: z.number().int().min(1).max(5),
-      condition: z.record(z.string(), z.any()),
-      notifyRoles: z.array(z.string()).min(1),
-      notifyChannels: z.array(z.string()).min(1),
-      templateKey: z.string().max(255).optional().nullable(),
-      autoRepeatMinutes: z.number().int().min(1).max(1440).optional().nullable(),
-    })
-  ).optional(),
+  rules: z
+    .array(
+      z.object({
+        level: z.number().int().min(1).max(5),
+        condition: z.record(z.string(), z.any()),
+        notifyRoles: z.array(z.string()).min(1),
+        notifyChannels: z.array(z.string()).min(1),
+        templateKey: z.string().max(255).optional().nullable(),
+        autoRepeatMinutes: z.number().int().min(1).max(1440).optional().nullable(),
+      }),
+    )
+    .optional(),
 });
 
 export const reminderRuleSchema = z.object({
@@ -90,7 +95,10 @@ export const optOutSchema = z.object({
   phoneNumber: z.string().max(20).optional().nullable(),
   email: z.string().email().optional().nullable(),
   channel: z.enum(['SMS', 'WHATSAPP', 'EMAIL', 'PUSH', 'IN_APP']).optional().nullable(),
-  reminderType: z.enum(['refill', 'appointment', 'expiry', 'followup', 'lab_result']).optional().nullable(),
+  reminderType: z
+    .enum(['refill', 'appointment', 'expiry', 'followup', 'lab_result'])
+    .optional()
+    .nullable(),
   reason: z.string().max(255).optional().nullable(),
 });
 

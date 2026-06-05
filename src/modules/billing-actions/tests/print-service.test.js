@@ -1,4 +1,4 @@
-import { jest , describe, beforeEach, it, expect } from '@jest/globals';
+import { jest, describe, beforeEach, it, expect } from '@jest/globals';
 
 const mockPrisma = {
   invoice: {
@@ -31,7 +31,8 @@ jest.unstable_mockModule('../../../config/prisma.js', () => ({
 }));
 
 jest.unstable_mockModule('../../../shared/events/local-event-bus.js', () => ({
-  emitLocalEvent: jest.fn(), localEventBus: { emit: jest.fn(), removeAllListeners: jest.fn() },
+  emitLocalEvent: jest.fn(),
+  localEventBus: { emit: jest.fn(), removeAllListeners: jest.fn() },
 }));
 
 jest.unstable_mockModule('../../../shared/utils/logger.js', () => ({
@@ -77,7 +78,7 @@ describe('PrintService', () => {
             printerType: 'A4',
             copies: 1,
           }),
-        })
+        }),
       );
     });
 
@@ -111,9 +112,9 @@ describe('PrintService', () => {
     it('should throw error when invoice not found', async () => {
       mockPrisma.invoice.findUnique.mockResolvedValue(null);
 
-      await expect(
-        printService.createPrintJob('nonexistent', 'tenant-1')
-      ).rejects.toThrow('Invoice not found: nonexistent');
+      await expect(printService.createPrintJob('nonexistent', 'tenant-1')).rejects.toThrow(
+        'Invoice not found: nonexistent',
+      );
     });
   });
 
@@ -133,7 +134,7 @@ describe('PrintService', () => {
         expect.objectContaining({
           where: { invoiceId: 'invoice-1' },
           orderBy: { createdAt: 'desc' },
-        })
+        }),
       );
     });
   });
@@ -171,7 +172,7 @@ describe('DeliveryAuditService', () => {
             deliveryChannel: 'EMAIL',
             recipient: 'test@example.com',
           }),
-        })
+        }),
       );
     });
   });
@@ -198,7 +199,7 @@ describe('DeliveryAuditService', () => {
             deliveryStatus: 'SENT',
             providerMessageId: 'msg-123',
           }),
-        })
+        }),
       );
     });
   });

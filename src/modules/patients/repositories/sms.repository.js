@@ -1,9 +1,9 @@
-import prisma from "../../../config/prisma.js";
+import prisma from '../../../config/prisma.js';
 
 class SmsRepository {
   async createNotification(data) {
     return prisma.smsNotification.create({
-      data
+      data,
     });
   }
 
@@ -24,7 +24,7 @@ class SmsRepository {
       include: { patient: true },
       orderBy: { createdAt: 'desc' },
       skip,
-      take
+      take,
     });
   }
 }

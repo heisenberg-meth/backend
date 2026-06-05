@@ -8,8 +8,20 @@ export default async function crmRoutes(fastify) {
   fastify.get('/patients/:id/behavior', crmController.getBehavior);
   fastify.get('/segments', crmController.getSegments);
   fastify.get('/reminders', crmController.getReminders);
-  fastify.post('/reminders', { preHandler: [requirePermission('VIEW_SALES')] }, crmController.createReminder);
+  fastify.post(
+    '/reminders',
+    { preHandler: [requirePermission('VIEW_SALES')] },
+    crmController.createReminder,
+  );
   fastify.get('/subscriptions', crmController.getSubscriptions);
-  fastify.post('/subscriptions', { preHandler: [requirePermission('VIEW_SALES')] }, crmController.createSubscription);
-  fastify.post('/campaigns', { preHandler: [requirePermission('VIEW_SALES')] }, crmController.launchCampaign);
+  fastify.post(
+    '/subscriptions',
+    { preHandler: [requirePermission('VIEW_SALES')] },
+    crmController.createSubscription,
+  );
+  fastify.post(
+    '/campaigns',
+    { preHandler: [requirePermission('VIEW_SALES')] },
+    crmController.launchCampaign,
+  );
 }

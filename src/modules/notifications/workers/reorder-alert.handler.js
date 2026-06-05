@@ -5,14 +5,14 @@ import { notificationQueue } from '../queue/notification.queue.js';
 
 export const processReorderAlert = async () => {
   logger.info('[Job] Running Reorder Alert Check');
-  
+
   const alerts = await prisma.stockAlert.findMany({
     where: { isResolved: false, type: 'LOW_STOCK' },
-    include: { medicine: true, tenant: { include: { users: true } } }
+    include: { medicine: true, tenant: { include: { users: true } } },
   });
 
   for (const alert of alerts) {
-    const owner = alert.tenant.users.find(u => u.role === 'OWNER');
+    const owner = alert.tenant.users.find((u) => u.role === 'OWNER');
     if (!owner) continue;
 
     const message = `Stock Alert: ${alert.medicine.name} is below the reorder level.`;
@@ -24,7 +24,7 @@ export const processReorderAlert = async () => {
       channel: 'IN_APP',
       recipient: owner.id,
       subject: 'Low Stock Alert',
-      message
+      message,
     });
 
     if (owner.phone) {
@@ -35,16 +35,20 @@ export const processReorderAlert = async () => {
         channel: 'WHATSAPP',
         recipient: owner.phone,
         subject: 'Low Stock Alert',
-        message
+        message,
       });
     }
   }
 };
 
 export const scheduleReorderAlerts = async () => {
-  await notificationQueue.add('reorder-alert', {}, {
-    repeat: {
-      pattern: '0 */12 * * *' // Every 12 hours
-    }
-  });
+  await notificationQueue.add(
+    'reorder-alert',
+    {},
+    {
+      repeat: {
+        pattern: '0 */12 * * *', // Every 12 hours
+      },
+    },
+  );
 };

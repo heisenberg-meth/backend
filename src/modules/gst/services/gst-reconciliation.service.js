@@ -6,7 +6,9 @@ import { EVENTS } from '../../../shared/constants/events.js';
 class GstReconciliationService {
   async reconcile(tenantId, options = {}) {
     const { from, to } = options;
-    const startDate = from ? new Date(from) : new Date(new Date().getFullYear(), new Date().getMonth(), 1);
+    const startDate = from
+      ? new Date(from)
+      : new Date(new Date().getFullYear(), new Date().getMonth(), 1);
     const endDate = to ? new Date(to) : new Date();
 
     const invoices = await prisma.invoice.findMany({
@@ -28,7 +30,8 @@ class GstReconciliationService {
     let totalInputGst = 0;
 
     for (const invoice of invoices) {
-      const invoiceGst = Number(invoice.cgst || 0) + Number(invoice.sgst || 0) + Number(invoice.igst || 0);
+      const invoiceGst =
+        Number(invoice.cgst || 0) + Number(invoice.sgst || 0) + Number(invoice.igst || 0);
       totalOutputGst += invoiceGst;
 
       let calculatedGst = 0;
@@ -89,7 +92,9 @@ class GstReconciliationService {
       timestamp: new Date().toISOString(),
     });
 
-    logger.info(`[GST] Reconciliation complete: ${result.totalChecked} checked, ${result.mismatchCount} mismatches`);
+    logger.info(
+      `[GST] Reconciliation complete: ${result.totalChecked} checked, ${result.mismatchCount} mismatches`,
+    );
     return result;
   }
 
@@ -98,7 +103,9 @@ class GstReconciliationService {
 
     const csvLines = ['Invoice #,Stored GST,Calculated GST,Difference,Items'];
     for (const m of result.mismatches) {
-      csvLines.push(`${m.invoiceNumber},${m.storedGst},${m.calculatedGst},${m.difference},${m.itemCount}`);
+      csvLines.push(
+        `${m.invoiceNumber},${m.storedGst},${m.calculatedGst},${m.difference},${m.itemCount}`,
+      );
     }
 
     const csv = csvLines.join('\n');

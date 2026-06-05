@@ -23,7 +23,15 @@ class CreditService {
     return account;
   }
 
-  async issueCredit(tenantId, patientId, amount, referenceId = null, notes = '', dueDate = null, tx) {
+  async issueCredit(
+    tenantId,
+    patientId,
+    amount,
+    referenceId = null,
+    notes = '',
+    dueDate = null,
+    tx,
+  ) {
     const client = tx || prisma;
 
     return await client.$transaction(async (ctx) => {
@@ -39,18 +47,21 @@ class CreditService {
         throw new Error('Credit limit exceeded');
       }
 
-      await ledgerService.recordCreditTransaction({
-        tenantId,
-        patientId,
-        accountId: account.id,
-        type: 'CREDIT_ISSUED',
-        debit: amount,
-        runningBalance: newBalance,
-        referenceType: referenceId ? 'INVOICE' : 'MANUAL',
-        referenceId,
-        notes,
-        dueDate,
-      }, ctx);
+      await ledgerService.recordCreditTransaction(
+        {
+          tenantId,
+          patientId,
+          accountId: account.id,
+          type: 'CREDIT_ISSUED',
+          debit: amount,
+          runningBalance: newBalance,
+          referenceType: referenceId ? 'INVOICE' : 'MANUAL',
+          referenceId,
+          notes,
+          dueDate,
+        },
+        ctx,
+      );
 
       await ctx.patientCreditAccount.update({
         where: { id: account.id },
@@ -71,16 +82,19 @@ class CreditService {
 
       const newBalance = new Decimal(account.outstandingBalance).sub(amount);
 
-      await ledgerService.recordCreditTransaction({
-        tenantId,
-        patientId,
-        accountId: account.id,
-        type: 'PAYMENT_RECEIVED',
-        credit: amount,
-        runningBalance: newBalance,
-        referenceType: 'PAYMENT',
-        notes,
-      }, ctx);
+      await ledgerService.recordCreditTransaction(
+        {
+          tenantId,
+          patientId,
+          accountId: account.id,
+          type: 'PAYMENT_RECEIVED',
+          credit: amount,
+          runningBalance: newBalance,
+          referenceType: 'PAYMENT',
+          notes,
+        },
+        ctx,
+      );
 
       await ctx.patientCreditAccount.update({
         where: { id: account.id },

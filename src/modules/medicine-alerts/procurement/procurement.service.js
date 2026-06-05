@@ -19,7 +19,7 @@ class ProcurementIntegrationService {
       const reorderRec = await forecastingService.getReorderRecommendations(
         alert.medicineId,
         tenantId,
-        alert.branchId
+        alert.branchId,
       );
 
       if (!reorderRec || reorderRec.recommendedOrderQuantity <= 0) continue;
@@ -56,7 +56,11 @@ class ProcurementIntegrationService {
   }
 
   async createAutoPO(tenantId, medicineId, branchId = null) {
-    const reorderRec = await forecastingService.getReorderRecommendations(medicineId, tenantId, branchId);
+    const reorderRec = await forecastingService.getReorderRecommendations(
+      medicineId,
+      tenantId,
+      branchId,
+    );
     if (!reorderRec) throw new Error('No reorder recommendation available');
 
     const supplier = await this._getPreferredSupplier(medicineId, tenantId);

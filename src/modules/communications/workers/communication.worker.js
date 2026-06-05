@@ -20,39 +20,49 @@ function buildMessage(patientName, reminderType, medicineName = {}) {
 async function initWorker() {
   const connection = getBullRedis();
 
-  const worker = new Worker('communications', async (job) => {
-    const { name, data } = job;
-    logger.info({ jobId: job.id, name, patientId: data.patientId }, 'Processing communication job');
+  const worker = new Worker(
+    'communications',
+    async (job) => {
+      const { name, data } = job;
+      logger.info(
+        { jobId: job.id, name, patientId: data.patientId },
+        'Processing communication job',
+      );
 
-    try {
-      switch (name) {
-        case 'send-reminder':
-          await handleSendReminder(data);
-          break;
-        case 'send-invoice':
-          await handleSendInvoice(data);
-          break;
-        case 'adherence-escalation':
-          await handleAdherenceEscalation(data);
-          break;
-        default:
-          logger.warn({ jobName: name }, 'Unknown communication job type');
+      try {
+        switch (name) {
+          case 'send-reminder':
+            await handleSendReminder(data);
+            break;
+          case 'send-invoice':
+            await handleSendInvoice(data);
+            break;
+          case 'adherence-escalation':
+            await handleAdherenceEscalation(data);
+            break;
+          default:
+            logger.warn({ jobName: name }, 'Unknown communication job type');
+        }
+      } catch (error) {
+        logger.error({ error, jobId: job.id, name }, 'Communication job failed');
+        if (data.notificationId) {
+          await updateDeliveryStatus(data.notificationId, 'FAILED', error.message);
+        }
+        throw error;
       }
-    } catch (error) {
-      logger.error({ error, jobId: job.id, name }, 'Communication job failed');
-      if (data.notificationId) {
-        await updateDeliveryStatus(data.notificationId, 'FAILED', error.message);
-      }
-      throw error;
-    }
-  }, { connection });
+    },
+    { connection },
+  );
 
   worker.on('completed', (job) => {
     logger.info({ jobId: job.id, name: job.name }, 'Communication job completed');
   });
 
   worker.on('failed', (job, err) => {
-    logger.error({ jobId: job.id, name: job?.name, error: err.message }, 'Communication job failed');
+    logger.error(
+      { jobId: job.id, name: job?.name, error: err.message },
+      'Communication job failed',
+    );
   });
 
   logger.info('Communications worker initialized');
@@ -60,7 +70,15 @@ async function initWorker() {
 }
 
 async function handleSendReminder(data) {
-  const { notificationId, refillReminderId, patientName, recipient, channel, reminderType, medicineName } = data;
+  const {
+    notificationId,
+    refillReminderId,
+    patientName,
+    recipient,
+    channel,
+    reminderType,
+    medicineName,
+  } = data;
 
   const message = buildMessage(patientName, reminderType, medicineName, data);
 
@@ -79,13 +97,24 @@ async function handleSendReminder(data) {
     data: { message, deliveryStatus: 'SENT' },
   });
 
-  const event = channel === 'WHATSAPP'
-    ? EVENTS.INVOICE_WHATSAPP_SENT
-    : channel === 'SMS'
-      ? DOMAIN_EVENTS.SMS_SENT
-      : DOMAIN_EVENTS.NOTIFICATION_SENT;
-  emitLocalEvent(event, { notificationId, patientId: data.patientId, channel, reminderType, tenantId: data.tenantId });
-  emitLocalEvent(DOMAIN_EVENTS.REMINDER_SENT, { notificationId, reminderType, patientId: data.patientId });
+  const event =
+    channel === 'WHATSAPP'
+      ? EVENTS.INVOICE_WHATSAPP_SENT
+      : channel === 'SMS'
+        ? DOMAIN_EVENTS.SMS_SENT
+        : DOMAIN_EVENTS.NOTIFICATION_SENT;
+  emitLocalEvent(event, {
+    notificationId,
+    patientId: data.patientId,
+    channel,
+    reminderType,
+    tenantId: data.tenantId,
+  });
+  emitLocalEvent(DOMAIN_EVENTS.REMINDER_SENT, {
+    notificationId,
+    reminderType,
+    patientId: data.patientId,
+  });
 
   await prisma.notificationDeliveryEvent.create({
     data: { notificationId, eventType: 'SENT', eventTimestamp: new Date() },
@@ -105,17 +134,25 @@ async function handleSendInvoice(data) {
   if (!recipient && channel !== 'EMAIL') {
     const fallbackChain = data.fallbackChain || [];
     const currentIndex = fallbackChain.indexOf(channel);
-    const nextChannel = currentIndex >= 0 && currentIndex + 1 < fallbackChain.length
-      ? fallbackChain[currentIndex + 1]
-      : null;
+    const nextChannel =
+      currentIndex >= 0 && currentIndex + 1 < fallbackChain.length
+        ? fallbackChain[currentIndex + 1]
+        : null;
 
     if (nextChannel) {
-      logger.info({ notificationId, fallbackTo: nextChannel }, 'Falling back to alternative channel');
+      logger.info(
+        { notificationId, fallbackTo: nextChannel },
+        'Falling back to alternative channel',
+      );
       await updateDeliveryStatus(notificationId, 'QUEUED', `Fallback to ${nextChannel}`);
       const fallbackRecipient = nextChannel === 'EMAIL' ? data.patientEmail : recipient;
 
       const { default: commQueue } = await import('../queues/communication.queue.js');
-      await commQueue.add('send-invoice', { ...data, channel: nextChannel, recipient: fallbackRecipient });
+      await commQueue.add('send-invoice', {
+        ...data,
+        channel: nextChannel,
+        recipient: fallbackRecipient,
+      });
       return { status: 'FALLBACK' };
     }
 
@@ -153,7 +190,12 @@ async function handleAdherenceEscalation(data) {
     },
   });
 
-  emitLocalEvent(DOMAIN_EVENTS.ADHERENCE_ALERT, { tenantId, patientName, medicineName, adherenceStatus });
+  emitLocalEvent(DOMAIN_EVENTS.ADHERENCE_ALERT, {
+    tenantId,
+    patientName,
+    medicineName,
+    adherenceStatus,
+  });
 }
 
 async function updateDeliveryStatus(notificationId, status, errorMessage) {

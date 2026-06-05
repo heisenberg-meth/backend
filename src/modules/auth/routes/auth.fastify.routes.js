@@ -2,7 +2,6 @@ import authController from '../controller/auth.fastify.controller.js';
 import { authenticate } from '../../../middleware/auth.fastify.js';
 
 async function authRoutes(fastify) {
-
   fastify.post(
     '/forgot-password',
     {

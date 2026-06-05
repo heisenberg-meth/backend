@@ -18,7 +18,10 @@ class AnomalyService {
     });
 
     if (recentDenials > threshold) {
-      logger.warn({ tenantId, count: recentDenials }, '[ANOMALY_SERVICE] Suspicious activity detected');
+      logger.warn(
+        { tenantId, count: recentDenials },
+        '[ANOMALY_SERVICE] Suspicious activity detected',
+      );
       return { suspicious: true, message: 'High volume of authorization denials.' };
     }
 

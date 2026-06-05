@@ -1,4 +1,3 @@
-
 class PrescriptionComplianceService {
   SCHEDULE_H1 = ['H1'];
   SCHEDULE_X = ['X'];
@@ -53,13 +52,16 @@ class PrescriptionComplianceService {
     }
 
     if (prescription.status === 'DISPENSED') {
-      const allDispensed = prescription.items?.every((i) => (i.dispensedQuantity || 0) >= i.quantity);
+      const allDispensed = prescription.items?.every(
+        (i) => (i.dispensedQuantity || 0) >= i.quantity,
+      );
       if (allDispensed) {
         return { valid: false, reason: 'Prescription fully dispensed' };
       }
     }
 
-    const daysSincePrescription = (Date.now() - new Date(prescription.prescriptionDate).getTime()) / (1000 * 60 * 60 * 24);
+    const daysSincePrescription =
+      (Date.now() - new Date(prescription.prescriptionDate).getTime()) / (1000 * 60 * 60 * 24);
 
     const hasAntibiotic = prescription.items?.some((i) => {
       const schedule = (i.medicine?.scheduleType || '').toUpperCase();

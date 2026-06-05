@@ -1,7 +1,11 @@
 import prisma from '../../../config/prisma.js';
 import notificationService from './notification.service.js';
 import { emitLocalEvent } from '../../../shared/events/local-event-bus.js';
-import { DOMAIN_EVENTS, NOTIFICATION_FAILURE_CATEGORIES, RETRY_ELIGIBILITY } from '../../../shared/constants/events.js';
+import {
+  DOMAIN_EVENTS,
+  NOTIFICATION_FAILURE_CATEGORIES,
+  RETRY_ELIGIBILITY,
+} from '../../../shared/constants/events.js';
 import logger from '../../../shared/utils/logger.js';
 
 class DeadLetterService {
@@ -107,12 +111,28 @@ class DeadLetterService {
 
   categorizeFailure(errorMessage) {
     const msg = (errorMessage || '').toLowerCase();
-    if (msg.includes('timeout') || msg.includes('timed out')) return NOTIFICATION_FAILURE_CATEGORIES.PROVIDER_TIMEOUT;
-    if (msg.includes('invalid number') || msg.includes('invalid phone') || msg.includes('invalid recipient')) return NOTIFICATION_FAILURE_CATEGORIES.INVALID_NUMBER;
-    if (msg.includes('template') && (msg.includes('reject') || msg.includes('not approved') || msg.includes('policy'))) return NOTIFICATION_FAILURE_CATEGORIES.TEMPLATE_REJECTED;
-    if (msg.includes('rate limit') || msg.includes('throttl')) return NOTIFICATION_FAILURE_CATEGORIES.RATE_LIMITED;
-    if (msg.includes('provider') && (msg.includes('unavail') || msg.includes('down') || msg.includes('offline'))) return NOTIFICATION_FAILURE_CATEGORIES.PROVIDER_UNAVAILABLE;
-    if (msg.includes('delivery') && msg.includes('fail')) return NOTIFICATION_FAILURE_CATEGORIES.DELIVERY_FAILED;
+    if (msg.includes('timeout') || msg.includes('timed out'))
+      return NOTIFICATION_FAILURE_CATEGORIES.PROVIDER_TIMEOUT;
+    if (
+      msg.includes('invalid number') ||
+      msg.includes('invalid phone') ||
+      msg.includes('invalid recipient')
+    )
+      return NOTIFICATION_FAILURE_CATEGORIES.INVALID_NUMBER;
+    if (
+      msg.includes('template') &&
+      (msg.includes('reject') || msg.includes('not approved') || msg.includes('policy'))
+    )
+      return NOTIFICATION_FAILURE_CATEGORIES.TEMPLATE_REJECTED;
+    if (msg.includes('rate limit') || msg.includes('throttl'))
+      return NOTIFICATION_FAILURE_CATEGORIES.RATE_LIMITED;
+    if (
+      msg.includes('provider') &&
+      (msg.includes('unavail') || msg.includes('down') || msg.includes('offline'))
+    )
+      return NOTIFICATION_FAILURE_CATEGORIES.PROVIDER_UNAVAILABLE;
+    if (msg.includes('delivery') && msg.includes('fail'))
+      return NOTIFICATION_FAILURE_CATEGORIES.DELIVERY_FAILED;
     return NOTIFICATION_FAILURE_CATEGORIES.UNKNOWN;
   }
 }

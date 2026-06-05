@@ -6,8 +6,13 @@ class ReminderAnalyzerService {
     const patient = await prisma.patient.findUnique({
       where: { id: patientId },
       select: {
-        id: true, fullName: true, phone: true, email: true,
-        allowSms: true, allowWhatsapp: true, allowEmail: true,
+        id: true,
+        fullName: true,
+        phone: true,
+        email: true,
+        allowSms: true,
+        allowWhatsapp: true,
+        allowEmail: true,
       },
     });
     if (!patient) throw new Error('Patient not found');
@@ -41,13 +46,18 @@ class ReminderAnalyzerService {
 
         const now = new Date();
         const daysUntilEnd = Math.ceil((prescriptionEnd - now) / (1000 * 60 * 60 * 24));
-        const isScheduleH = item.medicine?.scheduleType === 'H' || item.medicine?.scheduleType === 'H1' || item.medicine?.scheduleType === 'X';
+        const isScheduleH =
+          item.medicine?.scheduleType === 'H' ||
+          item.medicine?.scheduleType === 'H1' ||
+          item.medicine?.scheduleType === 'X';
 
         let reminderType = null;
         let priority = 'LOW';
 
         if (refillPrediction?.expectedRefillAt) {
-          const daysUntilRefill = Math.ceil((refillPrediction.expectedRefillAt - now) / (1000 * 60 * 60 * 24));
+          const daysUntilRefill = Math.ceil(
+            (refillPrediction.expectedRefillAt - now) / (1000 * 60 * 60 * 24),
+          );
           if (daysUntilRefill <= 0) {
             reminderType = 'REFILL_OVERDUE';
             priority = 'HIGH';
@@ -60,7 +70,11 @@ class ReminderAnalyzerService {
           priority = 'MEDIUM';
         }
 
-        if (isScheduleH && daysUntilEnd <= ADHERENCE_THRESHOLDS.SCHEDULE_H_EXPIRY_DAYS && daysUntilEnd >= 0) {
+        if (
+          isScheduleH &&
+          daysUntilEnd <= ADHERENCE_THRESHOLDS.SCHEDULE_H_EXPIRY_DAYS &&
+          daysUntilEnd >= 0
+        ) {
           reminderType = 'PRESCRIPTION_EXPIRING';
           priority = 'HIGH';
         }
@@ -116,13 +130,18 @@ class ReminderAnalyzerService {
     if (refill.lastReminderSent) {
       const hoursSinceLastReminder = (now - refill.lastReminderSent) / (1000 * 60 * 60);
       if (hoursSinceLastReminder < 24) {
-        return { eligible: false, reason: 'Reminder already sent within 24 hours', lastSent: refill.lastReminderSent };
+        return {
+          eligible: false,
+          reason: 'Reminder already sent within 24 hours',
+          lastSent: refill.lastReminderSent,
+        };
       }
     }
 
     const recentPurchase = await prisma.sale.findFirst({
       where: {
-        patientId, tenantId,
+        patientId,
+        tenantId,
         status: 'COMPLETED',
         items: { some: { medicineId } },
       },
@@ -152,7 +171,9 @@ class ReminderAnalyzerService {
 
     const sales = await prisma.sale.findMany({
       where: {
-        patientId, tenantId, status: 'COMPLETED',
+        patientId,
+        tenantId,
+        status: 'COMPLETED',
         items: { some: { medicineId } },
       },
       include: { items: { where: { medicineId }, select: { quantity: true } } },

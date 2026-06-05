@@ -34,16 +34,19 @@ class PointsService {
       const newBalance = account.availablePoints + points;
       const newLifetime = account.lifetimePoints + points;
 
-      await ledgerService.recordLoyaltyTransaction({
-        tenantId,
-        patientId,
-        type: 'EARNED',
-        points,
-        runningBalance: newBalance,
-        referenceType: 'INVOICE',
-        referenceId: invoiceId,
-        notes: `Earned from invoice #${invoiceId}`,
-      }, ctx);
+      await ledgerService.recordLoyaltyTransaction(
+        {
+          tenantId,
+          patientId,
+          type: 'EARNED',
+          points,
+          runningBalance: newBalance,
+          referenceType: 'INVOICE',
+          referenceId: invoiceId,
+          notes: `Earned from invoice #${invoiceId}`,
+        },
+        ctx,
+      );
 
       const updatedAccount = await ctx.patientLoyaltyAccount.update({
         where: { id: account.id },

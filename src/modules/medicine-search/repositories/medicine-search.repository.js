@@ -2,13 +2,7 @@ import prisma from '../../../config/prisma.js';
 
 class MedicineSearchRepository {
   async search(tenantId, query, options = {}) {
-    const {
-      limit = 20,
-      category,
-      schedule,
-      branchId,
-      inStockOnly = false,
-    } = options;
+    const { limit = 20, category, schedule, branchId, inStockOnly = false } = options;
 
     const where = {
       tenantId,
@@ -336,20 +330,21 @@ class MedicineSearchRepository {
     const reservedStock = batches.reduce((sum, b) => sum + (b.reservedQuantity || 0), 0);
     const availableStock = totalStock - reservedStock;
 
-    const earliestExpiry = batches.length > 0
-      ? batches.reduce((earliest, b) => (b.expiryDate < earliest ? b.expiryDate : earliest), batches[0].expiryDate)
-      : null;
+    const earliestExpiry =
+      batches.length > 0
+        ? batches.reduce(
+            (earliest, b) => (b.expiryDate < earliest ? b.expiryDate : earliest),
+            batches[0].expiryDate,
+          )
+        : null;
 
     const isNearExpiry = earliestExpiry ? this.isNearExpiry(earliestExpiry) : false;
     const isExpired = earliestExpiry ? new Date(earliestExpiry) < new Date() : false;
 
-    const bestPrice = batches.length > 0
-      ? Math.min(...batches.map((b) => b.sellingPrice))
-      : medicine.sellingPrice;
+    const bestPrice =
+      batches.length > 0 ? Math.min(...batches.map((b) => b.sellingPrice)) : medicine.sellingPrice;
 
-    const bestMrp = batches.length > 0
-      ? Math.max(...batches.map((b) => b.mrp))
-      : null;
+    const bestMrp = batches.length > 0 ? Math.max(...batches.map((b) => b.mrp)) : null;
 
     const result = {
       id: medicine.id,

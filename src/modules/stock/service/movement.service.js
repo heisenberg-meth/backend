@@ -43,17 +43,20 @@ class MovementService {
 
       const totalDeducted = quantity - remaining;
 
-      await ledgerRepository.createTransaction({
-        tenantId,
-        medicineId,
-        batchId: deductions[0]?.batchId,
-        branchId,
-        type: type || 'SALE',
-        quantity: totalDeducted,
-        previousStock: batches.reduce((s, b) => s + b.quantity, 0),
-        newStock: batches.reduce((s, b) => s + b.quantity, 0) - totalDeducted,
-        createdBy: userId,
-      }, tx);
+      await ledgerRepository.createTransaction(
+        {
+          tenantId,
+          medicineId,
+          batchId: deductions[0]?.batchId,
+          branchId,
+          type: type || 'SALE',
+          quantity: totalDeducted,
+          previousStock: batches.reduce((s, b) => s + b.quantity, 0),
+          newStock: batches.reduce((s, b) => s + b.quantity, 0) - totalDeducted,
+          createdBy: userId,
+        },
+        tx,
+      );
 
       await tx.inventory.update({
         where: {
@@ -91,19 +94,22 @@ class MovementService {
         },
       });
 
-      await ledgerRepository.createTransaction({
-        tenantId,
-        medicineId: data.medicineId,
-        batchId: newBatch.id,
-        branchId: data.branchId,
-        type: 'STOCK_IN',
-        quantity: data.quantity,
-        previousStock: currentStock.totalQuantity,
-        newStock: currentStock.totalQuantity + data.quantity,
-        createdBy: userId,
-        referenceType: data.referenceType,
-        notes: data.notes,
-      }, client);
+      await ledgerRepository.createTransaction(
+        {
+          tenantId,
+          medicineId: data.medicineId,
+          batchId: newBatch.id,
+          branchId: data.branchId,
+          type: 'STOCK_IN',
+          quantity: data.quantity,
+          previousStock: currentStock.totalQuantity,
+          newStock: currentStock.totalQuantity + data.quantity,
+          createdBy: userId,
+          referenceType: data.referenceType,
+          notes: data.notes,
+        },
+        client,
+      );
 
       await client.inventory.upsert({
         where: {
@@ -125,7 +131,10 @@ class MovementService {
         },
       });
 
-      logger.info({ tenantId, medicineId: data.medicineId, quantity: data.quantity, batchId: newBatch.id }, 'Stock in completed');
+      logger.info(
+        { tenantId, medicineId: data.medicineId, quantity: data.quantity, batchId: newBatch.id },
+        'Stock in completed',
+      );
 
       return newBatch;
     };
@@ -135,12 +144,22 @@ class MovementService {
   }
 
   async recordMovement(tenantId, data, userId, tx) {
-    const { medicineId, batchId, branchId, movementType, quantity, referenceType, referenceId, idempotencyKey, notes } = data;
+    const {
+      medicineId,
+      batchId,
+      branchId,
+      movementType,
+      quantity,
+      referenceType,
+      referenceId,
+      idempotencyKey,
+      notes,
+    } = data;
 
     const execute = async (client) => {
       if (idempotencyKey) {
         const existing = await client.stockMovement.findUnique({
-          where: { idempotencyKey }
+          where: { idempotencyKey },
         });
         if (existing) {
           logger.info({ idempotencyKey }, '[MOVEMENT_SERVICE] Duplicate movement ignored');
@@ -156,20 +175,23 @@ class MovementService {
         },
       });
 
-      await ledgerRepository.createTransaction({
-        tenantId,
-        medicineId,
-        batchId,
-        branchId,
-        type: movementType,
-        quantity: Math.abs(quantity),
-        previousStock: updatedBatch.quantity - quantity,
-        newStock: updatedBatch.quantity,
-        createdBy: userId,
-        referenceType,
-        referenceId,
-        notes,
-      }, client);
+      await ledgerRepository.createTransaction(
+        {
+          tenantId,
+          medicineId,
+          batchId,
+          branchId,
+          type: movementType,
+          quantity: Math.abs(quantity),
+          previousStock: updatedBatch.quantity - quantity,
+          newStock: updatedBatch.quantity,
+          createdBy: userId,
+          referenceType,
+          referenceId,
+          notes,
+        },
+        client,
+      );
 
       await client.inventory.update({
         where: {
@@ -180,7 +202,10 @@ class MovementService {
         },
       });
 
-      logger.info({ tenantId, medicineId, batchId, movementType, quantity }, 'Stock movement recorded');
+      logger.info(
+        { tenantId, medicineId, batchId, movementType, quantity },
+        'Stock movement recorded',
+      );
     };
 
     if (tx) return execute(tx);

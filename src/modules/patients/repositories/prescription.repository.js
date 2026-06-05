@@ -1,4 +1,4 @@
-import prisma from "../../../config/prisma.js";
+import prisma from '../../../config/prisma.js';
 
 class PrescriptionRepository {
   async createPrescription(data, tx) {
@@ -32,9 +32,9 @@ class PrescriptionRepository {
     return prisma.prescription.findMany({
       where: { patientId, tenantId },
       include: {
-        items: { include: { medicine: true } }
+        items: { include: { medicine: true } },
       },
-      orderBy: { prescriptionDate: 'desc' }
+      orderBy: { prescriptionDate: 'desc' },
     });
   }
 
@@ -43,8 +43,8 @@ class PrescriptionRepository {
       where: { id, tenantId },
       include: {
         items: { include: { medicine: true } },
-        patient: true
-      }
+        patient: true,
+      },
     });
   }
 }

@@ -13,10 +13,13 @@ const FALLBACK_CHAIN = {
 class ChannelFallbackService {
   async executeFallback(notificationId, failedChannel, params) {
     const fallbacks = FALLBACK_CHAIN[failedChannel] || [];
-    if (fallbacks.length === 0) return { fallbackUsed: false, message: 'No fallback channels configured' };
+    if (fallbacks.length === 0)
+      return { fallbackUsed: false, message: 'No fallback channels configured' };
 
     await deliveryTrackingService.markRetrying(notificationId);
-    logger.info(`[Fallback] ${failedChannel} failed for ${params.recipient}, trying ${fallbacks.join(' → ')}`);
+    logger.info(
+      `[Fallback] ${failedChannel} failed for ${params.recipient}, trying ${fallbacks.join(' → ')}`,
+    );
 
     for (const fallbackChannel of fallbacks) {
       try {
@@ -42,7 +45,9 @@ class ChannelFallbackService {
           };
         }
       } catch (error) {
-        logger.error(`[Fallback] ${fallbackChannel} also failed for ${params.recipient}: ${error.message}`);
+        logger.error(
+          `[Fallback] ${fallbackChannel} also failed for ${params.recipient}: ${error.message}`,
+        );
       }
     }
 

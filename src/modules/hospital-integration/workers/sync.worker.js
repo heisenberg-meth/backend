@@ -5,18 +5,24 @@ import prescriptionSyncService from '../services/prescription-sync.service.js';
 
 const isTest = process.env.NODE_ENV === 'test';
 
-const hospitalSyncWorker = isTest ? null : new Worker('hospital-sync-queue', async (job) => {
-  if (job.name === 'SYNC_PRESCRIPTION') {
-    const { tenantId, sourceSystem, externalMedicationRequest } = job.data;
-    logger.info({ tenantId }, '[HOSPITAL_SYNC_WORKER] Processing prescription sync');
+const hospitalSyncWorker = isTest
+  ? null
+  : new Worker(
+      'hospital-sync-queue',
+      async (job) => {
+        if (job.name === 'SYNC_PRESCRIPTION') {
+          const { tenantId, sourceSystem, externalMedicationRequest } = job.data;
+          logger.info({ tenantId }, '[HOSPITAL_SYNC_WORKER] Processing prescription sync');
 
-    await prescriptionSyncService.syncFromExternal(
-      tenantId,
-      externalMedicationRequest,
-      sourceSystem
+          await prescriptionSyncService.syncFromExternal(
+            tenantId,
+            externalMedicationRequest,
+            sourceSystem,
+          );
+        }
+      },
+      { connection: getBullRedis() },
     );
-  }
-}, { connection: getBullRedis() });
 
 if (hospitalSyncWorker) {
   hospitalSyncWorker.on('failed', (job, err) => {

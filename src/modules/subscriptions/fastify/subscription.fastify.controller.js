@@ -8,14 +8,20 @@ class SubscriptionFastifyController {
       return status;
     } catch (error) {
       request.log.error(error);
-      return reply.code(500).send({ success: false, message: 'Failed to fetch subscription status' });
+      return reply
+        .code(500)
+        .send({ success: false, message: 'Failed to fetch subscription status' });
     }
   }
 
   async createSubscription(request, reply) {
     try {
       const { planId, billingCycle } = request.body;
-      const sub = await subscriptionService.createSubscription(request.tenantId, planId, billingCycle);
+      const sub = await subscriptionService.createSubscription(
+        request.tenantId,
+        planId,
+        billingCycle,
+      );
       return reply.code(201).send(sub);
     } catch (error) {
       if (error.message === 'Invalid plan') {

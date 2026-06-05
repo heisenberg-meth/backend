@@ -7,14 +7,21 @@ import paymentLockService from './payment.lock.service.js';
 class PaymentReconciliationService {
   async reconcileAll(tenantId = null) {
     const where = tenantId ? { tenantId } : {};
-    
+
     // Phase 1: Heal/Sync with Gateway
     const paymentsToReconcile = await prisma.payment.findMany({
       where: {
         ...where,
         paymentProvider: 'RAZORPAY',
         razorpayOrderId: { not: null },
-        status: { in: [VALID_STATES.CREATED, VALID_STATES.PENDING, VALID_STATES.AUTHORIZED, VALID_STATES.CAPTURED] },
+        status: {
+          in: [
+            VALID_STATES.CREATED,
+            VALID_STATES.PENDING,
+            VALID_STATES.AUTHORIZED,
+            VALID_STATES.CAPTURED,
+          ],
+        },
       },
     });
 
@@ -96,34 +103,44 @@ class PaymentReconciliationService {
 
     if (gatewayStatus === VALID_STATES.CAPTURED || gatewayStatus === VALID_STATES.SUCCESS) {
       if (paymentStateMachine.isPending(internalStatus)) {
-        await paymentLockService.executeWithLock(`recon:${payment.id}`, async () => {
-          await prisma.payment.update({
-            where: { id: payment.id },
-            data: {
-              status: VALID_STATES.CAPTURED,
-              razorpayPaymentId: gatewayPayment.id,
-              paidAt: new Date(gatewayPayment.created_at * 1000),
-            },
-          });
+        await paymentLockService.executeWithLock(
+          `recon:${payment.id}`,
+          async () => {
+            await prisma.payment.update({
+              where: { id: payment.id },
+              data: {
+                status: VALID_STATES.CAPTURED,
+                razorpayPaymentId: gatewayPayment.id,
+                paidAt: new Date(gatewayPayment.created_at * 1000),
+              },
+            });
 
-          await prisma.payment.update({
-            where: { id: payment.id },
-            data: { status: VALID_STATES.SUCCESS },
-          });
+            await prisma.payment.update({
+              where: { id: payment.id },
+              data: { status: VALID_STATES.SUCCESS },
+            });
 
-          await prisma.paymentAuditLog.create({
-            data: {
-              paymentId: payment.id,
-              tenantId: payment.tenantId,
-              fromStatus: internalStatus,
-              toStatus: VALID_STATES.SUCCESS,
-              transition: `${internalStatus}->SUCCESS (reconciliation)`,
-              metadata: { gatewayStatus: gatewayPayment.status, razorpayPaymentId: gatewayPayment.id },
-            },
-          });
-        }, 10000);
+            await prisma.paymentAuditLog.create({
+              data: {
+                paymentId: payment.id,
+                tenantId: payment.tenantId,
+                fromStatus: internalStatus,
+                toStatus: VALID_STATES.SUCCESS,
+                transition: `${internalStatus}->SUCCESS (reconciliation)`,
+                metadata: {
+                  gatewayStatus: gatewayPayment.status,
+                  razorpayPaymentId: gatewayPayment.id,
+                },
+              },
+            });
+          },
+          10000,
+        );
 
-        logger.info({ paymentId: payment.id }, '[RECONCILIATION] Healed pending payment to success');
+        logger.info(
+          { paymentId: payment.id },
+          '[RECONCILIATION] Healed pending payment to success',
+        );
         return { status: 'healed' };
       }
     }

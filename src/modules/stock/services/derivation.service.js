@@ -1,12 +1,11 @@
 import prisma from '../../../config/prisma.js';
 
-
 class DerivationService {
   /**
    * Sums all StockMovement quantities for the given identifiers.
-   * @param {string} tenantId 
-   * @param {string} medicineId 
-   * @param {string} [batchId] 
+   * @param {string} tenantId
+   * @param {string} medicineId
+   * @param {string} [batchId]
    * @returns {Promise<number>}
    */
   async calculateCurrentStock(tenantId, medicineId, batchId = null) {
@@ -22,8 +21,8 @@ class DerivationService {
     const aggregations = await prisma.stockMovement.aggregate({
       where,
       _sum: {
-        quantity: true
-      }
+        quantity: true,
+      },
     });
 
     return aggregations._sum.quantity || 0;
@@ -31,19 +30,19 @@ class DerivationService {
 
   /**
    * Compares derived total with the current InventoryBatch.quantity
-   * @param {string} tenantId 
-   * @param {string} medicineId 
-   * @param {string} [batchId] 
+   * @param {string} tenantId
+   * @param {string} medicineId
+   * @param {string} [batchId]
    * @returns {Promise<Object>}
    */
   async verifyStockIntegrity(tenantId, medicineId, batchId = null) {
     const derivedQty = await this.calculateCurrentStock(tenantId, medicineId, batchId);
-    
+
     let recordedQty = 0;
 
     if (batchId) {
       const batch = await prisma.inventoryBatch.findUnique({
-        where: { id: batchId }
+        where: { id: batchId },
       });
       if (!batch || batch.tenantId !== tenantId) {
         throw new Error('[DERIVATION_SERVICE] Batch not found or unauthorized');
@@ -53,7 +52,7 @@ class DerivationService {
       // Aggregate across all batches
       const aggregations = await prisma.inventoryBatch.aggregate({
         where: { tenantId, medicineId },
-        _sum: { quantity: true }
+        _sum: { quantity: true },
       });
       recordedQty = aggregations._sum.quantity || 0;
     }
@@ -65,14 +64,14 @@ class DerivationService {
       status,
       derivedQuantity: derivedQty,
       recordedQuantity: recordedQty,
-      drift
+      drift,
     };
   }
 
   /**
    * Calculates closing stock for all items as of the end of the given date.
-   * @param {string} tenantId 
-   * @param {string|Date} date 
+   * @param {string} tenantId
+   * @param {string|Date} date
    * @returns {Promise<Array>}
    */
   async generateDailySnapshot(tenantId, date) {
@@ -97,12 +96,12 @@ class DerivationService {
       where: {
         tenantId,
         createdAt: {
-          lte: targetDate
-        }
+          lte: targetDate,
+        },
       },
       _sum: {
-        quantity: true
-      }
+        quantity: true,
+      },
     });
 
     const snapshots = [];
@@ -117,9 +116,9 @@ class DerivationService {
           tenantId_medicineId_snapshotDate: {
             tenantId,
             medicineId,
-            snapshotDate: prevDate
-          }
-        }
+            snapshotDate: prevDate,
+          },
+        },
       });
 
       const openingStock = prevSnapshot ? prevSnapshot.closingStock : 0;
@@ -129,20 +128,20 @@ class DerivationService {
           tenantId_medicineId_snapshotDate: {
             tenantId,
             medicineId,
-            snapshotDate
-          }
+            snapshotDate,
+          },
         },
         create: {
           tenantId,
           medicineId,
           openingStock,
           closingStock,
-          snapshotDate
+          snapshotDate,
         },
         update: {
           openingStock,
-          closingStock
-        }
+          closingStock,
+        },
       });
       snapshots.push(snapshot);
     }

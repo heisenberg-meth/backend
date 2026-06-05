@@ -3,7 +3,7 @@ import prisma from '../../../config/prisma.js';
 class LicenseService {
   async addLicense(tenantId, licenseData) {
     return await prisma.drugLicense.create({
-      data: { tenantId, ...licenseData }
+      data: { tenantId, ...licenseData },
     });
   }
 
@@ -17,8 +17,8 @@ class LicenseService {
     const licenses = await prisma.drugLicense.findMany({
       where: {
         status: 'ACTIVE',
-        expiryDate: { lte: new Date(new Date().setDate(new Date().getDate() + 30)) }
-      }
+        expiryDate: { lte: new Date(new Date().setDate(new Date().getDate() + 30)) },
+      },
     });
     return licenses;
   }

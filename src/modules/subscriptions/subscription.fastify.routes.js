@@ -8,54 +8,54 @@ export default async function (fastify) {
   fastify.addHook('preHandler', requireTenant);
 
   fastify.get('/status', {
-    schema: { 
-      tags: ['Subscriptions'], 
-      summary: 'Get subscription status' 
+    schema: {
+      tags: ['Subscriptions'],
+      summary: 'Get subscription status',
     },
-    handler: controller.getStatus
+    handler: controller.getStatus,
   });
 
   fastify.post('/', {
-    schema: { 
-      tags: ['Subscriptions'], 
+    schema: {
+      tags: ['Subscriptions'],
       summary: 'Create subscription',
       body: {
         type: 'object',
         required: ['planId', 'billingCycle'],
         properties: {
           planId: { type: 'string' },
-          billingCycle: { type: 'string', enum: ['monthly', 'annual'] }
-        }
-      }
+          billingCycle: { type: 'string', enum: ['monthly', 'annual'] },
+        },
+      },
     },
     preHandler: [requirePermission('MANAGE_SETTINGS')],
-    handler: controller.createSubscription
+    handler: controller.createSubscription,
   });
 
   fastify.post('/verify-trial', {
     schema: {
       tags: ['Subscriptions'],
-      summary: 'Activate trial subscription'
+      summary: 'Activate trial subscription',
     },
     preHandler: [requirePermission('MANAGE_SETTINGS')],
-    handler: trialController.activateTrial
+    handler: trialController.activateTrial,
   });
 
   fastify.post('/activate', {
     schema: {
       tags: ['Subscriptions'],
-      summary: 'Activate/reactivate subscription'
+      summary: 'Activate/reactivate subscription',
     },
     preHandler: [requirePermission('MANAGE_SETTINGS')],
-    handler: controller.activateSubscription
+    handler: controller.activateSubscription,
   });
 
   fastify.post('/cancel', {
-    schema: { 
-      tags: ['Subscriptions'], 
-      summary: 'Cancel subscription' 
+    schema: {
+      tags: ['Subscriptions'],
+      summary: 'Cancel subscription',
     },
     preHandler: [requirePermission('MANAGE_SETTINGS')],
-    handler: controller.cancelSubscription
+    handler: controller.cancelSubscription,
   });
 }

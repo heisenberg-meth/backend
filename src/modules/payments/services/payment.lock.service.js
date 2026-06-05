@@ -33,7 +33,10 @@ class PaymentLockService {
         logger.debug({ resourceId }, '[LOCK] Released');
         return true;
       }
-      logger.warn({ resourceId, expected: lockValue, actual: current }, '[LOCK] Release failed - not owner');
+      logger.warn(
+        { resourceId, expected: lockValue, actual: current },
+        '[LOCK] Release failed - not owner',
+      );
       return false;
     } catch (error) {
       logger.error({ error, resourceId }, '[LOCK] Release error');

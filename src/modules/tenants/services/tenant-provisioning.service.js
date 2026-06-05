@@ -81,7 +81,7 @@ class TenantProvisioningService {
       });
 
       logger.info({ tenantId: tenant.id, email }, 'Organization provisioned successfully');
-      
+
       eventBus.emit('TENANT_PROVISIONED', { tenantId: tenant.id, adminId: user.id });
 
       return { tenant, user, branch };

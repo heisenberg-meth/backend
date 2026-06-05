@@ -25,7 +25,9 @@ class RiskEngine {
     const ninetyDaysAgo = new Date();
     ninetyDaysAgo.setDate(ninetyDaysAgo.getDate() - 90);
 
-    const criticallyOverdue = account.ledgerEntries.some(entry => entry.dueDate && entry.dueDate < ninetyDaysAgo);
+    const criticallyOverdue = account.ledgerEntries.some(
+      (entry) => entry.dueDate && entry.dueDate < ninetyDaysAgo,
+    );
 
     if (criticallyOverdue) {
       await prisma.patientCreditAccount.update({

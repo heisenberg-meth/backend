@@ -11,7 +11,10 @@ class GstComplianceService {
     for (let i = 0; i < 6; i++) {
       let m = currentMonth - i;
       let y = currentYear;
-      if (m < 0) { m += 12; y -= 1; }
+      if (m < 0) {
+        m += 12;
+        y -= 1;
+      }
       const label = `${y}-${String(m + 1).padStart(2, '0')}`;
       months.push({ month: m + 1, year: y, label });
     }
@@ -50,7 +53,7 @@ class GstComplianceService {
         submittedAt: summary?.updatedAt || null,
         dueDate,
         isOverdue: isDue && !summary,
-        status: summary ? 'COMPLIANT' : (isDue ? 'OVERDUE' : 'PENDING'),
+        status: summary ? 'COMPLIANT' : isDue ? 'OVERDUE' : 'PENDING',
       });
     }
 
@@ -70,7 +73,11 @@ class GstComplianceService {
     const [gstSettings, invoiceStats] = await Promise.all([
       prisma.gstSetting.findFirst({ where: { tenantId } }),
       prisma.invoice.aggregate({
-        where: { tenantId, deletedAt: null, createdAt: { gte: new Date(new Date().getFullYear(), 0, 1) } },
+        where: {
+          tenantId,
+          deletedAt: null,
+          createdAt: { gte: new Date(new Date().getFullYear(), 0, 1) },
+        },
         _count: true,
         _sum: { gstAmount: true },
       }),

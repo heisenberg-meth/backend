@@ -39,7 +39,7 @@ class DeliveryTrackingService {
 
     if (!allowed.includes(newStatus)) {
       logger.warn(
-        `[Delivery] Invalid status transition: ${current.deliveryStatus} -> ${newStatus}`
+        `[Delivery] Invalid status transition: ${current.deliveryStatus} -> ${newStatus}`,
       );
     }
 

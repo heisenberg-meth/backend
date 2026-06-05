@@ -1,10 +1,25 @@
 import { z } from 'zod';
 
 export const DOSAGE_FORMS = [
-  'TABLET', 'CAPSULE', 'SYRUP', 'INJECTION', 'DROPS',
-  'INHALER', 'CREAM', 'OINTMENT', 'GEL', 'LOTION',
-  'SPRAY', 'POWDER', 'GRANULES', 'PATCH', 'SUPPOSITORY',
-  'SUSPENSION', 'EMULSION', 'SOLUTION', 'TINCTURE',
+  'TABLET',
+  'CAPSULE',
+  'SYRUP',
+  'INJECTION',
+  'DROPS',
+  'INHALER',
+  'CREAM',
+  'OINTMENT',
+  'GEL',
+  'LOTION',
+  'SPRAY',
+  'POWDER',
+  'GRANULES',
+  'PATCH',
+  'SUPPOSITORY',
+  'SUSPENSION',
+  'EMULSION',
+  'SOLUTION',
+  'TINCTURE',
 ];
 
 export const GST_PERCENTAGES = [0, 5, 12, 18, 28];
@@ -46,14 +61,20 @@ export const updateMedicineSchema = z.object({
   genericName: z.string().optional(),
   categoryId: z.string().uuid().optional(),
   manufacturerId: z.string().uuid().optional(),
-  dosageForm: z.string().refine(val => DOSAGE_FORMS.includes(val), {
-    message: `Invalid dosage form. Must be one of: ${DOSAGE_FORMS.join(', ')}`,
-  }).optional(),
+  dosageForm: z
+    .string()
+    .refine((val) => DOSAGE_FORMS.includes(val), {
+      message: `Invalid dosage form. Must be one of: ${DOSAGE_FORMS.join(', ')}`,
+    })
+    .optional(),
   strength: z.string().optional(),
   barcode: z.string().optional(),
   sku: z.string().optional(),
   hsnCode: z.string().regex(hsnRegex).optional(),
-  gstPercentage: z.coerce.number().refine(val => GST_PERCENTAGES.includes(val)).optional(),
+  gstPercentage: z.coerce
+    .number()
+    .refine((val) => GST_PERCENTAGES.includes(val))
+    .optional(),
   unitPrice: z.coerce.number().min(0).optional(),
   reorderLevel: z.coerce.number().int().min(0).optional(),
   rackLocation: z.string().optional(),

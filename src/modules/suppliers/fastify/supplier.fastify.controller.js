@@ -3,7 +3,11 @@ import { toSupplierListDto, toSupplierDetailDto } from '../dto/supplier-response
 
 class SupplierFastifyController {
   async createSupplier(request, reply) {
-    const supplier = await supplierService.createSupplier(request.body, request.tenantId, request.user.id);
+    const supplier = await supplierService.createSupplier(
+      request.body,
+      request.tenantId,
+      request.user.id,
+    );
     return reply.code(201).send({ success: true, data: toSupplierDetailDto(supplier) });
   }
 
@@ -12,7 +16,12 @@ class SupplierFastifyController {
     return reply.send({
       success: true,
       data: result.suppliers.map(toSupplierListDto),
-      pagination: { page: result.page, limit: result.limit, total: result.total, totalPages: result.totalPages },
+      pagination: {
+        page: result.page,
+        limit: result.limit,
+        total: result.total,
+        totalPages: result.totalPages,
+      },
     });
   }
 
@@ -27,7 +36,12 @@ class SupplierFastifyController {
   }
 
   async updateSupplier(request, reply) {
-    const supplier = await supplierService.updateSupplier(request.params.id, request.tenantId, request.body, request.user.id);
+    const supplier = await supplierService.updateSupplier(
+      request.params.id,
+      request.tenantId,
+      request.body,
+      request.user.id,
+    );
     return reply.send({ success: true, data: toSupplierDetailDto(supplier) });
   }
 
@@ -42,8 +56,21 @@ class SupplierFastifyController {
   }
 
   async getPurchaseHistory(request, reply) {
-    const result = await supplierService.getPurchaseHistory(request.params.id, request.tenantId, request.query);
-    return reply.send({ success: true, data: result.orders, pagination: { page: result.page, limit: result.limit, total: result.total, totalPages: result.totalPages } });
+    const result = await supplierService.getPurchaseHistory(
+      request.params.id,
+      request.tenantId,
+      request.query,
+    );
+    return reply.send({
+      success: true,
+      data: result.orders,
+      pagination: {
+        page: result.page,
+        limit: result.limit,
+        total: result.total,
+        totalPages: result.totalPages,
+      },
+    });
   }
 
   async getPendingPayments(request, reply) {
@@ -77,12 +104,30 @@ class SupplierFastifyController {
   }
 
   async getLedger(request, reply) {
-    const result = await supplierService.getLedger(request.params.id, request.tenantId, request.query);
-    return reply.send({ success: true, data: result.entries, pagination: { page: result.page, limit: result.limit, total: result.total, totalPages: result.totalPages } });
+    const result = await supplierService.getLedger(
+      request.params.id,
+      request.tenantId,
+      request.query,
+    );
+    return reply.send({
+      success: true,
+      data: result.entries,
+      pagination: {
+        page: result.page,
+        limit: result.limit,
+        total: result.total,
+        totalPages: result.totalPages,
+      },
+    });
   }
 
   async recordPayment(request, reply) {
-    const payment = await supplierService.recordPayment(request.params.id, request.tenantId, request.user.id, request.body);
+    const payment = await supplierService.recordPayment(
+      request.params.id,
+      request.tenantId,
+      request.user.id,
+      request.body,
+    );
     return reply.code(201).send({ success: true, data: payment });
   }
 

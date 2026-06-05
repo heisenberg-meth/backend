@@ -52,15 +52,17 @@ class PatientService {
 
   async getRefills(id, tenantId) {
     const prescriptions = await this.getPrescriptions(id, tenantId);
-    const refills = prescriptions.map(p => {
-      return p.items.map(item => ({
-        medicineName: item.medicine.name,
-        dosage: item.dosage,
-        instructions: item.instructions,
-        remainingRefills: 0,
-        nextRefillDate: null
-      }));
-    }).flat();
+    const refills = prescriptions
+      .map((p) => {
+        return p.items.map((item) => ({
+          medicineName: item.medicine.name,
+          dosage: item.dosage,
+          instructions: item.instructions,
+          remainingRefills: 0,
+          nextRefillDate: null,
+        }));
+      })
+      .flat();
     return refills;
   }
 
@@ -69,7 +71,7 @@ class PatientService {
     const history = await patientRepository.getLoyaltyHistory(id, tenantId);
     return {
       points: patient.loyaltyPoints,
-      history
+      history,
     };
   }
 
@@ -86,7 +88,7 @@ class PatientService {
       patientId: id,
       phone: patient.phone,
       message: `Hi ${patient.fullName}, it's time for your medicine refill. Please visit us soon.`,
-      type: 'REFILL_REMINDER'
+      type: 'REFILL_REMINDER',
     });
   }
 }

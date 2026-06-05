@@ -41,15 +41,7 @@ class ReturnRepository {
   }
 
   async findAll(tenantId, options = {}) {
-    const {
-      status,
-      reason,
-      from,
-      to,
-      search,
-      page = 1,
-      limit = 20,
-    } = options;
+    const { status, reason, from, to, search, page = 1, limit = 20 } = options;
 
     const where = { tenantId };
 

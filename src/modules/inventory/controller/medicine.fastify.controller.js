@@ -5,9 +5,20 @@ import { success, error as errorResponse } from '../../../shared/helpers/respons
 
 class MedicineFastifyController {
   async getMedicines(request) {
-    const { search, q, categoryId, manufacturerId, isActive, sortBy, order, page, limit, branchId } = request.query;
+    const {
+      search,
+      q,
+      categoryId,
+      manufacturerId,
+      isActive,
+      sortBy,
+      order,
+      page,
+      limit,
+      branchId,
+    } = request.query;
     const finalSearch = search || q;
-    
+
     // Automatically set lowStock if URL contains 'low-stock'
     const lowStock = request.query.lowStock || request.url.includes('low-stock');
 
@@ -17,7 +28,9 @@ class MedicineFastifyController {
       query: { search: finalSearch, categoryId, manufacturerId, isActive, lowStock, sortBy, order },
       pagination: { page, limit },
     });
-    const dataArray = Array.isArray(result) ? result : result.docs || result.data || result.medicines || [];
+    const dataArray = Array.isArray(result)
+      ? result
+      : result.docs || result.data || result.medicines || [];
     return success(dataArray);
   }
 
@@ -25,9 +38,9 @@ class MedicineFastifyController {
     try {
       const { branchId } = request.query;
       const medicine = await medicineService.getMedicine(
-        request.params.id, 
-        request.tenantId, 
-        branchId || request.branchId
+        request.params.id,
+        request.tenantId,
+        branchId || request.branchId,
       );
       return success(medicine);
     } catch (err) {
@@ -41,7 +54,7 @@ class MedicineFastifyController {
       const medicine = await medicineService.getMedicineByBarcode(
         request.params.barcode,
         request.tenantId,
-        branchId || request.branchId
+        branchId || request.branchId,
       );
       return success(medicine);
     } catch (err) {
@@ -52,16 +65,16 @@ class MedicineFastifyController {
   async createMedicine(request, reply) {
     try {
       const branchId = request.branchId || request.body.branchId || request.user?.branchId;
-      
+
       const payload = {
         ...request.body,
-        branchId
+        branchId,
       };
 
       const medicine = await medicineService.createMedicine(
         payload,
         request.tenantId,
-        request.user.id
+        request.user.id,
       );
       return success(medicine);
     } catch (err) {
@@ -84,7 +97,9 @@ class MedicineFastifyController {
       return success(medicine);
     } catch (err) {
       const statusCode = err.message.includes('only allowed to update') ? 403 : 400;
-      return reply.code(statusCode).send(errorResponse(err.message, statusCode === 403 ? 'FORBIDDEN' : 'UPDATE_FAILED'));
+      return reply
+        .code(statusCode)
+        .send(errorResponse(err.message, statusCode === 403 ? 'FORBIDDEN' : 'UPDATE_FAILED'));
     }
   }
 
@@ -142,7 +157,8 @@ class MedicineFastifyController {
   async getBarcode(request, reply) {
     try {
       const { text, type } = request.query;
-      if (!text) return reply.code(400).send(errorResponse('Text parameter is required', 'MISSING_PARAM'));
+      if (!text)
+        return reply.code(400).send(errorResponse('Text parameter is required', 'MISSING_PARAM'));
 
       const buffer = await barcodeService.generateBarcode(text, type);
       reply.header('Content-Type', 'image/png');
@@ -154,7 +170,10 @@ class MedicineFastifyController {
 
   async getNearExpiry(request) {
     const { days } = request.query;
-    const batches = await expiryService.getNearExpiryBatches(request.tenantId, parseInt(days) || 30);
+    const batches = await expiryService.getNearExpiryBatches(
+      request.tenantId,
+      parseInt(days) || 30,
+    );
     return success(batches);
   }
 

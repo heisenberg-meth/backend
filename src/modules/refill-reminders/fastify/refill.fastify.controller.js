@@ -7,11 +7,15 @@ class RefillFastifyController {
 
     const refill = await refillService.predictRefill(id, medicineId, request.tenantId);
     if (!refill) {
-      return reply.code(404).send({ success: false, message: 'No refill prediction found for this medicine' });
+      return reply
+        .code(404)
+        .send({ success: false, message: 'No refill prediction found for this medicine' });
     }
 
     const refillWithPatient = await refillService.getUpcomingRefills(request.tenantId);
-    const specificRefill = refillWithPatient.find(r => r.patientId === id && r.medicineId === medicineId);
+    const specificRefill = refillWithPatient.find(
+      (r) => r.patientId === id && r.medicineId === medicineId,
+    );
 
     await refillService.sendReminder(specificRefill || refill, channel || 'SMS');
     return reply.send({ success: true, message: 'Reminder sent successfully' });

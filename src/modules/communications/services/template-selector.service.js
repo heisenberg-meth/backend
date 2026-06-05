@@ -17,15 +17,24 @@ class TemplateSelectorService {
 
   selectBestChannel(patient, templateName, preferredChannel) {
     if (preferredChannel && this.isChannelSupported(templateName, preferredChannel)) {
-      if (preferredChannel === 'WHATSAPP' && patient.allowWhatsapp !== false) return preferredChannel;
+      if (preferredChannel === 'WHATSAPP' && patient.allowWhatsapp !== false)
+        return preferredChannel;
       if (preferredChannel === 'SMS' && patient.allowSms !== false) return preferredChannel;
       if (preferredChannel === 'EMAIL' && patient.email) return preferredChannel;
     }
 
-    if (patient.allowWhatsapp !== false && patient.phone && this.isChannelSupported(templateName, 'WHATSAPP')) {
+    if (
+      patient.allowWhatsapp !== false &&
+      patient.phone &&
+      this.isChannelSupported(templateName, 'WHATSAPP')
+    ) {
       return 'WHATSAPP';
     }
-    if (patient.allowSms !== false && patient.phone && this.isChannelSupported(templateName, 'SMS')) {
+    if (
+      patient.allowSms !== false &&
+      patient.phone &&
+      this.isChannelSupported(templateName, 'SMS')
+    ) {
       return 'SMS';
     }
     if (patient.email && this.isChannelSupported(templateName, 'EMAIL')) {
@@ -41,7 +50,7 @@ class TemplateSelectorService {
     const template = this.getTemplate(templateName);
     const supported = template.channels || [];
 
-    const order = supported.filter(ch => ch !== primaryChannel);
+    const order = supported.filter((ch) => ch !== primaryChannel);
     for (const ch of order) {
       if (ch === 'WHATSAPP' && patient.allowWhatsapp !== false && patient.phone) chain.push(ch);
       else if (ch === 'SMS' && patient.allowSms !== false && patient.phone) chain.push(ch);

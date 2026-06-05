@@ -10,9 +10,9 @@ class CreditRepository {
             fullName: true,
             creditLimit: true,
             creditUsed: true,
-          }
-        }
-      }
+          },
+        },
+      },
     });
   }
 
@@ -28,14 +28,14 @@ class CreditRepository {
       where: { patientId, tenantId },
       data: {
         outstandingBalance,
-      }
+      },
     });
   }
 
   async updateStatus(patientId, tenantId, accountStatus) {
     return prisma.patientCreditAccount.update({
       where: { patientId, tenantId },
-      data: { accountStatus }
+      data: { accountStatus },
     });
   }
 
@@ -43,7 +43,7 @@ class CreditRepository {
     return prisma.patientCreditLedger.findMany({
       where: { patientId, tenantId },
       orderBy: { createdAt: 'desc' },
-      take: 100
+      take: 100,
     });
   }
 

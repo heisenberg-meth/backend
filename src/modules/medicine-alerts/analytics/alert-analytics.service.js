@@ -39,9 +39,13 @@ class AlertAnalyticsService {
 
       medicineMap[mid].expiryCount++;
       medicineMap[mid].totalQuantity += alert.batch?.quantity || 0;
-      medicineMap[mid].totalPotentialLoss += (alert.batch?.quantity || 0) * (alert.batch?.purchasePrice || 0);
+      medicineMap[mid].totalPotentialLoss +=
+        (alert.batch?.quantity || 0) * (alert.batch?.purchasePrice || 0);
 
-      if (!medicineMap[mid].earliestExpiry || alert.daysRemaining < medicineMap[mid].earliestExpiry) {
+      if (
+        !medicineMap[mid].earliestExpiry ||
+        alert.daysRemaining < medicineMap[mid].earliestExpiry
+      ) {
         medicineMap[mid].earliestExpiry = alert.daysRemaining;
       }
     }
@@ -138,8 +142,9 @@ class AlertAnalyticsService {
       supplierMap[sid].totalExpiringQuantity += batch.quantity;
 
       const shelfLifeDays = Math.ceil(
-        (batch.expiryDate.getTime() - (batch.manufacturingDate || new Date(batch.createdAt)).getTime()) /
-          (1000 * 3600 * 24)
+        (batch.expiryDate.getTime() -
+          (batch.manufacturingDate || new Date(batch.createdAt)).getTime()) /
+          (1000 * 3600 * 24),
       );
       supplierMap[sid].totalShelfLifeDays += shelfLifeDays;
     }
@@ -162,13 +167,23 @@ class AlertAnalyticsService {
         where: { tenantId, branchId: branchId || undefined, type: 'LOW_STOCK', isResolved: false },
       }),
       prisma.stockAlert.count({
-        where: { tenantId, branchId: branchId || undefined, type: 'OUT_OF_STOCK', isResolved: false },
+        where: {
+          tenantId,
+          branchId: branchId || undefined,
+          type: 'OUT_OF_STOCK',
+          isResolved: false,
+        },
       }),
       prisma.expiryAlert.count({
         where: { tenantId, branchId: branchId || undefined, isResolved: false },
       }),
       prisma.stockAlert.count({
-        where: { tenantId, branchId: branchId || undefined, severity: 'CRITICAL', isResolved: false },
+        where: {
+          tenantId,
+          branchId: branchId || undefined,
+          severity: 'CRITICAL',
+          isResolved: false,
+        },
       }),
     ]);
 
@@ -179,7 +194,7 @@ class AlertAnalyticsService {
 
     const totalFinancialRisk = financialRisk.reduce(
       (sum, a) => sum + (a.batch?.quantity || 0) * (a.batch?.purchasePrice || 0),
-      0
+      0,
     );
 
     return {

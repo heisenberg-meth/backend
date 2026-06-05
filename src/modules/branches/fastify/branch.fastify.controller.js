@@ -17,7 +17,11 @@ class BranchFastifyController {
   }
 
   async updateBranch(request, reply) {
-    const branch = await branchService.updateBranch(request.params.id, request.tenantId, request.body);
+    const branch = await branchService.updateBranch(
+      request.params.id,
+      request.tenantId,
+      request.body,
+    );
     return reply.send(branch);
   }
 }

@@ -1,10 +1,10 @@
-import prisma from "../../../config/prisma.js";
+import prisma from '../../../config/prisma.js';
 
 class LoyaltyRepository {
   async createTransaction(data, tx) {
     const client = tx || prisma;
     return client.loyaltyTransaction.create({
-      data
+      data,
     });
   }
 

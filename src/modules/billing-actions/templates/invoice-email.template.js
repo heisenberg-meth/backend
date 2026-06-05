@@ -13,7 +13,7 @@ export function renderInvoiceEmail(invoiceData, tenantName, branding) {
           <td style="padding: 8px; border-bottom: 1px solid #eee; text-align: center;">${item.quantity}</td>
           <td style="padding: 8px; border-bottom: 1px solid #eee; text-align: right;">₹${item.unitPrice.toFixed(2)}</td>
           <td style="padding: 8px; border-bottom: 1px solid #eee; text-align: right;">₹${item.totalPrice.toFixed(2)}</td>
-        </tr>`
+        </tr>`,
     )
     .join('');
 

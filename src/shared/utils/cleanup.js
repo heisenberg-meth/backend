@@ -14,14 +14,18 @@ export const cleanupResources = async () => {
     log.info('Queues and Workers closed');
 
     if (typeof prisma.$disconnect === 'function') {
-      try { await prisma.$disconnect(); } catch (err) {
+      try {
+        await prisma.$disconnect();
+      } catch (err) {
         log.warn({ err: err.message }, '[CLEANUP] Error disconnecting Prisma');
       }
     }
     log.info('Databases disconnected');
 
     if (typeof quitRedis === 'function') {
-      try { await quitRedis(); } catch (err) {
+      try {
+        await quitRedis();
+      } catch (err) {
         log.warn({ err: err.message }, '[CLEANUP] Error quitting Redis');
       }
     }

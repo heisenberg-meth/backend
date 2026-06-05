@@ -20,7 +20,7 @@ function createReconciliationWorker() {
       concurrency: 2,
       removeOnComplete: { age: 86400 },
       removeOnFail: { age: 604800 },
-    }
+    },
   );
 
   reconciliationWorker.on('failed', (job, err) => {
@@ -42,7 +42,7 @@ function createDeadLetterWorker() {
     {
       connection: getBullRedis(),
       concurrency: 1,
-    }
+    },
   );
 
   dlqWorker.on('failed', (job, err) => {

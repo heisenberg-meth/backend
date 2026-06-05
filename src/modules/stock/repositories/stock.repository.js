@@ -1,4 +1,4 @@
-import prisma from "../../../config/prisma.js";
+import prisma from '../../../config/prisma.js';
 
 class StockRepository {
   async getCurrentStock(tenantId, medicineId, client) {
@@ -22,9 +22,9 @@ class StockRepository {
       where: {
         id: batchId,
         medicine: { tenantId },
-        deletedAt: null
+        deletedAt: null,
       },
-      include: { medicine: true }
+      include: { medicine: true },
     });
   }
 
@@ -32,14 +32,14 @@ class StockRepository {
     const client = tx || prisma;
     return client.inventoryBatch.update({
       where: { id: batchId },
-      data: { quantity: newQuantity }
+      data: { quantity: newQuantity },
     });
   }
 
   async createDamagedRecord(data, tx) {
     const client = tx || prisma;
     return client.damagedStock.create({
-      data
+      data,
     });
   }
 
@@ -48,12 +48,12 @@ class StockRepository {
       where: { tenantId },
       include: {
         batch: {
-          include: { medicine: true }
-        }
+          include: { medicine: true },
+        },
       },
       orderBy: { createdAt: 'desc' },
       skip,
-      take
+      take,
     });
   }
 
@@ -63,13 +63,13 @@ class StockRepository {
         tenantId_medicineId_snapshotDate: {
           tenantId: data.tenantId,
           medicineId: data.medicineId,
-          snapshotDate: data.snapshotDate
-        }
+          snapshotDate: data.snapshotDate,
+        },
       },
       update: {
-        closingStock: data.closingStock
+        closingStock: data.closingStock,
       },
-      create: data
+      create: data,
     });
   }
 }

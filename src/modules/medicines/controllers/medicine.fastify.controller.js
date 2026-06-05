@@ -16,7 +16,7 @@ class MedicineFastifyController {
         categoryId,
         schedule,
         page: parseInt(page),
-        limit: parseInt(limit)
+        limit: parseInt(limit),
       });
       return result;
     } catch (error) {
@@ -65,7 +65,13 @@ class MedicineFastifyController {
     const { id } = request.params;
 
     try {
-      const medicine = await medicineService.updateMedicineMaster(id, tenantId, userId, userRole, request.body);
+      const medicine = await medicineService.updateMedicineMaster(
+        id,
+        tenantId,
+        userId,
+        userRole,
+        request.body,
+      );
       return { success: true, data: medicine };
     } catch (error) {
       logger.error({ error, id, tenantId }, 'Failed to update medicine master');

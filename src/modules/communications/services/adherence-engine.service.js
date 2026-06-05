@@ -54,8 +54,19 @@ class AdherenceEngineService {
         status: { in: ['ACTIVE', 'VERIFIED'] },
       },
       include: {
-        patient: { select: { id: true, fullName: true, phone: true, email: true, allowSms: true, allowWhatsapp: true } },
-        items: { include: { medicine: { select: { id: true, fullName: true, scheduleType: true } } } },
+        patient: {
+          select: {
+            id: true,
+            fullName: true,
+            phone: true,
+            email: true,
+            allowSms: true,
+            allowWhatsapp: true,
+          },
+        },
+        items: {
+          include: { medicine: { select: { id: true, fullName: true, scheduleType: true } } },
+        },
       },
     });
 
@@ -78,7 +89,9 @@ class AdherenceEngineService {
 
       const recentPurchase = await prisma.sale.findFirst({
         where: {
-          patientId: refill.patientId, tenantId, status: 'COMPLETED',
+          patientId: refill.patientId,
+          tenantId,
+          status: 'COMPLETED',
           items: { some: { medicineId: refill.medicineId } },
         },
         orderBy: { soldAt: 'desc' },
@@ -116,12 +129,19 @@ class AdherenceEngineService {
 
         const daysUntilEnd = Math.ceil((prescriptionEnd - now) / (1000 * 60 * 60 * 24));
 
-        if (daysUntilEnd > ADHERENCE_THRESHOLDS.REFILL_WINDOW_DAYS || daysUntilEnd < -ADHERENCE_THRESHOLDS.CRITICAL_DAYS) continue;
+        if (
+          daysUntilEnd > ADHERENCE_THRESHOLDS.REFILL_WINDOW_DAYS ||
+          daysUntilEnd < -ADHERENCE_THRESHOLDS.CRITICAL_DAYS
+        )
+          continue;
 
-        const existingRefill = candidates.find(r => r.medicineId === item.medicineId);
+        const existingRefill = candidates.find((r) => r.medicineId === item.medicineId);
         if (existingRefill) continue;
 
-        const isScheduleH = item.medicine?.scheduleType === 'H' || item.medicine?.scheduleType === 'H1' || item.medicine?.scheduleType === 'X';
+        const isScheduleH =
+          item.medicine?.scheduleType === 'H' ||
+          item.medicine?.scheduleType === 'H1' ||
+          item.medicine?.scheduleType === 'X';
 
         let reminderType = 'PRESCRIPTION_EXPIRING';
         if (daysUntilEnd < 0) {

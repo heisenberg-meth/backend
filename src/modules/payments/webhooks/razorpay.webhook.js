@@ -14,16 +14,10 @@ class RazorpayWebhookHandler {
       return false;
     }
 
-    const expectedSignature = crypto
-      .createHmac('sha256', webhookSecret)
-      .update(body)
-      .digest('hex');
+    const expectedSignature = crypto.createHmac('sha256', webhookSecret).update(body).digest('hex');
 
     try {
-      return crypto.timingSafeEqual(
-        Buffer.from(expectedSignature),
-        Buffer.from(signature)
-      );
+      return crypto.timingSafeEqual(Buffer.from(expectedSignature), Buffer.from(signature));
     } catch {
       return false;
     }
@@ -42,49 +36,53 @@ class RazorpayWebhookHandler {
     const idempotencyKey = `webhook:${eventId}:${paymentEntity?.id || orderEntity?.id}`;
     const lockKey = `webhook_lock:${paymentEntity?.order_id || orderEntity?.id}`;
 
-    return paymentLockService.executeWithLock(lockKey, async () => {
-      const existing = await prisma.paymentWebhook.findUnique({
-        where: { idempotencyKey },
-      });
-      if (existing) {
-        logger.info({ event, eventId }, '[WEBHOOK] Duplicate webhook ignored');
-        return { received: true, ignored: true };
-      }
+    return paymentLockService.executeWithLock(
+      lockKey,
+      async () => {
+        const existing = await prisma.paymentWebhook.findUnique({
+          where: { idempotencyKey },
+        });
+        if (existing) {
+          logger.info({ event, eventId }, '[WEBHOOK] Duplicate webhook ignored');
+          return { received: true, ignored: true };
+        }
 
-      await prisma.paymentWebhook.create({
-        data: {
-          idempotencyKey,
-          event,
-          payload,
-          signature: payload.signature || '',
-          processedAt: new Date(),
-        },
-      });
+        await prisma.paymentWebhook.create({
+          data: {
+            idempotencyKey,
+            event,
+            payload,
+            signature: payload.signature || '',
+            processedAt: new Date(),
+          },
+        });
 
-      logger.info({ event, eventId, paymentId: paymentEntity?.id }, '[WEBHOOK] Processing');
+        logger.info({ event, eventId, paymentId: paymentEntity?.id }, '[WEBHOOK] Processing');
 
-      const orderId = paymentEntity?.order_id || orderEntity?.id;
-      if (!orderId) return { received: true, skipped: true };
+        const orderId = paymentEntity?.order_id || orderEntity?.id;
+        if (!orderId) return { received: true, skipped: true };
 
-      switch (event) {
-        case 'payment.captured':
-          await this._handlePaymentCaptured(orderId, paymentEntity);
-          break;
-        case 'payment.failed':
-          await this._handlePaymentFailed(orderId, paymentEntity);
-          break;
-        case 'payment.authorized':
-          await this._handlePaymentAuthorized(orderId, paymentEntity);
-          break;
-        case 'order.paid':
-          await this._handleOrderPaid(orderEntity, paymentEntity);
-          break;
-        default:
-          logger.info({ event }, '[WEBHOOK] Unhandled event type');
-      }
+        switch (event) {
+          case 'payment.captured':
+            await this._handlePaymentCaptured(orderId, paymentEntity);
+            break;
+          case 'payment.failed':
+            await this._handlePaymentFailed(orderId, paymentEntity);
+            break;
+          case 'payment.authorized':
+            await this._handlePaymentAuthorized(orderId, paymentEntity);
+            break;
+          case 'order.paid':
+            await this._handleOrderPaid(orderEntity, paymentEntity);
+            break;
+          default:
+            logger.info({ event }, '[WEBHOOK] Unhandled event type');
+        }
 
-      return { received: true };
-    }, 20000);
+        return { received: true };
+      },
+      20000,
+    );
   }
 
   async _handlePaymentCaptured(orderId, paymentEntity) {

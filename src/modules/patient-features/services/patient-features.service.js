@@ -34,11 +34,15 @@ class PatientFeaturesService {
     await this._audit(tenantId, id, 'HISTORY_ACCESS', { description: 'Purchase history accessed' });
 
     const { sales, total, page, limit } = await repo.findPurchaseHistory(id, tenantId, query);
-    const medicineFreq = await repo.findMedicinePurchaseFrequency(id, tenantId, CHRONIC_WINDOW_MONTHS);
+    const medicineFreq = await repo.findMedicinePurchaseFrequency(
+      id,
+      tenantId,
+      CHRONIC_WINDOW_MONTHS,
+    );
 
-    const chronicMedicines = medicineFreq.filter(m => m.purchaseCount >= CHRONIC_THRESHOLD);
-    const purchases = sales.flatMap(sale =>
-      sale.items.map(item => ({
+    const chronicMedicines = medicineFreq.filter((m) => m.purchaseCount >= CHRONIC_THRESHOLD);
+    const purchases = sales.flatMap((sale) =>
+      sale.items.map((item) => ({
         invoiceId: sale.invoiceId,
         medicineName: item.medicine.name,
         quantity: item.quantity,
@@ -59,20 +63,24 @@ class PatientFeaturesService {
 
   async getPrescriptions(id, tenantId) {
     await this._verifyPatient(id, tenantId);
-    await this._audit(tenantId, id, 'PRESCRIPTION_ACCESS', { description: 'Prescriptions accessed' });
+    await this._audit(tenantId, id, 'PRESCRIPTION_ACCESS', {
+      description: 'Prescriptions accessed',
+    });
 
     const prescriptions = await repo.findPrescriptions(id, tenantId);
     const now = new Date();
 
     return {
-      prescriptions: prescriptions.map(p => {
-        const maxDuration = Math.max(0, ...p.items.map(i => i.durationDays || 0));
+      prescriptions: prescriptions.map((p) => {
+        const maxDuration = Math.max(0, ...p.items.map((i) => i.durationDays || 0));
         const expiryDate = new Date(p.prescriptionDate);
         expiryDate.setDate(expiryDate.getDate() + maxDuration);
 
         const scheduleDrugs = p.items
-          .filter(i => i.medicine.scheduleType && SCHEDULE_RESTRICTED.includes(i.medicine.scheduleType))
-          .map(i => ({
+          .filter(
+            (i) => i.medicine.scheduleType && SCHEDULE_RESTRICTED.includes(i.medicine.scheduleType),
+          )
+          .map((i) => ({
             medicineName: i.medicine.name,
             scheduleType: i.medicine.scheduleType,
           }));
@@ -86,7 +94,7 @@ class PatientFeaturesService {
           expiryDate,
           isExpired: expiryDate < now,
           verificationStatus: p.verificationStatus,
-          medicines: p.items.map(i => ({
+          medicines: p.items.map((i) => ({
             medicineId: i.medicineId,
             medicineName: i.medicine.name,
             dosage: i.dosage,
@@ -108,7 +116,7 @@ class PatientFeaturesService {
     const result = await repo.findInvoices(id, tenantId, query);
     return {
       patientId: id,
-      invoices: result.invoices.map(inv => ({
+      invoices: result.invoices.map((inv) => ({
         invoiceId: inv.id,
         invoiceNumber: inv.invoiceNumber,
         amount: inv.totalAmount,
@@ -123,7 +131,9 @@ class PatientFeaturesService {
 
   async getRefills(id, tenantId) {
     await this._verifyPatient(id, tenantId);
-    await this._audit(tenantId, id, 'REFILL_ACCESS', { description: 'Refill predictions accessed' });
+    await this._audit(tenantId, id, 'REFILL_ACCESS', {
+      description: 'Refill predictions accessed',
+    });
 
     const medicineFreq = await repo.findMedicinePurchaseFrequency(id, tenantId, 12);
     const subscriptions = await repo.findMedicineSubscriptions(id, tenantId);
@@ -134,7 +144,7 @@ class PatientFeaturesService {
     for (const mf of medicineFreq) {
       if (mf.purchaseCount < 2) continue;
 
-      const sub = subscriptions.find(s => s.medicineId === mf.medicineId);
+      const sub = subscriptions.find((s) => s.medicineId === mf.medicineId);
 
       let dailyConsumption = 1;
       if (sub && sub.frequencyDays > 0 && sub.quantity > 0) {
@@ -220,7 +230,7 @@ class PatientFeaturesService {
         type: 'PURCHASE',
         id: sale.id,
         description: `Purchased items worth ₹${sale.totalAmount}`,
-        medicineSummary: sale.items.map(i => `${i.quantity}x ${i.medicine.name}`).join(', '),
+        medicineSummary: sale.items.map((i) => `${i.quantity}x ${i.medicine.name}`).join(', '),
         amount: sale.totalAmount,
         timestamp: sale.soldAt,
       });
@@ -273,9 +283,8 @@ class PatientFeaturesService {
     }
 
     const total = refills.length;
-    const adherenceRate = total > 0
-      ? Math.round(((counts.ON_TRACK + counts.AT_RISK) / total) * 100)
-      : null;
+    const adherenceRate =
+      total > 0 ? Math.round(((counts.ON_TRACK + counts.AT_RISK) / total) * 100) : null;
 
     const atRisk = counts.AT_RISK + counts.MISSED + counts.CRITICAL;
     if (atRisk > 0) {
@@ -298,12 +307,16 @@ class PatientFeaturesService {
   async getChronicMedicines(id, tenantId) {
     await this._verifyPatient(id, tenantId);
 
-    const medicineFreq = await repo.findMedicinePurchaseFrequency(id, tenantId, CHRONIC_WINDOW_MONTHS);
-    const chronic = medicineFreq.filter(m => m.purchaseCount >= CHRONIC_THRESHOLD);
+    const medicineFreq = await repo.findMedicinePurchaseFrequency(
+      id,
+      tenantId,
+      CHRONIC_WINDOW_MONTHS,
+    );
+    const chronic = medicineFreq.filter((m) => m.purchaseCount >= CHRONIC_THRESHOLD);
 
     return {
       patientId: id,
-      chronicMedicines: chronic.map(m => ({
+      chronicMedicines: chronic.map((m) => ({
         medicineId: m.medicineId,
         medicineName: m.medicineName,
         genericName: m.genericName,
@@ -321,7 +334,7 @@ class PatientFeaturesService {
     return {
       tenantId,
       count: refills.length,
-      refills: refills.map(r => ({
+      refills: refills.map((r) => ({
         patientId: r.patient.id,
         patientName: r.patient.fullName,
         patientPhone: r.patient.phone,
@@ -342,12 +355,12 @@ class PatientFeaturesService {
     }
 
     const now = new Date();
-    const maxDuration = Math.max(0, ...p.items.map(i => i.durationDays || 0));
+    const maxDuration = Math.max(0, ...p.items.map((i) => i.durationDays || 0));
     const expiryDate = new Date(p.prescriptionDate);
     expiryDate.setDate(expiryDate.getDate() + maxDuration);
 
     const hasScheduleDrugs = p.items.some(
-      i => i.medicine.scheduleType && SCHEDULE_RESTRICTED.includes(i.medicine.scheduleType),
+      (i) => i.medicine.scheduleType && SCHEDULE_RESTRICTED.includes(i.medicine.scheduleType),
     );
 
     const isExpired = expiryDate < now;
@@ -368,8 +381,10 @@ class PatientFeaturesService {
       expiryDate,
       hasScheduleDrugs,
       scheduleDrugs: p.items
-        .filter(i => i.medicine.scheduleType && SCHEDULE_RESTRICTED.includes(i.medicine.scheduleType))
-        .map(i => ({ medicineName: i.medicine.name, scheduleType: i.medicine.scheduleType })),
+        .filter(
+          (i) => i.medicine.scheduleType && SCHEDULE_RESTRICTED.includes(i.medicine.scheduleType),
+        )
+        .map((i) => ({ medicineName: i.medicine.name, scheduleType: i.medicine.scheduleType })),
       isRefillBlocked: isExpired || (hasScheduleDrugs && isExpired),
     };
   }

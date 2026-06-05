@@ -1,4 +1,4 @@
-import prisma from "../../../config/prisma.js";
+import prisma from '../../../config/prisma.js';
 import stockRepository from '../repositories/stock.repository.js';
 
 class SnapshotService {
@@ -7,7 +7,7 @@ class SnapshotService {
    */
   async captureDailySnapshots(tenantId) {
     const medicines = await prisma.medicine.findMany({
-      where: { tenantId, deletedAt: null }
+      where: { tenantId, deletedAt: null },
     });
 
     const snapshotDate = new Date();

@@ -6,7 +6,9 @@ class CommunicationsFastifyController {
   async sendRefillReminder(request, reply) {
     try {
       const result = await orchestratorService.sendRefillReminder(
-        request.params.id, request.tenantId, { channel: request.body?.channel },
+        request.params.id,
+        request.tenantId,
+        { channel: request.body?.channel },
       );
       return reply.send(result);
     } catch (error) {
@@ -32,12 +34,10 @@ class CommunicationsFastifyController {
       if (!request.body?.invoiceId) {
         return reply.code(400).send({ success: false, message: 'invoiceId is required' });
       }
-      const result = await orchestratorService.sendInvoice(
-        request.params.id, request.tenantId, {
-          invoiceId: request.body.invoiceId,
-          channel: request.body.channel,
-        },
-      );
+      const result = await orchestratorService.sendInvoice(request.params.id, request.tenantId, {
+        invoiceId: request.body.invoiceId,
+        channel: request.body.channel,
+      });
       return reply.send(result);
     } catch (error) {
       return reply.code(400).send({ success: false, message: error.message });
@@ -56,10 +56,13 @@ class CommunicationsFastifyController {
   async getPatientCommunications(request, reply) {
     try {
       const result = await orchestratorService.getPatientCommunications(
-        request.params.id, request.tenantId, request.query,
+        request.params.id,
+        request.tenantId,
+        request.query,
       );
       return reply.send({
-        success: true, data: result.data,
+        success: true,
+        data: result.data,
         meta: { total: result.total, page: result.page, limit: result.limit },
       });
     } catch (error) {
@@ -69,7 +72,10 @@ class CommunicationsFastifyController {
 
   async retryCommunication(request, reply) {
     try {
-      const result = await orchestratorService.retryCommunication(request.params.id, request.tenantId);
+      const result = await orchestratorService.retryCommunication(
+        request.params.id,
+        request.tenantId,
+      );
       return reply.send({ success: true, data: result });
     } catch (error) {
       return reply.code(400).send({ success: false, message: error.message });
@@ -79,7 +85,9 @@ class CommunicationsFastifyController {
   async updatePreferences(request, reply) {
     try {
       const result = await orchestratorService.updatePatientPreferences(
-        request.params.id, request.tenantId, request.body,
+        request.params.id,
+        request.tenantId,
+        request.body,
       );
       return reply.send({ success: true, data: result });
     } catch (error) {
@@ -90,7 +98,8 @@ class CommunicationsFastifyController {
   async analyzeReminders(request, reply) {
     try {
       const result = await reminderAnalyzerService.analyzePatientRefills(
-        request.params.id, request.tenantId,
+        request.params.id,
+        request.tenantId,
       );
       return reply.send({ success: true, data: result });
     } catch (error) {
@@ -105,7 +114,9 @@ class CommunicationsFastifyController {
         return reply.code(400).send({ success: false, message: 'medicineId query param required' });
       }
       const result = await reminderAnalyzerService.getAdherenceFormula(
-        request.params.id, medicineId, request.tenantId,
+        request.params.id,
+        medicineId,
+        request.tenantId,
       );
       return reply.send({ success: true, data: result });
     } catch (error) {

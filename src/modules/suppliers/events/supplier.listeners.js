@@ -8,7 +8,6 @@ export const initSupplierListeners = () => {
 
   // Update metrics when a Purchase Order is received
   localEventBus.on(DOMAIN_EVENTS.PURCHASE_ORDER_RECEIVED, async (orderId) => {
-
     try {
       const order = await prisma.purchaseOrder.findUnique({
         where: { id: orderId },
@@ -65,8 +64,8 @@ export const initSupplierListeners = () => {
       await prisma.supplierMetrics.update({
         where: { supplierId },
         data: {
-          qualityScore: { decrement: 5 } // Penalize quality score
-        }
+          qualityScore: { decrement: 5 }, // Penalize quality score
+        },
       });
     } catch (err) {
       logger.error({ err }, '[SUPPLIER-LISTENER] Failed to update metrics on return');

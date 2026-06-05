@@ -7,7 +7,7 @@ class PurchaseFastifyController {
       const result = await stockInService.receiveGoods(
         request.tenantId,
         request.body,
-        request.user.id
+        request.user.id,
       );
       return reply.code(201).send({ success: true, data: result });
     } catch (error) {
@@ -34,7 +34,7 @@ class PurchaseFastifyController {
             supplierId,
             reason: reason || 'Return',
           },
-          request.user.id
+          request.user.id,
         );
         results.push(result);
       }
@@ -52,7 +52,7 @@ class PurchaseFastifyController {
       const result = await supplierReturnService.getReturns(
         request.tenantId,
         parseInt(page) || 1,
-        parseInt(limit) || 20
+        parseInt(limit) || 20,
       );
       return reply.send({ success: true, data: result });
     } catch (error) {

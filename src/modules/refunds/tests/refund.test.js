@@ -1,4 +1,4 @@
-import { jest , describe, beforeEach, it, expect } from '@jest/globals';
+import { jest, describe, beforeEach, it, expect } from '@jest/globals';
 
 jest.unstable_mockModule('../../../config/prisma.js', () => ({
   default: {
@@ -72,7 +72,12 @@ function mockInvoiceItem(overrides = {}) {
     sgst: 90,
     igst: 0,
     totalPrice: 590,
-    medicine: { name: 'Paracetamol 650', hsnCode: '300490', scheduleType: 'OTC', storageCondition: 'ROOM_TEMPERATURE' },
+    medicine: {
+      name: 'Paracetamol 650',
+      hsnCode: '300490',
+      scheduleType: 'OTC',
+      storageCondition: 'ROOM_TEMPERATURE',
+    },
     batch: { batchNumber: 'B001' },
     ...overrides,
   };
@@ -103,7 +108,9 @@ function mockReturn(overrides = {}) {
 }
 
 describe('RefundCalculationService', () => {
-  beforeEach(() => { jest.clearAllMocks(); });
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
 
   it('calculates refund amount for an item with CGST/SGST', () => {
     const item = mockInvoiceItem();
@@ -134,29 +141,39 @@ describe('RefundCalculationService', () => {
   it('calculates total refund across multiple items', () => {
     const items = [
       refundCalculation.calculateRefundAmount(mockInvoiceItem({ unitPrice: 100 }), 2),
-      refundCalculation.calculateRefundAmount(mockInvoiceItem({ unitPrice: 50, gstPercentage: 12 }), 1),
+      refundCalculation.calculateRefundAmount(
+        mockInvoiceItem({ unitPrice: 50, gstPercentage: 12 }),
+        1,
+      ),
     ];
     const total = refundCalculation.calculateTotalRefund(items);
     expect(total.subtotal).toBeCloseTo(250);
     expect(total.totalRefund).toBeGreaterThan(total.subtotal);
   });
-
 });
 
 describe('RefundEligibilityService', () => {
-  beforeEach(() => { jest.clearAllMocks(); });
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
 
   it('validates invoice exists', () => {
     expect(refundEligibility.validateInvoice(null).eligible).toBe(false);
-    expect(refundEligibility.validateInvoice({ deletedAt: null, status: 'COMPLETED' }).eligible).toBe(true);
+    expect(
+      refundEligibility.validateInvoice({ deletedAt: null, status: 'COMPLETED' }).eligible,
+    ).toBe(true);
   });
 
   it('rejects cancelled invoices', () => {
-    expect(refundEligibility.validateInvoice({ deletedAt: null, status: 'CANCELLED' }).eligible).toBe(false);
+    expect(
+      refundEligibility.validateInvoice({ deletedAt: null, status: 'CANCELLED' }).eligible,
+    ).toBe(false);
   });
 
   it('rejects deleted invoices', () => {
-    expect(refundEligibility.validateInvoice({ deletedAt: new Date(), status: 'COMPLETED' }).eligible).toBe(false);
+    expect(
+      refundEligibility.validateInvoice({ deletedAt: new Date(), status: 'COMPLETED' }).eligible,
+    ).toBe(false);
   });
 
   it('rejects refunds beyond 30 day window', () => {
@@ -213,16 +230,23 @@ describe('RefundEligibilityService', () => {
   });
 
   it('requires approval for high-value refunds', async () => {
-    const result = await refundEligibility.determineApprovalRequired([{ requiresApproval: false }], 50000);
+    const result = await refundEligibility.determineApprovalRequired(
+      [{ requiresApproval: false }],
+      50000,
+    );
     expect(result.requiresApproval).toBe(true);
   });
 });
 
 describe('RefundFraudService', () => {
-  beforeEach(() => { jest.clearAllMocks(); });
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
 
   it('flags repeated refunds from same patient', () => {
-    const existing = Array(5).fill(null).map((_, i) => ({ items: [{ invoiceItemId: `item-${i}` }] }));
+    const existing = Array(5)
+      .fill(null)
+      .map((_, i) => ({ items: [{ invoiceItemId: `item-${i}` }] }));
     const result = refundFraud.checkRepeatedRefunds(existing);
     expect(result.flag).toContain('Repeated');
     expect(result.score).toBeGreaterThan(0);
@@ -240,7 +264,13 @@ describe('RefundFraudService', () => {
   });
 
   it('evaluates overall fraud score', async () => {
-    const result = await refundFraud.evaluateRefund('t1', 'p1', [{ invoiceItemId: 'i1', medicine: { scheduleType: 'X' } }], 25000, []);
+    const result = await refundFraud.evaluateRefund(
+      't1',
+      'p1',
+      [{ invoiceItemId: 'i1', medicine: { scheduleType: 'X' } }],
+      25000,
+      [],
+    );
     expect(result.fraudScore).toBeGreaterThan(0);
     expect(result.fraudFlags.length).toBeGreaterThan(0);
     expect(result.requiresReview).toBeDefined();
@@ -248,18 +278,28 @@ describe('RefundFraudService', () => {
   });
 
   it('returns low fraud score for normal refunds', async () => {
-    const result = await refundFraud.evaluateRefund('t1', 'p1', [{ invoiceItemId: 'i1', medicine: { scheduleType: 'OTC' } }], 500, []);
+    const result = await refundFraud.evaluateRefund(
+      't1',
+      'p1',
+      [{ invoiceItemId: 'i1', medicine: { scheduleType: 'OTC' } }],
+      500,
+      [],
+    );
     expect(result.fraudScore).toBe(0);
     expect(result.fraudFlags).toHaveLength(0);
   });
 });
 
 describe('RefundApprovalService', () => {
-  beforeEach(() => { jest.clearAllMocks(); });
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
 
   it('approves a refund that is in UNDER_REVIEW status', async () => {
     mockPrisma.return.findUnique.mockResolvedValue(mockReturn({ status: 'UNDER_REVIEW' }));
-    mockPrisma.return.update.mockResolvedValue(mockReturn({ status: 'APPROVED', approvedBy: 'user-1', approvedAt: new Date() }));
+    mockPrisma.return.update.mockResolvedValue(
+      mockReturn({ status: 'APPROVED', approvedBy: 'user-1', approvedAt: new Date() }),
+    );
 
     const result = await refundApproval.approveRefund('return-1', 'user-1');
     expect(result.status).toBe('APPROVED');
@@ -268,7 +308,9 @@ describe('RefundApprovalService', () => {
 
   it('rejects a refund that is in REQUESTED status', async () => {
     mockPrisma.return.findUnique.mockResolvedValue(mockReturn({ status: 'REQUESTED' }));
-    mockPrisma.return.update.mockResolvedValue(mockReturn({ status: 'REJECTED', rejectionReason: 'Test reject' }));
+    mockPrisma.return.update.mockResolvedValue(
+      mockReturn({ status: 'REJECTED', rejectionReason: 'Test reject' }),
+    );
 
     const result = await refundApproval.rejectRefund('return-1', 'user-1', 'Test reject');
     expect(result.status).toBe('REJECTED');
@@ -277,11 +319,15 @@ describe('RefundApprovalService', () => {
 
   it('throws if refund not found for approval', async () => {
     mockPrisma.return.findUnique.mockResolvedValue(null);
-    await expect(refundApproval.approveRefund('nonexistent', 'user-1')).rejects.toThrow('not found');
+    await expect(refundApproval.approveRefund('nonexistent', 'user-1')).rejects.toThrow(
+      'not found',
+    );
   });
 
   it('throws if refund in wrong status for approval', async () => {
     mockPrisma.return.findUnique.mockResolvedValue(mockReturn({ status: 'COMPLETED' }));
-    await expect(refundApproval.approveRefund('return-1', 'user-1')).rejects.toThrow('cannot approve');
+    await expect(refundApproval.approveRefund('return-1', 'user-1')).rejects.toThrow(
+      'cannot approve',
+    );
   });
 });

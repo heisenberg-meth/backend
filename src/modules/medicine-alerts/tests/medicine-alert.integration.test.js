@@ -186,7 +186,10 @@ describe('Medicine Alert API Integration Tests', () => {
 
   describe('GET /api/medicines/reorder-recommendations', () => {
     it('should return 401 without authentication', async () => {
-      const res = await app.inject({ method: 'GET', url: '/api/medicines/reorder-recommendations' });
+      const res = await app.inject({
+        method: 'GET',
+        url: '/api/medicines/reorder-recommendations',
+      });
       expect(res.statusCode).toBe(401);
     });
   });
@@ -207,7 +210,10 @@ describe('Medicine Alert API Integration Tests', () => {
 
   describe.skip('POST /api/medicines/alerts/:alertId/resolve', () => {
     it('should return 401 without authentication', async () => {
-      const res = await app.inject({ method: 'POST', url: '/api/medicines/alerts/some-id/resolve' });
+      const res = await app.inject({
+        method: 'POST',
+        url: '/api/medicines/alerts/some-id/resolve',
+      });
       expect(res.statusCode).toBe(401);
     });
   });

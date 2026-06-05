@@ -1,4 +1,4 @@
-import prisma from "../../../config/prisma.js";
+import prisma from '../../../config/prisma.js';
 
 class ProcurementService {
   /**
@@ -10,24 +10,24 @@ class ProcurementService {
       where: {
         tenantId,
         branchId,
-        currentStock: { lte: prisma.inventory.fields.reorderPoint }
+        currentStock: { lte: prisma.inventory.fields.reorderPoint },
       },
       include: {
         medicine: {
           include: {
             supplierItems: {
               where: { isPreferred: true },
-              include: { supplier: true }
-            }
-          }
-        }
-      }
+              include: { supplier: true },
+            },
+          },
+        },
+      },
     });
 
     // 2. Format suggestions
-    const suggestions = lowStockItems.map(item => {
+    const suggestions = lowStockItems.map((item) => {
       const preferredSupplier = item.medicine.supplierItems[0]?.supplier;
-      
+
       return {
         medicineId: item.medicineId,
         medicineName: item.medicine.name,
@@ -36,7 +36,7 @@ class ProcurementService {
         suggestedQuantity: item.reorderQuantity,
         preferredSupplierId: preferredSupplier?.id || null,
         preferredSupplierName: preferredSupplier?.name || 'Manual Selection Required',
-        estimatedLeadTime: preferredSupplier?.leadTimeDays || 7
+        estimatedLeadTime: preferredSupplier?.leadTimeDays || 7,
       };
     });
 
@@ -48,7 +48,7 @@ class ProcurementService {
    */
   async autoRaiseDraftPOs(tenantId, branchId, userId) {
     const suggestions = await this.getReorderSuggestions(tenantId, branchId);
-    
+
     // Group by supplier
     const supplierGroups = suggestions.reduce((groups, s) => {
       const key = s.preferredSupplierId || 'MANUAL';
@@ -71,17 +71,17 @@ class ProcurementService {
           orderNumber: `AUTO-PO-${Date.now()}`,
           status: 'DRAFT',
           items: {
-            create: items.map(item => ({
+            create: items.map((item) => ({
               medicineId: item.medicineId,
               medicineName: item.medicineName,
               quantity: item.suggestedQuantity,
               unitPrice: 0, // To be filled by procurement staff
               totalAmount: 0,
               currentStock: item.currentStock,
-              reorderQty: item.suggestedQuantity
-            }))
-          }
-        }
+              reorderQty: item.suggestedQuantity,
+            })),
+          },
+        },
       });
       createdPOs.push(po);
     }

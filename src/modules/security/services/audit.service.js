@@ -10,9 +10,9 @@ class AuditService {
     const client = tx || prisma;
 
     const lastLog = await client.securityAuditLog.findFirst({
-        orderBy: { createdAt: 'desc' }
+      orderBy: { createdAt: 'desc' },
     });
-    
+
     const prevHash = lastLog ? lastLog.checksum : '0';
     const checksum = crypto
       .createHash('sha256')
@@ -26,8 +26,8 @@ class AuditService {
         entityType,
         entityId,
         metadata,
-        checksum
-      }
+        checksum,
+      },
     });
   }
 }

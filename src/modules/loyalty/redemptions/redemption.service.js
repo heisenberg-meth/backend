@@ -24,16 +24,19 @@ class RedemptionService {
       const newBalance = account.availablePoints - points;
       const redeemableValue = points * this.getConversionRate();
 
-      await ledgerService.recordLoyaltyTransaction({
-        tenantId,
-        patientId,
-        type: 'REDEEMED',
-        points: -points,
-        runningBalance: newBalance,
-        referenceType: referenceId ? 'INVOICE' : 'REDEMPTION',
-        referenceId,
-        notes: `Redeemed ${points} points for ₹${redeemableValue} discount`,
-      }, ctx);
+      await ledgerService.recordLoyaltyTransaction(
+        {
+          tenantId,
+          patientId,
+          type: 'REDEEMED',
+          points: -points,
+          runningBalance: newBalance,
+          referenceType: referenceId ? 'INVOICE' : 'REDEMPTION',
+          referenceId,
+          notes: `Redeemed ${points} points for ₹${redeemableValue} discount`,
+        },
+        ctx,
+      );
 
       await ctx.patientLoyaltyAccount.update({
         where: { id: account.id },

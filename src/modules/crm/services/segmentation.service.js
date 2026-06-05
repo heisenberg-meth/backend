@@ -27,29 +27,31 @@ class SegmentationService {
         segments.add('VIP');
       }
 
-      const chronicBehaviors = patient.patientBehaviors.filter(b => b.purchaseFrequency >= 3 && b.adherenceScore > 70);
+      const chronicBehaviors = patient.patientBehaviors.filter(
+        (b) => b.purchaseFrequency >= 3 && b.adherenceScore > 70,
+      );
       if (chronicBehaviors.length > 0) {
         segments.add('CHRONIC');
       }
 
       const lastSaleDate = patient.sales.length > 0 ? patient.sales[0].soldAt : null;
       if (lastSaleDate) {
-         const daysSinceLastSale = Math.floor((now - lastSaleDate) / (1000 * 60 * 60 * 24));
-         if (daysSinceLastSale > 90) {
-            segments.add('INACTIVE');
-         }
+        const daysSinceLastSale = Math.floor((now - lastSaleDate) / (1000 * 60 * 60 * 24));
+        if (daysSinceLastSale > 90) {
+          segments.add('INACTIVE');
+        }
       } else {
-         segments.add('INACTIVE');
+        segments.add('INACTIVE');
       }
 
       await prisma.patientSegment.deleteMany({
-        where: { patientId: patient.id }
+        where: { patientId: patient.id },
       });
 
       if (segments.size > 0) {
-        const data = Array.from(segments).map(seg => ({
+        const data = Array.from(segments).map((seg) => ({
           patientId: patient.id,
-          segmentName: seg
+          segmentName: seg,
         }));
         await prisma.patientSegment.createMany({ data });
       }

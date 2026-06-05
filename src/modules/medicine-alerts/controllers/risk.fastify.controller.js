@@ -14,7 +14,7 @@ class RiskFastifyController {
         branchId,
         severity,
         page: parseInt(page),
-        limit: parseInt(limit)
+        limit: parseInt(limit),
       });
       return reply.send({ success: true, data });
     } catch (error) {
@@ -35,7 +35,7 @@ class RiskFastifyController {
         branchId,
         severity,
         page: parseInt(page),
-        limit: parseInt(limit)
+        limit: parseInt(limit),
       });
       return reply.send({ success: true, data });
     } catch (error) {
@@ -54,7 +54,7 @@ class RiskFastifyController {
       const data = await medicineAlertService.getOutOfStockAlerts(tenantId, {
         branchId,
         page: 1,
-        limit: 100
+        limit: 100,
       });
 
       return reply.send({ success: true, data: data.alerts });
@@ -111,7 +111,7 @@ class RiskFastifyController {
    */
   async triggerExpiryScan(request, reply) {
     const { tenantId } = request.user;
-    
+
     try {
       const result = await medicineAlertService.triggerFullScan(tenantId);
       return reply.send({ success: true, data: result });
@@ -130,7 +130,7 @@ class RiskFastifyController {
     try {
       const recommendations = await medicineAlertService.getReorderRecommendations(tenantId, {
         branchId,
-        medicineId
+        medicineId,
       });
       return reply.send({ success: true, data: recommendations });
     } catch (error) {

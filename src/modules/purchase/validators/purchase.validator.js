@@ -35,14 +35,18 @@ export const receiveGoodsSchema = z.object({
   gstAmount: z.number().min(0),
   totalAmount: z.number().min(0),
   invoicePdfUrl: z.string().url().optional().or(z.literal('')),
-  items: z.array(z.object({
-    medicineId: z.string().uuid(),
-    batchNumber: z.string().min(1),
-    quantity: z.number().int().positive(),
-    expiryDate: z.string(),
-    purchasePrice: z.number().min(0),
-    sellingPrice: z.number().min(0),
-  })).min(1),
+  items: z
+    .array(
+      z.object({
+        medicineId: z.string().uuid(),
+        batchNumber: z.string().min(1),
+        quantity: z.number().int().positive(),
+        expiryDate: z.string(),
+        purchasePrice: z.number().min(0),
+        sellingPrice: z.number().min(0),
+      }),
+    )
+    .min(1),
 });
 
 export const supplierReturnSchema = z.object({

@@ -1,4 +1,4 @@
-import { jest , describe, beforeEach, it, expect } from '@jest/globals';
+import { jest, describe, beforeEach, it, expect } from '@jest/globals';
 import express from 'express';
 import request from 'supertest';
 import path from 'path';
@@ -86,7 +86,8 @@ jest.unstable_mockModule(cachePath, () => ({
 }));
 
 jest.unstable_mockModule(localEventBusPath, () => ({
-  emitLocalEvent: jest.fn(), localEventBus: { emit: jest.fn(), removeAllListeners: jest.fn() },
+  emitLocalEvent: jest.fn(),
+  localEventBus: { emit: jest.fn(), removeAllListeners: jest.fn() },
 }));
 
 jest.unstable_mockModule(erpEventBusPath, () => ({
@@ -213,9 +214,7 @@ describe('Medicine Search API Integration', () => {
         ],
       });
 
-      const response = await request(app)
-        .get('/api/medicines/barcode/890123456789')
-        .expect(200);
+      const response = await request(app).get('/api/medicines/barcode/890123456789').expect(200);
 
       expect(response.body.success).toBe(true);
       expect(response.body.data.medicine.name).toBe('Dolo 650');
@@ -226,9 +225,7 @@ describe('Medicine Search API Integration', () => {
       mockSearchRepository.findByBarcode.mockResolvedValue(null);
       mockSearchRepository.findByBarcodeMapping.mockResolvedValue(null);
 
-      const response = await request(app)
-        .get('/api/medicines/barcode/nonexistent')
-        .expect(404);
+      const response = await request(app).get('/api/medicines/barcode/nonexistent').expect(404);
 
       expect(response.body.success).toBe(false);
     });
@@ -251,9 +248,7 @@ describe('Medicine Search API Integration', () => {
         ],
       });
 
-      const response = await request(app)
-        .get('/api/medicines/sku/MED-PARA-650-TAB')
-        .expect(200);
+      const response = await request(app).get('/api/medicines/sku/MED-PARA-650-TAB').expect(200);
 
       expect(response.body.success).toBe(true);
       expect(response.body.data.medicine.sku).toBe('MED-PARA-650-TAB');
@@ -263,9 +258,7 @@ describe('Medicine Search API Integration', () => {
       mockCache.getSku.mockResolvedValue(null);
       mockSearchRepository.findBySku.mockResolvedValue(null);
 
-      const response = await request(app)
-        .get('/api/medicines/sku/nonexistent-sku')
-        .expect(404);
+      const response = await request(app).get('/api/medicines/sku/nonexistent-sku').expect(404);
 
       expect(response.body.success).toBe(false);
     });
@@ -277,9 +270,7 @@ describe('Medicine Search API Integration', () => {
         { id: 'med-2', name: 'Crocin 650', genericName: 'Paracetamol' },
       ]);
 
-      const response = await request(app)
-        .get('/api/medicines/med-1/alternatives')
-        .expect(200);
+      const response = await request(app).get('/api/medicines/med-1/alternatives').expect(200);
 
       expect(response.body.success).toBe(true);
       expect(response.body.data).toHaveLength(1);
@@ -304,9 +295,7 @@ describe('Medicine Search API Integration', () => {
         },
       ]);
 
-      const response = await request(app)
-        .get('/api/medicines/med-1/availability')
-        .expect(200);
+      const response = await request(app).get('/api/medicines/med-1/availability').expect(200);
 
       expect(response.body.success).toBe(true);
       expect(response.body.data).toHaveLength(2);
@@ -321,9 +310,7 @@ describe('Medicine Search API Integration', () => {
         { query: 'paracetamol', count: 120 },
       ]);
 
-      const response = await request(app)
-        .get('/api/medicines/popular-searches')
-        .expect(200);
+      const response = await request(app).get('/api/medicines/popular-searches').expect(200);
 
       expect(response.body.success).toBe(true);
       expect(response.body.data).toHaveLength(2);

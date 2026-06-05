@@ -1,4 +1,4 @@
-import prisma from "../../../config/prisma.js";
+import prisma from '../../../config/prisma.js';
 
 class TallyService {
   /**
@@ -34,7 +34,7 @@ class TallyService {
             </REQUESTDESC>
             <REQUESTDATA>`;
 
-    sales.forEach(sale => {
+    sales.forEach((sale) => {
       const date = sale.soldAt.toISOString().slice(0, 10).replace(/-/g, '');
       const invoiceNo = sale.invoice?.invoiceNumber || sale.id;
       const partyName = sale.patient?.fullName || 'Cash Patient';
@@ -77,7 +77,7 @@ class TallyService {
   async getExportHistory(tenantId) {
     return prisma.tallyExport.findMany({
       where: { tenantId },
-      orderBy: { createdAt: 'desc' }
+      orderBy: { createdAt: 'desc' },
     });
   }
 
@@ -85,8 +85,8 @@ class TallyService {
     return prisma.tallyExport.create({
       data: {
         ...data,
-        tenantId
-      }
+        tenantId,
+      },
     });
   }
 }

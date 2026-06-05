@@ -7,7 +7,7 @@ class EpidemiologyService {
   async getOutbreakRecommendations(tenantId, region) {
     // 1. Fetch active outbreak risks
     const outbreaks = await prisma.outbreakPrediction.findMany({
-      where: { tenantId, region, outbreakRiskScore: { gte: 0.7 } }
+      where: { tenantId, region, outbreakRiskScore: { gte: 0.7 } },
     });
 
     if (outbreaks.length === 0) return [];
@@ -24,8 +24,8 @@ class EpidemiologyService {
 
   getRelatedMedicines(diseaseType) {
     const correlationMap = {
-      'DENGUE': ['ORS', 'Fever Meds', 'Platelet Support'],
-      'FLU': ['Antivirals', 'Fever Meds', 'Decongestants']
+      DENGUE: ['ORS', 'Fever Meds', 'Platelet Support'],
+      FLU: ['Antivirals', 'Fever Meds', 'Decongestants'],
     };
     return correlationMap[diseaseType] || [];
   }

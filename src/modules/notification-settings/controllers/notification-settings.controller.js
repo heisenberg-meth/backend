@@ -42,7 +42,7 @@ class NotificationSettingsController {
         tenantId,
         validated,
         updatedBy,
-        branchId || null
+        branchId || null,
       );
 
       return reply.send({
@@ -99,7 +99,9 @@ class NotificationSettingsController {
       });
     } catch (err) {
       if (err.errors) {
-        return reply.code(400).send({ success: false, error: 'Validation failed', details: err.errors });
+        return reply
+          .code(400)
+          .send({ success: false, error: 'Validation failed', details: err.errors });
       }
       return reply.code(500).send({ success: false, error: 'Failed to update channel' });
     }
@@ -130,7 +132,9 @@ class NotificationSettingsController {
       return reply.send({ success: true, data: policies });
     } catch (err) {
       logger.error({ err, tenantId }, '[NOTIFICATION] Failed to retrieve escalation policies');
-      return reply.code(500).send({ success: false, error: 'Failed to retrieve escalation policies' });
+      return reply
+        .code(500)
+        .send({ success: false, error: 'Failed to retrieve escalation policies' });
     }
   }
 
@@ -142,10 +146,14 @@ class NotificationSettingsController {
 
       const policy = await service.createEscalationPolicy(tenantId, validated);
 
-      return reply.code(201).send({ success: true, data: policy, message: 'Escalation policy created' });
+      return reply
+        .code(201)
+        .send({ success: true, data: policy, message: 'Escalation policy created' });
     } catch (err) {
       if (err.errors) {
-        return reply.code(400).send({ success: false, error: 'Validation failed', details: err.errors });
+        return reply
+          .code(400)
+          .send({ success: false, error: 'Validation failed', details: err.errors });
       }
       return reply.code(500).send({ success: false, error: 'Failed to create escalation policy' });
     }
@@ -163,7 +171,9 @@ class NotificationSettingsController {
       return reply.send({ success: true, data: policy, message: 'Escalation policy updated' });
     } catch (err) {
       if (err.errors) {
-        return reply.code(400).send({ success: false, error: 'Validation failed', details: err.errors });
+        return reply
+          .code(400)
+          .send({ success: false, error: 'Validation failed', details: err.errors });
       }
       return reply.code(500).send({ success: false, error: 'Failed to update escalation policy' });
     }
@@ -209,7 +219,9 @@ class NotificationSettingsController {
       return reply.code(201).send({ success: true, data: rule, message: 'Reminder rule created' });
     } catch (err) {
       if (err.errors) {
-        return reply.code(400).send({ success: false, error: 'Validation failed', details: err.errors });
+        return reply
+          .code(400)
+          .send({ success: false, error: 'Validation failed', details: err.errors });
       }
       return reply.code(500).send({ success: false, error: 'Failed to create reminder rule' });
     }
@@ -227,7 +239,9 @@ class NotificationSettingsController {
       return reply.send({ success: true, data: rule, message: 'Reminder rule updated' });
     } catch (err) {
       if (err.errors) {
-        return reply.code(400).send({ success: false, error: 'Validation failed', details: err.errors });
+        return reply
+          .code(400)
+          .send({ success: false, error: 'Validation failed', details: err.errors });
       }
       return reply.code(500).send({ success: false, error: 'Failed to update reminder rule' });
     }
@@ -259,7 +273,9 @@ class NotificationSettingsController {
       return reply.code(201).send({ success: true, data: optOut, message: 'Opt-out recorded' });
     } catch (err) {
       if (err.errors) {
-        return reply.code(400).send({ success: false, error: 'Validation failed', details: err.errors });
+        return reply
+          .code(400)
+          .send({ success: false, error: 'Validation failed', details: err.errors });
       }
       return reply.code(500).send({ success: false, error: 'Failed to record opt-out' });
     }
@@ -300,9 +316,10 @@ class NotificationSettingsController {
     try {
       const { type = 'pending' } = req.query;
 
-      const data = type === 'dlq'
-        ? await service.getDLQEntries(tenantId)
-        : await service.getPendingRetries(tenantId);
+      const data =
+        type === 'dlq'
+          ? await service.getDLQEntries(tenantId)
+          : await service.getPendingRetries(tenantId);
 
       return reply.send({ success: true, data });
     } catch (err) {
@@ -340,7 +357,9 @@ class NotificationSettingsController {
       return reply.send({ success: true, data: result, message: 'Test notification sent' });
     } catch (err) {
       if (err.errors) {
-        return reply.code(400).send({ success: false, error: 'Validation failed', details: err.errors });
+        return reply
+          .code(400)
+          .send({ success: false, error: 'Validation failed', details: err.errors });
       }
       return reply.code(500).send({ success: false, error: 'Failed to send test notification' });
     }

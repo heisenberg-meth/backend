@@ -23,13 +23,17 @@ class SupplierReturnService {
 
     const returnAmount = data.quantity * (batch.purchasePrice || 0);
 
-    await ledgerService.recordEntry(tenantId, {
-      supplierId: data.supplierId,
-      type: 'RETURN',
-      creditAmount: returnAmount,
-      referenceType: 'SUPPLIER_RETURN',
-      referenceId: data.batchId,
-    }, prisma);
+    await ledgerService.recordEntry(
+      tenantId,
+      {
+        supplierId: data.supplierId,
+        type: 'RETURN',
+        creditAmount: returnAmount,
+        referenceType: 'SUPPLIER_RETURN',
+        referenceId: data.batchId,
+      },
+      prisma,
+    );
 
     const returnRecord = await prisma.supplierReturn.create({
       data: {

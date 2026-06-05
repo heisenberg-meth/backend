@@ -1,36 +1,33 @@
-import prisma from "../../../config/prisma.js";
+import prisma from '../../../config/prisma.js';
 
 class DailySummaryRepository {
   // Sales Summaries
   async upsertSalesSummary(data) {
-  if (!data.branchId) {
-    console.warn(
-      "Skipping DailySalesSummary because branchId is missing",
-      data
-    );
-    return null;
-  }
+    if (!data.branchId) {
+      console.warn('Skipping DailySalesSummary because branchId is missing', data);
+      return null;
+    }
 
-  return prisma.dailySalesSummary.upsert({
-    where: {
-      tenantId_branchId_salesDate: {
-        tenantId: data.tenantId,
-        branchId: data.branchId,
-        salesDate: data.salesDate,
+    return prisma.dailySalesSummary.upsert({
+      where: {
+        tenantId_branchId_salesDate: {
+          tenantId: data.tenantId,
+          branchId: data.branchId,
+          salesDate: data.salesDate,
+        },
       },
-    },
-    update: data,
-    create: data,
-  });
-}
+      update: data,
+      create: data,
+    });
+  }
 
   async getSalesSummaries(tenantId, fromDate, toDate) {
     return prisma.dailySalesSummary.findMany({
       where: {
         tenantId,
-        salesDate: { gte: fromDate, lte: toDate }
+        salesDate: { gte: fromDate, lte: toDate },
       },
-      orderBy: { salesDate: 'asc' }
+      orderBy: { salesDate: 'asc' },
     });
   }
 
@@ -40,11 +37,11 @@ class DailySummaryRepository {
       where: {
         tenantId_reportDate: {
           tenantId: data.tenantId,
-          reportDate: data.reportDate
-        }
+          reportDate: data.reportDate,
+        },
       },
       update: data,
-      create: data
+      create: data,
     });
   }
 
@@ -52,9 +49,9 @@ class DailySummaryRepository {
     return prisma.dailyPurchaseSummary.findMany({
       where: {
         tenantId,
-        reportDate: { gte: fromDate, lte: toDate }
+        reportDate: { gte: fromDate, lte: toDate },
       },
-      orderBy: { reportDate: 'asc' }
+      orderBy: { reportDate: 'asc' },
     });
   }
 
@@ -64,11 +61,11 @@ class DailySummaryRepository {
       where: {
         tenantId_reportDate: {
           tenantId: data.tenantId,
-          reportDate: data.reportDate
-        }
+          reportDate: data.reportDate,
+        },
       },
       update: data,
-      create: data
+      create: data,
     });
   }
 
@@ -76,9 +73,9 @@ class DailySummaryRepository {
     return prisma.dailyFinanceSummary.findMany({
       where: {
         tenantId,
-        reportDate: { gte: fromDate, lte: toDate }
+        reportDate: { gte: fromDate, lte: toDate },
       },
-      orderBy: { reportDate: 'asc' }
+      orderBy: { reportDate: 'asc' },
     });
   }
 }

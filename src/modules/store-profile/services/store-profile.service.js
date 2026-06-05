@@ -76,7 +76,7 @@ class StoreProfileService {
           versionCount + 1,
           this._createSnapshot(existing, normalizedData),
           changedBy,
-          `Updated: ${changedFields.join(', ')}`
+          `Updated: ${changedFields.join(', ')}`,
         );
 
         await storeProfileEventEmitter.emit(StoreProfileEvents.STORE_PROFILE_VERSIONED, {
@@ -108,7 +108,10 @@ class StoreProfileService {
         });
       }
 
-      if (changedFields.includes('drugLicenseNumber') || changedFields.includes('drugLicenseExpiry')) {
+      if (
+        changedFields.includes('drugLicenseNumber') ||
+        changedFields.includes('drugLicenseExpiry')
+      ) {
         await storeProfileEventEmitter.emit(StoreProfileEvents.DRUG_LICENSE_UPDATED, {
           tenantId,
           profileId: existing.id,
@@ -136,7 +139,7 @@ class StoreProfileService {
         1,
         this._createSnapshot(null, { branchId: targetBranchId, ...normalizedData }),
         changedBy,
-        'Initial profile creation'
+        'Initial profile creation',
       );
 
       await settingsAuditRepository.logChange({
@@ -216,12 +219,15 @@ class StoreProfileService {
       throw new Error('Version not found');
     }
 
-    const profile = await storeProfileRepository.findByTenantId(tenantId, version.snapshot.branchId || null);
+    const profile = await storeProfileRepository.findByTenantId(
+      tenantId,
+      version.snapshot.branchId || null,
+    );
     if (!profile) {
       throw new Error('Store profile not found');
     }
 
-    const {restorableData} = version.snapshot;
+    const { restorableData } = version.snapshot;
 
     const updated = await storeProfileRepository.update(profile.id, restorableData);
 
@@ -232,7 +238,7 @@ class StoreProfileService {
       versionCount + 1,
       this._createSnapshot(profile, restorableData),
       changedBy,
-      `Restored from version ${version.versionNumber}`
+      `Restored from version ${version.versionNumber}`,
     );
 
     await this.invalidateCache(tenantId, profile.branchId);
@@ -246,7 +252,12 @@ class StoreProfileService {
       throw new Error('Store profile not found');
     }
 
-    const localization = await storeProfileRepository.upsertLocalization(tenantId, profileId, language, data);
+    const localization = await storeProfileRepository.upsertLocalization(
+      tenantId,
+      profileId,
+      language,
+      data,
+    );
 
     await storeProfileEventEmitter.emit(StoreProfileEvents.LOCALIZATION_UPDATED, {
       tenantId,
@@ -384,11 +395,32 @@ class StoreProfileService {
   _detectChanges(existing, newData) {
     const changedFields = [];
     const fieldsToTrack = [
-      'storeName', 'legalName', 'tradeName', 'gstin', 'pan',
-      'drugLicenseNumber', 'drugLicenseExpiry', 'fssaiLicense', 'fssaiLicenseExpiry',
-      'phoneNumber', 'alternatePhone', 'email', 'supportEmail', 'website',
-      'addressLine1', 'addressLine2', 'city', 'state', 'stateCode', 'pincode', 'country',
-      'logoUrl', 'invoiceLogoUrl', 'whatsappLogoUrl', 'brandColor', 'tagline',
+      'storeName',
+      'legalName',
+      'tradeName',
+      'gstin',
+      'pan',
+      'drugLicenseNumber',
+      'drugLicenseExpiry',
+      'fssaiLicense',
+      'fssaiLicenseExpiry',
+      'phoneNumber',
+      'alternatePhone',
+      'email',
+      'supportEmail',
+      'website',
+      'addressLine1',
+      'addressLine2',
+      'city',
+      'state',
+      'stateCode',
+      'pincode',
+      'country',
+      'logoUrl',
+      'invoiceLogoUrl',
+      'whatsappLogoUrl',
+      'brandColor',
+      'tagline',
     ];
 
     for (const field of fieldsToTrack) {
@@ -464,7 +496,7 @@ class StoreProfileService {
       1,
       this._createSnapshot(null, { storeName: 'My Pharmacy', country: 'IN' }),
       null,
-      'Default profile creation'
+      'Default profile creation',
     );
 
     return profile;

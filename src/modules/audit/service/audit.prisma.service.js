@@ -6,7 +6,7 @@ class AuditPrismaService {
    */
   async log(data) {
     const { tenantId, userId, action, target, type, username, shopName } = data;
-    
+
     await mainQueue.add('log-audit', {
       tenantId,
       userId,

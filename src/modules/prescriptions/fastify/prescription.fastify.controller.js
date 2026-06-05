@@ -7,7 +7,10 @@ import prescriptionRepository from '../repositories/prescription.repository.js';
 class PrescriptionFastifyController {
   async getPrescriptions(request, reply) {
     try {
-      const prescriptions = await prescriptionRepository.findPrescriptions(request.tenantId, request.query);
+      const prescriptions = await prescriptionRepository.findPrescriptions(
+        request.tenantId,
+        request.query,
+      );
       return reply.send({ success: true, data: prescriptions });
     } catch (error) {
       return reply.code(500).send({ success: false, message: error.message });
@@ -33,8 +36,13 @@ class PrescriptionFastifyController {
       if (!prescription) {
         return reply.code(404).send({ success: false, message: 'Prescription not found' });
       }
-      if (prescription.prescriptionFileUrl && !prescription.prescriptionFileUrl.startsWith('http')) {
-        prescription.prescriptionFileUrl = await uploadService.getSignedUrl(prescription.prescriptionFileUrl);
+      if (
+        prescription.prescriptionFileUrl &&
+        !prescription.prescriptionFileUrl.startsWith('http')
+      ) {
+        prescription.prescriptionFileUrl = await uploadService.getSignedUrl(
+          prescription.prescriptionFileUrl,
+        );
       }
       return reply.send({ success: true, data: prescription });
     } catch (error) {
@@ -45,7 +53,9 @@ class PrescriptionFastifyController {
   async verifyPrescription(request, reply) {
     try {
       const result = await verificationService.verifyPrescription(
-        request.tenantId, request.params.id, request.user?.id,
+        request.tenantId,
+        request.params.id,
+        request.user?.id,
       );
       return reply.send({ success: true, data: result });
     } catch (error) {
@@ -56,7 +66,10 @@ class PrescriptionFastifyController {
   async rejectPrescription(request, reply) {
     try {
       const result = await verificationService.rejectPrescription(
-        request.tenantId, request.params.id, request.user?.id, request.body.reason,
+        request.tenantId,
+        request.params.id,
+        request.user?.id,
+        request.body.reason,
       );
       return reply.send({ success: true, data: result });
     } catch (error) {
@@ -67,7 +80,9 @@ class PrescriptionFastifyController {
   async getCustomerPrescriptions(request, reply) {
     try {
       const prescriptions = await prescriptionRepository.findPrescriptionsByPatient(
-        request.params.patientId, request.tenantId, request.query,
+        request.params.patientId,
+        request.tenantId,
+        request.query,
       );
       return reply.send({ success: true, data: prescriptions });
     } catch (error) {
@@ -78,7 +93,8 @@ class PrescriptionFastifyController {
   async convertToInvoice(request, reply) {
     try {
       const result = await prescriptionService.convertToInvoice(
-        request.params.id, request.user?.id,
+        request.params.id,
+        request.user?.id,
       );
       return reply.code(201).send({ success: true, data: result });
     } catch (error) {
@@ -101,7 +117,10 @@ class PrescriptionFastifyController {
       if (!prescription) {
         return reply.code(404).send({ success: false, message: 'Prescription not found' });
       }
-      return reply.send({ success: true, data: { doctorId: prescription.doctorId, doctorName: prescription.doctor?.doctorName } });
+      return reply.send({
+        success: true,
+        data: { doctorId: prescription.doctorId, doctorName: prescription.doctor?.doctorName },
+      });
     } catch (error) {
       return reply.code(500).send({ success: false, message: error.message });
     }

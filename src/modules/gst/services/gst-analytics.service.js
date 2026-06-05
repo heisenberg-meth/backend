@@ -47,7 +47,8 @@ class GstAnalyticsService {
 
   async getGstByBranch(tenantId, options = {}) {
     const { month, year } = options;
-    const from = month && year ? new Date(year, month - 1, 1) : new Date(new Date().getFullYear(), 0, 1);
+    const from =
+      month && year ? new Date(year, month - 1, 1) : new Date(new Date().getFullYear(), 0, 1);
     const to = month && year ? new Date(year, month, 0, 23, 59, 59, 999) : new Date();
 
     const invoices = await prisma.invoice.groupBy({
@@ -94,7 +95,12 @@ class GstAnalyticsService {
 
     const [outputGst, inputGst] = await Promise.all([
       prisma.invoice.aggregate({
-        where: { tenantId, createdAt: { gte: startDate, lte: endDate }, status: { not: 'CANCELLED' }, deletedAt: null },
+        where: {
+          tenantId,
+          createdAt: { gte: startDate, lte: endDate },
+          status: { not: 'CANCELLED' },
+          deletedAt: null,
+        },
         _sum: { gstAmount: true, cgst: true, sgst: true, igst: true },
       }),
       prisma.purchaseInvoice.aggregate({

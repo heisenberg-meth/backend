@@ -13,10 +13,10 @@ class MedicineIntelligenceService {
    */
   async getMedicines(params) {
     const { tenantId, branchId, query = {}, pagination = {} } = params;
-    
+
     // Caching Key
     const cacheKey = `inventory:${tenantId}:${branchId || 'all'}:${JSON.stringify(query)}:${JSON.stringify(pagination)}`;
-    
+
     try {
       const cachedData = await redisClient.get(cacheKey);
       if (cachedData) {
@@ -26,7 +26,8 @@ class MedicineIntelligenceService {
       console.error('[REDIS CACHE ERROR]', err);
     }
 
-    const { q, search, categoryId, manufacturerId, isActive, lowStock, sortBy, order, schedule } = query;
+    const { q, search, categoryId, manufacturerId, isActive, lowStock, sortBy, order, schedule } =
+      query;
     const { page = 1, limit = 50 } = pagination;
 
     const result = await medicineRepository.findAll({
@@ -77,14 +78,14 @@ class MedicineIntelligenceService {
       pricing: medicine.pricingMaster[0] || null,
       inventorySummary: {
         totalStock: medicine.inventoryBatches.reduce((sum, b) => sum + b.quantity, 0),
-        batches: medicine.inventoryBatches
+        batches: medicine.inventoryBatches,
       },
-      alternatives: medicine.alternatives.map(a => a.alternative),
-      interactions: medicine.interactions.map(i => ({
+      alternatives: medicine.alternatives.map((a) => a.alternative),
+      interactions: medicine.interactions.map((i) => ({
         medicine: i.interactsWith,
         severity: i.severity,
-        description: i.description
-      }))
+        description: i.description,
+      })),
     };
   }
 
@@ -92,7 +93,16 @@ class MedicineIntelligenceService {
    * Create a new drug master record with governance
    */
   async createMedicineMaster(tenantId, userId, data) {
-    const { pricing, initialBatch, branchId, reorderPoint, rackLocation, category, manufacturer, ...rawMedicineData } = data;
+    const {
+      pricing,
+      initialBatch,
+      branchId,
+      reorderPoint,
+      rackLocation,
+      category,
+      manufacturer,
+      ...rawMedicineData
+    } = data;
 
     if (!branchId) {
       throw new Error('Branch ID is required to create medicine inventory');
@@ -101,14 +111,18 @@ class MedicineIntelligenceService {
     // 1. Validation: Barcode & SKU Uniqueness
     if (rawMedicineData.barcode) {
       const existing = await medicineRepository.findByBarcode(rawMedicineData.barcode, tenantId);
-      if (existing) throw new Error(`Barcode ${rawMedicineData.barcode} is already assigned to ${existing.name}`);
+      if (existing)
+        throw new Error(
+          `Barcode ${rawMedicineData.barcode} is already assigned to ${existing.name}`,
+        );
     }
 
     if (rawMedicineData.sku) {
       const existing = await prisma.medicine.findFirst({
-        where: { sku: rawMedicineData.sku, tenantId, deletedAt: null }
+        where: { sku: rawMedicineData.sku, tenantId, deletedAt: null },
       });
-      if (existing) throw new Error(`SKU ${rawMedicineData.sku} is already assigned to ${existing.name}`);
+      if (existing)
+        throw new Error(`SKU ${rawMedicineData.sku} is already assigned to ${existing.name}`);
     }
 
     // 2. Resolve Category ID from name if not provided
@@ -119,8 +133,8 @@ class MedicineIntelligenceService {
         where: {
           tenantId,
           name: { equals: catName, mode: 'insensitive' },
-          deletedAt: null
-        }
+          deletedAt: null,
+        },
       });
       if (existingCat) {
         categoryId = existingCat.id;
@@ -128,8 +142,8 @@ class MedicineIntelligenceService {
         const newCat = await prisma.medicineCategory.create({
           data: {
             name: catName,
-            tenantId
-          }
+            tenantId,
+          },
         });
         categoryId = newCat.id;
       }
@@ -143,8 +157,8 @@ class MedicineIntelligenceService {
         where: {
           tenantId,
           name: { equals: mfgName, mode: 'insensitive' },
-          deletedAt: null
-        }
+          deletedAt: null,
+        },
       });
       if (existingMfg) {
         manufacturerId = existingMfg.id;
@@ -152,8 +166,8 @@ class MedicineIntelligenceService {
         const newMfg = await prisma.manufacturer.create({
           data: {
             name: mfgName,
-            tenantId
-          }
+            tenantId,
+          },
         });
         manufacturerId = newMfg.id;
       }
@@ -176,8 +190,8 @@ class MedicineIntelligenceService {
           category: categoryId ? { connect: { id: categoryId } } : undefined,
           manufacturer: manufacturerId ? { connect: { id: manufacturerId } } : undefined,
           tenant: { connect: { id: tenantId } },
-          user: { connect: { id: userId } }
-        }
+          user: { connect: { id: userId } },
+        },
       });
 
       // 6. Initialize Pricing Master
@@ -186,19 +200,19 @@ class MedicineIntelligenceService {
           data: {
             ...pricing,
             tenant: { connect: { id: tenantId } },
-            medicine: { connect: { id: medicine.id } }
-          }
+            medicine: { connect: { id: medicine.id } },
+          },
         });
       }
 
       // 7. Initialize Branch Availability Snapshot
       await tx.inventory.upsert({
         where: {
-          tenantId_branchId_medicineId: { tenantId, branchId, medicineId: medicine.id }
+          tenantId_branchId_medicineId: { tenantId, branchId, medicineId: medicine.id },
         },
         update: {
           reorderPoint: reorderPoint ?? 10,
-          rackLocation: rackLocation || null
+          rackLocation: rackLocation || null,
         },
         create: {
           tenantId,
@@ -206,19 +220,24 @@ class MedicineIntelligenceService {
           medicineId: medicine.id,
           reorderPoint: reorderPoint ?? 10,
           rackLocation: rackLocation || null,
-          currentStock: 0
-        }
+          currentStock: 0,
+        },
       });
 
       // 8. Create Initial Batch via MovementService (Ledger-driven)
       if (initialBatch) {
-        await movementService.stockIn(tenantId, {
-          ...initialBatch,
-          medicineId: medicine.id,
-          branchId,
-          referenceType: 'INITIAL_STOCK',
-          notes: 'Initial inventory during medicine creation'
-        }, userId, tx);
+        await movementService.stockIn(
+          tenantId,
+          {
+            ...initialBatch,
+            medicineId: medicine.id,
+            branchId,
+            referenceType: 'INITIAL_STOCK',
+            notes: 'Initial inventory during medicine creation',
+          },
+          userId,
+          tx,
+        );
       }
 
       await auditService.log({
@@ -226,7 +245,7 @@ class MedicineIntelligenceService {
         userId,
         action: 'CREATE_MEDICINE_MASTER',
         target: medicine.name,
-        type: 'PHARMACEUTICAL'
+        type: 'PHARMACEUTICAL',
       });
 
       await this.invalidateCache(tenantId);
@@ -246,23 +265,31 @@ class MedicineIntelligenceService {
 
     // Governance: Restricted Fields
     const restrictedFields = ['barcode', 'scheduleType', 'gstPercentage'];
-    const isAttemptingRestrictedUpdate = restrictedFields.some(field => data[field] !== undefined && data[field] !== existing[field]);
+    const isAttemptingRestrictedUpdate = restrictedFields.some(
+      (field) => data[field] !== undefined && data[field] !== existing[field],
+    );
 
     if (isAttemptingRestrictedUpdate && userRole !== 'OWNER' && userRole !== 'ADMIN') {
-      throw new Error('Only owners or admins can update barcode, schedule type, or GST classification.');
+      throw new Error(
+        'Only owners or admins can update barcode, schedule type, or GST classification.',
+      );
     }
 
     // Uniqueness checks for barcode/sku if they are being changed
     if (data.barcode && data.barcode !== existing.barcode) {
       const existingWithBarcode = await medicineRepository.findByBarcode(data.barcode, tenantId);
-      if (existingWithBarcode) throw new Error(`Barcode ${data.barcode} is already assigned to ${existingWithBarcode.name}`);
+      if (existingWithBarcode)
+        throw new Error(
+          `Barcode ${data.barcode} is already assigned to ${existingWithBarcode.name}`,
+        );
     }
 
     if (data.sku && data.sku !== existing.sku) {
       const existingWithSku = await prisma.medicine.findFirst({
-        where: { sku: data.sku, tenantId, deletedAt: null }
+        where: { sku: data.sku, tenantId, deletedAt: null },
       });
-      if (existingWithSku) throw new Error(`SKU ${data.sku} is already assigned to ${existingWithSku.name}`);
+      if (existingWithSku)
+        throw new Error(`SKU ${data.sku} is already assigned to ${existingWithSku.name}`);
     }
 
     // Resolve Category ID from name if not provided
@@ -273,8 +300,8 @@ class MedicineIntelligenceService {
         where: {
           tenantId,
           name: { equals: catName, mode: 'insensitive' },
-          deletedAt: null
-        }
+          deletedAt: null,
+        },
       });
       if (existingCat) {
         categoryId = existingCat.id;
@@ -282,8 +309,8 @@ class MedicineIntelligenceService {
         const newCat = await prisma.medicineCategory.create({
           data: {
             name: catName,
-            tenantId
-          }
+            tenantId,
+          },
         });
         categoryId = newCat.id;
       }
@@ -297,8 +324,8 @@ class MedicineIntelligenceService {
         where: {
           tenantId,
           name: { equals: mfgName, mode: 'insensitive' },
-          deletedAt: null
-        }
+          deletedAt: null,
+        },
       });
       if (existingMfg) {
         manufacturerId = existingMfg.id;
@@ -306,8 +333,8 @@ class MedicineIntelligenceService {
         const newMfg = await prisma.manufacturer.create({
           data: {
             name: mfgName,
-            tenantId
-          }
+            tenantId,
+          },
         });
         manufacturerId = newMfg.id;
       }
@@ -319,18 +346,19 @@ class MedicineIntelligenceService {
     delete cleanData.statusReason;
     const updateData = {
       ...cleanData,
-      ...(categoryId !== undefined && { 
-        category: categoryId ? { connect: { id: categoryId } } : { disconnect: true } 
+      ...(categoryId !== undefined && {
+        category: categoryId ? { connect: { id: categoryId } } : { disconnect: true },
       }),
-      ...(manufacturerId !== undefined && { 
-        manufacturer: manufacturerId ? { connect: { id: manufacturerId } } : { disconnect: true } 
-      })
+      ...(manufacturerId !== undefined && {
+        manufacturer: manufacturerId ? { connect: { id: manufacturerId } } : { disconnect: true },
+      }),
     };
     delete updateData.categoryId;
     delete updateData.manufacturerId;
 
-    const statusChanged = (data.status && data.status !== existing.status) || 
-                          (data.isActive !== undefined && data.isActive !== existing.isActive);
+    const statusChanged =
+      (data.status && data.status !== existing.status) ||
+      (data.isActive !== undefined && data.isActive !== existing.isActive);
 
     const updated = await prisma.$transaction(async (tx) => {
       const result = await medicineRepository.update(id, tenantId, updateData, tx);
@@ -343,8 +371,8 @@ class MedicineIntelligenceService {
             oldStatus: existing.status,
             newStatus: data.status || existing.status,
             reason: data.statusReason || 'Manual master update',
-            changedByUser: { connect: { id: userId } }
-          }
+            changedByUser: { connect: { id: userId } },
+          },
         });
       }
       return result;
@@ -355,7 +383,7 @@ class MedicineIntelligenceService {
       userId,
       action: 'UPDATE_MEDICINE_MASTER',
       target: updated.name,
-      type: 'PHARMACEUTICAL'
+      type: 'PHARMACEUTICAL',
     });
 
     await this.invalidateCache(tenantId);
@@ -382,8 +410,8 @@ class MedicineIntelligenceService {
           oldStatus: existing.status,
           newStatus: 'INACTIVE',
           reason: 'Medicine deactivation',
-          changedByUser: { connect: { id: userId } }
-        }
+          changedByUser: { connect: { id: userId } },
+        },
       });
       return result;
     });
@@ -393,7 +421,7 @@ class MedicineIntelligenceService {
       userId,
       action: 'DEACTIVATE_MEDICINE',
       target: updated.name,
-      type: 'PHARMACEUTICAL'
+      type: 'PHARMACEUTICAL',
     });
 
     await this.invalidateCache(tenantId);
@@ -414,7 +442,7 @@ class MedicineIntelligenceService {
 
   async batchRecall(data, tenantId, userId) {
     const { batchNumber, reason, severity } = data;
-    
+
     const result = await medicineRepository.flagBatchRecall(batchNumber, tenantId);
 
     await this.invalidateCache(tenantId);
@@ -425,7 +453,7 @@ class MedicineIntelligenceService {
       action: 'BATCH_RECALL',
       target: `Batch ${batchNumber}`,
       type: 'PHARMACEUTICAL',
-      metadata: { reason, severity }
+      metadata: { reason, severity },
     });
 
     return { message: `Batch ${batchNumber} flagged for recall`, affected: result.count };
@@ -434,13 +462,17 @@ class MedicineIntelligenceService {
   async addBatch(medicineId, tenantId, batchData, userId) {
     const medicine = await medicineRepository.findById(medicineId, tenantId);
     if (!medicine) throw new Error('Medicine not found');
-    
-    const batch = await movementService.stockIn(tenantId, {
-      ...batchData,
-      medicineId,
-      referenceType: 'MANUAL_ADD_BATCH',
-      notes: batchData.notes || `Manually added batch for ${medicine.name}`
-    }, userId);
+
+    const batch = await movementService.stockIn(
+      tenantId,
+      {
+        ...batchData,
+        medicineId,
+        referenceType: 'MANUAL_ADD_BATCH',
+        notes: batchData.notes || `Manually added batch for ${medicine.name}`,
+      },
+      userId,
+    );
 
     await this.invalidateCache(tenantId);
 
@@ -449,7 +481,7 @@ class MedicineIntelligenceService {
       userId,
       action: 'ADD_BATCH',
       target: `${medicine.name} - Batch ${batch.batchNumber}`,
-      type: 'PHARMACEUTICAL'
+      type: 'PHARMACEUTICAL',
     });
 
     return batch;
@@ -465,7 +497,7 @@ class MedicineIntelligenceService {
       userId,
       action: 'CLEAR_INVENTORY',
       target: 'ALL_MEDICINES',
-      type: 'PHARMACEUTICAL'
+      type: 'PHARMACEUTICAL',
     });
   }
 }

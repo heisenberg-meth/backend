@@ -39,16 +39,25 @@ class StockInService {
       }
     }
 
-    await ledgerService.recordEntry(tenantId, {
-      supplierId: data.supplierId,
-      type: 'PURCHASE',
-      debitAmount: data.totalAmount,
-      referenceType: 'PURCHASE_INVOICE',
-      referenceId: invoice.id,
-    }, prisma);
+    await ledgerService.recordEntry(
+      tenantId,
+      {
+        supplierId: data.supplierId,
+        type: 'PURCHASE',
+        debitAmount: data.totalAmount,
+        referenceType: 'PURCHASE_INVOICE',
+        referenceId: invoice.id,
+      },
+      prisma,
+    );
 
     if (data.purchaseOrderId) {
-      await purchaseOrderRepository.updateStatus(data.purchaseOrderId, tenantId, 'RECEIVED', prisma);
+      await purchaseOrderRepository.updateStatus(
+        data.purchaseOrderId,
+        tenantId,
+        'RECEIVED',
+        prisma,
+      );
     }
 
     logger.info(`[StockIn] Received goods for ${data.supplierId}, invoice ${invoice.id}`);

@@ -13,14 +13,17 @@ class ReportFastifyController {
       const data = await reportService.getSalesReport(request.tenantId, from, to);
       return reply.send(success(data));
     } catch (err) {
-      logger.error({
-        err,
-        requestId: request.id,
-        route: request.url,
-        tenantId: request.tenantId,
-        queryParams: request.query,
-        duration: Date.now() - startTime
-      }, 'Get sales report failed');
+      logger.error(
+        {
+          err,
+          requestId: request.id,
+          route: request.url,
+          tenantId: request.tenantId,
+          queryParams: request.query,
+          duration: Date.now() - startTime,
+        },
+        'Get sales report failed',
+      );
       return reply.code(500).send(error(err.message, 'INTERNAL_SERVER_ERROR'));
     }
   }
@@ -32,14 +35,17 @@ class ReportFastifyController {
       const data = await reportService.getPurchaseReport(request.tenantId, from, to);
       return reply.send(success(data));
     } catch (err) {
-      logger.error({
-        err,
-        requestId: request.id,
-        route: request.url,
-        tenantId: request.tenantId,
-        queryParams: request.query,
-        duration: Date.now() - startTime
-      }, 'Get purchase report failed');
+      logger.error(
+        {
+          err,
+          requestId: request.id,
+          route: request.url,
+          tenantId: request.tenantId,
+          queryParams: request.query,
+          duration: Date.now() - startTime,
+        },
+        'Get purchase report failed',
+      );
       return reply.code(500).send(error(err.message, 'INTERNAL_SERVER_ERROR'));
     }
   }
@@ -51,14 +57,17 @@ class ReportFastifyController {
       const data = await reportService.getFinanceReport(request.tenantId, from, to);
       return reply.send(success(data));
     } catch (err) {
-      logger.error({
-        err,
-        requestId: request.id,
-        route: request.url,
-        tenantId: request.tenantId,
-        queryParams: request.query,
-        duration: Date.now() - startTime
-      }, 'Get finance report failed');
+      logger.error(
+        {
+          err,
+          requestId: request.id,
+          route: request.url,
+          tenantId: request.tenantId,
+          queryParams: request.query,
+          duration: Date.now() - startTime,
+        },
+        'Get finance report failed',
+      );
       return reply.code(500).send(error(err.message, 'INTERNAL_SERVER_ERROR'));
     }
   }
@@ -67,17 +76,23 @@ class ReportFastifyController {
     const startTime = Date.now();
     try {
       const { days } = request.query;
-      const data = await expiryReportService.getExpiryReport(request.tenantId, parseInt(days) || 30);
+      const data = await expiryReportService.getExpiryReport(
+        request.tenantId,
+        parseInt(days) || 30,
+      );
       return reply.send(success(data));
     } catch (err) {
-      logger.error({
-        err,
-        requestId: request.id,
-        route: request.url,
-        tenantId: request.tenantId,
-        queryParams: request.query,
-        duration: Date.now() - startTime
-      }, 'Get expiry report failed');
+      logger.error(
+        {
+          err,
+          requestId: request.id,
+          route: request.url,
+          tenantId: request.tenantId,
+          queryParams: request.query,
+          duration: Date.now() - startTime,
+        },
+        'Get expiry report failed',
+      );
       return reply.code(500).send(error(err.message, 'INTERNAL_SERVER_ERROR'));
     }
   }
@@ -98,24 +113,32 @@ class ReportFastifyController {
 
       if (format === 'excel') {
         const buffer = await exportService.exportToExcel(data, columns, 'Sales Report');
-        return reply.header('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+        return reply
+          .header(
+            'Content-Type',
+            'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+          )
           .header('Content-Disposition', 'attachment; filename=sales-report.xlsx')
           .send(buffer);
       }
 
       const pdfBuffer = await exportService.exportToPdf('Sales Report', data, columns);
-      return reply.header('Content-Type', 'application/pdf')
+      return reply
+        .header('Content-Type', 'application/pdf')
         .header('Content-Disposition', 'attachment; filename=sales-report.pdf')
         .send(pdfBuffer);
     } catch (err) {
-      logger.error({
-        err,
-        requestId: request.id,
-        route: request.url,
-        tenantId: request.tenantId,
-        queryParams: request.query,
-        duration: Date.now() - startTime
-      }, 'Export sales report failed');
+      logger.error(
+        {
+          err,
+          requestId: request.id,
+          route: request.url,
+          tenantId: request.tenantId,
+          queryParams: request.query,
+          duration: Date.now() - startTime,
+        },
+        'Export sales report failed',
+      );
       return reply.code(500).send(error(err.message, 'INTERNAL_SERVER_ERROR'));
     }
   }
@@ -128,14 +151,17 @@ class ReportFastifyController {
       await reportService.invalidateCache(request.tenantId);
       return reply.send(success({ message: 'Aggregation completed successfully' }));
     } catch (err) {
-      logger.error({
-        err,
-        requestId: request.id,
-        route: request.url,
-        tenantId: request.tenantId,
-        body: request.body,
-        duration: Date.now() - startTime
-      }, 'Manual aggregation failed');
+      logger.error(
+        {
+          err,
+          requestId: request.id,
+          route: request.url,
+          tenantId: request.tenantId,
+          body: request.body,
+          duration: Date.now() - startTime,
+        },
+        'Manual aggregation failed',
+      );
       return reply.code(500).send(error(err.message, 'INTERNAL_SERVER_ERROR'));
     }
   }

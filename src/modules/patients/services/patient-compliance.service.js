@@ -115,12 +115,15 @@ class PatientComplianceService {
     if (!patient) throw new Error('Patient not found');
 
     const totalDoses = patient.patientAdherence.length;
-    const takenDoses = patient.patientAdherence.filter(a => a.taken).length;
+    const takenDoses = patient.patientAdherence.filter((a) => a.taken).length;
     const adherenceRate = totalDoses > 0 ? Math.round((takenDoses / totalDoses) * 100) : null;
 
-    const refillCompliance = patient.patientRefills.length > 0
-      ? patient.patientRefills.filter(r => r.status === 'COLLECTED').length / patient.patientRefills.length * 100
-      : null;
+    const refillCompliance =
+      patient.patientRefills.length > 0
+        ? (patient.patientRefills.filter((r) => r.status === 'COLLECTED').length /
+            patient.patientRefills.length) *
+          100
+        : null;
 
     return {
       patientId,
@@ -129,7 +132,7 @@ class PatientComplianceService {
       chronicConditions: patient.chronicConditions,
       adherenceRate,
       refillCompliance: refillCompliance ? `${Math.round(refillCompliance)}%` : 'N/A',
-      activePrescriptions: patient.prescriptions.filter(p => p.status === 'ACTIVE').length,
+      activePrescriptions: patient.prescriptions.filter((p) => p.status === 'ACTIVE').length,
       recentAdherence: patient.patientAdherence.slice(0, 10),
     };
   }

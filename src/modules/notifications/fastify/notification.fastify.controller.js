@@ -24,9 +24,14 @@ class NotificationFastifyController {
       const { channel, recipient, template, variables, patientId, notificationType } = request.body;
 
       const result = await orchestratorService.send({
-        tenantId, userId, patientId,
-        channel: channel.toUpperCase(), recipient,
-        templateName: template, variables, notificationType,
+        tenantId,
+        userId,
+        patientId,
+        channel: channel.toUpperCase(),
+        recipient,
+        templateName: template,
+        variables,
+        notificationType,
       });
 
       const status = result.success ? 202 : result.reason === 'RATE_LIMITED' ? 429 : 200;
@@ -53,7 +58,13 @@ class NotificationFastifyController {
       const results = [];
 
       for (const recipient of to) {
-        const isDuplicate = await deduplicationService.checkDuplicate(tenantId, 'EMAIL', recipient, template, notificationType);
+        const isDuplicate = await deduplicationService.checkDuplicate(
+          tenantId,
+          'EMAIL',
+          recipient,
+          template,
+          notificationType,
+        );
         if (isDuplicate) {
           results.push({ recipient, status: 'SKIPPED', reason: 'DUPLICATE' });
           continue;
@@ -61,19 +72,33 @@ class NotificationFastifyController {
 
         const rateLimit = await rateLimitService.checkRateLimit(tenantId, 'email', recipient);
         if (!rateLimit.allowed) {
-          results.push({ recipient, status: 'RATE_LIMITED', reason: `Max ${rateLimit.max} per ${rateLimit.windowSeconds}s` });
+          results.push({
+            recipient,
+            status: 'RATE_LIMITED',
+            reason: `Max ${rateLimit.max} per ${rateLimit.windowSeconds}s`,
+          });
           continue;
         }
 
         const result = await notificationService.queueNotification({
-          tenantId, userId,
+          tenantId,
+          userId,
           notificationType: notificationType || 'ALERT',
-          channel: 'EMAIL', recipient, subject,
-          templateName: template, variables: data,
+          channel: 'EMAIL',
+          recipient,
+          subject,
+          templateName: template,
+          variables: data,
         });
 
         if (result.success) {
-          await deduplicationService.markSent(tenantId, 'EMAIL', recipient, template, notificationType);
+          await deduplicationService.markSent(
+            tenantId,
+            'EMAIL',
+            recipient,
+            template,
+            notificationType,
+          );
           results.push({ recipient, status: 'QUEUED', notificationId: result.notificationId });
         } else {
           results.push({ recipient, status: 'FAILED', reason: result.reason });
@@ -100,25 +125,44 @@ class NotificationFastifyController {
         return reply.code(400).send({ success: false, message: 'Template required for SMS' });
       }
 
-      const isDuplicate = await deduplicationService.checkDuplicate(tenantId, 'SMS', phoneNumber, template, notificationType);
+      const isDuplicate = await deduplicationService.checkDuplicate(
+        tenantId,
+        'SMS',
+        phoneNumber,
+        template,
+        notificationType,
+      );
       if (isDuplicate) {
         return reply.send({ success: true, data: { status: 'SKIPPED', reason: 'DUPLICATE' } });
       }
 
       const rateLimit = await rateLimitService.checkRateLimit(tenantId, 'sms', phoneNumber);
       if (!rateLimit.allowed) {
-        return reply.code(429).send({ success: false, message: 'SMS rate limit exceeded', retryAfter: rateLimit.retryAfter });
+        return reply.code(429).send({
+          success: false,
+          message: 'SMS rate limit exceeded',
+          retryAfter: rateLimit.retryAfter,
+        });
       }
 
       const result = await notificationService.queueNotification({
-        tenantId, userId,
+        tenantId,
+        userId,
         notificationType: notificationType || 'ALERT',
-        channel: 'SMS', recipient: phoneNumber,
-        templateName: template, variables: data,
+        channel: 'SMS',
+        recipient: phoneNumber,
+        templateName: template,
+        variables: data,
       });
 
       if (result.success) {
-        await deduplicationService.markSent(tenantId, 'SMS', phoneNumber, template, notificationType);
+        await deduplicationService.markSent(
+          tenantId,
+          'SMS',
+          phoneNumber,
+          template,
+          notificationType,
+        );
       }
 
       return reply.code(202).send({ success: true, data: result });
@@ -141,25 +185,44 @@ class NotificationFastifyController {
         return reply.code(400).send({ success: false, message: 'Template required for WhatsApp' });
       }
 
-      const isDuplicate = await deduplicationService.checkDuplicate(tenantId, 'WHATSAPP', phoneNumber, template, notificationType);
+      const isDuplicate = await deduplicationService.checkDuplicate(
+        tenantId,
+        'WHATSAPP',
+        phoneNumber,
+        template,
+        notificationType,
+      );
       if (isDuplicate) {
         return reply.send({ success: true, data: { status: 'SKIPPED', reason: 'DUPLICATE' } });
       }
 
       const rateLimit = await rateLimitService.checkRateLimit(tenantId, 'whatsapp', phoneNumber);
       if (!rateLimit.allowed) {
-        return reply.code(429).send({ success: false, message: 'WhatsApp rate limit exceeded', retryAfter: rateLimit.retryAfter });
+        return reply.code(429).send({
+          success: false,
+          message: 'WhatsApp rate limit exceeded',
+          retryAfter: rateLimit.retryAfter,
+        });
       }
 
       const result = await notificationService.queueNotification({
-        tenantId, userId,
+        tenantId,
+        userId,
         notificationType: notificationType || 'ALERT',
-        channel: 'WHATSAPP', recipient: phoneNumber,
-        templateName: template, variables: data,
+        channel: 'WHATSAPP',
+        recipient: phoneNumber,
+        templateName: template,
+        variables: data,
       });
 
       if (result.success) {
-        await deduplicationService.markSent(tenantId, 'WHATSAPP', phoneNumber, template, notificationType);
+        await deduplicationService.markSent(
+          tenantId,
+          'WHATSAPP',
+          phoneNumber,
+          template,
+          notificationType,
+        );
       }
 
       return reply.code(202).send({ success: true, data: result });
@@ -259,7 +322,10 @@ class NotificationFastifyController {
         },
       });
     } catch (error) {
-      logger.error({ error, tenantId: request.user?.tenantId }, 'Failed to get notification status');
+      logger.error(
+        { error, tenantId: request.user?.tenantId },
+        'Failed to get notification status',
+      );
       return reply.code(500).send({ success: false, message: error.message });
     }
   }
@@ -278,7 +344,9 @@ class NotificationFastifyController {
       }
 
       if (notification.deliveryStatus !== 'FAILED') {
-        return reply.code(400).send({ success: false, message: 'Can only retry failed notifications' });
+        return reply
+          .code(400)
+          .send({ success: false, message: 'Can only retry failed notifications' });
       }
 
       await deliveryTrackingService.markRetrying(id);
@@ -295,7 +363,11 @@ class NotificationFastifyController {
       const result = await notificationService.queueNotification(params);
 
       if (!result.success) {
-        const fallbackResult = await channelFallbackService.executeFallback(id, notification.channel, params);
+        const fallbackResult = await channelFallbackService.executeFallback(
+          id,
+          notification.channel,
+          params,
+        );
         return reply.send({ success: true, retry: result, fallback: fallbackResult });
       }
 
@@ -340,7 +412,10 @@ class NotificationFastifyController {
         },
       });
     } catch (error) {
-      logger.error({ error, tenantId: request.user?.tenantId }, 'Failed to fetch notification history');
+      logger.error(
+        { error, tenantId: request.user?.tenantId },
+        'Failed to fetch notification history',
+      );
       return reply.code(500).send({ success: false, message: error.message });
     }
   }
@@ -357,9 +432,15 @@ class NotificationFastifyController {
         notificationAnalyticsService.getChannelUsage(tenantId, { days: parseInt(days) }),
       ]);
 
-      return reply.send({ success: true, data: { deliveryStats, providerPerformance, responseTimes, channelUsage } });
+      return reply.send({
+        success: true,
+        data: { deliveryStats, providerPerformance, responseTimes, channelUsage },
+      });
     } catch (error) {
-      logger.error({ error, tenantId: request.user?.tenantId }, 'Failed to fetch notification analytics');
+      logger.error(
+        { error, tenantId: request.user?.tenantId },
+        'Failed to fetch notification analytics',
+      );
       return reply.code(500).send({ success: false, message: error.message });
     }
   }
@@ -391,7 +472,9 @@ class NotificationFastifyController {
       return reply.code(201).send({ success: true, data: template });
     } catch (error) {
       if (error.code === 'P2002') {
-        return reply.code(409).send({ success: false, message: 'Template already exists for this channel and tenant' });
+        return reply
+          .code(409)
+          .send({ success: false, message: 'Template already exists for this channel and tenant' });
       }
       logger.error({ error, tenantId: request.user?.tenantId }, 'Failed to create template');
       return reply.code(500).send({ success: false, message: error.message });
@@ -444,7 +527,12 @@ class NotificationFastifyController {
       const { tenantId } = request.user;
       const { templateName, channel, variables } = request.body;
 
-      const rendered = await templateService.renderTemplate(tenantId, templateName, channel, variables);
+      const rendered = await templateService.renderTemplate(
+        tenantId,
+        templateName,
+        channel,
+        variables,
+      );
       return reply.send({ success: true, data: { rendered } });
     } catch (error) {
       return reply.code(404).send({ success: false, message: error.message });
@@ -508,7 +596,10 @@ class NotificationFastifyController {
 
       return reply.send({ success: true, data: { ...settings, channelConfigs } });
     } catch (error) {
-      logger.error({ error, tenantId: request.user?.tenantId }, 'Failed to get notification settings');
+      logger.error(
+        { error, tenantId: request.user?.tenantId },
+        'Failed to get notification settings',
+      );
       return reply.code(500).send({ success: false, message: error.message });
     }
   }
@@ -536,7 +627,10 @@ class NotificationFastifyController {
       emitLocalEvent(DOMAIN_EVENTS.SETTINGS_UPDATED, { tenantId, settingsId: settings.id });
       return reply.send({ success: true, data: settings });
     } catch (error) {
-      logger.error({ error, tenantId: request.user?.tenantId }, 'Failed to update notification settings');
+      logger.error(
+        { error, tenantId: request.user?.tenantId },
+        'Failed to update notification settings',
+      );
       return reply.code(500).send({ success: false, message: error.message });
     }
   }
@@ -564,12 +658,29 @@ class NotificationFastifyController {
   async upsertProviderConfig(request, reply) {
     try {
       const { tenantId } = request.user;
-      const { channelType, providerName, providerConfig, isActive, priority, dailyLimit, rateLimitPerMinute } = request.body;
+      const {
+        channelType,
+        providerName,
+        providerConfig,
+        isActive,
+        priority,
+        dailyLimit,
+        rateLimitPerMinute,
+      } = request.body;
 
       const config = await prisma.notificationChannelConfig.upsert({
         where: { tenantId_channelType_providerName: { tenantId, channelType, providerName } },
         update: { providerConfig, isActive, priority, dailyLimit, rateLimitPerMinute },
-        create: { tenantId, channelType, providerName, providerConfig, isActive, priority, dailyLimit, rateLimitPerMinute },
+        create: {
+          tenantId,
+          channelType,
+          providerName,
+          providerConfig,
+          isActive,
+          priority,
+          dailyLimit,
+          rateLimitPerMinute,
+        },
       });
 
       return reply.send({ success: true, data: config });
@@ -619,17 +730,20 @@ class NotificationFastifyController {
         include: {
           deliveryEvents: {
             orderBy: { eventTimestamp: 'desc' },
-            take: 1
-          }
-        }
+            take: 1,
+          },
+        },
       });
 
       return reply.send({
         success: true,
-        data: { notifications: history }
+        data: { notifications: history },
       });
     } catch (error) {
-      logger.error({ error, tenantId: request.user?.tenantId }, 'Failed to fetch notification ops history');
+      logger.error(
+        { error, tenantId: request.user?.tenantId },
+        'Failed to fetch notification ops history',
+      );
       return reply.code(500).send({ success: false, message: error.message });
     }
   }
@@ -639,7 +753,7 @@ class NotificationFastifyController {
       const metrics = await queueService.getMetrics();
       return reply.send({
         success: true,
-        data: metrics
+        data: metrics,
       });
     } catch (error) {
       logger.error({ error }, 'Failed to fetch notification queue metrics');
@@ -670,7 +784,12 @@ class NotificationFastifyController {
       return reply.send({
         success: true,
         data: notifications,
-        pagination: { total, page: parseInt(page), limit: take, totalPages: Math.ceil(total / take) },
+        pagination: {
+          total,
+          page: parseInt(page),
+          limit: take,
+          totalPages: Math.ceil(total / take),
+        },
       });
     } catch (error) {
       logger.error({ error, userId: request.user?.id }, 'Failed to fetch user notifications');

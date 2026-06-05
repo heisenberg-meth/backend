@@ -24,11 +24,13 @@ class EventBus {
 
     while (attempt < retryLimit && !this.closing) {
       try {
-        logger.info(`[EVENTBUS] Connecting to RabbitMQ at ${env.rabbitmq.url} (Attempt ${attempt + 1})...`);
+        logger.info(
+          `[EVENTBUS] Connecting to RabbitMQ at ${env.rabbitmq.url} (Attempt ${attempt + 1})...`,
+        );
         this.connection = await amqp.connect(env.rabbitmq.url);
         this.channel = await this.connection.createChannel();
         await this.channel.assertExchange(this.exchangeName, 'topic', { durable: true });
-        
+
         this.connection.on('error', (err) => {
           logger.error({ err }, '[EVENTBUS] Connection error');
           this.connection = null;
@@ -54,7 +56,7 @@ class EventBus {
           this.connecting = false;
           return;
         }
-        
+
         // Wait before next retry, but allow shutdown to interrupt
         await new Promise((resolve) => {
           const t = setTimeout(resolve, 5000);
@@ -78,13 +80,13 @@ class EventBus {
 
   async publish(routingKey, message) {
     if (!env.rabbitmq.enabled) return;
-    
+
     // If not connected and not connecting, try to connect in background
     if (!this.channel && !this.connecting) {
       this.connect(); // Fire and forget connection
     }
 
-    // If still no channel, we can't publish. 
+    // If still no channel, we can't publish.
     // We don't block the caller (like the payment API) for 20 seconds.
     if (!this.channel) {
       logger.warn(`[EVENTBUS] Skipping event publish (not connected): ${routingKey}`);

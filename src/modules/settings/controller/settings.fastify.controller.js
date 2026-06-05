@@ -14,7 +14,6 @@ class SettingsFastifyController {
   }
 
   async updateCategorySettings(request, reply) {
-    // The category is extracted from the URL path (e.g. /api/settings/inventory -> inventory)
     const category = request.url.split('?')[0].split('/').pop();
     const settings = await settingsService.updateCategorySettings(
       request.tenantId,
@@ -25,8 +24,6 @@ class SettingsFastifyController {
     );
     return reply.send(settings);
   }
-
-  // ── Invoice Template ────────────────────────────────────────
 
   async getInvoiceTemplate(request, reply) {
     const result = await invoiceTemplateService.getTemplate(request.tenantId);
@@ -76,8 +73,6 @@ class SettingsFastifyController {
     const result = await invoiceTemplateService.testRender(request.tenantId, data);
     return reply.send(result);
   }
-
-  // ── GST Settings ────────────────────────────────────────────
 
   async getGstSettings(request, reply) {
     const branchId = request.query.branchId || null;

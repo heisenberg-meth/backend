@@ -6,10 +6,10 @@ class ExportService {
     const workbook = new ExcelJS.Workbook();
     const worksheet = workbook.addWorksheet(worksheetName);
 
-    worksheet.columns = columns.map(col => ({
+    worksheet.columns = columns.map((col) => ({
       header: col.header,
       key: col.key,
-      width: col.width || 15
+      width: col.width || 15,
     }));
 
     worksheet.addRows(data);

@@ -1,4 +1,4 @@
-import prisma from "../../../config/prisma.js";
+import prisma from '../../../config/prisma.js';
 
 class SummaryRepository {
   async upsertDailySummary(data) {
@@ -29,10 +29,10 @@ class SummaryRepository {
         tenantId,
         salesDate: {
           gte: fromDate,
-          lte: toDate
-        }
+          lte: toDate,
+        },
       },
-      orderBy: { salesDate: 'asc' }
+      orderBy: { salesDate: 'asc' },
     });
   }
 }

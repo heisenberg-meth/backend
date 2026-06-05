@@ -1,4 +1,4 @@
-import prisma from "../../../config/prisma.js";
+import prisma from '../../../config/prisma.js';
 
 class CentralizedInventoryService {
   /**
@@ -27,7 +27,7 @@ class CentralizedInventoryService {
       },
     });
 
-    return medicines.map(med => {
+    return medicines.map((med) => {
       const branchSummary = {};
       let totalGlobalQuantity = 0;
 
@@ -61,30 +61,30 @@ class CentralizedInventoryService {
         medicine: {
           tenantId,
           ...(search && {
-            name: { contains: search, mode: 'insensitive' }
-          })
+            name: { contains: search, mode: 'insensitive' },
+          }),
         },
         deletedAt: null,
-        status: 'ACTIVE'
+        status: 'ACTIVE',
       },
-      include: { medicine: true }
+      include: { medicine: true },
     });
 
     const medicineMap = {};
-    batches.forEach(batch => {
+    batches.forEach((batch) => {
       if (!medicineMap[batch.medicineId]) {
         medicineMap[batch.medicineId] = {
           id: batch.medicine.id,
           name: batch.medicine.name,
           totalQuantity: 0,
-          batches: []
+          batches: [],
         };
       }
       medicineMap[batch.medicineId].totalQuantity += batch.quantity;
       medicineMap[batch.medicineId].batches.push({
         batchNumber: batch.batchNumber,
         quantity: batch.quantity,
-        expiryDate: batch.expiryDate
+        expiryDate: batch.expiryDate,
       });
     });
 

@@ -26,7 +26,7 @@ export async function processAnalyticsAggregation(data) {
     const zeroResultSearches = topSearches.filter((s) => s.resultCount === 0);
 
     logger.info(
-      `[Worker] Analytics aggregated: ${topSearches.length} searches, ${zeroResultSearches.length} zero-result`
+      `[Worker] Analytics aggregated: ${topSearches.length} searches, ${zeroResultSearches.length} zero-result`,
     );
 
     return {

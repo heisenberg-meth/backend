@@ -5,7 +5,7 @@ class MovementService {
   /**
    * Record a stock movement and update batch/inventory aggregates.
    * MUST be run within a Prisma transaction 'tx'.
-   * 
+   *
    * @param {Object} tx - Prisma transaction client
    * @param {Object} data - Movement data
    */
@@ -21,7 +21,7 @@ class MovementService {
       referenceId,
       idempotencyKey,
       userId,
-      notes
+      notes,
     } = data;
 
     // 1. Validation
@@ -32,16 +32,19 @@ class MovementService {
     // 2. Idempotency Check
     const finalIdempotencyKey = idempotencyKey || crypto.randomUUID();
     const existing = await tx.stockMovement.findUnique({
-      where: { idempotencyKey: finalIdempotencyKey }
+      where: { idempotencyKey: finalIdempotencyKey },
     });
     if (existing) {
-      logger.info({ idempotencyKey: finalIdempotencyKey }, '[MOVEMENT_SERVICE] Duplicate movement ignored');
+      logger.info(
+        { idempotencyKey: finalIdempotencyKey },
+        '[MOVEMENT_SERVICE] Duplicate movement ignored',
+      );
       return existing;
     }
 
     // 3. Update InventoryBatch quantity
     const batchUpdateData = {
-      quantity: { increment: quantity }
+      quantity: { increment: quantity },
     };
 
     if (data.isFromReservation) {
@@ -53,37 +56,42 @@ class MovementService {
     const updatedBatch = await tx.inventoryBatch.update({
       where: {
         id: batchId,
-        tenantId 
+        tenantId,
       },
-      data: batchUpdateData
+      data: batchUpdateData,
     });
 
     // 4. Update Inventory (Medicine-level aggregate)
-    // Using upsert or update? The plan says "Updates Inventory aggregate". 
+    // Using upsert or update? The plan says "Updates Inventory aggregate".
     // Usually Inventory record should exist if batch exists, but let's be safe.
     const inventoryUpdateData = {
-      currentStock: { increment: quantity }
+      currentStock: { increment: quantity },
     };
 
     if (data.isFromReservation) {
       inventoryUpdateData.reservedStock = { increment: quantity }; // quantity is negative, so this decrements
     }
 
-    const updatedInventory = await tx.inventory.update({
-      where: {
-        tenantId_branchId_medicineId: {
-          tenantId,
-          branchId: branchId || null,
-          medicineId
-        }
-      },
-      data: inventoryUpdateData
-    }).catch(err => {
-      logger.error({ err, medicineId, branchId }, '[MOVEMENT_SERVICE] Failed to update inventory aggregate');
-      // If inventory record doesn't exist, we might need to create it, but in this system
-      // inventory should be initialized when medicine is added to a branch.
-      throw err;
-    });
+    const updatedInventory = await tx.inventory
+      .update({
+        where: {
+          tenantId_branchId_medicineId: {
+            tenantId,
+            branchId: branchId || null,
+            medicineId,
+          },
+        },
+        data: inventoryUpdateData,
+      })
+      .catch((err) => {
+        logger.error(
+          { err, medicineId, branchId },
+          '[MOVEMENT_SERVICE] Failed to update inventory aggregate',
+        );
+        // If inventory record doesn't exist, we might need to create it, but in this system
+        // inventory should be initialized when medicine is added to a branch.
+        throw err;
+      });
 
     // 4.5 Dynamic Reorder Point Implementation
     let newStatus = 'HEALTHY';
@@ -98,14 +106,20 @@ class MovementService {
     if (newStatus !== updatedInventory.status) {
       await tx.inventory.update({
         where: { id: updatedInventory.id },
-        data: { status: newStatus }
+        data: { status: newStatus },
       });
     }
 
     if (newStatus === 'LOW' || newStatus === 'CRITICAL') {
       logger.warn(
-        { medicineId, branchId, currentStock: updatedInventory.currentStock, reorderPoint: updatedInventory.reorderPoint, status: newStatus },
-        '[MOVEMENT_SERVICE] Stock level fell below reorder point'
+        {
+          medicineId,
+          branchId,
+          currentStock: updatedInventory.currentStock,
+          reorderPoint: updatedInventory.reorderPoint,
+          status: newStatus,
+        },
+        '[MOVEMENT_SERVICE] Stock level fell below reorder point',
       );
     }
 
@@ -123,8 +137,8 @@ class MovementService {
         referenceId,
         idempotencyKey: finalIdempotencyKey,
         performedBy: userId,
-        notes
-      }
+        notes,
+      },
     });
 
     return movement;
@@ -133,17 +147,17 @@ class MovementService {
   /**
    * Adjust stock manually with notes and attribution.
    * MUST be run within a Prisma transaction 'tx'.
-   * 
+   *
    * @param {Object} tx - Prisma transaction client
    * @param {Object} data - Adjustment data
    */
   async adjustStock(tx, data) {
     const { userId, notes } = data;
-    
+
     if (!userId) {
       throw new Error('[MOVEMENT_SERVICE] userId is required for stock adjustments');
     }
-    
+
     if (!notes) {
       throw new Error('[MOVEMENT_SERVICE] notes are required for stock adjustments');
     }
@@ -151,22 +165,33 @@ class MovementService {
     return this.recordMovement(tx, {
       ...data,
       movementType: 'ADJUSTMENT',
-      referenceType: 'ADJUSTMENT_LOG'
+      referenceType: 'ADJUSTMENT_LOG',
     });
   }
 
   /**
    * Transfer stock between branches.
    * MUST be run within a Prisma transaction 'tx'.
-   * 
+   *
    * @param {Object} tx - Prisma transaction client
    * @param {Object} data - Transfer data (sourceBranchId, destinationBranchId, quantity, etc.)
    */
   async transferStock(tx, data) {
-    const { tenantId, medicineId, batchId, sourceBranchId, destinationBranchId, quantity, userId, notes } = data;
+    const {
+      tenantId,
+      medicineId,
+      batchId,
+      sourceBranchId,
+      destinationBranchId,
+      quantity,
+      userId,
+      notes,
+    } = data;
 
     if (!sourceBranchId || !destinationBranchId) {
-      throw new Error('[MOVEMENT_SERVICE] Both source and destination branch IDs are required for transfer');
+      throw new Error(
+        '[MOVEMENT_SERVICE] Both source and destination branch IDs are required for transfer',
+      );
     }
 
     if (quantity <= 0) {
@@ -186,7 +211,7 @@ class MovementService {
       referenceType: 'TRANSFER_GROUP',
       referenceId: transferGroupId,
       userId,
-      notes: notes || `Transfer to branch ${destinationBranchId}`
+      notes: notes || `Transfer to branch ${destinationBranchId}`,
     });
 
     // 2. Transfer IN to destination branch
@@ -200,7 +225,7 @@ class MovementService {
       referenceType: 'TRANSFER_GROUP',
       referenceId: transferGroupId,
       userId,
-      notes: notes || `Transfer from branch ${sourceBranchId}`
+      notes: notes || `Transfer from branch ${sourceBranchId}`,
     });
 
     return { transferOut, transferIn, transferGroupId };

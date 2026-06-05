@@ -1,16 +1,103 @@
 import { z } from 'zod';
 
 const INDIAN_STATE_CODES = [
-  '01', '02', '03', '04', '05', '06', '07', '08', '09', '10',
-  '11', '12', '13', '14', '15', '16', '17', '18', '19', '20',
-  '21', '22', '23', '24', '25', '26', '27', '28', '29', '30',
-  '31', '32', '33', '34', '35', '36', '37', '38', '39', '40',
-  '41', '42', '43', '44', '45', '46', '47', '48', '49', '50',
-  '51', '52', '53', '54', '55', '56', '57', '58', '59', '60',
-  '61', '62', '63', '64', '65', '66', '67', '68', '69', '70',
-  '71', '72', '73', '74', '75', '76', '77', '78', '79', '80',
-  '81', '82', '83', '84', '85', '86', '87', '88', '89', '90',
-  '91', '92', '93', '94', '95', '96', '97',
+  '01',
+  '02',
+  '03',
+  '04',
+  '05',
+  '06',
+  '07',
+  '08',
+  '09',
+  '10',
+  '11',
+  '12',
+  '13',
+  '14',
+  '15',
+  '16',
+  '17',
+  '18',
+  '19',
+  '20',
+  '21',
+  '22',
+  '23',
+  '24',
+  '25',
+  '26',
+  '27',
+  '28',
+  '29',
+  '30',
+  '31',
+  '32',
+  '33',
+  '34',
+  '35',
+  '36',
+  '37',
+  '38',
+  '39',
+  '40',
+  '41',
+  '42',
+  '43',
+  '44',
+  '45',
+  '46',
+  '47',
+  '48',
+  '49',
+  '50',
+  '51',
+  '52',
+  '53',
+  '54',
+  '55',
+  '56',
+  '57',
+  '58',
+  '59',
+  '60',
+  '61',
+  '62',
+  '63',
+  '64',
+  '65',
+  '66',
+  '67',
+  '68',
+  '69',
+  '70',
+  '71',
+  '72',
+  '73',
+  '74',
+  '75',
+  '76',
+  '77',
+  '78',
+  '79',
+  '80',
+  '81',
+  '82',
+  '83',
+  '84',
+  '85',
+  '86',
+  '87',
+  '88',
+  '89',
+  '90',
+  '91',
+  '92',
+  '93',
+  '94',
+  '95',
+  '96',
+  '97',
 ];
 
 const GSTIN_CHECKSUM_CHARS = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ';
@@ -52,7 +139,10 @@ export function validateGstin(gstin) {
   const panPattern = normalized.substring(2, 12);
   const panRegex = /^[A-Z]{5}[0-9]{4}[A-Z]{1}$/;
   if (!panRegex.test(panPattern)) {
-    return { valid: false, error: 'Invalid PAN structure in GSTIN (positions 3-12 must be AAAAA9999A)' };
+    return {
+      valid: false,
+      error: 'Invalid PAN structure in GSTIN (positions 3-12 must be AAAAA9999A)',
+    };
   }
 
   const entityType = normalized[12];
@@ -85,7 +175,8 @@ export function validateDrugLicense(licenseNumber) {
   if (!isValid) {
     return {
       valid: false,
-      error: 'Invalid drug license format. Expected: DL-YYYY-NNN, DL/YYYY/NNN, DLNNNNNNNNNN, or XX-DL-YYYY-NNN',
+      error:
+        'Invalid drug license format. Expected: DL-YYYY-NNN, DL/YYYY/NNN, DLNNNNNNNNNN, or XX-DL-YYYY-NNN',
     };
   }
 
@@ -108,7 +199,10 @@ export function validatePhone(phone) {
 
   const phoneRegex = /^\+?[0-9]{10,15}$/;
   if (!phoneRegex.test(phone.trim())) {
-    return { valid: false, error: 'Invalid phone number. Expected 10-15 digits, optionally prefixed with +' };
+    return {
+      valid: false,
+      error: 'Invalid phone number. Expected 10-15 digits, optionally prefixed with +',
+    };
   }
 
   return { valid: true, error: null };
@@ -183,14 +277,24 @@ export const createStoreProfileSchema = z.object({
   logoUrl: z.string().url().optional().nullable(),
   invoiceLogoUrl: z.string().url().optional().nullable(),
   whatsappLogoUrl: z.string().url().optional().nullable(),
-  brandColor: z.string().regex(/^#[0-9A-Fa-f]{6}$/).optional().nullable(),
+  brandColor: z
+    .string()
+    .regex(/^#[0-9A-Fa-f]{6}$/)
+    .optional()
+    .nullable(),
   tagline: z.string().max(255).optional().nullable(),
 });
 
 export const updateStoreProfileSchema = createStoreProfileSchema.partial();
 
 export const uploadDocumentSchema = z.object({
-  documentType: z.enum(['GST_CERTIFICATE', 'DRUG_LICENSE', 'FSSAI_LICENSE', 'INCORPORATION', 'OTHER']),
+  documentType: z.enum([
+    'GST_CERTIFICATE',
+    'DRUG_LICENSE',
+    'FSSAI_LICENSE',
+    'INCORPORATION',
+    'OTHER',
+  ]),
   fileName: z.string().max(255),
   fileUrl: z.string().url(),
   fileSize: z.number().int().positive().optional(),

@@ -19,15 +19,28 @@ class AlertNotificationService {
     });
 
     const branch = branchId
-      ? await prisma.branch.findUnique({ where: { id: branchId }, select: { name: true, code: true } })
+      ? await prisma.branch.findUnique({
+          where: { id: branchId },
+          select: { name: true, code: true },
+        })
       : null;
 
-    const message = this._buildLowStockMessage(medicine, branch, currentStock, thresholdValue, severity);
+    const message = this._buildLowStockMessage(
+      medicine,
+      branch,
+      currentStock,
+      thresholdValue,
+      severity,
+    );
 
     await Promise.allSettled([
       this._sendDashboardAlert(tenantId, branchId, 'LOW_STOCK', severity, message, alert),
-      severity === 'CRITICAL' ? this._sendEmailAlert(tenantId, message, medicine) : Promise.resolve(),
-      severity === 'CRITICAL' ? this._sendWhatsAppAlert(tenantId, message, medicine) : Promise.resolve(),
+      severity === 'CRITICAL'
+        ? this._sendEmailAlert(tenantId, message, medicine)
+        : Promise.resolve(),
+      severity === 'CRITICAL'
+        ? this._sendWhatsAppAlert(tenantId, message, medicine)
+        : Promise.resolve(),
       this._broadcastWebSocket(tenantId, branchId, 'LOW_STOCK_ALERT', {
         medicineId,
         medicineName: medicine?.name,
@@ -60,12 +73,20 @@ class AlertNotificationService {
 
     const potentialLoss = (batch?.quantity || 0) * (batch?.purchasePrice || 0);
 
-    const message = this._buildExpiryMessage(medicine, batch, daysRemaining, potentialLoss, severity);
+    const message = this._buildExpiryMessage(
+      medicine,
+      batch,
+      daysRemaining,
+      potentialLoss,
+      severity,
+    );
 
     await Promise.allSettled([
       this._sendDashboardAlert(tenantId, branchId, 'EXPIRY_WARNING', severity, message, alert),
       this._sendEmailAlert(tenantId, message, medicine),
-      severity === 'CRITICAL' ? this._sendWhatsAppAlert(tenantId, message, medicine) : Promise.resolve(),
+      severity === 'CRITICAL'
+        ? this._sendWhatsAppAlert(tenantId, message, medicine)
+        : Promise.resolve(),
       this._broadcastWebSocket(tenantId, branchId, 'EXPIRY_ALERT', {
         medicineId,
         medicineName: medicine?.name,
@@ -94,7 +115,10 @@ class AlertNotificationService {
     });
 
     const branch = branchId
-      ? await prisma.branch.findUnique({ where: { id: branchId }, select: { name: true, code: true } })
+      ? await prisma.branch.findUnique({
+          where: { id: branchId },
+          select: { name: true, code: true },
+        })
       : null;
 
     const message = this._buildOutOfStockMessage(medicine, branch, severity);
@@ -119,7 +143,9 @@ class AlertNotificationService {
     const message = `Stock transfer recommended: ${medicineName} is low at this branch, but ${availableStock} units available elsewhere.`;
 
     await Promise.allSettled([
-      this._sendDashboardAlert(tenantId, branchId, 'TRANSFER_RECOMMENDED', 'INFO', message, { medicineId }),
+      this._sendDashboardAlert(tenantId, branchId, 'TRANSFER_RECOMMENDED', 'INFO', message, {
+        medicineId,
+      }),
       this._broadcastWebSocket(tenantId, branchId, 'TRANSFER_RECOMMENDATION', {
         medicineId,
         medicineName,

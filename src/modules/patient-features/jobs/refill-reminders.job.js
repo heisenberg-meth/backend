@@ -23,9 +23,7 @@ export async function processRefillReminders() {
     });
 
     for (const refill of dueRefills) {
-      const daysUntilDue = Math.round(
-        (refill.expectedRefillAt.getTime() - Date.now()) / 86400000,
-      );
+      const daysUntilDue = Math.round((refill.expectedRefillAt.getTime() - Date.now()) / 86400000);
 
       const message = `Hi ${refill.patient.fullName}, your ${refill.medicine.name} refill is due in ${daysUntilDue} day(s). Please visit us.`;
 

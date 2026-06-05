@@ -20,7 +20,7 @@ class ImportService {
       fileUrl: data.fileUrl,
       purchaseOrderId: data.purchaseOrderId || null,
       extractedData: data.extractedData || null,
-      importStatus: 'UPLOADED'
+      importStatus: 'UPLOADED',
     });
 
     await auditService.log({
@@ -28,14 +28,14 @@ class ImportService {
       userId,
       action: 'IMPORT_JOB_CREATED',
       target: job.id,
-      type: 'INVENTORY'
+      type: 'INVENTORY',
     });
 
     // Trigger async processing via queue
     await mainQueue.add('process-import-job', {
       jobId: job.id,
       tenantId,
-      userId
+      userId,
     });
 
     return job;
@@ -56,7 +56,7 @@ class ImportService {
         const ocrResult = await ocrService.extractInvoiceData(job.fileUrl);
         rawExtractedData = ocrResult.data;
         confidenceScore = ocrResult.confidence || 0.9;
-        
+
         await emitEvent(DOMAIN_EVENTS.OCR_COMPLETED, { jobId, tenantId });
       }
 
@@ -73,12 +73,12 @@ class ImportService {
       // 3. Duplicate Invoice Detection
       if (extractedData.invoiceNumber) {
         const existing = await prisma.importJob.findFirst({
-          where: { 
-            tenantId, 
+          where: {
+            tenantId,
             extractedData: { path: ['invoiceNumber'], equals: extractedData.invoiceNumber },
             importStatus: 'COMPLETED',
-            id: { not: jobId }
-          }
+            id: { not: jobId },
+          },
         });
         if (existing) throw new Error(`Invoice ${extractedData.invoiceNumber} already imported`);
       }
@@ -86,7 +86,7 @@ class ImportService {
       // 4. Attempt PO Matching
       if (extractedData.orderNumber && !job.purchaseOrderId) {
         const po = await prisma.purchaseOrder.findFirst({
-          where: { orderNumber: extractedData.orderNumber, tenantId, deletedAt: null }
+          where: { orderNumber: extractedData.orderNumber, tenantId, deletedAt: null },
         });
         if (po) {
           await repo.updateJob(jobId, tenantId, { purchaseOrderId: po.id });
@@ -113,7 +113,12 @@ class ImportService {
           // Batch Validation
           if (matchedMed && med.batchNumber) {
             const existingBatch = await prisma.inventoryBatch.findFirst({
-              where: { medicineId: matchedMed.id, batchNumber: med.batchNumber, tenantId, deletedAt: null }
+              where: {
+                medicineId: matchedMed.id,
+                batchNumber: med.batchNumber,
+                tenantId,
+                deletedAt: null,
+              },
             });
             if (existingBatch) {
               validationErrors.push(`Batch ${med.batchNumber} already exists for this medicine`);
@@ -123,18 +128,20 @@ class ImportService {
           // PO Reconciliation Validation
           if (job.purchaseOrderId) {
             const poItem = await prisma.purchaseOrderItem.findFirst({
-              where: { 
+              where: {
                 purchaseOrderId: job.purchaseOrderId,
                 OR: [
                   { medicineId: matchedMed?.id },
-                  { medicineName: { contains: med.name, mode: 'insensitive' } }
-                ]
-              }
+                  { medicineName: { contains: med.name, mode: 'insensitive' } },
+                ],
+              },
             });
             if (!poItem) {
               validationErrors.push(`Item ${med.name} not found in linked Purchase Order`);
             } else if (med.quantity > poItem.quantity) {
-              validationErrors.push(`Quantity ${med.quantity} exceeds ordered quantity ${poItem.quantity}`);
+              validationErrors.push(
+                `Quantity ${med.quantity} exceeds ordered quantity ${poItem.quantity}`,
+              );
             }
           }
 
@@ -150,7 +157,7 @@ class ImportService {
             gstPercentage: med.gstPercentage,
             totalAmount: Number(med.quantity) * Number(med.unitPrice),
             status: matchedMed ? 'MATCHED' : 'PENDING',
-            validationErrors: validationErrors.length > 0 ? validationErrors : null
+            validationErrors: validationErrors.length > 0 ? validationErrors : null,
           });
         }
       }
@@ -163,9 +170,9 @@ class ImportService {
         finalStatus = 'AUTO_APPROVED';
       } else if (confidenceScore < 0.8) {
         finalStatus = 'FAILED';
-        await repo.updateJob(jobId, tenantId, { 
-          importStatus: 'FAILED', 
-          errorMessage: 'OCR confidence too low for processing' 
+        await repo.updateJob(jobId, tenantId, {
+          importStatus: 'FAILED',
+          errorMessage: 'OCR confidence too low for processing',
         });
         return;
       }
@@ -177,13 +184,11 @@ class ImportService {
         logger.info({ jobId }, 'Auto-approving high confidence import');
         await this.approveImport(jobId, tenantId, job.uploadedBy);
       }
-
-
     } catch (error) {
       logger.error({ error, jobId }, 'Import job failed during processing');
-      await repo.updateJob(jobId, tenantId, { 
+      await repo.updateJob(jobId, tenantId, {
         importStatus: 'FAILED',
-        errorMessage: error.message 
+        errorMessage: error.message,
       });
       await emitEvent(DOMAIN_EVENTS.IMPORT_FAILED, { jobId, tenantId, error: error.message });
     }
@@ -191,7 +196,12 @@ class ImportService {
 
   async approveImport(jobId, tenantId, userId) {
     const job = await repo.getJobById(jobId, tenantId);
-    if (!job || (job.importStatus !== 'REVIEW_REQUIRED' && job.importStatus !== 'PROCESSING' && job.importStatus !== 'AUTO_APPROVED')) {
+    if (
+      !job ||
+      (job.importStatus !== 'REVIEW_REQUIRED' &&
+        job.importStatus !== 'PROCESSING' &&
+        job.importStatus !== 'AUTO_APPROVED')
+    ) {
       throw new Error('Import job not ready for approval');
     }
 
@@ -204,12 +214,13 @@ class ImportService {
           data: {
             medicineId: item.matchedMedicineId,
             batchNumber: item.batchNumber || `IMP-${Date.now()}`,
-            expiryDate: item.expiryDate || new Date(new Date().setFullYear(new Date().getFullYear() + 2)),
+            expiryDate:
+              item.expiryDate || new Date(new Date().setFullYear(new Date().getFullYear() + 2)),
             quantity: item.quantity || 0,
             purchasePrice: parseFloat(item.unitPrice) || 0,
             sellingPrice: parseFloat(item.unitPrice) * 1.2,
-            status: 'ACTIVE'
-          }
+            status: 'ACTIVE',
+          },
         });
 
         // Stock Transaction Log
@@ -223,26 +234,26 @@ class ImportService {
             newStock: item.quantity || 0,
             referenceType: 'IMPORT',
             referenceId: jobId,
-            notes: `Imported from invoice ${job.fileName}`
-          }
+            notes: `Imported from invoice ${job.fileName}`,
+          },
         });
 
         await tx.importExtractedItem.update({
           where: { id: item.id },
-          data: { status: 'CREATED' }
+          data: { status: 'CREATED' },
         });
       }
 
       const updatedJob = await tx.importJob.update({
         where: { id: jobId },
-        data: { importStatus: 'COMPLETED', processedAt: new Date() }
+        data: { importStatus: 'COMPLETED', processedAt: new Date() },
       });
 
       // Update PO status if reconciled
       if (job.purchaseOrderId) {
         await tx.purchaseOrder.update({
           where: { id: job.purchaseOrderId },
-          data: { status: PURCHASE_ORDER_STATUS.RECEIVED }
+          data: { status: PURCHASE_ORDER_STATUS.RECEIVED },
         });
       }
 
@@ -254,7 +265,7 @@ class ImportService {
       userId,
       action: 'IMPORT_JOB_APPROVED',
       target: jobId,
-      type: 'INVENTORY'
+      type: 'INVENTORY',
     });
 
     await emitEvent(DOMAIN_EVENTS.INVENTORY_CREATED, { jobId, tenantId });

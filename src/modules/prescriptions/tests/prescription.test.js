@@ -1,4 +1,4 @@
-import { jest , describe, beforeEach, it, expect } from '@jest/globals';
+import { jest, describe, beforeEach, it, expect } from '@jest/globals';
 
 jest.unstable_mockModule('../../../config/prisma.js', () => ({
   default: {
@@ -25,7 +25,9 @@ jest.unstable_mockModule('../../../config/prisma.js', () => ({
     auditLog: {
       create: jest.fn(),
     },
-    $transaction: jest.fn((fn) => fn({ prescription: { update: jest.fn() }, prescriptionVerification: { create: jest.fn() } })),
+    $transaction: jest.fn((fn) =>
+      fn({ prescription: { update: jest.fn() }, prescriptionVerification: { create: jest.fn() } }),
+    ),
   },
 }));
 
@@ -43,7 +45,7 @@ const mockPrisma = (await import('../../../config/prisma.js')).default;
 const ocrService = (await import('../services/ocr.service.js')).default;
 const complianceService = (await import('../services/compliance.service.js')).default;
 const prescriptionService = (await import('../services/prescription.service.js')).default;
-const prescriptionEvents = (await import('../events/prescription.events.js'));
+const prescriptionEvents = await import('../events/prescription.events.js');
 
 function mockPrescription(overrides = {}) {
   return {
@@ -85,10 +87,15 @@ function mockPrescription(overrides = {}) {
 }
 
 describe('OcrService', () => {
-  beforeEach(() => { jest.clearAllMocks(); });
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
 
   it('extracts medicines from handwritten-like text', async () => {
-    const result = await ocrService.processOcr('Patient: Rahul\nDr. Kumar\nDolo 650 - 1 tab BD x 5 days\nAzithral 500', 't1');
+    const result = await ocrService.processOcr(
+      'Patient: Rahul\nDr. Kumar\nDolo 650 - 1 tab BD x 5 days\nAzithral 500',
+      't1',
+    );
     expect(result.extractedMedicines.length).toBeGreaterThanOrEqual(2);
     expect(result.detectedDoctor).toBe('Kumar');
     expect(result.detectedPatient).toBe('Rahul');
@@ -116,18 +123,26 @@ describe('OcrService', () => {
 });
 
 describe('PrescriptionComplianceService', () => {
-  beforeEach(() => { jest.clearAllMocks(); });
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
 
   it('rejects expired prescriptions', () => {
-    expect(complianceService.checkPrescriptionValidity({
-      status: 'EXPIRED', deletedAt: null,
-    }).valid).toBe(false);
+    expect(
+      complianceService.checkPrescriptionValidity({
+        status: 'EXPIRED',
+        deletedAt: null,
+      }).valid,
+    ).toBe(false);
   });
 
   it('rejects archived prescriptions', () => {
-    expect(complianceService.checkPrescriptionValidity({
-      status: 'ARCHIVED', deletedAt: new Date(),
-    }).valid).toBe(false);
+    expect(
+      complianceService.checkPrescriptionValidity({
+        status: 'ARCHIVED',
+        deletedAt: new Date(),
+      }).valid,
+    ).toBe(false);
   });
 
   it('rejects old prescriptions beyond dispensing window', () => {
@@ -158,34 +173,47 @@ describe('PrescriptionComplianceService', () => {
   });
 
   it('rejects unverified prescriptions for dispensing', async () => {
-    const result = await complianceService.validatePrescriptionForDispensing(mockPrescription({ verificationStatus: 'PENDING' }));
+    const result = await complianceService.validatePrescriptionForDispensing(
+      mockPrescription({ verificationStatus: 'PENDING' }),
+    );
     expect(result.valid).toBe(false);
   });
 
   it('rejects rejected prescriptions for dispensing', async () => {
-    const result = await complianceService.validatePrescriptionForDispensing(mockPrescription({ verificationStatus: 'REJECTED' }));
+    const result = await complianceService.validatePrescriptionForDispensing(
+      mockPrescription({ verificationStatus: 'REJECTED' }),
+    );
     expect(result.valid).toBe(false);
   });
 
   it('passes verified prescription for dispensing', async () => {
-    const result = await complianceService.validatePrescriptionForDispensing(mockPrescription({ verificationStatus: 'VERIFIED' }));
+    const result = await complianceService.validatePrescriptionForDispensing(
+      mockPrescription({ verificationStatus: 'VERIFIED' }),
+    );
     expect(result.valid).toBe(true);
   });
 
   it('detects Schedule X quantity restrictions', () => {
     const result = complianceService.checkDispensingRestrictions(
-      { scheduleType: 'X', storageCondition: 'ROOM_TEMPERATURE' }, 60,
+      { scheduleType: 'X', storageCondition: 'ROOM_TEMPERATURE' },
+      60,
     );
     expect(result.restricted).toBe(true);
   });
 });
 
 describe('PrescriptionService', () => {
-  beforeEach(() => { jest.clearAllMocks(); });
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
 
   it('archives prescription instead of hard delete', async () => {
     mockPrisma.prescription.findUnique.mockResolvedValue(mockPrescription());
-    mockPrisma.prescription.update.mockResolvedValue({ ...mockPrescription(), status: 'ARCHIVED', deletedAt: new Date() });
+    mockPrisma.prescription.update.mockResolvedValue({
+      ...mockPrescription(),
+      status: 'ARCHIVED',
+      deletedAt: new Date(),
+    });
 
     const result = await prescriptionService.archivePrescription('rx-1');
     expect(result.status).toBe('ARCHIVED');
@@ -197,34 +225,52 @@ describe('PrescriptionService', () => {
   it('rejects update to prescribed medicines', async () => {
     mockPrisma.prescription.findUnique.mockResolvedValue(mockPrescription());
 
-    await expect(prescriptionService.updatePrescription('rx-1', {
-      items: [{ medicineId: 'new-med' }],
-    }, 'user-1')).rejects.toThrow('No editable fields');
+    await expect(
+      prescriptionService.updatePrescription(
+        'rx-1',
+        {
+          items: [{ medicineId: 'new-med' }],
+        },
+        'user-1',
+      ),
+    ).rejects.toThrow('No editable fields');
   });
 
   it('allows update to notes only', async () => {
     mockPrisma.prescription.findUnique.mockResolvedValue(mockPrescription());
     mockPrisma.prescription.update.mockResolvedValue(mockPrescription());
 
-    const result = await prescriptionService.updatePrescription('rx-1', {
-      notes: 'Doctor confirmed dosage',
-    }, 'user-1');
+    const result = await prescriptionService.updatePrescription(
+      'rx-1',
+      {
+        notes: 'Doctor confirmed dosage',
+      },
+      'user-1',
+    );
     expect(result).toBeDefined();
   });
 
   it('throws for nonexistent prescription on archive', async () => {
     mockPrisma.prescription.findUnique.mockResolvedValue(null);
-    await expect(prescriptionService.archivePrescription('nonexistent')).rejects.toThrow('not found');
+    await expect(prescriptionService.archivePrescription('nonexistent')).rejects.toThrow(
+      'not found',
+    );
   });
 
   it('throws when converting unverified prescription to invoice', async () => {
-    mockPrisma.prescription.findUnique.mockResolvedValue(mockPrescription({ verificationStatus: 'PENDING' }));
+    mockPrisma.prescription.findUnique.mockResolvedValue(
+      mockPrescription({ verificationStatus: 'PENDING' }),
+    );
 
-    await expect(prescriptionService.convertToInvoice('rx-1', 'user-1')).rejects.toThrow('must be verified');
+    await expect(prescriptionService.convertToInvoice('rx-1', 'user-1')).rejects.toThrow(
+      'must be verified',
+    );
   });
 
   it('converts verified prescription to invoice draft', async () => {
-    mockPrisma.prescription.findUnique.mockResolvedValue(mockPrescription({ verificationStatus: 'VERIFIED' }));
+    mockPrisma.prescription.findUnique.mockResolvedValue(
+      mockPrescription({ verificationStatus: 'VERIFIED' }),
+    );
 
     const result = await prescriptionService.convertToInvoice('rx-1', 'user-1');
     expect(result.readyForBilling).toBe(true);
@@ -233,19 +279,23 @@ describe('PrescriptionService', () => {
 });
 
 describe('PrescriptionEvents', () => {
-  beforeEach(() => { jest.clearAllMocks(); });
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
 
   it('emits PRESCRIPTION_CREATED on create', () => {
     prescriptionEvents.emitPrescriptionCreated('rx-1', 'RX-001', 'pat-1', 't1');
     expect(emitLocalEvent).toHaveBeenCalledWith(
-      expect.stringContaining('prescription.created'), expect.any(Object),
+      expect.stringContaining('prescription.created'),
+      expect.any(Object),
     );
   });
 
   it('emits PRESCRIPTION_VERIFIED on verify', () => {
     prescriptionEvents.emitPrescriptionVerified('rx-1', 'user-1');
     expect(emitLocalEvent).toHaveBeenCalledWith(
-      expect.stringContaining('prescription.verified'), expect.any(Object),
+      expect.stringContaining('prescription.verified'),
+      expect.any(Object),
     );
   });
 });

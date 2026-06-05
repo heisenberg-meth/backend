@@ -19,7 +19,10 @@ class NotificationThrottlingService {
     }
 
     if (current > limits) {
-      logger.warn({ tenantId, channel, current, limits }, '[Throttle] Hourly notification limit reached');
+      logger.warn(
+        { tenantId, channel, current, limits },
+        '[Throttle] Hourly notification limit reached',
+      );
       return { allowed: false, current, limit: limits, retryAfter: windowSeconds };
     }
 

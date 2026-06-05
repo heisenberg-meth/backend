@@ -1,28 +1,30 @@
-import { jest , describe, afterEach, it, expect } from '@jest/globals';
+import { jest, describe, afterEach, it, expect } from '@jest/globals';
 
 // Define mocks first
 const mockPrisma = {
-  $transaction: jest.fn((cb) => cb({
-    supplierPayment: { create: jest.fn() },
-    supplierLedger: { findFirst: jest.fn(), create: jest.fn() },
-    purchaseInvoice: { findUnique: jest.fn(), update: jest.fn() },
-    supplierPaymentAllocation: { create: jest.fn() }
-  })),
-  supplierLedger: { findFirst: jest.fn() }
+  $transaction: jest.fn((cb) =>
+    cb({
+      supplierPayment: { create: jest.fn() },
+      supplierLedger: { findFirst: jest.fn(), create: jest.fn() },
+      purchaseInvoice: { findUnique: jest.fn(), update: jest.fn() },
+      supplierPaymentAllocation: { create: jest.fn() },
+    }),
+  ),
+  supplierLedger: { findFirst: jest.fn() },
 };
 
 const mockLedgerService = {
-  createEntry: jest.fn()
+  createEntry: jest.fn(),
 };
 
 jest.unstable_mockModule('../../../../config/prisma.js', () => ({
   default: mockPrisma,
-  __esModule: true
+  __esModule: true,
 }));
 
 jest.unstable_mockModule('../ledger/ledger.service.js', () => ({
   default: mockLedgerService,
-  __esModule: true
+  __esModule: true,
 }));
 
 jest.unstable_mockModule('../../../../shared/events/erp-event-bus.js', () => ({
@@ -69,12 +71,13 @@ describe('SettlementService', () => {
       const tx = {
         supplierPayment: { create: jest.fn().mockResolvedValue({ id: 'PAY-1' }) },
         purchaseInvoice: {
-          findUnique: jest.fn()
+          findUnique: jest
+            .fn()
             .mockResolvedValueOnce({ id: 'INV-1', totalAmount: 1000, paidAmount: 0, tenantId })
             .mockResolvedValueOnce({ id: 'INV-2', totalAmount: 2000, paidAmount: 0, tenantId }),
-          update: jest.fn()
+          update: jest.fn(),
         },
-        supplierPaymentAllocation: { create: jest.fn() }
+        supplierPaymentAllocation: { create: jest.fn() },
       };
 
       prisma.$transaction.mockImplementation(async (cb) => cb(tx));
@@ -84,7 +87,7 @@ describe('SettlementService', () => {
         amount: 1500,
         paymentMethod: 'UPI',
         paymentReference: 'UTR123',
-        invoiceIds: ['INV-1', 'INV-2']
+        invoiceIds: ['INV-1', 'INV-2'],
       };
 
       const result = await settlementService.recordPayment(tenantId, userId, data);
@@ -92,13 +95,13 @@ describe('SettlementService', () => {
       // Verify first invoice was fully paid (1000)
       expect(tx.purchaseInvoice.update).toHaveBeenCalledWith({
         where: { id: 'INV-1' },
-        data: expect.objectContaining({ paidAmount: 1000, paymentStatus: 'PAID' })
+        data: expect.objectContaining({ paidAmount: 1000, paymentStatus: 'PAID' }),
       });
 
       // Verify second invoice was partially paid (500)
       expect(tx.purchaseInvoice.update).toHaveBeenCalledWith({
         where: { id: 'INV-2' },
-        data: expect.objectContaining({ paidAmount: 500, paymentStatus: 'PARTIAL' })
+        data: expect.objectContaining({ paidAmount: 500, paymentStatus: 'PARTIAL' }),
       });
 
       expect(result.unallocatedAmount).toBe(0);

@@ -30,7 +30,9 @@ const mockPdfRenderer = {
 };
 
 const mockS3Storage = {
-  uploadPDF: jest.fn().mockResolvedValue({ url: 's3://bucket/key', key: 'invoices/tenant-1/original/inv-1.pdf' }),
+  uploadPDF: jest
+    .fn()
+    .mockResolvedValue({ url: 's3://bucket/key', key: 'invoices/tenant-1/original/inv-1.pdf' }),
   getSignedUrl: jest.fn().mockResolvedValue('https://signed-url.example.com/pdf'),
   generatePDFKey: jest.fn().mockReturnValue('invoices/tenant-1/original/inv-1.pdf'),
 };
@@ -40,7 +42,8 @@ jest.unstable_mockModule('../../../config/prisma.js', () => ({
 }));
 
 jest.unstable_mockModule('../../../shared/events/local-event-bus.js', () => ({
-  emitLocalEvent: jest.fn(), localEventBus: { emit: jest.fn(), removeAllListeners: jest.fn() },
+  emitLocalEvent: jest.fn(),
+  localEventBus: { emit: jest.fn(), removeAllListeners: jest.fn() },
 }));
 
 jest.unstable_mockModule('../../../shared/utils/logger.js', () => ({
@@ -109,7 +112,7 @@ describe('PdfGenerationService', () => {
         expect.objectContaining({
           where: { id: 'invoice-1' },
           include: expect.any(Object),
-        })
+        }),
       );
     });
 
@@ -123,16 +126,16 @@ describe('PdfGenerationService', () => {
 
       mockPrisma.invoice.findUnique.mockResolvedValue(mockInvoice);
 
-      await expect(
-        pdfGenerationService.generateAndStore('invoice-1', 'tenant-1')
-      ).rejects.toThrow('Cannot generate PDF for cancelled invoice without watermark');
+      await expect(pdfGenerationService.generateAndStore('invoice-1', 'tenant-1')).rejects.toThrow(
+        'Cannot generate PDF for cancelled invoice without watermark',
+      );
     });
 
     it('should throw error when invoice not found', async () => {
       mockPrisma.invoice.findUnique.mockResolvedValue(null);
 
       await expect(
-        pdfGenerationService.generateAndStore('nonexistent', 'tenant-1')
+        pdfGenerationService.generateAndStore('nonexistent', 'tenant-1'),
       ).rejects.toThrow('Invoice not found: nonexistent');
     });
 

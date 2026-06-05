@@ -46,17 +46,12 @@ class InventoryReversalService {
       if (this.requiresDestruction(item.medicine, returnRecord.returnReason)) {
         if (disposition === 'RESTOCK') {
           throw new Error(
-            `Medicine ${item.medicine.name} cannot be restocked. Requires destruction.`
+            `Medicine ${item.medicine.name} cannot be restocked. Requires destruction.`,
           );
         }
       }
 
-      const result = await this.executeDisposition(
-        returnRecord,
-        item,
-        disposition,
-        userId
-      );
+      const result = await this.executeDisposition(returnRecord, item, disposition, userId);
 
       results.push(result);
     }
@@ -136,7 +131,7 @@ class InventoryReversalService {
     });
 
     logger.info(
-      `[InventoryReversal] Restocked ${item.returnedQuantity} x ${item.medicine.name} from ${returnRecord.returnNumber}`
+      `[InventoryReversal] Restocked ${item.returnedQuantity} x ${item.medicine.name} from ${returnRecord.returnNumber}`,
     );
 
     return {
@@ -208,7 +203,7 @@ class InventoryReversalService {
     });
 
     logger.info(
-      `[InventoryReversal] Destroyed ${item.returnedQuantity} x ${item.medicine.name} from ${returnRecord.returnNumber}`
+      `[InventoryReversal] Destroyed ${item.returnedQuantity} x ${item.medicine.name} from ${returnRecord.returnNumber}`,
     );
 
     return {
@@ -246,7 +241,7 @@ class InventoryReversalService {
     });
 
     logger.info(
-      `[InventoryReversal] Quarantined ${item.returnedQuantity} x ${item.medicine.name} from ${returnRecord.returnNumber}`
+      `[InventoryReversal] Quarantined ${item.returnedQuantity} x ${item.medicine.name} from ${returnRecord.returnNumber}`,
     );
 
     return {
@@ -270,7 +265,7 @@ class InventoryReversalService {
     });
 
     logger.info(
-      `[InventoryReversal] Marked for supplier return: ${item.returnedQuantity} x ${item.medicine.name}`
+      `[InventoryReversal] Marked for supplier return: ${item.returnedQuantity} x ${item.medicine.name}`,
     );
 
     return {

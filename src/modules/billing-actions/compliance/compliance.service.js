@@ -42,7 +42,7 @@ class ComplianceService {
       if (schedule === 'H' || schedule === 'H1' || schedule === 'X') {
         if (!invoice.prescriptionId && schedule !== 'H') {
           scheduleMismatches.push(
-            `Schedule ${schedule} drug "${item.medicine?.name}" requires prescription`
+            `Schedule ${schedule} drug "${item.medicine?.name}" requires prescription`,
           );
         }
       }

@@ -24,10 +24,10 @@ class TemplateController {
 
   async getTemplates(req, reply) {
     const { tenantId } = req.user;
-    
+
     try {
       const templates = await prisma.notificationTemplate.findMany({
-        where: { tenantId }
+        where: { tenantId },
       });
       return reply.send(templates);
     } catch (error) {

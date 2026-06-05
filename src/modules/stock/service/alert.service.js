@@ -29,7 +29,7 @@ class AlertService {
             tenant.id,
             batch.medicineId,
             'EXPIRING',
-            `Batch ${batch.batchNumber} of ${batch.medicine.name} is expiring soon (${new Date(batch.expiryDate).toLocaleDateString()}).`
+            `Batch ${batch.batchNumber} of ${batch.medicine.name} is expiring soon (${new Date(batch.expiryDate).toLocaleDateString()}).`,
           );
         }
       }
@@ -62,13 +62,13 @@ class AlertService {
     }
 
     const alerts = await alertRepository.findActiveAlerts(tenantId);
-    
+
     try {
       await redisClient.set(cacheKey, JSON.stringify(alerts), 'EX', 300);
     } catch (err) {
       logger.error('[REDIS ERROR]', err);
     }
-    
+
     return alerts;
   }
 

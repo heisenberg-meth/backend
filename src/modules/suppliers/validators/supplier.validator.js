@@ -16,7 +16,10 @@ const phoneRefinement = (val, ctx) => {
     ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'Phone number must be 10-15 digits' });
   }
   if (!/^\+?\d+$/.test(cleaned)) {
-    ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'Phone number must contain only digits and optional leading +' });
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: 'Phone number must contain only digits and optional leading +',
+    });
   }
 };
 
@@ -30,16 +33,20 @@ const emailRefinement = (val, ctx) => {
 
 export const createSupplierSchema = z.object({
   name: z.string().min(1, 'Supplier name is required'),
-  contactPerson: z.string().optional().default(''),
+  contactPerson: z.string().optional(),
+  contact: z.string().optional(),
   email: z.string().optional().default('').superRefine(emailRefinement),
   phone: z.string().optional().default('').superRefine(phoneRefinement),
   gstNumber: z.string().optional().default('').superRefine(gstRefinement),
-  drugLicenseNumber: z.string().optional().default(''),
-  paymentTermsDays: z.coerce.number().int().min(0).optional().default(30),
-  address: z.string().optional().default(''),
-  leadTimeDays: z.coerce.number().int().min(1, 'Lead time must be at least 1 day').optional().default(7),
-  rating: z.coerce.number().min(0).max(5).optional().default(0),
-  status: z.enum(['ACTIVE', 'SUSPENDED', 'INACTIVE', 'BLOCKED', 'BLACKLISTED', 'ARCHIVED']).optional().default('ACTIVE'),
+  gst: z.string().optional().default('').superRefine(gstRefinement),
+  paymentTermsDays: z.coerce.number().int().min(0).optional(),
+  paymentTerms: z.string().optional(),
+  leadTimeDays: z.coerce.number().int().min(1).optional(),
+  leadTime: z.coerce.number().int().min(1).optional(),
+  status: z
+    .enum(['ACTIVE', 'SUSPENDED', 'INACTIVE', 'BLOCKED', 'BLACKLISTED', 'ARCHIVED'])
+    .optional()
+    .default('ACTIVE'),
 });
 
 export const updateSupplierSchema = z.object({
@@ -53,7 +60,9 @@ export const updateSupplierSchema = z.object({
   address: z.string().optional(),
   leadTimeDays: z.coerce.number().int().min(1).optional(),
   rating: z.coerce.number().min(0).max(5).optional(),
-  status: z.enum(['ACTIVE', 'SUSPENDED', 'INACTIVE', 'BLOCKED', 'BLACKLISTED', 'ARCHIVED']).optional(),
+  status: z
+    .enum(['ACTIVE', 'SUSPENDED', 'INACTIVE', 'BLOCKED', 'BLACKLISTED', 'ARCHIVED'])
+    .optional(),
 });
 
 export const listSupplierQuerySchema = z.object({
@@ -66,7 +75,10 @@ export const listSupplierQuerySchema = z.object({
 export const createPaymentSchema = z.object({
   paymentMethod: z.enum(['CASH', 'CHEQUE', 'BANK_TRANSFER', 'UPI', 'CARD', 'OTHER']),
   amount: z.coerce.number().positive('Amount must be positive'),
-  paymentDate: z.string().optional().default(() => new Date().toISOString()),
+  paymentDate: z
+    .string()
+    .optional()
+    .default(() => new Date().toISOString()),
   notes: z.string().optional().default(''),
   paymentReference: z.string().optional().default(''),
 });
@@ -75,12 +87,16 @@ export const createSupplierPurchaseOrderSchema = z.object({
   branchId: z.string().optional(),
   expectedDeliveryDate: z.string().optional(),
   notes: z.string().optional().default(''),
-  items: z.array(z.object({
-    medicineId: z.string().min(1, 'Medicine ID is required'),
-    quantity: z.coerce.number().int().positive('Quantity must be positive'),
-    unitPrice: z.coerce.number().positive('Unit price must be positive'),
-    gstPercentage: z.coerce.number().min(0).optional().default(0),
-  })).min(1, 'At least one item is required'),
+  items: z
+    .array(
+      z.object({
+        medicineId: z.string().min(1, 'Medicine ID is required'),
+        quantity: z.coerce.number().int().positive('Quantity must be positive'),
+        unitPrice: z.coerce.number().positive('Unit price must be positive'),
+        gstPercentage: z.coerce.number().min(0).optional().default(0),
+      }),
+    )
+    .min(1, 'At least one item is required'),
 });
 
 export const paginationQuerySchema = z.object({

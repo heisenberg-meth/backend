@@ -11,7 +11,12 @@ class RefundEligibilityService {
       { medicineType: 'opened insulin', refundAllowed: false, requiresApproval: false },
       { medicineType: 'cold-chain', refundAllowed: false, requiresApproval: false },
       { medicineType: 'Schedule X', refundAllowed: true, requiresApproval: true, restricted: true },
-      { medicineType: 'Schedule H1', refundAllowed: true, requiresApproval: true, restricted: true },
+      {
+        medicineType: 'Schedule H1',
+        refundAllowed: true,
+        requiresApproval: true,
+        restricted: true,
+      },
       { medicineType: 'expired', refundAllowed: false, requiresApproval: false },
     ];
   }
@@ -30,9 +35,13 @@ class RefundEligibilityService {
   }
 
   validateReturnWindow(invoice) {
-    const daysSincePurchase = (Date.now() - new Date(invoice.createdAt).getTime()) / (1000 * 60 * 60 * 24);
+    const daysSincePurchase =
+      (Date.now() - new Date(invoice.createdAt).getTime()) / (1000 * 60 * 60 * 24);
     if (daysSincePurchase > 30) {
-      return { eligible: false, reason: `Return period expired (${Math.floor(daysSincePurchase)} days > 30 day limit)` };
+      return {
+        eligible: false,
+        reason: `Return period expired (${Math.floor(daysSincePurchase)} days > 30 day limit)`,
+      };
     }
     return { eligible: true, daysSincePurchase: Math.floor(daysSincePurchase) };
   }
@@ -56,7 +65,11 @@ class RefundEligibilityService {
     }
 
     if (storageCondition === 'COLD_STORAGE' || storageCondition === 'REFRIGERATED') {
-      return { eligible: false, reason: 'Cold-chain items are non-returnable', requiresApproval: false };
+      return {
+        eligible: false,
+        reason: 'Cold-chain items are non-returnable',
+        requiresApproval: false,
+      };
     }
 
     if (scheduleType === 'X' || scheduleType === 'NARCOTIC' || scheduleType === 'PSYCHOTROPIC') {
@@ -71,7 +84,10 @@ class RefundEligibilityService {
       return { valid: false, reason: 'Refund quantity must be positive' };
     }
     if (requestedQuantity > item.quantity) {
-      return { valid: false, reason: `Refund quantity (${requestedQuantity}) exceeds sold quantity (${item.quantity})` };
+      return {
+        valid: false,
+        reason: `Refund quantity (${requestedQuantity}) exceeds sold quantity (${item.quantity})`,
+      };
     }
     return { valid: true };
   }

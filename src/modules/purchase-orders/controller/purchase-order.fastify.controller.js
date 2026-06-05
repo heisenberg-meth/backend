@@ -17,7 +17,14 @@ class PurchaseOrderFastifyController {
   async getPendingOrders(request, reply) {
     const tenantId = request.tenantId;
     try {
-      const statuses = ['DRAFT', 'PENDING_APPROVAL', 'APPROVED', 'SENT', 'PARTIALLY_RECEIVED', 'ORDERED'];
+      const statuses = [
+        'DRAFT',
+        'PENDING_APPROVAL',
+        'APPROVED',
+        'SENT',
+        'PARTIALLY_RECEIVED',
+        'ORDERED',
+      ];
       const orders = await purchaseOrderService.getOrdersByStatus(tenantId, statuses);
       return reply.send({ success: true, data: orders });
     } catch {
@@ -89,11 +96,11 @@ class PurchaseOrderFastifyController {
     const userId = request.user.id;
     try {
       const result = await purchaseOrderService.receiveOrder(tenantId, id, userId, request.body);
-      return reply.send({ 
-        success: true, 
-        data: result.grn, 
+      return reply.send({
+        success: true,
+        data: result.grn,
         orderStatus: result.orderStatus,
-        message: 'Inventory received and batches registered' 
+        message: 'Inventory received and batches registered',
       });
     } catch (error) {
       logger.error({ error, id, tenantId }, 'Failed to receive purchase order');

@@ -1,4 +1,4 @@
-import { jest , describe, beforeEach, it, expect } from '@jest/globals';
+import { jest, describe, beforeEach, it, expect } from '@jest/globals';
 import path from 'path';
 import { fileURLToPath } from 'url';
 
@@ -107,7 +107,8 @@ jest.unstable_mockModule(creditNoteRepoPath, () => ({
 }));
 
 jest.unstable_mockModule(localEventBusPath, () => ({
-  emitLocalEvent: jest.fn(), localEventBus: { emit: jest.fn(), removeAllListeners: jest.fn() },
+  emitLocalEvent: jest.fn(),
+  localEventBus: { emit: jest.fn(), removeAllListeners: jest.fn() },
 }));
 
 jest.unstable_mockModule(erpEventBusPath, () => ({
@@ -121,8 +122,10 @@ jest.unstable_mockModule(loggerPath, () => ({
 const { default: returnService } = await import('../services/return.service.js');
 const { default: creditNoteService } = await import('../services/credit-note.service.js');
 const { default: refundEngine } = await import('../refund-engine/refund.engine.js');
-const { default: inventoryReversalService } = await import('../inventory-reversal/inventory-reversal.service.js');
-const { default: fraudDetectionService } = await import('../fraud-detection/fraud-detection.service.js');
+const { default: inventoryReversalService } =
+  await import('../inventory-reversal/inventory-reversal.service.js');
+const { default: fraudDetectionService } =
+  await import('../fraud-detection/fraud-detection.service.js');
 
 describe('ReturnService', () => {
   beforeEach(() => {
@@ -148,7 +151,7 @@ describe('ReturnService', () => {
       const requestedItems = [{ invoiceItemId: 'item-1', quantity: 5 }];
 
       expect(() =>
-        returnService.validateReturnQuantities(requestedItems, invoiceItems, existingReturns)
+        returnService.validateReturnQuantities(requestedItems, invoiceItems, existingReturns),
       ).not.toThrow();
     });
 
@@ -158,7 +161,7 @@ describe('ReturnService', () => {
       const requestedItems = [{ invoiceItemId: 'item-1', quantity: 10 }];
 
       expect(() =>
-        returnService.validateReturnQuantities(requestedItems, invoiceItems, existingReturns)
+        returnService.validateReturnQuantities(requestedItems, invoiceItems, existingReturns),
       ).toThrow('Return quantity (10) exceeds available quantity (5)');
     });
 
@@ -172,7 +175,7 @@ describe('ReturnService', () => {
       const requestedItems = [{ invoiceItemId: 'item-1', quantity: 5 }];
 
       expect(() =>
-        returnService.validateReturnQuantities(requestedItems, invoiceItems, existingReturns)
+        returnService.validateReturnQuantities(requestedItems, invoiceItems, existingReturns),
       ).toThrow('Return quantity (5) exceeds available quantity (3)');
     });
   });
@@ -202,7 +205,7 @@ describe('CreditNoteService', () => {
       mockPrisma.return.findUnique.mockResolvedValue(null);
 
       await expect(
-        creditNoteService.generateCreditNote('nonexistent', 'tenant-1', 'user-1')
+        creditNoteService.generateCreditNote('nonexistent', 'tenant-1', 'user-1'),
       ).rejects.toThrow('Return not found');
     });
 
@@ -216,7 +219,7 @@ describe('CreditNoteService', () => {
       });
 
       await expect(
-        creditNoteService.generateCreditNote('return-1', 'tenant-1', 'user-1')
+        creditNoteService.generateCreditNote('return-1', 'tenant-1', 'user-1'),
       ).rejects.toThrow('Cannot generate credit note for return in status: REQUESTED');
     });
   });
@@ -232,7 +235,7 @@ describe('RefundEngine', () => {
       mockPrisma.return.findUnique.mockResolvedValue(null);
 
       await expect(
-        refundEngine.processRefund('nonexistent', 'tenant-1', 'user-1', { refundMethod: 'UPI' })
+        refundEngine.processRefund('nonexistent', 'tenant-1', 'user-1', { refundMethod: 'UPI' }),
       ).rejects.toThrow('Return not found');
     });
 
@@ -247,7 +250,7 @@ describe('RefundEngine', () => {
       });
 
       await expect(
-        refundEngine.processRefund('return-1', 'tenant-1', 'user-1', { refundMethod: 'UPI' })
+        refundEngine.processRefund('return-1', 'tenant-1', 'user-1', { refundMethod: 'UPI' }),
       ).rejects.toThrow('Cannot process refund for return in status: REQUESTED');
     });
 
@@ -263,7 +266,7 @@ describe('RefundEngine', () => {
       });
 
       await expect(
-        refundEngine.processRefund('return-1', 'tenant-1', 'user-1', { refundMethod: 'UPI' })
+        refundEngine.processRefund('return-1', 'tenant-1', 'user-1', { refundMethod: 'UPI' }),
       ).rejects.toThrow('Refund already completed');
     });
   });

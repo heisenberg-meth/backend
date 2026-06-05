@@ -10,13 +10,10 @@ class MetadataRepository {
       where: { medicineId, tenantId },
       include: {
         supplier: {
-          select: { id: true, name: true, phone: true, rating: true }
-        }
+          select: { id: true, name: true, phone: true, rating: true },
+        },
       },
-      orderBy: [
-        { isPreferred: 'desc' },
-        { reliabilityScore: 'desc' }
-      ]
+      orderBy: [{ isPreferred: 'desc' }, { reliabilityScore: 'desc' }],
     });
   }
 
@@ -31,16 +28,16 @@ class MetadataRepository {
       if (isPreferred) {
         await tx.medicineSupplier.updateMany({
           where: { medicineId, tenantId, isPreferred: true },
-          data: { isPreferred: false }
+          data: { isPreferred: false },
         });
       }
 
       return await tx.medicineSupplier.upsert({
         where: {
-          medicineId_supplierId: { medicineId, supplierId }
+          medicineId_supplierId: { medicineId, supplierId },
         },
         update: data,
-        create: { ...data, tenantId }
+        create: { ...data, tenantId },
       });
     });
   }
@@ -51,19 +48,19 @@ class MetadataRepository {
   async findPurchaseHistory(medicineId, tenantId, limit = 50) {
     // Joining via PurchaseOrderItem
     return await prisma.purchaseOrderItem.findMany({
-      where: { 
-        medicineId, 
-        purchaseOrder: { tenantId, status: PURCHASE_ORDER_STATUS.RECEIVED } 
+      where: {
+        medicineId,
+        purchaseOrder: { tenantId, status: PURCHASE_ORDER_STATUS.RECEIVED },
       },
       include: {
         purchaseOrder: {
           include: {
-            supplier: { select: { name: true } }
-          }
-        }
+            supplier: { select: { name: true } },
+          },
+        },
       },
       orderBy: { createdAt: 'desc' },
-      take: limit
+      take: limit,
     });
   }
 
@@ -75,10 +72,10 @@ class MetadataRepository {
       where: { medicineId, tenantId },
       include: {
         user: { select: { fullName: true } },
-        batch: { select: { batchNumber: true } }
+        batch: { select: { batchNumber: true } },
       },
       orderBy: { createdAt: 'desc' },
-      take: limit
+      take: limit,
     });
   }
 
@@ -94,9 +91,9 @@ class MetadataRepository {
         // Include both active and expired to see historical trends in current stock
       },
       include: {
-        supplier: { select: { name: true } }
+        supplier: { select: { name: true } },
       },
-      orderBy: { expiryDate: 'asc' }
+      orderBy: { expiryDate: 'asc' },
     });
   }
 }

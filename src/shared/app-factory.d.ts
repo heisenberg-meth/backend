@@ -4,8 +4,6 @@ interface ServiceAppOptions {
   name: string;
 }
 
-declare function createServiceApp(
-  options: ServiceAppOptions
-): Promise<FastifyInstance>;
+declare function createServiceApp(options: ServiceAppOptions): Promise<FastifyInstance>;
 
 export default createServiceApp;

@@ -4,22 +4,22 @@ import { EVENTS } from '../../../shared/constants/events.js';
 
 class OcrService {
   MEDICINE_MAP = {
-    'dolo': 'Dolo 650',
-    'doloo': 'Dolo 650',
-    'paracetamol': 'Paracetamol 650',
-    'crocin': 'Crocin 500',
-    'azithral': 'Azithral 500',
-    'azithromycin': 'Azithromycin 500',
-    'amox': 'Amoxicillin 500',
-    'amoxicillin': 'Amoxicillin 500',
-    'metformin': 'Metformin 500',
-    'glucophage': 'Metformin 500',
-    'omeprazole': 'Omeprazole 20',
-    'pantoprazole': 'Pantoprazole 40',
-    'atorvastatin': 'Atorvastatin 10',
-    'amlodipine': 'Amlodipine 5',
-    'losartan': 'Losartan 50',
-    'telma': 'Telma 40',
+    dolo: 'Dolo 650',
+    doloo: 'Dolo 650',
+    paracetamol: 'Paracetamol 650',
+    crocin: 'Crocin 500',
+    azithral: 'Azithral 500',
+    azithromycin: 'Azithromycin 500',
+    amox: 'Amoxicillin 500',
+    amoxicillin: 'Amoxicillin 500',
+    metformin: 'Metformin 500',
+    glucophage: 'Metformin 500',
+    omeprazole: 'Omeprazole 20',
+    pantoprazole: 'Pantoprazole 40',
+    atorvastatin: 'Atorvastatin 10',
+    amlodipine: 'Amlodipine 5',
+    losartan: 'Losartan 50',
+    telma: 'Telma 40',
   };
 
   async processOcr(text, tenantId) {
@@ -45,7 +45,8 @@ class OcrService {
     const dosagePattern = /(\d+\s*(?:tablet|tab|mg|ml|capsule|caps))/gi;
     const dosages = text.match(dosagePattern) || [];
 
-    const frequencyPattern = /(\d+\s*times?\s*(?:a|per)\s*day|twice\s*daily|once\s*daily|thrice\s*daily|OD|BD|TDS|QID)/gi;
+    const frequencyPattern =
+      /(\d+\s*times?\s*(?:a|per)\s*day|twice\s*daily|once\s*daily|thrice\s*daily|OD|BD|TDS|QID)/gi;
     const frequencies = text.match(frequencyPattern) || [];
 
     const doctorPattern = /(?:Dr\.?|Doctor)\s+([A-Za-z ]+)/i;
@@ -94,9 +95,10 @@ class OcrService {
     );
     for (let i = 1; i <= a.length; i++) {
       for (let j = 1; j <= b.length; j++) {
-        matrix[i][j] = a[i - 1] === b[j - 1]
-          ? matrix[i - 1][j - 1]
-          : Math.min(matrix[i - 1][j - 1] + 1, matrix[i][j - 1] + 1, matrix[i - 1][j] + 1);
+        matrix[i][j] =
+          a[i - 1] === b[j - 1]
+            ? matrix[i - 1][j - 1]
+            : Math.min(matrix[i - 1][j - 1] + 1, matrix[i][j - 1] + 1, matrix[i - 1][j] + 1);
       }
     }
     return matrix[a.length][b.length];

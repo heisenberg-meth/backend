@@ -17,65 +17,83 @@ class RiskWorker {
   setup() {
     if (process.env.NODE_ENV === 'test') return;
 
-    this.worker = new Worker('erp-events', async (job) => {
-      const { name, data } = job;
+    this.worker = new Worker(
+      'erp-events',
+      async (job) => {
+        const { name, data } = job;
 
-      try {
-        switch (name) {
-          case DOMAIN_EVENTS.STOCK_UPDATED:
-            // Sync alert snapshots for this medicine
-            await riskMonitoringService.handleStockMovement(data);
-            break;
+        try {
+          switch (name) {
+            case DOMAIN_EVENTS.STOCK_UPDATED:
+              // Sync alert snapshots for this medicine
+              await riskMonitoringService.handleStockMovement(data);
+              break;
 
-          case 'RUN_GLOBAL_EXPIRY_SCAN': {
-            const tenants = await prisma.tenant.findMany({ where: { deletedAt: null } });
-            for (const tenant of tenants) {
-              await riskMonitoringService.runExpiryScan(tenant.id);
+            case 'RUN_GLOBAL_EXPIRY_SCAN': {
+              const tenants = await prisma.tenant.findMany({ where: { deletedAt: null } });
+              for (const tenant of tenants) {
+                await riskMonitoringService.runExpiryScan(tenant.id);
+              }
+              break;
             }
-            break;
+
+            default:
+              break;
+          }
+        } catch (error) {
+          const permanentErrors = [
+            'P2022',
+            'P2025',
+            'P2003',
+            'P2002',
+            'P2014',
+            'ZOD_ERROR',
+            'UNRECOVERABLE',
+          ];
+          const errorCode = error.code || '';
+          const isPermanent = permanentErrors.some((code) => errorCode.startsWith(code));
+
+          if (isPermanent) {
+            logger.error(
+              { error: error.message, code: errorCode, event: name, jobId: job.id },
+              '[RISK-WORKER] Unrecoverable error — will NOT retry',
+            );
+            const unrecoverable = new Error(error.message);
+            unrecoverable.code = 'UNRECOVERABLE';
+            unrecoverable.originalCode = errorCode;
+            throw unrecoverable;
           }
 
-          default:
-            break;
-        }
-      } catch (error) {
-        const permanentErrors = ['P2022', 'P2025', 'P2003', 'P2002', 'P2014', 'ZOD_ERROR', 'UNRECOVERABLE'];
-        const errorCode = error.code || '';
-        const isPermanent = permanentErrors.some(code => errorCode.startsWith(code));
-
-        if (isPermanent) {
-          logger.error(
-            { error: error.message, code: errorCode, event: name, jobId: job.id },
-            '[RISK-WORKER] Unrecoverable error — will NOT retry'
+          logger.warn(
+            { error: error.message, code: errorCode, event: name, attempt: job.attemptsMade },
+            '[RISK-WORKER] Transient error — will retry',
           );
-          const unrecoverable = new Error(error.message);
-          unrecoverable.code = 'UNRECOVERABLE';
-          unrecoverable.originalCode = errorCode;
-          throw unrecoverable;
+          throw error;
         }
-
-        logger.warn(
-          { error: error.message, code: errorCode, event: name, attempt: job.attemptsMade },
-          '[RISK-WORKER] Transient error — will retry'
-        );
-        throw error;
-      }
-    }, {
-      connection: getBullRedis(),
-      concurrency: 5,
-      attempts: 3,
-      backoff: {
-        type: 'exponential',
-        delay: 1000,
       },
-    });
+      {
+        connection: getBullRedis(),
+        concurrency: 5,
+        attempts: 3,
+        backoff: {
+          type: 'exponential',
+          delay: 1000,
+        },
+      },
+    );
 
     this.worker.on('failed', (job, err) => {
       const isUnrecoverable = err.code === 'UNRECOVERABLE';
       const logLevel = isUnrecoverable ? 'error' : 'warn';
       logger[logLevel](
-        { jobId: job.id, error: err.message, code: err.originalCode || err.code, attempts: job.attemptsMade, unrecoverable: isUnrecoverable },
-        `[RISK-WORKER] Job failed ${isUnrecoverable ? 'permanently (no retry)' : 'after all retries'}`
+        {
+          jobId: job.id,
+          error: err.message,
+          code: err.originalCode || err.code,
+          attempts: job.attemptsMade,
+          unrecoverable: isUnrecoverable,
+        },
+        `[RISK-WORKER] Job failed ${isUnrecoverable ? 'permanently (no retry)' : 'after all retries'}`,
       );
     });
 

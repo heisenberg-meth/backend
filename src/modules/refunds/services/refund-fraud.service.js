@@ -88,7 +88,9 @@ class RefundFraudService {
 
   async checkPatientFrequency(patientRefunds) {
     const thirtyDaysAgo = Date.now() - 30 * 24 * 60 * 60 * 1000;
-    const recentRefunds = patientRefunds.filter((r) => new Date(r.createdAt).getTime() > thirtyDaysAgo);
+    const recentRefunds = patientRefunds.filter(
+      (r) => new Date(r.createdAt).getTime() > thirtyDaysAgo,
+    );
 
     if (recentRefunds.length >= this.FRAUD_THRESHOLDS.MAX_REFUNDS_PER_DAY) {
       return { flag: `Patient initiated ${recentRefunds.length} refunds in 30 days`, score: 35 };

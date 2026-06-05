@@ -52,7 +52,10 @@ export const resendInvoiceSchema = z.object({
   body: z.object({
     channels: z.array(z.enum(['email', 'whatsapp'])).min(1),
     email: z.string().email().optional(),
-    phoneNumber: z.string().regex(/^\+?[1-9]\d{1,14}$/).optional(),
+    phoneNumber: z
+      .string()
+      .regex(/^\+?[1-9]\d{1,14}$/)
+      .optional(),
   }),
   params: z.object({
     id: z.string().uuid(),

@@ -7,15 +7,19 @@ export const createPrescriptionSchema = z.object({
     doctorName: z.string().optional(),
     prescriptionDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
     notes: z.string().optional(),
-    items: z.array(z.object({
-      medicineId: z.string().uuid(),
-      dosage: z.string().optional(),
-      frequency: z.string().optional(),
-      durationDays: z.number().int().positive().optional(),
-      quantity: z.number().int().positive(),
-      refillEligible: z.boolean().optional(),
-      instructions: z.string().optional(),
-    })).min(1, 'At least one medicine item required'),
+    items: z
+      .array(
+        z.object({
+          medicineId: z.string().uuid(),
+          dosage: z.string().optional(),
+          frequency: z.string().optional(),
+          durationDays: z.number().int().positive().optional(),
+          quantity: z.number().int().positive(),
+          refillEligible: z.boolean().optional(),
+          instructions: z.string().optional(),
+        }),
+      )
+      .min(1, 'At least one medicine item required'),
   }),
 });
 
@@ -42,8 +46,14 @@ export const getPrescriptionsSchema = z.object({
     patientId: z.string().uuid().optional(),
     doctorId: z.string().uuid().optional(),
     verified: z.string().optional(),
-    from: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
-    to: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+    from: z
+      .string()
+      .regex(/^\d{4}-\d{2}-\d{2}$/)
+      .optional(),
+    to: z
+      .string()
+      .regex(/^\d{4}-\d{2}-\d{2}$/)
+      .optional(),
     limit: z.string().regex(/^\d+$/).optional(),
     offset: z.string().regex(/^\d+$/).optional(),
   }),
@@ -70,9 +80,13 @@ export const convertToInvoiceSchema = z.object({
 export const recordDispensingSchema = z.object({
   params: z.object({ id: z.string().uuid() }),
   body: z.object({
-    items: z.array(z.object({
-      medicineId: z.string().uuid(),
-      quantity: z.number().int().positive(),
-    })).min(1),
+    items: z
+      .array(
+        z.object({
+          medicineId: z.string().uuid(),
+          quantity: z.number().int().positive(),
+        }),
+      )
+      .min(1),
   }),
 });

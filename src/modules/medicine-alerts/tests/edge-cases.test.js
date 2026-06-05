@@ -215,7 +215,7 @@ describe('MedicineAlertService - Edge Cases', () => {
       expect(redisClient.del).toHaveBeenCalledWith(
         'alerts:tenant-1:low-stock',
         'alerts:tenant-1:expiry',
-        'alerts:tenant-1:out-of-stock'
+        'alerts:tenant-1:out-of-stock',
       );
     });
 
@@ -238,7 +238,7 @@ describe('MedicineAlertService - Edge Cases', () => {
       expect(alertRepository.findLowStockAlerts).toHaveBeenCalledWith(
         expect.objectContaining({
           branchId: 'branch-1',
-        })
+        }),
       );
     });
 
@@ -253,7 +253,7 @@ describe('MedicineAlertService - Edge Cases', () => {
       expect(alertRepository.findLowStockAlerts).toHaveBeenCalledWith(
         expect.objectContaining({
           branchId: undefined,
-        })
+        }),
       );
     });
   });
@@ -270,7 +270,7 @@ describe('MedicineAlertService - Edge Cases', () => {
       expect(alertRepository.findLowStockAlerts).toHaveBeenCalledWith(
         expect.objectContaining({
           severity: 'CRITICAL',
-        })
+        }),
       );
     });
   });

@@ -23,7 +23,7 @@ class SessionService {
   async revokeSession(sessionId) {
     return await prisma.userSession.update({
       where: { id: sessionId },
-      data: { revoked: true }
+      data: { revoked: true },
     });
   }
 
@@ -33,11 +33,8 @@ class SessionService {
   async cleanupExpiredSessions() {
     return await prisma.userSession.deleteMany({
       where: {
-        OR: [
-          { expiresAt: { lt: new Date() } },
-          { revoked: true }
-        ]
-      }
+        OR: [{ expiresAt: { lt: new Date() } }, { revoked: true }],
+      },
     });
   }
 }

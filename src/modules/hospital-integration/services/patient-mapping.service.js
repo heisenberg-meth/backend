@@ -3,7 +3,7 @@ import prisma from '../../../config/prisma.js';
 class PatientMappingService {
   async getOrCreateInternalPatient(externalId, tenantId, sourceSystem, patientDetails) {
     const mapping = await prisma.patientIdentityMap.findFirst({
-      where: { externalPatientId: externalId, sourceSystem }
+      where: { externalPatientId: externalId, sourceSystem },
     });
 
     if (mapping) {
@@ -23,8 +23,8 @@ class PatientMappingService {
       data: {
         externalPatientId: externalId,
         internalPatientId: newPatient.id,
-        sourceSystem
-      }
+        sourceSystem,
+      },
     });
 
     return newPatient;

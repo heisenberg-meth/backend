@@ -9,16 +9,7 @@ import {
   calculateTaxBreakdown,
 } from '../validators/gst.validator.js';
 
-/**
- * Enterprise GST Settings Service
- * Handles GST slab configuration, versioning, audit logging, and cache management.
- * This is financial compliance infrastructure — all changes are versioned and audited.
- */
 class GstSettingsService {
-  /**
-   * Get all GST settings for a tenant (with optional branch filter).
-   * Uses Redis cache for performance.
-   */
   async getGstSettings(tenantId, branchId = null) {
     const cacheKey = `settings:gst:${tenantId}:${branchId || 'global'}`;
 
@@ -275,7 +266,7 @@ class GstSettingsService {
 
     logger.info(
       { tenantId, branchId, changedBy, categories: categories?.length },
-      'GST settings updated'
+      'GST settings updated',
     );
 
     return result;

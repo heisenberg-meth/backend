@@ -31,7 +31,7 @@ class PaymentHealthService {
       results.checks.razorpay = { status: 'unhealthy', error: error.message };
     }
 
-    const allHealthy = Object.values(results.checks).every(c => c.status === 'healthy');
+    const allHealthy = Object.values(results.checks).every((c) => c.status === 'healthy');
     results.status = allHealthy ? 'healthy' : 'degraded';
 
     return results;

@@ -48,17 +48,19 @@ export function toSupplierDetailDto(supplier) {
     totalPurchaseInvoices: supplier._count?.purchaseInvoices ?? 0,
     totalPayments: supplier._count?.payments ?? 0,
     totalReturns: supplier._count?.supplierReturns ?? 0,
-    metrics: supplier.metrics ? {
-      qualityScore: supplier.metrics.qualityScore,
-      reliabilityScore: supplier.metrics.reliabilityScore,
-      fulfillmentRate: supplier.metrics.fulfillmentRate,
-      rejectionRate: supplier.metrics.rejectionRate,
-      onTimeDeliveries: supplier.metrics.onTimeDeliveries,
-      totalOrders: supplier.metrics.totalOrders,
-      averageDeliveryDays: supplier.metrics.averageDeliveryDays,
-      returnPercentage: supplier.metrics.returnPercentage,
-      expiryIssuePercentage: supplier.metrics.expiryIssuePercentage,
-    } : null,
+    metrics: supplier.metrics
+      ? {
+          qualityScore: supplier.metrics.qualityScore,
+          reliabilityScore: supplier.metrics.reliabilityScore,
+          fulfillmentRate: supplier.metrics.fulfillmentRate,
+          rejectionRate: supplier.metrics.rejectionRate,
+          onTimeDeliveries: supplier.metrics.onTimeDeliveries,
+          totalOrders: supplier.metrics.totalOrders,
+          averageDeliveryDays: supplier.metrics.averageDeliveryDays,
+          returnPercentage: supplier.metrics.returnPercentage,
+          expiryIssuePercentage: supplier.metrics.expiryIssuePercentage,
+        }
+      : null,
     createdAt: supplier.createdAt,
     updatedAt: supplier.updatedAt,
   };

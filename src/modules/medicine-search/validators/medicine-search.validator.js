@@ -7,7 +7,10 @@ export const medicineSearchSchema = z.object({
     category: z.string().uuid().optional(),
     schedule: z.string().optional(),
     branchId: z.string().uuid().optional(),
-    inStockOnly: z.enum(['true', 'false']).transform((v) => v === 'true').optional(),
+    inStockOnly: z
+      .enum(['true', 'false'])
+      .transform((v) => v === 'true')
+      .optional(),
   }),
 });
 

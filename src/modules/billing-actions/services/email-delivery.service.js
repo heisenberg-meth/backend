@@ -64,7 +64,7 @@ class EmailDeliveryService {
           <td style="padding: 8px; border-bottom: 1px solid #eee; text-align: right;">₹${item.unitPrice.toFixed(2)}</td>
           <td style="padding: 8px; border-bottom: 1px solid #eee; text-align: right;">₹${item.totalPrice.toFixed(2)}</td>
         </tr>
-      `
+      `,
       )
       .join('');
 

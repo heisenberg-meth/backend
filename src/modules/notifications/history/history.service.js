@@ -5,16 +5,7 @@ class NotificationHistoryService {
    * Get paginated notification history with filters
    */
   async getHistory(tenantId, filters = {}) {
-    const {
-      channel,
-      status,
-      patientId,
-      userId,
-      from,
-      to,
-      page = 1,
-      limit = 20,
-    } = filters;
+    const { channel, status, patientId, userId, from, to, page = 1, limit = 20 } = filters;
 
     const skip = (parseInt(page) - 1) * parseInt(limit);
     const take = parseInt(limit);
@@ -25,12 +16,12 @@ class NotificationHistoryService {
       ...(status && { deliveryStatus: status }),
       ...(patientId && { patientId }),
       ...(userId && { userId }),
-      ...(from || to) && {
+      ...((from || to) && {
         createdAt: {
           ...(from && { gte: new Date(from) }),
           ...(to && { lte: new Date(to) }),
         },
-      },
+      }),
     };
 
     const [notifications, total] = await Promise.all([

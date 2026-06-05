@@ -36,7 +36,7 @@ class PaymentIdempotencyService {
           `${IDEMPOTENCY_KEY_PREFIX}${idempotencyKey}`,
           JSON.stringify(dbRecord.response),
           'EX',
-          3600
+          3600,
         );
         return dbRecord.response;
       }
@@ -53,7 +53,7 @@ class PaymentIdempotencyService {
         `${RESPONSE_PREFIX}${idempotencyKey}`,
         JSON.stringify(response),
         'EX',
-        ttlSeconds
+        ttlSeconds,
       );
 
       await prisma.paymentIdempotency.upsert({
@@ -85,17 +85,21 @@ class PaymentIdempotencyService {
     }
 
     const lockKey = `idem_lock:${key}`;
-    return paymentLockService.executeWithLock(lockKey, async () => {
-      // Double-check inside lock to prevent race conditions
-      const doubleCheck = await this.isProcessed(key);
-      if (doubleCheck) {
-        return { ...doubleCheck, _replayed: true };
-      }
+    return paymentLockService.executeWithLock(
+      lockKey,
+      async () => {
+        // Double-check inside lock to prevent race conditions
+        const doubleCheck = await this.isProcessed(key);
+        if (doubleCheck) {
+          return { ...doubleCheck, _replayed: true };
+        }
 
-      const result = await fn();
-      await this.markProcessed(key, result, ttlSeconds);
-      return result;
-    }, LOCK_TTL);
+        const result = await fn();
+        await this.markProcessed(key, result, ttlSeconds);
+        return result;
+      },
+      LOCK_TTL,
+    );
   }
 
   async cleanupExpired() {

@@ -1,4 +1,4 @@
-import { jest, describe,afterEach, it, expect } from '@jest/globals';
+import { jest, describe, afterEach, it, expect } from '@jest/globals';
 
 // Define mocks first
 const mockMedicineRepository = {
@@ -64,23 +64,23 @@ const mockMovementService = {
 
 // Use unstable_mockModule for ESM mocking
 jest.unstable_mockModule('../../../config/prisma.js', () => ({
-  default: mockPrisma
+  default: mockPrisma,
 }));
 
 jest.unstable_mockModule('../repositories/medicine.repository.js', () => ({
-  default: mockMedicineRepository
+  default: mockMedicineRepository,
 }));
 
 jest.unstable_mockModule('../../../config/redis.js', () => ({
-  default: mockRedis
+  default: mockRedis,
 }));
 
 jest.unstable_mockModule('../../audit/service/audit.prisma.service.js', () => ({
-  default: mockAuditService
+  default: mockAuditService,
 }));
 
 jest.unstable_mockModule('../../../shared/services/eventbus.service.js', () => ({
-  default: mockEventBus
+  default: mockEventBus,
 }));
 
 jest.unstable_mockModule('../../../queue/index.js', () => ({
@@ -106,10 +106,10 @@ describe('MedicineIntelligenceService Consolidation (ESM)', () => {
     it('should use cache', async () => {
       mockRedis.get.mockResolvedValue(null);
       mockMedicineRepository.findAll.mockResolvedValue({ medicines: [], total: 0 });
-      
+
       const params = { tenantId, query: { q: 'paracetamol' } };
       await medicineService.getMedicines(params);
-      
+
       expect(mockMedicineRepository.findAll).toHaveBeenCalled();
       expect(mockRedis.set).toHaveBeenCalled();
     });
@@ -127,8 +127,8 @@ describe('MedicineIntelligenceService Consolidation (ESM)', () => {
           batchNumber: 'P001',
           quantity: 100,
           expiryDate: '2027-01-01',
-          purchasePrice: 10
-        }
+          purchasePrice: 10,
+        },
       };
 
       mockMedicineRepository.findByBarcode.mockResolvedValue(null);
@@ -136,12 +136,14 @@ describe('MedicineIntelligenceService Consolidation (ESM)', () => {
 
       const result = await medicineService.createMedicineMaster(tenantId, userId, data);
 
-      expect(mockPrisma.medicine.create).toHaveBeenCalledWith(expect.objectContaining({
-        data: expect.objectContaining({
-          category: { connect: { id: 'cat-1' } },
-          manufacturer: { connect: { id: 'mfg-1' } },
-        })
-      }));
+      expect(mockPrisma.medicine.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            category: { connect: { id: 'cat-1' } },
+            manufacturer: { connect: { id: 'mfg-1' } },
+          }),
+        }),
+      );
       expect(mockMovementService.stockIn).toHaveBeenCalled();
       expect(result.name).toBe('Amoxil');
     });

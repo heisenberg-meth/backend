@@ -6,14 +6,14 @@ import eventBus from '../../../shared/services/eventbus.service.js';
 class IntegrationService {
   async getSettings(tenantId, branchId = null) {
     const providers = await integrationRepository.getProviders(tenantId, branchId);
-    
+
     const settings = {
       whatsapp: null,
       sms: null,
       email: null,
     };
 
-    providers.forEach(p => {
+    providers.forEach((p) => {
       const type = p.providerType.toLowerCase();
       if (settings[type] === undefined) return;
 
@@ -22,7 +22,7 @@ class IntegrationService {
         settings[type] = {
           provider: p.providerName,
           enabled: p.isEnabled,
-          // We don't return full config/secrets to frontend usually, 
+          // We don't return full config/secrets to frontend usually,
           // or we redact sensitive parts
           config: this._redactConfig(p.config),
         };
@@ -44,13 +44,18 @@ class IntegrationService {
       // Encrypt sensitive config before saving
       const encryptedConfig = this._encryptConfig(config);
 
-      const updated = await integrationRepository.updateProvider(tenantId, providerType, {
-        providerName,
-        isEnabled: enabled,
-        isPrimary: true, // For now, assume update sets as primary
-        config: encryptedConfig,
-        updatedBy: userId,
-      }, branchId);
+      const updated = await integrationRepository.updateProvider(
+        tenantId,
+        providerType,
+        {
+          providerName,
+          isEnabled: enabled,
+          isPrimary: true, // For now, assume update sets as primary
+          config: encryptedConfig,
+          updatedBy: userId,
+        },
+        branchId,
+      );
 
       results.push(updated);
 
@@ -66,13 +71,20 @@ class IntegrationService {
   }
 
   async testProvider(tenantId, providerType, branchId = null) {
-    const provider = await integrationRepository.getProviderByType(tenantId, providerType.toUpperCase(), branchId);
+    const provider = await integrationRepository.getProviderByType(
+      tenantId,
+      providerType.toUpperCase(),
+      branchId,
+    );
     if (!provider) {
       throw new Error(`Provider for ${providerType} not found`);
     }
 
-    logger.info({ tenantId, providerType, providerName: provider.providerName }, '[INTEGRATIONS] Testing provider...');
-    
+    logger.info(
+      { tenantId, providerType, providerName: provider.providerName },
+      '[INTEGRATIONS] Testing provider...',
+    );
+
     return {
       success: true,
       message: `Test successful for ${provider.providerName}`,
@@ -91,13 +103,13 @@ class IntegrationService {
     const encrypted = { ...config };
     // Example: encrypt apiKey, secret, etc.
     const sensitiveKeys = ['apiKey', 'apiSecret', 'authToken', 'password', 'secret'];
-    
-    sensitiveKeys.forEach(key => {
+
+    sensitiveKeys.forEach((key) => {
       if (encrypted[key]) {
         encrypted[key] = encrypt(encrypted[key]);
       }
     });
-    
+
     return encrypted;
   }
 
@@ -105,8 +117,8 @@ class IntegrationService {
     if (!config) return {};
     const decrypted = { ...config };
     const sensitiveKeys = ['apiKey', 'apiSecret', 'authToken', 'password', 'secret'];
-    
-    sensitiveKeys.forEach(key => {
+
+    sensitiveKeys.forEach((key) => {
       if (decrypted[key]) {
         try {
           decrypted[key] = decrypt(decrypted[key]);
@@ -115,7 +127,7 @@ class IntegrationService {
         }
       }
     });
-    
+
     return decrypted;
   }
 
@@ -123,13 +135,13 @@ class IntegrationService {
     if (!config) return {};
     const redacted = { ...config };
     const sensitiveKeys = ['apiKey', 'apiSecret', 'authToken', 'password', 'secret'];
-    
-    sensitiveKeys.forEach(key => {
+
+    sensitiveKeys.forEach((key) => {
       if (redacted[key]) {
         redacted[key] = '********';
       }
     });
-    
+
     return redacted;
   }
 }

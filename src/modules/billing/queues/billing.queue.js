@@ -16,10 +16,12 @@ const createQueue = (name) => {
   });
 };
 
-export const billingQueues = isTest ? {} : {
-  pdf: registerQueue(createQueue('billing_pdf_generation')),
-  share: registerQueue(createQueue('billing_invoice_sharing')),
-};
+export const billingQueues = isTest
+  ? {}
+  : {
+      pdf: registerQueue(createQueue('billing_pdf_generation')),
+      share: registerQueue(createQueue('billing_invoice_sharing')),
+    };
 
 class BillingQueueService {
   async queuePdfGeneration(invoiceId, tenantId) {

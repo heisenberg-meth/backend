@@ -18,12 +18,12 @@ async function riskAlertRoutes(fastify) {
             severity: { type: 'string', enum: ['INFO', 'WARNING', 'CRITICAL'] },
             page: { type: 'integer', default: 1 },
             limit: { type: 'integer', default: 50 },
-            branchId: { type: 'string', format: 'uuid' }
-          }
-        }
-      }
+            branchId: { type: 'string', format: 'uuid' },
+          },
+        },
+      },
     },
-    riskController.getLowStockAlerts
+    riskController.getLowStockAlerts,
   );
 
   fastify.get(
@@ -37,12 +37,12 @@ async function riskAlertRoutes(fastify) {
             severity: { type: 'string', enum: ['INFO', 'WARNING', 'CRITICAL'] },
             page: { type: 'integer', default: 1 },
             limit: { type: 'integer', default: 50 },
-            branchId: { type: 'string', format: 'uuid' }
-          }
-        }
-      }
+            branchId: { type: 'string', format: 'uuid' },
+          },
+        },
+      },
     },
-    riskController.getExpiryAlerts
+    riskController.getExpiryAlerts,
   );
 
   fastify.get(
@@ -53,12 +53,12 @@ async function riskAlertRoutes(fastify) {
         querystring: {
           type: 'object',
           properties: {
-            branchId: { type: 'string', format: 'uuid' }
-          }
-        }
-      }
+            branchId: { type: 'string', format: 'uuid' },
+          },
+        },
+      },
     },
-    riskController.getOutOfStock
+    riskController.getOutOfStock,
   );
 
   fastify.get(
@@ -66,10 +66,10 @@ async function riskAlertRoutes(fastify) {
     {
       schema: {
         tags: ['Medicines', 'Alerts'],
-        summary: 'Get all critical pharmaceutical risk alerts'
-      }
+        summary: 'Get all critical pharmaceutical risk alerts',
+      },
     },
-    riskController.getCriticalAlerts
+    riskController.getCriticalAlerts,
   );
 
   fastify.get(
@@ -77,10 +77,10 @@ async function riskAlertRoutes(fastify) {
     {
       schema: {
         tags: ['Medicines', 'Alerts'],
-        summary: 'Get a summary of expiring inventory by severity'
-      }
+        summary: 'Get a summary of expiring inventory by severity',
+      },
     },
-    riskController.getExpirySummary
+    riskController.getExpirySummary,
   );
 
   fastify.get(
@@ -88,10 +88,10 @@ async function riskAlertRoutes(fastify) {
     {
       schema: {
         tags: ['Medicines', 'Alerts'],
-        summary: 'Get alert trends over the last 30 days'
-      }
+        summary: 'Get alert trends over the last 30 days',
+      },
     },
-    riskController.getAlertTrends
+    riskController.getAlertTrends,
   );
 
   fastify.get(
@@ -103,12 +103,12 @@ async function riskAlertRoutes(fastify) {
           type: 'object',
           properties: {
             id: { type: 'string', format: 'uuid' },
-            branchId: { type: 'string', format: 'uuid' }
-          }
-        }
-      }
+            branchId: { type: 'string', format: 'uuid' },
+          },
+        },
+      },
     },
-    riskController.getReorderRecommendations
+    riskController.getReorderRecommendations,
   );
 
   // --- Operational Tools ---
@@ -117,11 +117,11 @@ async function riskAlertRoutes(fastify) {
     {
       schema: {
         tags: ['Medicines', 'Alerts'],
-        summary: 'Manually trigger a comprehensive pharmaceutical risk scan'
+        summary: 'Manually trigger a comprehensive pharmaceutical risk scan',
       },
       preHandler: [requirePermission('VIEW_INVENTORY')],
     },
-    riskController.triggerExpiryScan
+    riskController.triggerExpiryScan,
   );
 }
 

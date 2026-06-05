@@ -64,7 +64,7 @@ class RefillRepository {
     return prisma.patientRefillReminder.findMany({
       where: { patientId, tenantId },
       orderBy: { scheduledAt: 'desc' },
-      take: 50
+      take: 50,
     });
   }
 
@@ -72,7 +72,7 @@ class RefillRepository {
     return prisma.patientAdherence.findMany({
       where: { patientId, tenantId },
       orderBy: { calculatedAt: 'desc' },
-      take: 10
+      take: 10,
     });
   }
 }

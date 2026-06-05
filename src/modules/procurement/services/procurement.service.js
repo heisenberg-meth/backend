@@ -9,8 +9,8 @@ class ProcurementService {
         branchId,
         requestedById: userId,
         status: 'PENDING',
-        ...data
-      }
+        ...data,
+      },
     });
 
     // Emit event for finance to validate budget

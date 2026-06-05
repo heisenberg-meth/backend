@@ -1,4 +1,4 @@
-import { jest , describe, beforeEach, it, expect } from '@jest/globals';
+import { jest, describe, beforeEach, it, expect } from '@jest/globals';
 
 const mockPrisma = {
   inventoryBatch: {
@@ -54,27 +54,27 @@ const mockRedis = {
 
 // Use unstable_mockModule for ESM mocking
 jest.unstable_mockModule('../../../config/prisma.js', () => ({
-  default: mockPrisma
+  default: mockPrisma,
 }));
 
 jest.unstable_mockModule('../repositories/alert.repository.js', () => ({
-  default: mockAlertRepository
+  default: mockAlertRepository,
 }));
 
 jest.unstable_mockModule('../forecasting/forecasting.service.js', () => ({
-  default: mockForecastingService
+  default: mockForecastingService,
 }));
 
 jest.unstable_mockModule('../../../shared/services/eventbus.service.js', () => ({
-  default: mockEventBus
+  default: mockEventBus,
 }));
 
 jest.unstable_mockModule('../../alert-settings/services/alert-settings.service.js', () => ({
-  default: mockAlertSettingsService
+  default: mockAlertSettingsService,
 }));
 
 jest.unstable_mockModule('../../../config/redis.js', () => ({
-  default: mockRedis
+  default: mockRedis,
 }));
 
 // Import modules AFTER mocking

@@ -129,9 +129,7 @@ describe('Edge Cases - PDF Generation Timeout', () => {
       tenant: { name: 'Test Pharmacy' },
     });
 
-    const response = await request(app)
-      .post('/api/billing/invoices/invoice-1/pdf')
-      .expect(500);
+    const response = await request(app).post('/api/billing/invoices/invoice-1/pdf').expect(500);
 
     expect(response.body.success).toBe(false);
     expect(response.body.message).toContain('timed out');
@@ -167,9 +165,7 @@ describe('Edge Cases - PDF Generation Timeout', () => {
       expiresAt: new Date(Date.now() + 3600000),
     });
 
-    const response = await request(app)
-      .post('/api/billing/invoices/invoice-1/pdf')
-      .expect(200);
+    const response = await request(app).post('/api/billing/invoices/invoice-1/pdf').expect(200);
 
     expect(response.body.success).toBe(true);
     expect(response.body.data.pdfUrl).toBeTruthy();
@@ -204,7 +200,9 @@ describe('Edge Cases - Printer Offline', () => {
     const mockUpdate = jest.fn();
     mockPrisma.invoicePrintJob.update = mockUpdate;
 
-    mockPdfRenderer.renderA4.mockRejectedValue(new Error('Printer communication failed: connect ECONNREFUSED 127.0.0.1:9100'));
+    mockPdfRenderer.renderA4.mockRejectedValue(
+      new Error('Printer communication failed: connect ECONNREFUSED 127.0.0.1:9100'),
+    );
 
     const createResult = await printService.createPrintJob('invoice-1', 'tenant-1', {
       printerType: 'THERMAL_80MM',
@@ -292,7 +290,9 @@ describe('Edge Cases - Email Bounce', () => {
 
     const logSpy = jest.spyOn(deliveryAuditService, 'updateDeliveryStatus');
 
-    mockPrisma.invoiceDeliveryLog.update.mockRejectedValue(new Error('550 5.1.1 The email account does not exist'));
+    mockPrisma.invoiceDeliveryLog.update.mockRejectedValue(
+      new Error('550 5.1.1 The email account does not exist'),
+    );
 
     try {
       await deliveryAuditService.updateDeliveryStatus('log-1', 'FAILED', {
@@ -336,7 +336,10 @@ describe('Edge Cases - Duplicate Delivery Retries', () => {
 
     const existingDeliveries = await deliveryAuditService.getDeliveryStatus('invoice-1');
     const existingEmailDeliveries = existingDeliveries.filter(
-      (d) => d.deliveryChannel === 'EMAIL' && d.recipient === 'test@example.com' && d.deliveryStatus === 'SENT'
+      (d) =>
+        d.deliveryChannel === 'EMAIL' &&
+        d.recipient === 'test@example.com' &&
+        d.deliveryStatus === 'SENT',
     );
 
     expect(existingEmailDeliveries.length).toBeGreaterThan(0);
@@ -495,11 +498,13 @@ describe('Edge Cases - Concurrent Delivery Requests', () => {
       deliveryStatus: 'QUEUED',
     });
 
-    const promises = Array(5).fill().map(() =>
-      request(app)
-        .post('/api/billing/invoices/invoice-1/email')
-        .send({ email: 'test@example.com' })
-    );
+    const promises = Array(5)
+      .fill()
+      .map(() =>
+        request(app)
+          .post('/api/billing/invoices/invoice-1/email')
+          .send({ email: 'test@example.com' }),
+      );
 
     const responses = await Promise.all(promises);
 

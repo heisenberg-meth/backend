@@ -104,7 +104,7 @@ class SettlementService {
         userId,
         action: 'SUPPLIER_PAYMENT_RECORDED',
         target: `Payment of ${amount} to Supplier ${supplierId}`,
-        type: 'FINANCIAL'
+        type: 'FINANCIAL',
       });
 
       // 5. Emit Global Events
@@ -167,7 +167,7 @@ class SettlementService {
         userId,
         action: 'SUPPLIER_PAYMENT_REVERSED',
         target: `Reversal of payment ${paymentId}`,
-        type: 'FINANCIAL'
+        type: 'FINANCIAL',
       });
 
       emitLocalEvent(DOMAIN_EVENTS.SUPPLIER_PAYMENT_REVERSED, { paymentId, tenantId });
@@ -178,4 +178,3 @@ class SettlementService {
 }
 
 export default new SettlementService();
-

@@ -1,8 +1,3 @@
-export function acquireLock(
-  resource: string,
-  ttl: number
-): Promise<boolean>;
+export function acquireLock(resource: string, ttl: number): Promise<boolean>;
 
-export function releaseLock(
-  resource: string
-): Promise<void>;
+export function releaseLock(resource: string): Promise<void>;

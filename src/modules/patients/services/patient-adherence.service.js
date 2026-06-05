@@ -45,7 +45,7 @@ class PatientAdherenceService {
     ]);
 
     const totalDoses = records.length;
-    const takenDoses = records.filter(r => r.taken).length;
+    const takenDoses = records.filter((r) => r.taken).length;
     const adherenceRate = totalDoses > 0 ? Math.round((takenDoses / totalDoses) * 100) : null;
 
     return {
@@ -73,7 +73,7 @@ class PatientAdherenceService {
     const total = records.length;
     if (total === 0) return { rate: null, total: 0, taken: 0, missed: 0 };
 
-    const taken = records.filter(r => r.taken).length;
+    const taken = records.filter((r) => r.taken).length;
     return {
       rate: Math.round((taken / total) * 100),
       total,

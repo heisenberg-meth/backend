@@ -6,12 +6,14 @@ class IntegrationController {
     try {
       const tenantId = request.tenantId;
       const branchId = request.query.branchId || request.branchId;
-      
+
       const settings = await integrationService.getSettings(tenantId, branchId);
       return reply.send({ success: true, data: settings });
     } catch (error) {
       logger.error({ error, tenantId: request.tenantId }, '[INTEGRATIONS] Get settings failed');
-      return reply.code(500).send({ success: false, error: 'Failed to retrieve integration settings' });
+      return reply
+        .code(500)
+        .send({ success: false, error: 'Failed to retrieve integration settings' });
     }
   }
 
@@ -30,7 +32,9 @@ class IntegrationController {
       return reply.send({ success: true, message: 'Integration settings updated successfully' });
     } catch (error) {
       logger.error({ error, tenantId: request.tenantId }, '[INTEGRATIONS] Update settings failed');
-      return reply.code(500).send({ success: false, error: 'Failed to update integration settings' });
+      return reply
+        .code(500)
+        .send({ success: false, error: 'Failed to update integration settings' });
     }
   }
 
@@ -43,11 +47,17 @@ class IntegrationController {
         return reply.code(400).send({ success: false, error: 'Provider type is required' });
       }
 
-      const result = await integrationService.testProvider(tenantId, providerType, branchId || request.branchId);
+      const result = await integrationService.testProvider(
+        tenantId,
+        providerType,
+        branchId || request.branchId,
+      );
       return reply.send({ success: true, data: result });
     } catch (error) {
       logger.error({ error, tenantId: request.tenantId }, '[INTEGRATIONS] Test provider failed');
-      return reply.code(500).send({ success: false, error: error.message || 'Provider test failed' });
+      return reply
+        .code(500)
+        .send({ success: false, error: error.message || 'Provider test failed' });
     }
   }
 

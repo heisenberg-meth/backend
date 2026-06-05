@@ -8,23 +8,26 @@ class InsuranceService {
    */
   async verifyClaim(claimId, tenantId) {
     logger.info(`[INSURANCE] Verifying claim: ${claimId}`);
-    
+
     const claim = await prisma.patientInsuranceClaim.findUnique({
-      where: { id: claimId, tenantId }
+      where: { id: claimId, tenantId },
     });
 
     if (!claim) return;
 
-    await new Promise(resolve => setTimeout(resolve, 2000));
+    await new Promise((resolve) => setTimeout(resolve, 2000));
 
     const status = 'APPROVED';
-    
+
     await prisma.patientInsuranceClaim.update({
       where: { id: claimId },
-      data: { 
+      data: {
         status,
-        notes: status === 'APPROVED' ? 'Claim verified by provider' : 'Provider rejected claim: Policy inactive'
-      }
+        notes:
+          status === 'APPROVED'
+            ? 'Claim verified by provider'
+            : 'Provider rejected claim: Policy inactive',
+      },
     });
 
     await emitEvent('INSURANCE_CLAIM_UPDATED', { claimId, tenantId, status });

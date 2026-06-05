@@ -10,7 +10,8 @@ class PatientFastifyController {
     try {
       const { search, chronic, page, limit } = request.query;
       const result = await patientService.getCustomers(request.tenantId, {
-        search, chronic,
+        search,
+        chronic,
         page: parseInt(page) || 1,
         limit: parseInt(limit) || 50,
       });
@@ -49,7 +50,10 @@ class PatientFastifyController {
 
   async getRecommendations(request, reply) {
     try {
-      const recommendations = await recommendationService.getReorderRecommendations(request.tenantId, request.params.id);
+      const recommendations = await recommendationService.getReorderRecommendations(
+        request.tenantId,
+        request.params.id,
+      );
       return reply.send(recommendations);
     } catch (error) {
       return reply.code(500).send({ message: error.message });
@@ -67,13 +71,21 @@ class PatientFastifyController {
 
   async createPatient(request, reply) {
     try {
-      const patient = await patientService.createCustomer(request.tenantId, request.body, request.user?.email);
+      const patient = await patientService.createCustomer(
+        request.tenantId,
+        request.body,
+        request.user?.email,
+      );
       return reply.code(201).send(patient);
     } catch (error) {
       if (error.message.includes('Duplicate')) {
         return reply.code(409).send({ message: error.message });
       }
-      if (error.message.includes('required') || error.message.includes('Invalid') || error.message.includes('must be')) {
+      if (
+        error.message.includes('required') ||
+        error.message.includes('Invalid') ||
+        error.message.includes('must be')
+      ) {
         return reply.code(400).send({ message: error.message });
       }
       return reply.code(400).send({ message: error.message });
@@ -82,13 +94,22 @@ class PatientFastifyController {
 
   async updatePatient(request, reply) {
     try {
-      const patient = await patientService.updateCustomer(request.params.id, request.tenantId, request.body, request.user?.email);
+      const patient = await patientService.updateCustomer(
+        request.params.id,
+        request.tenantId,
+        request.body,
+        request.user?.email,
+      );
       return reply.send(patient);
     } catch (error) {
       if (error.message.includes('already in use')) {
         return reply.code(409).send({ message: error.message });
       }
-      if (error.message.includes('required') || error.message.includes('Invalid') || error.message.includes('must be')) {
+      if (
+        error.message.includes('required') ||
+        error.message.includes('Invalid') ||
+        error.message.includes('must be')
+      ) {
         return reply.code(400).send({ message: error.message });
       }
       return reply.code(400).send({ message: error.message });
@@ -116,7 +137,8 @@ class PatientFastifyController {
   async getRecentPatients(request, reply) {
     try {
       const patients = await patientService.getCustomers(request.tenantId, {
-        page: 1, limit: parseInt(request.query.limit) || 10,
+        page: 1,
+        limit: parseInt(request.query.limit) || 10,
       });
       return reply.send({ success: true, data: patients });
     } catch (error) {
@@ -135,7 +157,10 @@ class PatientFastifyController {
 
   async getPrescriptions(request, reply) {
     try {
-      const prescriptions = await patientService.getPrescriptions(request.params.id, request.tenantId);
+      const prescriptions = await patientService.getPrescriptions(
+        request.params.id,
+        request.tenantId,
+      );
       return reply.send({ success: true, data: prescriptions });
     } catch (error) {
       return reply.code(404).send({ success: false, message: error.message });
@@ -223,7 +248,11 @@ class PatientFastifyController {
 
   async sendRefillReminder(request, reply) {
     try {
-      const result = await communicationsService.sendRefillReminder(request.params.id, request.tenantId, { channel: request.body?.channel });
+      const result = await communicationsService.sendRefillReminder(
+        request.params.id,
+        request.tenantId,
+        { channel: request.body?.channel },
+      );
       return reply.send({ success: true, data: result });
     } catch (error) {
       return reply.code(400).send({ success: false, message: error.message });

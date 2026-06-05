@@ -1,4 +1,4 @@
-import { jest , describe, beforeEach, it, expect } from '@jest/globals';
+import { jest, describe, beforeEach, it, expect } from '@jest/globals';
 
 jest.unstable_mockModule('../../../config/prisma.js', () => ({
   default: {
@@ -116,7 +116,9 @@ function mockAdherence(overrides = {}) {
 }
 
 describe('PatientComplianceService', () => {
-  beforeEach(() => { jest.clearAllMocks(); });
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
 
   it('detects allergy conflicts with prescribed medicines', async () => {
     mockPrisma.patient.findFirst.mockResolvedValue(mockPatient());
@@ -124,7 +126,10 @@ describe('PatientComplianceService', () => {
       { id: 'med-1', name: 'Penicillin V', genericName: 'penicillin' },
       { id: 'med-2', name: 'Paracetamol', genericName: 'acetaminophen' },
     ]);
-    const result = await complianceService.checkAllergyInteractions('pat-1', 'tenant-1', ['med-1', 'med-2']);
+    const result = await complianceService.checkAllergyInteractions('pat-1', 'tenant-1', [
+      'med-1',
+      'med-2',
+    ]);
     expect(result.safe).toBe(false);
     expect(result.conflicts).toHaveLength(1);
     expect(result.conflicts[0].allergy).toBe('penicillin');
@@ -139,8 +144,9 @@ describe('PatientComplianceService', () => {
 
   it('throws for non-existent patient', async () => {
     mockPrisma.patient.findFirst.mockResolvedValue(null);
-    await expect(complianceService.checkAllergyInteractions('nonexistent', 'tenant-1', []))
-      .rejects.toThrow('Patient not found');
+    await expect(
+      complianceService.checkAllergyInteractions('nonexistent', 'tenant-1', []),
+    ).rejects.toThrow('Patient not found');
   });
 
   it('validates insurance returns not valid when no info on file', async () => {
@@ -152,7 +158,11 @@ describe('PatientComplianceService', () => {
 
   it('validates insurance is valid when info present', async () => {
     mockPrisma.patient.findFirst.mockResolvedValue(
-      mockPatient({ insuranceProvider: 'ICICI Lombard', insurancePolicyNo: 'POL-12345', insuranceCoveragePercentage: 80 })
+      mockPatient({
+        insuranceProvider: 'ICICI Lombard',
+        insurancePolicyNo: 'POL-12345',
+        insuranceCoveragePercentage: 80,
+      }),
     );
     const result = await complianceService.validateInsurance('pat-1', 'tenant-1');
     expect(result.valid).toBe(true);
@@ -163,11 +173,16 @@ describe('PatientComplianceService', () => {
   it('updates insurance information', async () => {
     mockPrisma.patient.findFirst.mockResolvedValue(mockPatient());
     mockPrisma.patient.update.mockResolvedValue(mockPatient());
-    const result = await complianceService.updateInsurance('pat-1', 'tenant-1', {
-      insuranceProvider: 'New India Assurance',
-      insurancePolicyNo: 'POL-99999',
-      insuranceCoveragePercentage: 75,
-    }, 'admin@pharmacy.com');
+    const result = await complianceService.updateInsurance(
+      'pat-1',
+      'tenant-1',
+      {
+        insuranceProvider: 'New India Assurance',
+        insurancePolicyNo: 'POL-99999',
+        insuranceCoveragePercentage: 75,
+      },
+      'admin@pharmacy.com',
+    );
     expect(result).toBeDefined();
     expect(mockPrisma.patient.update).toHaveBeenCalled();
   });
@@ -175,9 +190,13 @@ describe('PatientComplianceService', () => {
   it('generates compliance report with adherence rate', async () => {
     mockPrisma.patient.findFirst.mockResolvedValue(
       mockPatient({
-        patientAdherence: [mockAdherence({ taken: true }), mockAdherence({ taken: true }), mockAdherence({ taken: false })],
+        patientAdherence: [
+          mockAdherence({ taken: true }),
+          mockAdherence({ taken: true }),
+          mockAdherence({ taken: false }),
+        ],
         patientRefills: [],
-      })
+      }),
     );
     const report = await complianceService.getComplianceReport('pat-1', 'tenant-1');
     expect(report.adherenceRate).toBe(67);
@@ -187,7 +206,9 @@ describe('PatientComplianceService', () => {
 });
 
 describe('PatientAnalyticsService', () => {
-  beforeEach(() => { jest.clearAllMocks(); });
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
 
   it('returns comprehensive patient analytics', async () => {
     const enhancedPatient = {
@@ -227,7 +248,11 @@ describe('PatientAnalyticsService', () => {
         chronicConditions: ['diabetes'],
         totalVisits: 10,
         lastPurchaseDate: new Date(),
-        patientAdherence: [mockAdherence({ taken: true }), mockAdherence({ taken: true }), mockAdherence({ taken: false })],
+        patientAdherence: [
+          mockAdherence({ taken: true }),
+          mockAdherence({ taken: true }),
+          mockAdherence({ taken: false }),
+        ],
         _count: { prescriptions: 3, invoices: 5 },
       },
     ]);
@@ -245,7 +270,11 @@ describe('PatientAnalyticsService', () => {
         chronicConditions: ['hypertension'],
         totalVisits: 5,
         lastPurchaseDate: new Date(),
-        patientAdherence: [mockAdherence({ taken: true }), mockAdherence({ taken: false }), mockAdherence({ taken: false })],
+        patientAdherence: [
+          mockAdherence({ taken: true }),
+          mockAdherence({ taken: false }),
+          mockAdherence({ taken: false }),
+        ],
         _count: { prescriptions: 2, invoices: 3 },
       },
     ]);
@@ -254,7 +283,11 @@ describe('PatientAnalyticsService', () => {
   });
 
   it('returns purchase patterns with segmentation', async () => {
-    mockPrisma.patient.count.mockResolvedValueOnce(15).mockResolvedValueOnce(5).mockResolvedValueOnce(3).mockResolvedValueOnce(8);
+    mockPrisma.patient.count
+      .mockResolvedValueOnce(15)
+      .mockResolvedValueOnce(5)
+      .mockResolvedValueOnce(3)
+      .mockResolvedValueOnce(8);
     const result = await analyticsService.getPurchasePatterns('tenant-1');
     expect(result.frequent).toBe(15);
     expect(result.atRisk).toBe(5);
@@ -281,7 +314,9 @@ describe('PatientAnalyticsService', () => {
 });
 
 describe('PatientAdherenceService', () => {
-  beforeEach(() => { jest.clearAllMocks(); });
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
 
   it('logs adherence entry', async () => {
     mockPrisma.patient.findFirst.mockResolvedValue(mockPatient());
@@ -298,8 +333,9 @@ describe('PatientAdherenceService', () => {
 
   it('throws for non-existent patient on adherence log', async () => {
     mockPrisma.patient.findFirst.mockResolvedValue(null);
-    await expect(adherenceService.logAdherence('nonexistent', 'tenant-1', {}))
-      .rejects.toThrow('Patient not found');
+    await expect(adherenceService.logAdherence('nonexistent', 'tenant-1', {})).rejects.toThrow(
+      'Patient not found',
+    );
   });
 
   it('returns adherence history with summary', async () => {
@@ -348,12 +384,18 @@ describe('PatientAdherenceService', () => {
 });
 
 describe('PatientService', () => {
-  beforeEach(() => { jest.clearAllMocks(); });
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
 
   it('returns prescriptions list for patient', async () => {
     mockPrisma.patient.findFirst.mockResolvedValue(mockPatient());
     mockPrisma.prescription.findMany.mockResolvedValue([
-      { id: 'rx-1', items: [{ medicine: { name: 'Paracetamol' }, dosage: '1 tab' }], doctor: { doctorName: 'Dr. Kumar' } },
+      {
+        id: 'rx-1',
+        items: [{ medicine: { name: 'Paracetamol' }, dosage: '1 tab' }],
+        doctor: { doctorName: 'Dr. Kumar' },
+      },
     ]);
     const result = await patientService.getPrescriptions('pat-1', 'tenant-1');
     expect(result.length).toBeGreaterThan(0);
@@ -377,13 +419,16 @@ describe('PatientService', () => {
 
   it('throws on refill reminder when patient has no phone', async () => {
     mockPrisma.patient.findFirst.mockResolvedValue(mockPatient({ phone: null }));
-    await expect(patientService.sendRefillReminder('pat-1', 'tenant-1'))
-      .rejects.toThrow('does not have a phone number');
+    await expect(patientService.sendRefillReminder('pat-1', 'tenant-1')).rejects.toThrow(
+      'does not have a phone number',
+    );
   });
 });
 
 describe('PatientRepository', () => {
-  beforeEach(() => { jest.clearAllMocks(); });
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
 
   describe('validatePhone', () => {
     it('rejects empty phone', () => {

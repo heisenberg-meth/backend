@@ -22,7 +22,7 @@ class NotificationService {
     await mainQueue.add('send-sms', {
       notificationId: notification.id,
       phone,
-      message
+      message,
     });
 
     return notification;
@@ -41,14 +41,14 @@ class NotificationService {
       phone,
       message,
       type: `WA_${type}`,
-      status: 'PENDING'
+      status: 'PENDING',
     });
 
     await mainQueue.add('send-whatsapp', {
       notificationId: notification.id,
       phone,
       message,
-      mediaUrl
+      mediaUrl,
     });
 
     return notification;
@@ -69,7 +69,7 @@ class NotificationService {
       message,
       html,
       type,
-      attachments
+      attachments,
     });
 
     return { success: true, message: 'Email queued' };

@@ -30,7 +30,7 @@ class CreditNoteService {
 
     const creditNoteNumber = await creditNoteRepository.generateCreditNoteNumber(
       tenantId,
-      returnRecord.invoice.branch?.code || 'GEN'
+      returnRecord.invoice.branch?.code || 'GEN',
     );
 
     let totalCreditAmount = 0;
@@ -66,7 +66,7 @@ class CreditNoteService {
         notes,
         createdBy: userId,
       },
-      prisma
+      prisma,
     );
 
     emitLocalEvent(DOMAIN_EVENTS.CREDIT_NOTE_GENERATED, {
@@ -84,7 +84,9 @@ class CreditNoteService {
       tenantId,
     });
 
-    logger.info(`[CreditNote] Generated ${creditNoteNumber} for return ${returnRecord.returnNumber}`);
+    logger.info(
+      `[CreditNote] Generated ${creditNoteNumber} for return ${returnRecord.returnNumber}`,
+    );
 
     return creditNote;
   }

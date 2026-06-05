@@ -17,7 +17,6 @@ export const billingSettingsSchema = z.object({
   termsAndConditions: z.string().max(2000).optional(),
 });
 
-// Inventory settings schema
 export const inventorySettingsSchema = z.object({
   lowStockThreshold: z.number().min(0).optional(),
   expiryAlertDays: z.number().min(1).max(365).optional(),

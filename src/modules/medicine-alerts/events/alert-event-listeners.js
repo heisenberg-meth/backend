@@ -44,7 +44,10 @@ class AlertEventListeners {
 
         await this._checkEscalation(tenantId, medicineId, 'LOW_STOCK');
       } catch (error) {
-        logger.error({ error, event: DOMAIN_EVENTS.LOW_STOCK_DETECTED }, 'Failed to process low stock event');
+        logger.error(
+          { error, event: DOMAIN_EVENTS.LOW_STOCK_DETECTED },
+          'Failed to process low stock event',
+        );
       }
     });
   }
@@ -71,7 +74,10 @@ class AlertEventListeners {
           tenantId,
         });
       } catch (error) {
-        logger.error({ error, event: DOMAIN_EVENTS.OUT_OF_STOCK_DETECTED }, 'Failed to process out of stock event');
+        logger.error(
+          { error, event: DOMAIN_EVENTS.OUT_OF_STOCK_DETECTED },
+          'Failed to process out of stock event',
+        );
       }
     });
   }
@@ -90,7 +96,10 @@ class AlertEventListeners {
           daysRemaining,
         });
       } catch (error) {
-        logger.error({ error, event: DOMAIN_EVENTS.EXPIRY_WARNING }, 'Failed to process expiry warning event');
+        logger.error(
+          { error, event: DOMAIN_EVENTS.EXPIRY_WARNING },
+          'Failed to process expiry warning event',
+        );
       }
     });
   }
@@ -105,7 +114,10 @@ class AlertEventListeners {
 
         await this._broadcastResolution(tenantId, alertId, resolvedBy);
       } catch (error) {
-        logger.error({ error, event: DOMAIN_EVENTS.ALERT_RESOLVED }, 'Failed to process alert resolved event');
+        logger.error(
+          { error, event: DOMAIN_EVENTS.ALERT_RESOLVED },
+          'Failed to process alert resolved event',
+        );
       }
     });
   }
@@ -124,15 +136,18 @@ class AlertEventListeners {
             timestamp: new Date().toISOString(),
           }),
           'EX',
-          86400
+          86400,
         );
 
         logger.info(
           { tenantId, expiryAlerts, stockAlerts },
-          `[ALERT-SCAN] Completed: ${expiryAlerts + stockAlerts} total alerts`
+          `[ALERT-SCAN] Completed: ${expiryAlerts + stockAlerts} total alerts`,
         );
       } catch (error) {
-        logger.error({ error, event: DOMAIN_EVENTS.ALERT_SCAN_COMPLETED }, 'Failed to process scan completed event');
+        logger.error(
+          { error, event: DOMAIN_EVENTS.ALERT_SCAN_COMPLETED },
+          'Failed to process scan completed event',
+        );
       }
     });
   }
@@ -151,7 +166,10 @@ class AlertEventListeners {
           message: `Reorder recommended: ${recommendedQuantity} units for ${data.medicineName || medicineId}`,
         });
       } catch (error) {
-        logger.error({ error, event: DOMAIN_EVENTS.REORDER_RECOMMENDED }, 'Failed to process reorder event');
+        logger.error(
+          { error, event: DOMAIN_EVENTS.REORDER_RECOMMENDED },
+          'Failed to process reorder event',
+        );
       }
     });
   }
@@ -166,12 +184,12 @@ class AlertEventListeners {
           branchId,
           medicineId,
           medicineName,
-          availableStock
+          availableStock,
         );
       } catch (error) {
         logger.error(
           { error, event: DOMAIN_EVENTS.STOCK_TRANSFER_RECOMMENDED },
-          'Failed to process transfer event'
+          'Failed to process transfer event',
         );
       }
     });
@@ -188,7 +206,7 @@ class AlertEventListeners {
     if (count >= 3) {
       logger.warn(
         { tenantId, medicineId, alertType, count },
-        `[ALERT-ESCALATION] Alert triggered ${count} times, escalating`
+        `[ALERT-ESCALATION] Alert triggered ${count} times, escalating`,
       );
 
       await redisClient.set(
@@ -198,7 +216,7 @@ class AlertEventListeners {
           escalatedAt: new Date().toISOString(),
         }),
         'EX',
-        ALERT_ESCALATION_TTL
+        ALERT_ESCALATION_TTL,
       );
     }
   }

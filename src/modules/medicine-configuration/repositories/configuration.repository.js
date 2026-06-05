@@ -13,19 +13,19 @@ class ConfigurationRepository {
       if (!branchId) {
         await tx.medicine.update({
           where: { id: medicineId },
-          data: { reorderLevel: reorderPoint }
+          data: { reorderLevel: reorderPoint },
         });
       }
 
       // 2. Upsert branch specific or default config record
       const existing = await tx.medicineInventoryConfig.findFirst({
-        where: { medicineId, tenantId, branchId: branchId || null }
+        where: { medicineId, tenantId, branchId: branchId || null },
       });
 
       if (existing) {
         return await tx.medicineInventoryConfig.update({
           where: { id: existing.id },
-          data: { reorderPoint, safetyStock, maxStockLimit, updatedBy, updatedAt: new Date() }
+          data: { reorderPoint, safetyStock, maxStockLimit, updatedBy, updatedAt: new Date() },
         });
       }
 
@@ -37,8 +37,8 @@ class ConfigurationRepository {
           reorderPoint,
           safetyStock,
           maxStockLimit,
-          updatedBy
-        }
+          updatedBy,
+        },
       });
     });
   }
@@ -53,25 +53,25 @@ class ConfigurationRepository {
       // 1. Fetch current price for history
       const currentMedicine = await tx.medicine.findUnique({
         where: { id: medicineId },
-        select: { unitPrice: true, sellingPrice: true, storefrontPrice: true }
+        select: { unitPrice: true, sellingPrice: true, storefrontPrice: true },
       });
 
       // Assuming unitPrice in Medicine model is purchasePrice for now (based on schema)
       // Actually, Medicine model has unitPrice and sellingPrice.
-      
+
       // 2. Update Medicine table
       await tx.medicine.update({
         where: { id: medicineId },
-        data: { 
+        data: {
           unitPrice: purchasePrice, // Map purchase to unitPrice
-          sellingPrice: sellingPrice 
-        }
+          sellingPrice: sellingPrice,
+        },
       });
 
       // 3. Update MedicinePricing (current active record)
       await tx.medicinePricing.updateMany({
         where: { medicineId, tenantId, isActive: true },
-        data: { isActive: false }
+        data: { isActive: false },
       });
 
       await tx.medicinePricing.create({
@@ -81,8 +81,8 @@ class ConfigurationRepository {
           mrp,
           sellingPrice,
           purchasePrice,
-          isActive: true
-        }
+          isActive: true,
+        },
       });
 
       // 4. Record History
@@ -96,8 +96,8 @@ class ConfigurationRepository {
           newSellingPrice: sellingPrice,
           oldPurchasePrice: currentMedicine.unitPrice,
           newPurchasePrice: purchasePrice,
-          changedBy
-        }
+          changedBy,
+        },
       });
     });
   }
@@ -112,16 +112,16 @@ class ConfigurationRepository {
       // 1. Fetch old status
       const medicine = await tx.medicine.findUnique({
         where: { id: medicineId },
-        select: { status: true, isActive: true }
+        select: { status: true, isActive: true },
       });
 
       // 2. Update Medicine
       await tx.medicine.update({
         where: { id: medicineId },
-        data: { 
+        data: {
           status,
-          isActive: status === 'ACTIVE'
-        }
+          isActive: status === 'ACTIVE',
+        },
       });
 
       // 3. Record History
@@ -132,8 +132,8 @@ class ConfigurationRepository {
           oldStatus: medicine.status,
           newStatus: status,
           reason,
-          changedBy
-        }
+          changedBy,
+        },
       });
     });
   }
@@ -145,7 +145,7 @@ class ConfigurationRepository {
     return await prisma.medicinePriceHistory.findMany({
       where: { medicineId, tenantId },
       include: { changedByUser: { select: { fullName: true } } },
-      orderBy: { changedAt: 'desc' }
+      orderBy: { changedAt: 'desc' },
     });
   }
 
@@ -156,7 +156,7 @@ class ConfigurationRepository {
     return await prisma.medicineStatusHistory.findMany({
       where: { medicineId, tenantId },
       include: { changedByUser: { select: { fullName: true } } },
-      orderBy: { changedAt: 'desc' }
+      orderBy: { changedAt: 'desc' },
     });
   }
 }

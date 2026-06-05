@@ -19,7 +19,9 @@ export async function processAdherenceScoring() {
     for (const refill of refills) {
       if (!refill.expectedRefillAt) continue;
 
-      const daysOverdue = Math.round((now.getTime() - refill.expectedRefillAt.getTime()) / 86400000);
+      const daysOverdue = Math.round(
+        (now.getTime() - refill.expectedRefillAt.getTime()) / 86400000,
+      );
       let newStatus = refill.adherenceStatus;
 
       if (daysOverdue > 14) newStatus = 'CRITICAL';

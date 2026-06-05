@@ -11,13 +11,15 @@ export const createReturnSchema = z.object({
       'EXPIRED_RETURN',
       'PARTIAL_RETURN',
     ]),
-    returnType: z.enum([
-      'CUSTOMER_RETURN',
-      'DAMAGED_RETURN',
-      'BILLING_CORRECTION',
-      'EXPIRED_RETURN',
-      'PARTIAL_RETURN',
-    ]).optional(),
+    returnType: z
+      .enum([
+        'CUSTOMER_RETURN',
+        'DAMAGED_RETURN',
+        'BILLING_CORRECTION',
+        'EXPIRED_RETURN',
+        'PARTIAL_RETURN',
+      ])
+      .optional(),
     items: z
       .array(
         z.object({
@@ -26,7 +28,7 @@ export const createReturnSchema = z.object({
           disposition: z
             .enum(['PENDING', 'RESTOCK', 'DESTROY', 'QUARANTINE', 'SUPPLIER_RETURN'])
             .optional(),
-        })
+        }),
       )
       .min(1),
     refundMethod: z.enum(['CASH', 'UPI', 'STORE_CREDIT', 'BANK_TRANSFER']).optional(),
@@ -78,10 +80,7 @@ export const processDispositionSchema = z.object({
   }),
   body: z.object({
     dispositions: z
-      .record(
-        z.string().uuid(),
-        z.enum(['RESTOCK', 'DESTROY', 'QUARANTINE', 'SUPPLIER_RETURN'])
-      )
+      .record(z.string().uuid(), z.enum(['RESTOCK', 'DESTROY', 'QUARANTINE', 'SUPPLIER_RETURN']))
       .optional(),
   }),
 });

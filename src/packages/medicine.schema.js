@@ -1,6 +1,13 @@
 import { z } from 'zod';
 
-export const MedicineStatus = z.enum(['ACTIVE', 'INACTIVE', 'DISCONTINUED', 'BLOCKED', 'RESTRICTED', 'RECALLED']);
+export const MedicineStatus = z.enum([
+  'ACTIVE',
+  'INACTIVE',
+  'DISCONTINUED',
+  'BLOCKED',
+  'RESTRICTED',
+  'RECALLED',
+]);
 
 export const StorageCondition = z.enum(['ROOM_TEMPERATURE', 'COLD_STORAGE', 'PROTECT_FROM_LIGHT']);
 
@@ -37,7 +44,7 @@ export const AddBatchSchema = z.object({
   branchId: z.string().uuid().optional(),
   batchNumber: z.string().min(1, 'Batch number is required'),
   quantity: z.number().int().min(0),
-  expiryDate: z.string().refine(val => new Date(val) > new Date(), {
+  expiryDate: z.string().refine((val) => new Date(val) > new Date(), {
     message: 'Expiry date must be in the future',
   }),
   manufacturingDate: z.string().optional(),
@@ -83,7 +90,7 @@ export const MedicineResponseSchema = z.object({
   isActive: z.boolean(),
   createdAt: z.string(),
   updatedAt: z.string(),
-  
+
   // Relations (simplified for now)
   category: z.object({ id: z.string(), name: z.string() }).nullable().optional(),
   manufacturer: z.object({ id: z.string(), name: z.string() }).nullable().optional(),
