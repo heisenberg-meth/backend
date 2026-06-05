@@ -7,15 +7,16 @@ import { mainQueue } from '../../../queue/index.js';
 import eventBus from '../../../shared/services/eventbus.service.js';
 import movementService from '../../stock/service/movement.service.js';
 import { scanKeys } from '../../../shared/utils/scan-keys.js';
+import inventoryBatchRepository from '../repository/inventory_batch.repository.js';
 
 class MedicinePrismaService {
   async getMedicines(params) {
     try {
       const { tenantId, branchId, query = {}, pagination = {} } = params;
-      
+
       // Caching Key
       const cacheKey = `inventory:${tenantId}:${branchId || 'all'}:${JSON.stringify(query)}:${JSON.stringify(pagination)}`;
-      
+
       try {
         const cachedData = await redisClient.get(cacheKey);
         if (cachedData) {
@@ -29,7 +30,7 @@ class MedicinePrismaService {
       const { page = 1, limit = 20 } = pagination;
 
       const skip = (page - 1) * limit;
-      
+
       const result = await medicineRepository.findAll({
         tenantId,
         branchId,
@@ -102,14 +103,16 @@ class MedicinePrismaService {
             where: {
               tenantId,
               name: { equals: catName, mode: 'insensitive' },
-              deletedAt: null
-            }
+              deletedAt: null,
+            },
           });
-          categoryId = existingCat ? existingCat.id : (
-            await tx.medicineCategory.create({
-              data: { name: catName, tenantId }
-            })
-          ).id;
+          categoryId = existingCat
+            ? existingCat.id
+            : (
+                await tx.medicineCategory.create({
+                  data: { name: catName, tenantId },
+                })
+              ).id;
         }
 
         let manufacturerId = rawMedicineData.manufacturerId || null;
@@ -119,14 +122,16 @@ class MedicinePrismaService {
             where: {
               tenantId,
               name: { equals: mfgName, mode: 'insensitive' },
-              deletedAt: null
-            }
+              deletedAt: null,
+            },
           });
-          manufacturerId = existingMfg ? existingMfg.id : (
-            await tx.manufacturer.create({
-              data: { name: mfgName, tenantId }
-            })
-          ).id;
+          manufacturerId = existingMfg
+            ? existingMfg.id
+            : (
+                await tx.manufacturer.create({
+                  data: { name: mfgName, tenantId },
+                })
+              ).id;
         }
 
         let status = 'ACTIVE';
@@ -155,10 +160,13 @@ class MedicinePrismaService {
           unit: rawMedicineData.unit || null,
           scheduleType: rawMedicineData.scheduleType || rawMedicineData.schedule || null,
           storageCondition: rawMedicineData.storageCondition || null,
-          prescriptionRequired: rawMedicineData.prescriptionRequired === true || 
-                                rawMedicineData.prescriptionRequired === 'true' || 
-                                ['Schedule H', 'Schedule H1', 'Schedule X'].includes(rawMedicineData.schedule || rawMedicineData.scheduleType) || 
-                                false,
+          prescriptionRequired:
+            rawMedicineData.prescriptionRequired === true ||
+            rawMedicineData.prescriptionRequired === 'true' ||
+            ['Schedule H', 'Schedule H1', 'Schedule X'].includes(
+              rawMedicineData.schedule || rawMedicineData.scheduleType,
+            ) ||
+            false,
           hsnCode: rawMedicineData.hsnCode || null,
           barcode: rawMedicineData.barcode || null,
           sku: rawMedicineData.sku || null,
@@ -166,28 +174,36 @@ class MedicinePrismaService {
           onlineDescription: rawMedicineData.onlineDescription || null,
           imageUrl: rawMedicineData.imageUrl || null,
           gstPercentage,
-          reorderLevel: rawMedicineData.reorderLevel !== undefined ? Number(rawMedicineData.reorderLevel) : 10,
-          reorderQuantity: rawMedicineData.reorderQuantity !== undefined ? Number(rawMedicineData.reorderQuantity) : null,
+          reorderLevel:
+            rawMedicineData.reorderLevel !== undefined ? Number(rawMedicineData.reorderLevel) : 10,
+          reorderQuantity:
+            rawMedicineData.reorderQuantity !== undefined
+              ? Number(rawMedicineData.reorderQuantity)
+              : null,
           status,
           isActive: rawMedicineData.isActive !== false,
-          isPublished: rawMedicineData.isPublished === true || rawMedicineData.isPublished === 'true'
+          isPublished:
+            rawMedicineData.isPublished === true || rawMedicineData.isPublished === 'true',
         };
 
         // 1. Create Medicine Catalog Entry
-        const newMedicine = await medicineRepository.create({
-          ...medicineData,
-          tenantId,
-          userId,
-        }, tx);
+        const newMedicine = await medicineRepository.create(
+          {
+            ...medicineData,
+            tenantId,
+            userId,
+          },
+          tx,
+        );
 
         // 2. Initialize Branch Inventory Snapshot
         await tx.inventory.upsert({
           where: {
-            tenantId_branchId_medicineId: { tenantId, branchId, medicineId: newMedicine.id }
+            tenantId_branchId_medicineId: { tenantId, branchId, medicineId: newMedicine.id },
           },
           update: {
             reorderPoint: reorderPoint ?? 10,
-            rackLocation: rackLocation || null
+            rackLocation: rackLocation || null,
           },
           create: {
             tenantId,
@@ -195,19 +211,24 @@ class MedicinePrismaService {
             medicineId: newMedicine.id,
             reorderPoint: reorderPoint ?? 10,
             rackLocation: rackLocation || null,
-            currentStock: 0
-          }
+            currentStock: 0,
+          },
         });
 
         // 3. Create Initial Batch + Stock Movement (only if initial stock provided)
         if (initialBatch && initialBatch.batchNumber && initialBatch.quantity > 0) {
-          await movementService.stockIn(tenantId, {
-            ...initialBatch,
-            medicineId: newMedicine.id,
-            branchId,
-            referenceType: 'INITIAL_STOCK',
-            notes: 'Initial inventory during medicine creation'
-          }, userId, tx);
+          await movementService.stockIn(
+            tenantId,
+            {
+              ...initialBatch,
+              medicineId: newMedicine.id,
+              branchId,
+              referenceType: 'INITIAL_STOCK',
+              notes: 'Initial inventory during medicine creation',
+            },
+            userId,
+            tx,
+          );
         }
 
         return newMedicine;
@@ -222,21 +243,27 @@ class MedicinePrismaService {
           userId,
           action: 'CREATE_MEDICINE',
           target: medicine.name,
-          type: 'INVENTORY'
+          type: 'INVENTORY',
         });
       } catch (sideEffectError) {
-        logger.error({ err: sideEffectError.message }, '[INVENTORY] Non-critical side-effect failed during medicine creation');
+        logger.error(
+          { err: sideEffectError.message },
+          '[INVENTORY] Non-critical side-effect failed during medicine creation',
+        );
       }
 
       return medicine;
     } catch (error) {
-      logger.error({ 
-        err: error.message, 
-        stack: error.stack, 
-        tenantId, 
-        userId, 
-        payload: data 
-      }, '[INVENTORY] Create medicine failed');
+      logger.error(
+        {
+          err: error.message,
+          stack: error.stack,
+          tenantId,
+          userId,
+          payload: data,
+        },
+        '[INVENTORY] Create medicine failed',
+      );
       throw error;
     }
   }
@@ -250,8 +277,8 @@ class MedicinePrismaService {
         where: {
           tenantId,
           name: { equals: catName, mode: 'insensitive' },
-          deletedAt: null
-        }
+          deletedAt: null,
+        },
       });
       if (existingCat) {
         categoryId = existingCat.id;
@@ -259,8 +286,8 @@ class MedicinePrismaService {
         const newCat = await prisma.medicineCategory.create({
           data: {
             name: catName,
-            tenantId
-          }
+            tenantId,
+          },
         });
         categoryId = newCat.id;
       }
@@ -274,8 +301,8 @@ class MedicinePrismaService {
         where: {
           tenantId,
           name: { equals: mfgName, mode: 'insensitive' },
-          deletedAt: null
-        }
+          deletedAt: null,
+        },
       });
       if (existingMfg) {
         manufacturerId = existingMfg.id;
@@ -283,8 +310,8 @@ class MedicinePrismaService {
         const newMfg = await prisma.manufacturer.create({
           data: {
             name: mfgName,
-            tenantId
-          }
+            tenantId,
+          },
         });
         manufacturerId = newMfg.id;
       }
@@ -321,7 +348,8 @@ class MedicinePrismaService {
     else if (data.schedule !== undefined) updateData.scheduleType = data.schedule;
     if (data.storageCondition !== undefined) updateData.storageCondition = data.storageCondition;
     if (data.prescriptionRequired !== undefined) {
-      updateData.prescriptionRequired = data.prescriptionRequired === true || data.prescriptionRequired === 'true';
+      updateData.prescriptionRequired =
+        data.prescriptionRequired === true || data.prescriptionRequired === 'true';
     } else if (data.schedule !== undefined || data.scheduleType !== undefined) {
       const sched = data.schedule || data.scheduleType;
       if (['Schedule H', 'Schedule H1', 'Schedule X'].includes(sched)) {
@@ -336,10 +364,13 @@ class MedicinePrismaService {
     if (data.imageUrl !== undefined) updateData.imageUrl = data.imageUrl;
     if (gstPercentage !== undefined) updateData.gstPercentage = gstPercentage;
     if (data.reorderLevel !== undefined) updateData.reorderLevel = Number(data.reorderLevel);
-    if (data.reorderQuantity !== undefined) updateData.reorderQuantity = Number(data.reorderQuantity);
+    if (data.reorderQuantity !== undefined)
+      updateData.reorderQuantity = Number(data.reorderQuantity);
     if (status !== undefined) updateData.status = status;
-    if (data.isActive !== undefined) updateData.isActive = data.isActive === true || data.isActive === 'true';
-    if (data.isPublished !== undefined) updateData.isPublished = data.isPublished === true || data.isPublished === 'true';
+    if (data.isActive !== undefined)
+      updateData.isActive = data.isActive === true || data.isActive === 'true';
+    if (data.isPublished !== undefined)
+      updateData.isPublished = data.isPublished === true || data.isPublished === 'true';
     if (data.rackLocation !== undefined) updateData.rackLocation = data.rackLocation;
 
     const medicine = await medicineRepository.update(id, tenantId, updateData);
@@ -363,8 +394,15 @@ class MedicinePrismaService {
 
   async deleteMedicine(id, tenantId, userId) {
     const medicine = await this.getMedicine(id, tenantId);
+
+    const batches = await inventoryBatchRepository.findByMedicineId(id, medicine.branchId || null);
+
+    for (const batch of batches) {
+      await inventoryBatchRepository.delete(batch.id);
+    }
+
     await medicineRepository.delete(id, tenantId);
-    
+
     await this.invalidateCache(tenantId);
     await mainQueue.add('update-analytics', { tenantId });
 
@@ -373,7 +411,7 @@ class MedicinePrismaService {
       userId,
       action: 'DELETE_MEDICINE',
       target: medicine.name,
-      type: 'INVENTORY'
+      type: 'INVENTORY',
     });
   }
 
@@ -385,13 +423,20 @@ class MedicinePrismaService {
         deletedAt: null,
       },
       take: 10,
-      select: { id: true, name: true, genericName: true, strength: true, dosageForm: true, unit: true },
+      select: {
+        id: true,
+        name: true,
+        genericName: true,
+        strength: true,
+        dosageForm: true,
+        unit: true,
+      },
     });
   }
 
   async batchRecall(data, tenantId, userId) {
     const { batchNumber, reason, severity } = data;
-    
+
     const result = await medicineRepository.flagBatchRecall(batchNumber, tenantId);
 
     await this.invalidateCache(tenantId);
@@ -402,7 +447,7 @@ class MedicinePrismaService {
       action: 'BATCH_RECALL',
       target: `Batch ${batchNumber}`,
       type: 'INVENTORY',
-      metadata: { reason, severity }
+      metadata: { reason, severity },
     });
 
     return { message: `Batch ${batchNumber} flagged for recall`, affected: result.count };
@@ -418,7 +463,7 @@ class MedicinePrismaService {
       userId,
       action: 'CLEAR_INVENTORY',
       target: 'ALL_MEDICINES',
-      type: 'INVENTORY'
+      type: 'INVENTORY',
     });
   }
 
@@ -427,16 +472,20 @@ class MedicinePrismaService {
     if (!batchData.branchId) {
       throw new Error('branchId is required to add a batch');
     }
-    
+
     const medicine = await this.getMedicine(medicineId, tenantId, batchData.branchId);
-    
-    const batch = await movementService.stockIn(tenantId, {
-      ...batchData,
-      medicineId,
-      branchId: batchData.branchId,
-      referenceType: 'MANUAL_ADD_BATCH',
-      notes: batchData.notes || `Manually added batch for ${medicine.name}`
-    }, userId);
+
+    const batch = await movementService.stockIn(
+      tenantId,
+      {
+        ...batchData,
+        medicineId,
+        branchId: batchData.branchId,
+        referenceType: 'MANUAL_ADD_BATCH',
+        notes: batchData.notes || `Manually added batch for ${medicine.name}`,
+      },
+      userId,
+    );
 
     await this.invalidateCache(tenantId);
 
@@ -445,7 +494,7 @@ class MedicinePrismaService {
       userId,
       action: 'ADD_BATCH',
       target: `${medicine.name} - Batch ${batch.batchNumber}`,
-      type: 'INVENTORY'
+      type: 'INVENTORY',
     });
 
     return batch;

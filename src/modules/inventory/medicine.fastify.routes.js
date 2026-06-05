@@ -7,12 +7,10 @@ import { requireBranch } from '../../middleware/requireBranch.js';
 import { requirePermission } from '../../middleware/permission.fastify.js';
 
 async function medicineRoutes(fastify) {
-  // Apply authentication to all routes in this plugin
   fastify.addHook('preHandler', authenticate);
   fastify.addHook('preHandler', requireTenant);
   fastify.addHook('preHandler', requireBranch);
 
-  // Medicines
   fastify.get(
     '/medicines',
     {
@@ -43,210 +41,240 @@ async function medicineRoutes(fastify) {
   fastify.get('/medicines/search', {
     schema: {
       tags: ['Inventory'],
-      querystring: { type: 'object', properties: { q: { type: 'string' } } }
+      querystring: { type: 'object', properties: { q: { type: 'string' } } },
     },
-    handler: medicineController.getMedicines
+    handler: medicineController.getMedicines,
   });
 
   fastify.get('/medicines/autocomplete', {
     schema: {
       tags: ['Inventory'],
-      querystring: { type: 'object', properties: { q: { type: 'string' } } }
+      querystring: { type: 'object', properties: { q: { type: 'string' } } },
     },
-    handler: medicineController.getMedicines
+    handler: medicineController.getMedicines,
   });
 
   fastify.get('/medicines/barcode/:barcode', {
     schema: {
       tags: ['Inventory'],
-      params: { type: 'object', properties: { barcode: { type: 'string' } } }
+      params: { type: 'object', properties: { barcode: { type: 'string' } } },
     },
-    handler: medicineController.getMedicineByBarcode
+    handler: medicineController.getMedicineByBarcode,
   });
 
-  fastify.get('/medicines/:id', {
-    schema: {
-      tags: ['Inventory'],
-      params: { type: 'object', properties: { id: { type: 'string' } } }
-    }
-  }, medicineController.getMedicine);
-
-  fastify.post('/medicines', {
-    schema: {
-      tags: ['Inventory'],
-      body: {
-        type: 'object',
-        required: ['name'],
-        properties: {
-          name: { type: 'string' },
-          genericName: { type: 'string' },
-          categoryId: { type: 'string' },
-          manufacturerId: { type: 'string' },
-          gstPercentage: { type: 'number' },
-          initialBatch: { type: 'object' }
-        }
-      }
+  fastify.get(
+    '/medicines/:id',
+    {
+      schema: {
+        tags: ['Inventory'],
+        params: { type: 'object', properties: { id: { type: 'string' } } },
+      },
     },
-    preHandler: [requirePermission('VIEW_INVENTORY')],
-  }, medicineController.createMedicine);
+    medicineController.getMedicine,
+  );
 
-  fastify.put('/medicines/:id', {
-    schema: {
-      tags: ['Inventory'],
-      params: { type: 'object', properties: { id: { type: 'string' } } }
+  fastify.post(
+    '/medicines',
+    {
+      schema: {
+        tags: ['Inventory'],
+        body: {
+          type: 'object',
+          required: ['name'],
+          properties: {
+            name: { type: 'string' },
+            genericName: { type: 'string' },
+            categoryId: { type: 'string' },
+            manufacturerId: { type: 'string' },
+            gstPercentage: { type: 'number' },
+            initialBatch: { type: 'object' },
+          },
+        },
+      },
+      preHandler: [requirePermission('VIEW_INVENTORY')],
     },
-    preHandler: [requirePermission('VIEW_INVENTORY')],
-  }, medicineController.updateMedicine);
+    medicineController.createMedicine,
+  );
 
-  fastify.delete('/medicines/:id', {
-    preHandler: [requirePermission('VIEW_INVENTORY')],
-    schema: {
-      tags: ['Inventory'],
-      params: { type: 'object', properties: { id: { type: 'string' } } }
-    }
-  }, medicineController.deleteMedicine);
+  fastify.put(
+    '/medicines/:id',
+    {
+      schema: {
+        tags: ['Inventory'],
+        params: { type: 'object', properties: { id: { type: 'string' } } },
+      },
+      preHandler: [requirePermission('VIEW_INVENTORY')],
+    },
+    medicineController.updateMedicine,
+  );
 
-  // Categories
+  fastify.delete(
+    '/medicines/:id',
+    {
+      preHandler: [requirePermission('VIEW_INVENTORY')],
+      schema: {
+        tags: ['Inventory'],
+        params: { type: 'object', properties: { id: { type: 'string' } } },
+      },
+    },
+    medicineController.deleteMedicine,
+  );
+
   fastify.get('/categories', {
     schema: { tags: ['Inventory'], summary: 'List categories' },
-    handler: categoryController.getCategories
+    handler: categoryController.getCategories,
   });
 
   fastify.post('/categories', {
     schema: { tags: ['Inventory'], summary: 'Create category' },
     preHandler: [requirePermission('VIEW_INVENTORY')],
-    handler: categoryController.createCategory
+    handler: categoryController.createCategory,
   });
 
   fastify.put('/categories/:id', {
     schema: { tags: ['Inventory'], summary: 'Update category' },
     preHandler: [requirePermission('VIEW_INVENTORY')],
-    handler: categoryController.updateCategory
+    handler: categoryController.updateCategory,
   });
 
   fastify.delete('/categories/:id', {
     schema: { tags: ['Inventory'], summary: 'Delete category' },
     preHandler: [requirePermission('VIEW_INVENTORY')],
-    handler: categoryController.deleteCategory
+    handler: categoryController.deleteCategory,
   });
 
-  // Manufacturers
   fastify.get('/manufacturers', {
     schema: { tags: ['Inventory'], summary: 'List manufacturers' },
-    handler: manufacturerController.getManufacturers
+    handler: manufacturerController.getManufacturers,
   });
 
   fastify.post('/manufacturers', {
     schema: { tags: ['Inventory'], summary: 'Create manufacturer' },
     preHandler: [requirePermission('VIEW_INVENTORY')],
-    handler: manufacturerController.createManufacturer
+    handler: manufacturerController.createManufacturer,
   });
 
   fastify.put('/manufacturers/:id', {
     schema: { tags: ['Inventory'], summary: 'Update manufacturer' },
     preHandler: [requirePermission('VIEW_INVENTORY')],
-    handler: manufacturerController.updateManufacturer
+    handler: manufacturerController.updateManufacturer,
   });
 
   fastify.delete('/manufacturers/:id', {
     schema: { tags: ['Inventory'], summary: 'Delete manufacturer' },
     preHandler: [requirePermission('VIEW_INVENTORY')],
-    handler: manufacturerController.deleteManufacturer
+    handler: manufacturerController.deleteManufacturer,
   });
 
-  // Batches
   fastify.get('/batches', {
     schema: { tags: ['Inventory'], summary: 'List all batches' },
-    handler: batchController.getBatches
+    handler: batchController.getBatches,
   });
 
   fastify.post('/batches', {
     schema: { tags: ['Inventory'], summary: 'Add a batch' },
     preHandler: [requirePermission('VIEW_INVENTORY')],
-    handler: batchController.createBatch
+    handler: batchController.createBatch,
   });
 
   fastify.put('/batches/:id', {
     schema: { tags: ['Inventory'], summary: 'Update batch' },
     preHandler: [requirePermission('VIEW_INVENTORY')],
-    handler: batchController.updateBatch
+    handler: batchController.updateBatch,
   });
 
   fastify.delete('/batches/:id', {
     schema: { tags: ['Inventory'], summary: 'Delete batch' },
     preHandler: [requirePermission('VIEW_INVENTORY')],
-    handler: batchController.deleteBatch
+    handler: batchController.deleteBatch,
   });
 
-  // Master & Utilities
-  fastify.get('/medicine-master', {
-    schema: {
-      tags: ['Inventory'],
-      querystring: { type: 'object', properties: { q: { type: 'string' } } }
-    }
-  }, medicineController.searchMaster);
+  fastify.get(
+    '/medicine-master',
+    {
+      schema: {
+        tags: ['Inventory'],
+        querystring: { type: 'object', properties: { q: { type: 'string' } } },
+      },
+    },
+    medicineController.searchMaster,
+  );
 
   fastify.get('/medicines/low-stock', {
     schema: { tags: ['Inventory'], summary: 'List low stock medicines' },
-    handler: medicineController.getMedicines // getMedicines handles minQty/lowStock via query if implemented, or we can use a dedicated method
+    handler: medicineController.getMedicines,
   });
 
   fastify.get('/expiry/near', {
     schema: { tags: ['Inventory'], summary: 'Get near expiry batches' },
-    handler: medicineController.getNearExpiry
+    handler: medicineController.getNearExpiry,
   });
 
   fastify.get('/expiry/summary', {
     schema: { tags: ['Inventory'], summary: 'Get expiry summary' },
-    handler: medicineController.getExpirySummary
+    handler: medicineController.getExpirySummary,
   });
 
-  fastify.post('/batch-recall', {
-    schema: {
-      tags: ['Inventory'],
-      body: {
-        type: 'object',
-        required: ['batchNumber'],
-        properties: {
-          batchNumber: { type: 'string' },
-          reason: { type: 'string' },
-          severity: { type: 'string' }
-        }
-      }
+  fastify.post(
+    '/batch-recall',
+    {
+      schema: {
+        tags: ['Inventory'],
+        body: {
+          type: 'object',
+          required: ['batchNumber'],
+          properties: {
+            batchNumber: { type: 'string' },
+            reason: { type: 'string' },
+            severity: { type: 'string' },
+          },
+        },
+      },
+      preHandler: [requirePermission('VIEW_INVENTORY')],
     },
-    preHandler: [requirePermission('VIEW_INVENTORY')],
-  }, medicineController.batchRecall);
+    medicineController.batchRecall,
+  );
 
-  fastify.delete('/medicines-clear-all', {
-    schema: {
-      tags: ['Inventory'],
-      summary: 'Clear all medicines for the tenant'
+  fastify.delete(
+    '/medicines-clear-all',
+    {
+      schema: {
+        tags: ['Inventory'],
+        summary: 'Clear all medicines for the tenant',
+      },
+      preHandler: [requirePermission('VIEW_INVENTORY')],
     },
-    preHandler: [requirePermission('VIEW_INVENTORY')],
-  }, medicineController.clearAllMedicines);
+    medicineController.clearAllMedicines,
+  );
 
-  // Batch Management
-  fastify.post('/medicines/:id/batches', {
-    schema: {
-      tags: ['Inventory'],
-      params: { type: 'object', properties: { id: { type: 'string' } } }
+  fastify.post(
+    '/medicines/:id/batches',
+    {
+      schema: {
+        tags: ['Inventory'],
+        params: { type: 'object', properties: { id: { type: 'string' } } },
+      },
+      preHandler: [requirePermission('VIEW_INVENTORY')],
     },
-    preHandler: [requirePermission('VIEW_INVENTORY')],
-  }, medicineController.addBatch);
+    medicineController.addBatch,
+  );
 
-  // Barcode
-  fastify.get('/barcode/generate', {
-    schema: {
-      tags: ['Inventory'],
-      querystring: {
-        type: 'object',
-        properties: {
-          text: { type: 'string' },
-          type: { type: 'string', default: 'code128' }
-        }
-      }
-    }
-  }, medicineController.getBarcode);
+  fastify.get(
+    '/barcode/generate',
+    {
+      schema: {
+        tags: ['Inventory'],
+        querystring: {
+          type: 'object',
+          properties: {
+            text: { type: 'string' },
+            type: { type: 'string', default: 'code128' },
+          },
+        },
+      },
+    },
+    medicineController.getBarcode,
+  );
 }
 
 export default medicineRoutes;

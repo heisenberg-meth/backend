@@ -356,7 +356,6 @@ class CsvImportService {
     const medicineIdMap = new Map();
 
     await prisma.$transaction(async (tx) => {
-      // P0 Fix: Create medicines sequentially to reliably get IDs
       for (const m of newMedicines) {
         const { _tempId, ...data } = m;
         const created = await tx.medicine.create({ data });

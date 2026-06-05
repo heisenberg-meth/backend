@@ -1,4 +1,4 @@
-import prisma from "../../../config/prisma.js";
+import prisma from '../../../config/prisma.js';
 
 class InventoryBatchRepository {
   async findByMedicineId(medicineId, branchId = null) {
@@ -31,9 +31,9 @@ class InventoryBatchRepository {
   async delete(id) {
     return prisma.inventoryBatch.update({
       where: { id },
-      data: { 
+      data: {
         status: 'ARCHIVED',
-        deletedAt: new Date() 
+        deletedAt: new Date(),
       },
     });
   }
@@ -49,6 +49,9 @@ class InventoryBatchRepository {
         expiryDate: { lte: thresholdDate },
         quantity: { gt: 0 },
         deletedAt: null,
+        medicine: {
+          deletedAt: null,
+        },
       },
       include: { medicine: true },
       orderBy: { expiryDate: 'asc' },
@@ -56,13 +59,15 @@ class InventoryBatchRepository {
   }
 
   async getLowStock(tenantId, branchId = null) {
-    return prisma.inventory.findMany({
-      where: {
-        tenantId,
-        branchId,
-      },
-      include: { medicine: true }
-    }).then(results => results.filter(r => r.currentStock <= r.reorderPoint));
+    return prisma.inventory
+      .findMany({
+        where: {
+          tenantId,
+          branchId,
+        },
+        include: { medicine: true },
+      })
+      .then((results) => results.filter((r) => r.currentStock <= r.reorderPoint));
   }
 }
 

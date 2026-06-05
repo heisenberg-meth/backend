@@ -51,14 +51,12 @@ class InvoiceRepository {
       ...(status && { status }),
     };
 
-    // BUG 12 FIX: Add date range filtering for "Today's Bills" and date-scoped queries
     if (fromDate || toDate) {
       where.createdAt = {};
       if (fromDate) {
         where.createdAt.gte = new Date(fromDate);
       }
       if (toDate) {
-        // Set to end of day if only date string provided
         const endDate = new Date(toDate);
         if (toDate.length <= 10) {
           endDate.setHours(23, 59, 59, 999);
@@ -74,7 +72,6 @@ class InvoiceRepository {
           patient: { select: { fullName: true, phone: true } },
           cashier: { select: { fullName: true } },
           payments: { select: { paymentMode: true, amount: true } },
-          // BUG 13 FIX: Include items for accurate display in bill cards
           items: {
             include: {
               medicine: { select: { name: true } },

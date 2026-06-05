@@ -3,7 +3,7 @@ import logger from '../shared/utils/logger.js';
 import { sessionCache, userCache } from '../modules/auth/service/auth.cache.js';
 
 const SESSION_CACHE_TTL_MS = 30_000;
-const USER_CACHE_TTL_MS = 60_000; // 1 minute TTL for user cache
+const USER_CACHE_TTL_MS = 60_000;
 const SESSION_CACHE_MAX = 500;
 const USER_CACHE_MAX = 500;
 

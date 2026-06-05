@@ -6,4 +6,3 @@ export const initBillingModule = () => {
   registerWorker(pdfWorker);
   registerWorker(shareWorker);
 };
-

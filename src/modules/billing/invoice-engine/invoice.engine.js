@@ -103,7 +103,7 @@ class InvoiceEngine {
           const availableBatch = await t.inventoryBatch.findFirst({
             where: {
               tenantId,
-              branchId: branchId, // Use the invoice branchId
+              branchId: branchId,
               medicineId: item.medicineId,
               availableQuantity: { gt: 0 },
               deletedAt: null,
@@ -120,7 +120,6 @@ class InvoiceEngine {
           }
           resolvedBatchId = availableBatch.id;
         } else {
-          // Optionally check if the provided batch exists
           const batchCount = await t.inventoryBatch.count({ where: { id: resolvedBatchId } });
           if (batchCount === 0) {
             throw new Error(`Cannot create draft: Batch ${resolvedBatchId} does not exist`);

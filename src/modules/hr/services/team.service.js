@@ -201,7 +201,6 @@ class TeamService {
       },
     });
 
-    // Audit log the role change
     await auditService.log({
       tenantId,
       action: 'UPDATE_TEAM_ROLE',
@@ -219,13 +218,10 @@ class TeamService {
     return user;
   }
 
-  // ===================== ENHANCED SHIFT MANAGEMENT =====================
-
   async getShifts(tenantId, filters = {}) {
     const { userId, branchId, role, status, fromDate, toDate } = filters;
     const cacheKey = `team:shifts:${tenantId}:${userId || 'all'}:${branchId || 'all'}:${status || 'all'}`;
 
-    // Try cache first for active shifts
     if (!userId && !fromDate && !toDate && status === 'ACTIVE') {
       const cached = await redisClient.get(cacheKey);
       if (cached) {
@@ -243,7 +239,6 @@ class TeamService {
       if (toDate) where.startTime.lte = new Date(toDate);
     }
 
-    // If filtering by branch or role, get users matching those criteria first
     if (branchId || role) {
       const userWhere = { tenantId, deletedAt: null };
       if (branchId) userWhere.branchId = branchId;
@@ -275,7 +270,6 @@ class TeamService {
       take: 200,
     });
 
-    // Cache active shifts
     if (!userId && !fromDate && !toDate && status === 'ACTIVE') {
       await redisClient.setex(cacheKey, ACTIVE_SHIFTS_CACHE_TTL, JSON.stringify(shifts));
     }
@@ -286,7 +280,6 @@ class TeamService {
   async createShift(tenantId, data) {
     const { employeeId, shiftStart, shiftEnd } = data;
 
-    // Validate employee exists and belongs to tenant
     const employee = await prisma.user.findFirst({
       where: { id: employeeId, tenantId, deletedAt: null },
     });
@@ -294,20 +287,16 @@ class TeamService {
       throw new Error('Employee not found');
     }
 
-    // Shift overlap detection — prevent double booking
-    // Handles both standard overlapping ranges and ongoing shifts (endTime: null)
     const overlapping = await prisma.shift.findFirst({
       where: {
         tenantId,
         userId: employeeId,
         status: { in: ['SCHEDULED', 'ACTIVE'] },
         OR: [
-          // Standard overlap: existing shift time range intersects new shift
           {
             startTime: { lte: new Date(shiftEnd) },
             endTime: { gte: new Date(shiftStart) },
           },
-          // Ongoing shift (null endTime) that started before new shift ends
           {
             startTime: { lte: new Date(shiftEnd) },
             endTime: null,
@@ -322,9 +311,7 @@ class TeamService {
       );
     }
 
-    // Role validation — ensure role-appropriate shift assignment
     if (employee.role !== 'PHARMACIST' && employee.role !== 'ADMIN' && employee.role !== 'OWNER') {
-      // Non-pharmacist shifts are allowed but logged
       await auditService.log({
         tenantId,
         action: 'SHIFT_CREATED_NON_PHARMACIST',
@@ -356,7 +343,6 @@ class TeamService {
       },
     });
 
-    // Invalidate active shifts cache
     await redisClient.del(`team:shifts:${tenantId}:*`);
 
     await emitEvent(DOMAIN_EVENTS.SHIFT_CREATED, {
@@ -371,7 +357,6 @@ class TeamService {
   }
 
   async startShift(tenantId, userId, notes) {
-    // Check for existing active shift
     const existingActive = await prisma.shift.findFirst({
       where: {
         tenantId,
@@ -400,7 +385,6 @@ class TeamService {
       },
     });
 
-    // Invalidate cache
     await redisClient.del(`team:shifts:${tenantId}:*`);
 
     return shift;
@@ -428,7 +412,6 @@ class TeamService {
       },
     });
 
-    // Invalidate cache
     await redisClient.del(`team:shifts:${tenantId}:*`);
 
     return updated;
@@ -469,8 +452,6 @@ class TeamService {
     return shifts;
   }
 
-  // ===================== BILLING PERFORMANCE =====================
-
   async getBillingPerformance(tenantId, filters = {}) {
     const { branchId, fromDate, toDate } = filters;
     const cacheKey = `team:billing-perf:${tenantId}:${branchId || 'all'}:${fromDate || ''}:${toDate || ''}`;
@@ -500,7 +481,6 @@ class TeamService {
       _avg: { totalAmount: true },
     });
 
-    // Get refund and cancellation data per user
     const refunds = await prisma.salesReturn.groupBy({
       by: ['createdBy'],
       where: {
@@ -519,7 +499,6 @@ class TeamService {
       };
     }
 
-    // Get cancellations
     const cancellations = await prisma.sale.groupBy({
       by: ['soldBy'],
       where: {
@@ -535,7 +514,6 @@ class TeamService {
       cancelMap[c.soldBy] = c._count.id;
     }
 
-    // Build user lookup
     const userWhere = { tenantId, deletedAt: null };
     if (branchId) userWhere.branchId = branchId;
     const users = await prisma.user.findMany({
@@ -554,9 +532,6 @@ class TeamService {
       const salesAmount = s._sum.totalAmount || 0;
       const refundData = refundMap[s.soldBy] || { count: 0, amount: 0 };
       const cancelCount = cancelMap[s.soldBy] || 0;
-
-      // Approximate average billing time: estimate based on invoice count vs assumed work duration
-      // In production, this would use actual start/end timestamps from shift data
       const avgBillingTimeSeconds = invoiceCount > 0 ? Math.round((8 * 3600) / invoiceCount) : 0;
 
       return {
@@ -565,7 +540,7 @@ class TeamService {
         role: user.role || 'Unknown',
         invoiceCount,
         salesAmount,
-        averageBillingTimeSeconds: Math.min(avgBillingTimeSeconds, 600), // Cap at 10 min
+        averageBillingTimeSeconds: Math.min(avgBillingTimeSeconds, 600),
         refundCount: refundData.count,
         refundAmount: refundData.amount,
         refundRatio: invoiceCount > 0 ? (refundData.count / invoiceCount).toFixed(4) : 0,
@@ -577,7 +552,6 @@ class TeamService {
       };
     });
 
-    // Sort by sales amount descending
     cashiers.sort((a, b) => b.salesAmount - a.salesAmount);
 
     const result = {
@@ -599,8 +573,6 @@ class TeamService {
     return result;
   }
 
-  // ===================== TEAM PERFORMANCE =====================
-
   async getPerformance(tenantId, userId) {
     const cacheKey = `team:perf:${tenantId}:${userId}`;
     const cached = await redisClient.get(cacheKey);
@@ -616,30 +588,20 @@ class TeamService {
       where: { tenantId, userId, status: { in: ['COMPLETED', 'CLOSED'] } },
     });
 
-    // Prescription verifications
     const prescriptionVerifications = await prisma.prescriptionVerification.count({
       where: { verifiedBy: userId },
     });
-
-    // Inventory actions (stock transactions by this user)
     const inventoryActions = await prisma.stockTransaction.count({
       where: { tenantId, createdBy: userId },
     });
-
-    // Returns processed by this user
     const returnsProcessed = await prisma.salesReturn.count({
       where: { tenantId, createdBy: userId },
     });
-
-    // Active shifts count
     const activeShifts = await prisma.shift.count({
       where: { tenantId, userId, status: 'ACTIVE' },
     });
-
-    // Performance Score = (completed tasks / total assigned) * 100
-    // Weighted: 40% sales, 25% prescriptions, 20% inventory, 15% attendance
     const totalCompleted = (sales._count.id || 0) + prescriptionVerifications + inventoryActions;
-    const totalAssigned = totalCompleted + returnsProcessed * 2; // Returns as negative indicator
+    const totalAssigned = totalCompleted + returnsProcessed * 2;
     const performanceScore =
       totalAssigned > 0 ? Math.round((totalCompleted / totalAssigned) * 100) : 0;
 
@@ -687,7 +649,6 @@ class TeamService {
       }),
     );
 
-    // Sort by performance score descending
     staffPerformance.sort((a, b) => b.performanceScore - a.performanceScore);
 
     const result = {
@@ -714,8 +675,6 @@ class TeamService {
     return result;
   }
 
-  // ===================== PERMISSION MANAGEMENT =====================
-
   async updateTeamMemberPermissions(tenantId, userId, permissions, changedBy) {
     const user = await prisma.user.findFirst({
       where: { id: userId, tenantId, deletedAt: null },
@@ -726,7 +685,6 @@ class TeamService {
       throw new Error('Team member not found');
     }
 
-    // Fetch old permissions for audit trail
     const oldPermissions = user.roleId
       ? await prisma.rolePermission.findMany({
           where: { roleId: user.roleId },
@@ -734,7 +692,6 @@ class TeamService {
         })
       : [];
 
-    // Validate permissions exist
     const validPermissions = await prisma.permission.findMany({
       where: { name: { in: permissions } },
     });
@@ -744,11 +701,9 @@ class TeamService {
       throw new Error(`Invalid permissions: ${missing.join(', ')}`);
     }
 
-    // Find or create a custom role for this user (or update their assigned role)
     let roleId = user.roleId;
 
     if (!roleId) {
-      // Create a custom role for individual permission assignment
       const customRole = await prisma.accessRole.create({
         data: {
           name: `CUSTOM_${user.fullName.replace(/\s+/g, '_').toUpperCase()}`,
@@ -765,7 +720,6 @@ class TeamService {
       });
     }
 
-    // Replace all role permissions with the new set
     await prisma.rolePermission.deleteMany({
       where: { roleId },
     });
@@ -782,7 +736,6 @@ class TeamService {
       });
     }
 
-    // Audit log the permission change
     await auditService.log({
       tenantId,
       userId: changedBy,

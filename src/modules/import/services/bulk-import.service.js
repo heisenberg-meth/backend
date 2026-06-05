@@ -25,8 +25,6 @@ class BulkImportService {
     };
 
     const preValidatedRows = [];
-
-    // 1. Process and validate all rows in-memory (First Pass)
     const namesToLookup = new Set();
     const barcodesToLookup = new Set();
 
@@ -38,7 +36,6 @@ class BulkImportService {
       if (barcode) barcodesToLookup.add(barcode);
     }
 
-    // P1 Fix: Targeted lookup to avoid OOM
     const existingMedicines = await prisma.medicine.findMany({
       where: {
         tenantId,
@@ -74,18 +71,15 @@ class BulkImportService {
       const validationErrors = [];
       const validationWarnings = [];
 
-      // Validation 1: Medication Name
       if (!name) {
         validationErrors.push('Medicine name is required');
       }
 
-      // Validation 2: Quantity
       const qty = parseInt(qtyStr, 10);
       if (isNaN(qty) || qty <= 0) {
         validationErrors.push('Invalid quantity (must be greater than zero)');
       }
 
-      // Validation 3: Expiry Date
       let expiryDate = null;
       let isExpired = false;
       if (expiryStr) {
@@ -100,13 +94,11 @@ class BulkImportService {
         }
       }
 
-      // Validation 4: Unit Price
       const price = parseFloat(priceStr);
       if (isNaN(price) || price < 0) {
         validationErrors.push('Invalid unit price (must be non-negative number)');
       }
 
-      // Validation 5: Barcode — lenient validation
       if (barcode) {
         analysis.validBarcodes++;
         if (barcodeOptions.validate) {
@@ -119,7 +111,6 @@ class BulkImportService {
         analysis.autoGenBarcodes++;
       }
 
-      // If we have HARD errors (not warnings), skip this row
       if (validationErrors.length > 0) {
         analysis.errors.push({
           row: rowNum,
@@ -131,7 +122,6 @@ class BulkImportService {
         continue;
       }
 
-      // Find matching medicine in preloaded maps
       let matchedMedicine = null;
       const normName = name.toLowerCase().trim();
       const normBarcode = barcode ? barcode.trim() : '';
@@ -160,7 +150,6 @@ class BulkImportService {
       });
     }
 
-    // Fetch latest inventory batches in a single bulk query (to avoid N+1 queries in second pass)
     const matchedMedicineIds = Array.from(
       new Set(
         preValidatedRows.filter((row) => row.matchedMedicine).map((row) => row.matchedMedicine.id),
@@ -185,7 +174,6 @@ class BulkImportService {
       }
     }
 
-    // 2. Perform duplicate and conflict scans (Second Pass)
     const validatedRows = [];
     for (const row of preValidatedRows) {
       let isDuplicate = false;
@@ -198,7 +186,6 @@ class BulkImportService {
         isDuplicate = true;
         analysis.duplicates++;
 
-        // Determine Match Type
         if (matchedMedicine.name.toLowerCase() === row.name.toLowerCase()) {
           matchType = 'EXACT';
         } else if (row.barcode && matchedMedicine.barcode === row.barcode) {
@@ -209,7 +196,6 @@ class BulkImportService {
 
         const existingBatch = latestBatchMap.get(matchedMedicine.id);
 
-        // Detect Conflicts (e.g. if the barcode belongs to a different medicine name)
         if (
           row.barcode &&
           matchedMedicine.name.toLowerCase() !== row.name.toLowerCase() &&
@@ -219,7 +205,6 @@ class BulkImportService {
           analysis.conflicts++;
           diffDesc = `Barcode ${row.barcode} matches existing medicine "${matchedMedicine.name}" in system`;
         } else if (matchedMedicine.name.toLowerCase() === row.name.toLowerCase()) {
-          // Check price difference
           if (
             row.price > 0 &&
             existingBatch &&
@@ -251,12 +236,10 @@ class BulkImportService {
       });
     }
 
-    // If dry-run, return immediately
     if (dryRun) {
       return { success: true, dryRun: true, summary: analysis };
     }
 
-    // 3. Database Commits (Write Mode)
     const commitSummary = {
       importedCount: 0,
       newMedicinesCount: 0,
@@ -290,7 +273,6 @@ class BulkImportService {
           for (const row of chunk) {
             let medicineId = null;
 
-            // Re-lookup dynamically to catch duplicates created in earlier chunks of this import
             const normName = row.name.toLowerCase().trim();
             const normBarcode = row.barcode ? row.barcode.trim() : '';
 
@@ -437,7 +419,6 @@ class BulkImportService {
       );
     }
 
-    // Post-commit side effects: Log audit trail
     const importJob = await prisma.importJob.create({
       data: {
         tenantId,
@@ -483,7 +464,6 @@ class BulkImportService {
     if (!dateStr) return null;
     const trimmed = String(dateStr).trim();
 
-    // Handle Excel serial dates (numbers like 45678)
     const numVal = Number(trimmed);
     if (!isNaN(numVal) && numVal > 10000 && numVal < 100000) {
       const excelEpoch = new Date(1899, 11, 30);
@@ -491,13 +471,11 @@ class BulkImportService {
       if (!isNaN(date.getTime())) return date;
     }
 
-    // Try native Date parse first (handles ISO, YYYY-MM-DD, etc.)
     let date = new Date(trimmed);
     if (!isNaN(date.getTime())) return date;
 
     const parts = trimmed.split(/[-/.\s]/);
 
-    // YYYY-MM (e.g. "2027-05")
     if (parts.length === 2) {
       const p0 = parseInt(parts[0], 10);
       const p1 = parseInt(parts[1], 10);
@@ -523,7 +501,6 @@ class BulkImportService {
         date = new Date(c, a - 1, b);
         if (!isNaN(date.getTime())) return date;
       }
-      // YYYY/MM/DD
       if (a > 1000 && b <= 12 && c <= 31) {
         date = new Date(a, b - 1, c);
         if (!isNaN(date.getTime())) return date;

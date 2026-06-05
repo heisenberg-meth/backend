@@ -10,26 +10,38 @@ export let pdfWorker = null;
 export let shareWorker = null;
 
 export const createBillingWorkers = () => {
-  pdfWorker = registerWorker(new Worker('billing_pdf_generation', async (job) => {
-    const { invoiceId, tenantId } = job.data;
-    logger.info({ invoiceId }, 'Processing PDF generation job');
-    await pdfService.generateInvoicePdf(invoiceId, tenantId);
-  }, { connection: getBullRedis() }));
+  pdfWorker = registerWorker(
+    new Worker(
+      'billing_pdf_generation',
+      async (job) => {
+        const { invoiceId, tenantId } = job.data;
+        logger.info({ invoiceId }, 'Processing PDF generation job');
+        await pdfService.generateInvoicePdf(invoiceId, tenantId);
+      },
+      { connection: getBullRedis() },
+    ),
+  );
 
-  shareWorker = registerWorker(new Worker('billing_invoice_sharing', async (job) => {
-    const { invoiceId, tenantId, channel, recipient } = job.data;
-    logger.info({ invoiceId, channel }, 'Processing sharing job');
-    
-    let pdfUrl = await pdfService.generateInvoicePdf(invoiceId, tenantId);
-    
-    await notificationService.queueNotification({
-      tenantId,
-      channel,
-      recipient,
-      message: `Your invoice is ready. View it here: ${process.env.FRONTEND_URL}${pdfUrl}`,
-      notificationType: 'INVOICE_SHARE',
-    });
+  shareWorker = registerWorker(
+    new Worker(
+      'billing_invoice_sharing',
+      async (job) => {
+        const { invoiceId, tenantId, channel, recipient } = job.data;
+        logger.info({ invoiceId, channel }, 'Processing sharing job');
 
-    logger.info({ invoiceId, channel }, 'Invoice share queued via notification system');
-  }, { connection: getBullRedis() }));
+        let pdfUrl = await pdfService.generateInvoicePdf(invoiceId, tenantId);
+
+        await notificationService.queueNotification({
+          tenantId,
+          channel,
+          recipient,
+          message: `Your invoice is ready. View it here: ${process.env.FRONTEND_URL}${pdfUrl}`,
+          notificationType: 'INVOICE_SHARE',
+        });
+
+        logger.info({ invoiceId, channel }, 'Invoice share queued via notification system');
+      },
+      { connection: getBullRedis() },
+    ),
+  );
 };
