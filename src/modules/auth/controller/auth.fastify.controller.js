@@ -97,8 +97,15 @@ class AuthFastifyController {
 
   async refreshToken(request, reply) {
     try {
+      request.log.info(
+        {
+          cookieToken: request.cookies?.refreshToken,
+          bodyToken: request.body?.refreshToken,
+        },
+        'Refresh request received',
+      );
 
-      const refreshToken = request.cookies?.refreshToken || request.body?.refreshToken;
+      const refreshToken = request.body?.refreshToken ?? request.cookies?.refreshToken;
 
       if (!refreshToken) {
         return reply
@@ -115,10 +122,15 @@ class AuthFastifyController {
       request.log.error(error);
       if (
         error?.message === 'Invalid refresh token' ||
+        error?.message === 'Invalid or reused refresh token' ||
         error?.message === 'Refresh token expired'
       ) {
         reply.clearCookie('refreshToken', { path: '/' });
-        return reply.code(401).send(errorResponse(error.message, 'REFRESH_INVALID'));
+        const code =
+          error.message === 'Invalid or reused refresh token'
+            ? 'REFRESH_TOKEN_REUSED'
+            : 'REFRESH_INVALID';
+        return reply.code(401).send(errorResponse(error.message, code));
       }
       return reply
         .code(401)

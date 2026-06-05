@@ -185,9 +185,20 @@ class AuthPrismaService {
   }
 
   async refreshSession(oldRefreshToken) {
+    const tokenHash = sessionService.hashToken(oldRefreshToken);
     const session = await sessionService.findSessionByRefreshToken(oldRefreshToken);
+
+    logger.info(
+      {
+        tokenHash,
+        sessionFound: !!session,
+        sessionId: session?.id,
+      },
+      'Session lookup during refresh',
+    );
+
     if (!session || session.revoked) {
-      throw new Error('Invalid refresh token');
+      throw new Error('Invalid or reused refresh token');
     }
 
     if (new Date() > session.expiresAt) {
@@ -202,6 +213,18 @@ class AuthPrismaService {
 
     const newRefreshToken = sessionService.generateDeviceToken();
     await sessionService.rotateRefreshToken(session.id, newRefreshToken);
+
+    const updated = await prisma.userSession.findUnique({
+      where: { id: session.id },
+    });
+
+    logger.info(
+      {
+        sessionId: session.id,
+        refreshTokenUpdated: !!updated,
+      },
+      'Refresh token persistence check',
+    );
 
     const accessToken = this._signAccessToken(user, session.id);
     const subscription = user.tenant?.subscription;
