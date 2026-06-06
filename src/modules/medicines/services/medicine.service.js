@@ -6,6 +6,7 @@ import eventBus from '../../../shared/services/eventbus.service.js';
 import { scanKeys } from '../../../shared/utils/scan-keys.js';
 import { mainQueue } from '../../../queue/index.js';
 import movementService from '../../stock/service/movement.service.js';
+import { mapDosageFormToPackaging, validatePricing } from '../../../shared/utils/medicine-helpers.js';
 
 class MedicineIntelligenceService {
   /**
@@ -108,6 +109,28 @@ class MedicineIntelligenceService {
       throw new Error('Branch ID is required to create medicine inventory');
     }
 
+    if (pricing && (pricing.purchasePrice || pricing.sellingPrice || pricing.mrp)) {
+      const pricingError = validatePricing({
+        purchasePrice: pricing.purchasePrice || 0,
+        sellingPrice: pricing.sellingPrice || 0,
+        mrp: pricing.mrp || 0
+      });
+      if (pricingError) {
+        throw new Error(pricingError);
+      }
+    }
+
+    if (initialBatch && (initialBatch.purchasePrice || initialBatch.sellingPrice || initialBatch.mrp)) {
+      const pricingError = validatePricing({
+        purchasePrice: initialBatch.purchasePrice || 0,
+        sellingPrice: initialBatch.sellingPrice || 0,
+        mrp: initialBatch.mrp || 0
+      });
+      if (pricingError) {
+        throw new Error(pricingError);
+      }
+    }
+
     // 1. Validation: Barcode & SKU Uniqueness
     if (rawMedicineData.barcode) {
       const existing = await medicineRepository.findByBarcode(rawMedicineData.barcode, tenantId);
@@ -187,6 +210,7 @@ class MedicineIntelligenceService {
       const medicine = await tx.medicine.create({
         data: {
           ...rawMedicineData,
+          packagingType: rawMedicineData.packagingType || mapDosageFormToPackaging(rawMedicineData.dosageForm),
           category: categoryId ? { connect: { id: categoryId } } : undefined,
           manufacturer: manufacturerId ? { connect: { id: manufacturerId } } : undefined,
           tenant: { connect: { id: tenantId } },
@@ -344,6 +368,11 @@ class MedicineIntelligenceService {
     delete cleanData.category;
     delete cleanData.manufacturer;
     delete cleanData.statusReason;
+    
+    if (cleanData.dosageForm !== undefined) {
+      cleanData.packagingType = mapDosageFormToPackaging(cleanData.dosageForm);
+    }
+    
     const updateData = {
       ...cleanData,
       ...(categoryId !== undefined && {

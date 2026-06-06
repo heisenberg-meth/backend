@@ -564,6 +564,7 @@ model Medicine {
   sku                      String?                    @unique
   hsnCode                  String?
   dosageForm               String?
+  packagingType            String?
   strength                 String?
   gstPercentage            Float                      @default(0)
   reorderLevel             Int                        @default(10)

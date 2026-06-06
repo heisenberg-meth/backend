@@ -5,6 +5,10 @@ import prisma from '../../../config/prisma.js';
 import { getBullRedis } from '../../../config/redis.js';
 import auditService from '../../audit/service/audit.prisma.service.js';
 import logger from '../../../shared/utils/logger.js';
+import {
+  mapDosageFormToPackaging,
+  validatePricing,
+} from '../../../shared/utils/medicine-helpers.js';
 
 const CHUNK_SIZE = 1000;
 
@@ -22,7 +26,18 @@ async function updateProgress(jobId, data) {
 }
 
 class CsvImportService {
-  async run(filePath, { jobId, tenantId, branchId, userId, duplicateStrategy, barcodeOptions, supplier: supplierName }) {
+  async run(
+    filePath,
+    {
+      jobId,
+      tenantId,
+      branchId,
+      userId,
+      duplicateStrategy,
+      barcodeOptions,
+      supplier: supplierName,
+    },
+  ) {
     logger.info({ jobId, filePath }, '[CSV-Import] Starting bulk import');
 
     let resolvedSupplierId = null;
@@ -285,7 +300,14 @@ class CsvImportService {
       const batchNo = this._getColumn(row, ['batch', 'lot', 'no', 'code']);
       const barcode = this._getColumn(row, ['barcode', 'upc', 'ean', 'sku']);
       const category = this._getColumn(row, ['category', 'cat', 'type', 'group', 'classification']);
-      const manufacturer = this._getColumn(row, ['manufacturer', 'mfr', 'maker', 'brand', 'company', 'vendor']);
+      const manufacturer = this._getColumn(row, [
+        'manufacturer',
+        'mfr',
+        'maker',
+        'brand',
+        'company',
+        'vendor',
+      ]);
       const genericName = this._getColumn(row, ['generic', 'gen', 'salt', 'composition']);
       const strength = this._getColumn(row, ['strength', 'mg', 'ml', 'dose', 'concentration']);
       const dosageForm = this._getColumn(row, ['dosage', 'form', 'type', 'drug_form']);
@@ -311,11 +333,16 @@ class CsvImportService {
       }
 
       const price = parseFloat(priceStr);
-      if (isNaN(price) || price < 0) {
+      const pricingError = validatePricing({
+        purchasePrice: price,
+        sellingPrice: price * 1.2,
+        mrp: price * 1.2,
+      });
+      if (pricingError) {
         ctx.errors.push({
           row: ctx.importedCount + ctx.newMedicines.length + 1,
           name,
-          reason: 'Invalid price',
+          reason: pricingError,
         });
         continue;
       }
@@ -383,15 +410,20 @@ class CsvImportService {
           genericName: genericName || null,
           strength: strength || null,
           dosageForm: dosageForm || null,
+          packagingType: mapDosageFormToPackaging(dosageForm),
           hsnCode: hsnCode || null,
           gstPercentage: isNaN(parsedGst) ? 0 : parsedGst,
           reorderLevel: 10,
           status: 'ACTIVE',
           isActive: true,
           categoryId: resolvedCategoryId,
-          _categoryName: resolvedCategoryId ? null : (category ? category.trim() : null),
+          _categoryName: resolvedCategoryId ? null : category ? category.trim() : null,
           manufacturerId: resolvedManufacturerId,
-          _manufacturerName: resolvedManufacturerId ? null : (manufacturer ? manufacturer.trim() : null),
+          _manufacturerName: resolvedManufacturerId
+            ? null
+            : manufacturer
+              ? manufacturer.trim()
+              : null,
         };
         medicineId = `new:${crypto.randomUUID()}`;
         newMed._tempId = medicineId;

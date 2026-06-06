@@ -2,6 +2,10 @@ import crypto from 'crypto';
 import prisma from '../../../config/prisma.js';
 import auditService from '../../audit/service/audit.prisma.service.js';
 import logger from '../../../shared/utils/logger.js';
+import {
+  mapDosageFormToPackaging,
+  validatePricing,
+} from '../../../shared/utils/medicine-helpers.js';
 
 class BulkImportService {
   async analyzeOrCommit(payload, tenantId, branchId, userId) {
@@ -124,8 +128,13 @@ class BulkImportService {
       }
 
       const price = parseFloat(priceStr);
-      if (isNaN(price) || price < 0) {
-        validationErrors.push('Invalid unit price (must be non-negative number)');
+      const pricingError = validatePricing({
+        purchasePrice: price,
+        sellingPrice: price * 1.2,
+        mrp: price * 1.2,
+      });
+      if (pricingError) {
+        validationErrors.push(pricingError);
       }
 
       if (barcode) {
@@ -435,6 +444,7 @@ class BulkImportService {
                   barcode: row.barcode,
                   hsnCode: row.hsnCode || null,
                   dosageForm: row.dosageForm || null,
+                  packagingType: mapDosageFormToPackaging(row.dosageForm),
                   strength: row.strength || null,
                   sku: `SKU-${crypto.randomUUID()}`,
                   gstPercentage: row.gstPercentage || 0,

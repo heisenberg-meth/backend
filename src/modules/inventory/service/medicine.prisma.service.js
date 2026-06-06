@@ -8,6 +8,10 @@ import eventBus from '../../../shared/services/eventbus.service.js';
 import movementService from '../../stock/service/movement.service.js';
 import { scanKeys } from '../../../shared/utils/scan-keys.js';
 import inventoryBatchRepository from '../repository/inventory_batch.repository.js';
+import {
+  mapDosageFormToPackaging,
+  validatePricing,
+} from '../../../shared/utils/medicine-helpers.js';
 
 class MedicinePrismaService {
   async getMedicines(params) {
@@ -94,6 +98,20 @@ class MedicinePrismaService {
         throw new Error('Branch ID is required to create medicine inventory');
       }
 
+      if (
+        initialBatch &&
+        (initialBatch.purchasePrice || initialBatch.sellingPrice || initialBatch.mrp)
+      ) {
+        const pricingError = validatePricing({
+          purchasePrice: initialBatch.purchasePrice || 0,
+          sellingPrice: initialBatch.sellingPrice || 0,
+          mrp: initialBatch.mrp || 0,
+        });
+        if (pricingError) {
+          throw new Error(pricingError);
+        }
+      }
+
       // All database writes in a single atomic transaction
       const medicine = await prisma.$transaction(async (tx) => {
         let categoryId = rawMedicineData.categoryId || null;
@@ -156,6 +174,8 @@ class MedicinePrismaService {
           categoryId,
           manufacturerId,
           dosageForm: rawMedicineData.dosageForm || null,
+          packagingType:
+            rawMedicineData.packagingType || mapDosageFormToPackaging(rawMedicineData.dosageForm),
           strength: rawMedicineData.strength || null,
           unit: rawMedicineData.unit || null,
           scheduleType: rawMedicineData.scheduleType || rawMedicineData.schedule || null,
@@ -341,7 +361,11 @@ class MedicinePrismaService {
     if (data.composition !== undefined) updateData.composition = data.composition;
     if (categoryId !== undefined) updateData.categoryId = categoryId;
     if (manufacturerId !== undefined) updateData.manufacturerId = manufacturerId;
-    if (data.dosageForm !== undefined) updateData.dosageForm = data.dosageForm;
+    if (data.dosageForm !== undefined) {
+      updateData.dosageForm = data.dosageForm;
+      updateData.packagingType = mapDosageFormToPackaging(data.dosageForm);
+    }
+    if (data.packagingType !== undefined) updateData.packagingType = data.packagingType;
     if (data.strength !== undefined) updateData.strength = data.strength;
     if (data.unit !== undefined) updateData.unit = data.unit;
     if (data.scheduleType !== undefined) updateData.scheduleType = data.scheduleType;

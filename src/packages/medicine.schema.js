@@ -81,6 +81,7 @@ export const MedicineResponseSchema = z.object({
   barcode: z.string().nullable(),
   sku: z.string().nullable(),
   dosageForm: z.string().nullable(),
+  packagingType: z.string().nullable().optional(),
   strength: z.string().nullable(),
   gstPercentage: z.number(),
   description: z.string().nullable(),

@@ -9,30 +9,60 @@ class DashboardService {
     const targetDate = date ? new Date(date) : new Date();
     targetDate.setHours(0, 0, 0, 0);
 
-    const summary = await prisma.dailySalesSummary.findUnique({
-      where: {
-        tenantId_branchId_salesDate: {
+    if (branchId) {
+      const summary = await prisma.dailySalesSummary.findUnique({
+        where: {
+          tenantId_branchId_salesDate: {
+            tenantId,
+            branchId,
+            salesDate: targetDate,
+          },
+        },
+      });
+
+      if (!summary) return this._emptySummary(targetDate);
+
+      return {
+        date: summary.salesDate,
+        summary: {
+          totalSales: Number(summary.totalSales),
+          totalInvoices: summary.totalInvoices,
+          totalRefunds: Number(summary.totalReturns),
+          netRevenue: Number(summary.totalSales) - Number(summary.totalReturns),
+        },
+        taxSummary: {
+          totalGst: Number(summary.totalGst),
+        },
+      };
+    } else {
+      // Tenant-level aggregation
+      const summaries = await prisma.dailySalesSummary.findMany({
+        where: {
           tenantId,
-          branchId: branchId || null,
           salesDate: targetDate,
         },
-      },
-    });
+      });
 
-    if (!summary) return this._emptySummary(targetDate);
+      if (summaries.length === 0) return this._emptySummary(targetDate);
 
-    return {
-      date: summary.salesDate,
-      summary: {
-        totalSales: summary.totalSales,
-        totalInvoices: summary.totalInvoices,
-        totalRefunds: summary.totalReturns,
-        netRevenue: summary.totalSales - summary.totalReturns,
-      },
-      taxSummary: {
-        totalGst: summary.totalGst,
-      },
-    };
+      const totalSales = summaries.reduce((sum, s) => sum + Number(s.totalSales), 0);
+      const totalInvoices = summaries.reduce((sum, s) => sum + s.totalInvoices, 0);
+      const totalRefunds = summaries.reduce((sum, s) => sum + Number(s.totalReturns), 0);
+      const totalGst = summaries.reduce((sum, s) => sum + Number(s.totalGst), 0);
+
+      return {
+        date: targetDate,
+        summary: {
+          totalSales,
+          totalInvoices,
+          totalRefunds,
+          netRevenue: totalSales - totalRefunds,
+        },
+        taxSummary: {
+          totalGst,
+        },
+      };
+    }
   }
 
   async getPaymentBreakdown(tenantId, branchId, date) {
@@ -42,21 +72,31 @@ class DashboardService {
     const analytics = await prisma.paymentMethodAnalytics.findMany({
       where: {
         tenantId,
-        branchId: branchId || null,
+        ...(branchId ? { branchId } : {}),
         paymentDate: targetDate,
       },
     });
 
-    const totalRevenue = analytics.reduce((sum, item) => sum + item.totalAmount, 0);
+    const grouped = {};
+    for (const item of analytics) {
+      const method = item.paymentMethod;
+      if (!grouped[method]) {
+        grouped[method] = { amount: 0, count: 0 };
+      }
+      grouped[method].amount += Number(item.totalAmount);
+      grouped[method].count += item.totalCount;
+    }
+
+    const totalRevenue = Object.values(grouped).reduce((sum, item) => sum + item.amount, 0);
 
     return {
       date: targetDate,
       totalRevenue,
-      payments: analytics.map((item) => ({
-        method: item.paymentMethod,
-        amount: item.totalAmount,
-        count: item.totalCount,
-        percentage: totalRevenue > 0 ? (item.totalAmount / totalRevenue) * 100 : 0,
+      payments: Object.entries(grouped).map(([method, data]) => ({
+        method,
+        amount: data.amount,
+        count: data.count,
+        percentage: totalRevenue > 0 ? (data.amount / totalRevenue) * 100 : 0,
       })),
     };
   }

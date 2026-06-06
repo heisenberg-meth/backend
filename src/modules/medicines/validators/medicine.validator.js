@@ -34,6 +34,7 @@ export const createMedicineSchema = z.object({
   dosageForm: z.string().refine((val) => DOSAGE_FORMS.includes(val), {
     message: `Invalid dosage form. Must be one of: ${DOSAGE_FORMS.join(', ')}`,
   }),
+  packagingType: z.string().optional(),
   strength: z.string().optional().default(''),
   barcode: z.string().optional().default(''),
   sku: z.string().optional().default(''),
@@ -67,6 +68,7 @@ export const updateMedicineSchema = z.object({
       message: `Invalid dosage form. Must be one of: ${DOSAGE_FORMS.join(', ')}`,
     })
     .optional(),
+  packagingType: z.string().optional(),
   strength: z.string().optional(),
   barcode: z.string().optional(),
   sku: z.string().optional(),

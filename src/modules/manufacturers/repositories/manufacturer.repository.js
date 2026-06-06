@@ -2,17 +2,22 @@ import prisma from '../../../config/prisma.js';
 
 class ManufacturerRepository {
   async findAll(tenantId) {
-    return prisma.manufacturer.findMany({
+    const manufacturers = await prisma.manufacturer.findMany({
       where: { tenantId, deletedAt: null },
       include: {
         _count: { select: { medicines: { where: { deletedAt: null } } } },
       },
       orderBy: { name: 'asc' },
     });
+
+    return manufacturers.map((m) => ({
+      ...m,
+      medicineCount: m._count.medicines,
+    }));
   }
 
   async findById(id, tenantId) {
-    return prisma.manufacturer.findFirst({
+    const manufacturer = await prisma.manufacturer.findFirst({
       where: { id, tenantId, deletedAt: null },
       include: {
         _count: { select: { medicines: { where: { deletedAt: null } } } },
@@ -29,6 +34,13 @@ class ManufacturerRepository {
         },
       },
     });
+
+    if (!manufacturer) return null;
+
+    return {
+      ...manufacturer,
+      medicineCount: manufacturer._count.medicines,
+    };
   }
 
   async create(data) {
