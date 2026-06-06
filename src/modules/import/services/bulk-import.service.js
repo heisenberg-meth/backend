@@ -441,8 +441,8 @@ class BulkImportService {
                   reorderLevel: 10,
                   status: 'ACTIVE',
                   isActive: true,
-                  category: categoryId ? { connect: { id: categoryId } } : undefined,
-                  manufacturer: manufacturerId ? { connect: { id: manufacturerId } } : undefined,
+                  categoryId: categoryId || null,
+                  manufacturerId: manufacturerId || null,
                 },
               });
               medicineId = newMed.id;
