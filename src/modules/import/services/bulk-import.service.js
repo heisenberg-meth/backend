@@ -2,6 +2,7 @@ import crypto from 'crypto';
 import prisma from '../../../config/prisma.js';
 import auditService from '../../audit/service/audit.prisma.service.js';
 import logger from '../../../shared/utils/logger.js';
+import { connect } from 'http2';
 
 class BulkImportService {
   async analyzeOrCommit(payload, tenantId, branchId, userId) {
@@ -67,6 +68,19 @@ class BulkImportService {
         rawRow.price !== undefined && rawRow.price !== null ? String(rawRow.price).trim() : '0';
       const batch = rawRow.batch ? String(rawRow.batch).trim() : '';
       const barcode = rawRow.barcode ? String(rawRow.barcode).trim() : '';
+      const category = rawRow.category ? String(rawRow.category).trim() : '';
+
+      const manufacturer = rawRow.manufacturer ? String(rawRow.manufacturer).trim() : '';
+
+      const genericName = rawRow.genericName ? String(rawRow.genericName).trim() : '';
+
+      const strength = rawRow.strength ? String(rawRow.strength).trim() : '';
+
+      const dosageForm = rawRow.dosageForm ? String(rawRow.dosageForm).trim() : '';
+
+      const hsnCode = rawRow.hsnCode ? String(rawRow.hsnCode).trim() : '';
+
+      const gstPercentage = rawRow.gstPercentage ? parseFloat(rawRow.gstPercentage) : 0;
 
       const validationErrors = [];
       const validationWarnings = [];
@@ -145,6 +159,13 @@ class BulkImportService {
             ? `BC-${crypto.randomUUID().substring(0, 8).toUpperCase()}`
             : null),
         matchedMedicine,
+        category,
+        manufacturer,
+        genericName,
+        strength,
+        dosageForm,
+        hsnCode,
+        gstPercentage,
         isExpired,
         warnings: validationWarnings,
       });
@@ -320,17 +341,79 @@ class BulkImportService {
                 }
               }
             } else {
+              let categoryId = null;
+
+              if (row.category) {
+                const existingCategory = await tx.medicineCategory.findFirst({
+                  where: {
+                    tenantId,
+                    name: {
+                      equals: row.category.trim(),
+                      mode: 'insensitive',
+                    },
+                    deletedAt: null,
+                  },
+                });
+
+                if (existingCategory) {
+                  categoryId = existingCategory.id;
+                } else {
+                  const newCategory = await tx.medicineCategory.create({
+                    data: {
+                      tenantId,
+                      name: row.category.trim(),
+                    },
+                  });
+
+                  categoryId = newCategory.id;
+                }
+              }
+
+              let manufacturerId = null;
+
+              if (row.manufacturer) {
+                const existingManufacturer = await tx.manufacturer.findFirst({
+                  where: {
+                    tenantId,
+                    name: {
+                      equals: row.manufacturer.trim(),
+                      mode: 'insensitive',
+                    },
+                    deletedAt: null,
+                  },
+                });
+
+                if (existingManufacturer) {
+                  manufacturerId = existingManufacturer.id;
+                } else {
+                  const newManufacturer = await tx.manufacturer.create({
+                    data: {
+                      tenantId,
+                      name: row.manufacturer.trim(),
+                    },
+                  });
+
+                  manufacturerId = newManufacturer.id;
+                }
+              }
+
               const newMed = await tx.medicine.create({
                 data: {
                   tenantId,
                   userId,
                   name: row.name,
+                  genericName: row.genericName || null,
                   barcode: row.barcode,
+                  hsnCode: row.hsnCode || null,
+                  dosageForm: row.dosageForm || null,
+                  strength: row.strength || null,
                   sku: `SKU-${crypto.randomUUID()}`,
-                  gstPercentage: 0,
+                  gstPercentage: row.gstPercentage || 0,
                   reorderLevel: 10,
                   status: 'ACTIVE',
                   isActive: true,
+                  category: categoryId ? { connect: { id: categoryId } } : undefined,
+                  manufacturer: manufacturerId ? { connect: { id: manufacturerId } } : undefined,
                 },
               });
               medicineId = newMed.id;
