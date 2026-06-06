@@ -531,7 +531,7 @@ model MedicineCategory {
   children    MedicineCategory[] @relation("CategoryHierarchy")
   tenant      Tenant             @relation(fields: [tenantId], references: [id])
 
-  @@index([tenantId, name])
+  @@unique([tenantId, name])
 }
 
 model Manufacturer {
@@ -549,7 +549,7 @@ model Manufacturer {
   tenant        Tenant     @relation(fields: [tenantId], references: [id])
   medicines     Medicine[]
 
-  @@index([tenantId, name])
+  @@unique([tenantId, name])
 }
 
 model Medicine {

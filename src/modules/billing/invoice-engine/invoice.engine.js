@@ -189,6 +189,46 @@ class InvoiceEngine {
         },
       });
 
+      const sale = await t.sale.create({
+        data: {
+          tenantId,
+          branchId: invoice.branchId,
+          invoiceId,
+          totalItems: invoice.items.reduce((sum, i) => sum + i.quantity, 0),
+          subtotal: invoice.subtotal,
+          discountAmount: invoice.discountAmount,
+          gstAmount: invoice.gstAmount,
+          totalAmount: invoice.totalAmount,
+          soldBy: userId,
+          patientId: invoice.patientId,
+          paymentStatus: invoice.paymentStatus === 'PAID' ? 'PAID' : 'PENDING',
+          status: 'COMPLETED',
+        },
+      });
+
+      for (const item of invoice.items) {
+        const gstAmount = new Decimal(item.cgst || 0)
+          .plus(item.igst || 0)
+          .plus(item.sgst || 0);
+        await t.saleItem.create({
+          data: {
+            saleId: sale.id,
+            medicineId: item.medicineId,
+            batchId: item.batchId,
+            quantity: item.quantity,
+            unitPrice: item.unitPrice,
+            discountAmount: item.discountAmount,
+            gstAmount,
+            totalAmount: item.totalPrice,
+          },
+        });
+      }
+
+      await t.invoice.update({
+        where: { id: invoiceId },
+        data: { saleId: sale.id },
+      });
+
       if (invoice.patientId) {
         await pointsService.earnPoints(
           tenantId,

@@ -2,7 +2,6 @@ import crypto from 'crypto';
 import prisma from '../../../config/prisma.js';
 import auditService from '../../audit/service/audit.prisma.service.js';
 import logger from '../../../shared/utils/logger.js';
-import { connect } from 'http2';
 
 class BulkImportService {
   async analyzeOrCommit(payload, tenantId, branchId, userId) {
@@ -13,6 +12,15 @@ class BulkImportService {
       barcodeOptions = { autoGen: true, overwrite: false, validate: true },
       dryRun = true,
     } = payload;
+
+    let resolvedSupplierId = null;
+    if (supplierName && supplierName !== 'None') {
+      const supplier = await prisma.supplier.findFirst({
+        where: { tenantId, name: { equals: supplierName, mode: 'insensitive' }, deletedAt: null },
+        select: { id: true },
+      });
+      if (supplier) resolvedSupplierId = supplier.id;
+    }
 
     const analysis = {
       new: 0,
@@ -42,11 +50,18 @@ class BulkImportService {
         tenantId,
         deletedAt: null,
         OR: [
-          { name: { in: Array.from(namesToLookup), mode: 'insensitive' } },
+          {
+            OR: Array.from(namesToLookup).map((name) => ({
+              name: {
+                equals: name,
+                mode: 'insensitive',
+              },
+            })),
+          },
           { barcode: { in: Array.from(barcodesToLookup) } },
         ],
       },
-      select: { id: true, name: true, barcode: true },
+      select: { id: true, name: true, barcode: true, categoryId: true, manufacturerId: true },
     });
 
     const medicineMapByName = new Map();
@@ -318,6 +333,28 @@ class BulkImportService {
                     currentMatch.barcode = row.barcode;
                     medicineMapByBarcode.set(row.barcode.trim(), currentMatch);
                   }
+                  if (row.category) {
+                    const resolvedCatId = await this._resolveCategory(
+                      tx,
+                      tenantId,
+                      row.category.trim(),
+                    );
+                    if (resolvedCatId) {
+                      updatePayload.categoryId = resolvedCatId;
+                      currentMatch.categoryId = resolvedCatId;
+                    }
+                  }
+                  if (row.manufacturer) {
+                    const resolvedMfrId = await this._resolveManufacturer(
+                      tx,
+                      tenantId,
+                      row.manufacturer.trim(),
+                    );
+                    if (resolvedMfrId) {
+                      updatePayload.manufacturerId = resolvedMfrId;
+                      currentMatch.manufacturerId = resolvedMfrId;
+                    }
+                  }
                   if (Object.keys(updatePayload).length > 0) {
                     await tx.medicine.update({
                       where: { id: medicineId },
@@ -332,6 +369,28 @@ class BulkImportService {
                     currentMatch.barcode = row.barcode;
                     medicineMapByBarcode.set(row.barcode.trim(), currentMatch);
                   }
+                  if (row.category && !currentMatch.categoryId) {
+                    const resolvedCatId = await this._resolveCategory(
+                      tx,
+                      tenantId,
+                      row.category.trim(),
+                    );
+                    if (resolvedCatId) {
+                      updatePayload.categoryId = resolvedCatId;
+                      currentMatch.categoryId = resolvedCatId;
+                    }
+                  }
+                  if (row.manufacturer && !currentMatch.manufacturerId) {
+                    const resolvedMfrId = await this._resolveManufacturer(
+                      tx,
+                      tenantId,
+                      row.manufacturer.trim(),
+                    );
+                    if (resolvedMfrId) {
+                      updatePayload.manufacturerId = resolvedMfrId;
+                      currentMatch.manufacturerId = resolvedMfrId;
+                    }
+                  }
                   if (Object.keys(updatePayload).length > 0) {
                     await tx.medicine.update({
                       where: { id: medicineId },
@@ -341,61 +400,31 @@ class BulkImportService {
                 }
               }
             } else {
-              let categoryId = null;
+              let categoryId = row.category
+                ? await this._resolveCategory(tx, tenantId, row.category.trim())
+                : null;
 
-              if (row.category) {
-                const existingCategory = await tx.medicineCategory.findFirst({
-                  where: {
-                    tenantId,
-                    name: {
-                      equals: row.category.trim(),
-                      mode: 'insensitive',
-                    },
-                    deletedAt: null,
-                  },
-                });
+              let manufacturerId = row.manufacturer
+                ? await this._resolveManufacturer(tx, tenantId, row.manufacturer.trim())
+                : null;
 
-                if (existingCategory) {
-                  categoryId = existingCategory.id;
-                } else {
-                  const newCategory = await tx.medicineCategory.create({
-                    data: {
-                      tenantId,
-                      name: row.category.trim(),
-                    },
-                  });
+              console.log('IMPORT ROW');
+              console.log({
+                name: row.name,
+                category: row.category,
+                manufacturer: row.manufacturer,
+                genericName: row.genericName,
+                strength: row.strength,
+                dosageForm: row.dosageForm,
+                hsnCode: row.hsnCode,
+                gstPercentage: row.gstPercentage,
+              });
 
-                  categoryId = newCategory.id;
-                }
-              }
-
-              let manufacturerId = null;
-
-              if (row.manufacturer) {
-                const existingManufacturer = await tx.manufacturer.findFirst({
-                  where: {
-                    tenantId,
-                    name: {
-                      equals: row.manufacturer.trim(),
-                      mode: 'insensitive',
-                    },
-                    deletedAt: null,
-                  },
-                });
-
-                if (existingManufacturer) {
-                  manufacturerId = existingManufacturer.id;
-                } else {
-                  const newManufacturer = await tx.manufacturer.create({
-                    data: {
-                      tenantId,
-                      name: row.manufacturer.trim(),
-                    },
-                  });
-
-                  manufacturerId = newManufacturer.id;
-                }
-              }
+              console.log('RESOLVED IDS');
+              console.log({
+                categoryId,
+                manufacturerId,
+              });
 
               const newMed = await tx.medicine.create({
                 data: {
@@ -419,6 +448,13 @@ class BulkImportService {
               medicineId = newMed.id;
               commitSummary.newMedicinesCount++;
 
+              console.log('CREATED MEDICINE');
+              console.log({
+                id: newMed.id,
+                categoryId: newMed.categoryId,
+                manufacturerId: newMed.manufacturerId,
+              });
+
               const cachedMed = { id: medicineId, name: row.name, barcode: row.barcode };
               medicineMapByName.set(normName, cachedMed);
               if (row.barcode) {
@@ -441,6 +477,7 @@ class BulkImportService {
                 sellingPrice: (row.price || 0) * 1.2,
                 mrp: (row.price || 0) * 1.2,
                 status: 'ACTIVE',
+                supplierId: resolvedSupplierId,
               });
 
               movementsToCreate.push({
@@ -517,14 +554,18 @@ class BulkImportService {
       },
     });
 
-    await auditService.log({
-      tenantId,
-      userId,
-      action: 'BULK_IMPORT_COMPLETED',
-      target: importJob.id,
-      type: 'INVENTORY',
-      metadata: commitSummary,
-    });
+    try {
+      await auditService.log({
+        tenantId,
+        userId,
+        action: 'BULK_IMPORT_COMPLETED',
+        target: importJob.id,
+        type: 'INVENTORY',
+        metadata: commitSummary,
+      });
+    } catch (auditErr) {
+      logger.warn({ err: auditErr }, 'Audit log failed (non-blocking)');
+    }
 
     return {
       success: true,
@@ -541,6 +582,38 @@ class BulkImportService {
         newBatchesCount: commitSummary.newBatchesCount,
       },
     };
+  }
+
+  async _resolveCategory(tx, tenantId, categoryName) {
+    if (!categoryName) return null;
+    const existing = await tx.medicineCategory.findFirst({
+      where: {
+        tenantId,
+        name: { equals: categoryName, mode: 'insensitive' },
+        deletedAt: null,
+      },
+    });
+    if (existing) return existing.id;
+    const created = await tx.medicineCategory.create({
+      data: { tenantId, name: categoryName },
+    });
+    return created.id;
+  }
+
+  async _resolveManufacturer(tx, tenantId, manufacturerName) {
+    if (!manufacturerName) return null;
+    const existing = await tx.manufacturer.findFirst({
+      where: {
+        tenantId,
+        name: { equals: manufacturerName, mode: 'insensitive' },
+        deletedAt: null,
+      },
+    });
+    if (existing) return existing.id;
+    const created = await tx.manufacturer.create({
+      data: { tenantId, name: manufacturerName },
+    });
+    return created.id;
   }
 
   parseExpiryDate(dateStr) {

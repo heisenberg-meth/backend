@@ -22,8 +22,21 @@ async function updateProgress(jobId, data) {
 }
 
 class CsvImportService {
-  async run(filePath, { jobId, tenantId, branchId, userId, duplicateStrategy, barcodeOptions }) {
+  async run(filePath, { jobId, tenantId, branchId, userId, duplicateStrategy, barcodeOptions, supplier: supplierName }) {
     logger.info({ jobId, filePath }, '[CSV-Import] Starting bulk import');
+
+    let resolvedSupplierId = null;
+    if (supplierName && supplierName !== 'None') {
+      try {
+        const supplier = await prisma.supplier.findFirst({
+          where: { tenantId, name: { equals: supplierName, mode: 'insensitive' }, deletedAt: null },
+          select: { id: true },
+        });
+        if (supplier) resolvedSupplierId = supplier.id;
+      } catch (err) {
+        logger.warn({ err }, '[CSV-Import] Supplier lookup failed');
+      }
+    }
 
     await updateProgress(jobId, { processed: 0, total: 0, status: 'preloading' });
 
@@ -31,6 +44,8 @@ class CsvImportService {
     const medicineMap = await this._preloadMedicines(tenantId);
     const batchMap = await this._preloadBatches(tenantId, branchId);
     const inventoryMap = await this._preloadInventory(tenantId, branchId);
+    const categoryMap = await this._preloadCategories(tenantId);
+    const manufacturerMap = await this._preloadManufacturers(tenantId);
     logger.info(
       { jobId, elapsed: Date.now() - preloadStart, size: medicineMap.size },
       '[CSV-Import] Preload complete',
@@ -46,6 +61,8 @@ class CsvImportService {
     let inventoryUpdates = [];
     let errors = [];
     let importedCount = 0;
+    const categoriesToCreate = [];
+    const manufacturersToCreate = [];
 
     await new Promise((resolve, reject) => {
       const stream = fs
@@ -72,11 +89,16 @@ class CsvImportService {
                 medicineMap,
                 batchMap,
                 inventoryMap,
+                categoryMap,
+                categoriesToCreate,
+                manufacturerMap,
+                manufacturersToCreate,
                 newMedicines,
                 newBatches,
                 newMovements,
                 inventoryUpdates,
                 errors,
+                supplierId: resolvedSupplierId,
               });
               importedCount += chunk.length;
               chunk = [];
@@ -103,11 +125,16 @@ class CsvImportService {
                 medicineMap,
                 batchMap,
                 inventoryMap,
+                categoryMap,
+                categoriesToCreate,
+                manufacturerMap,
+                manufacturersToCreate,
                 newMedicines,
                 newBatches,
                 newMovements,
                 inventoryUpdates,
                 errors,
+                supplierId: resolvedSupplierId,
               });
               importedCount += chunk.length;
             } catch (err) {
@@ -135,6 +162,8 @@ class CsvImportService {
       newMovements,
       inventoryUpdates,
       errors,
+      categoriesToCreate,
+      manufacturersToCreate,
     });
     logger.info({ jobId, elapsed: Date.now() - commitStart }, '[CSV-Import] Commit complete');
 
@@ -170,6 +199,30 @@ class CsvImportService {
 
     logger.info({ jobId, summary }, '[CSV-Import] Import complete');
     return summary;
+  }
+
+  async _preloadCategories(tenantId) {
+    const cats = await prisma.medicineCategory.findMany({
+      where: { tenantId, deletedAt: null },
+      select: { id: true, name: true },
+    });
+    const map = new Map();
+    for (const c of cats) {
+      map.set(c.name.toLowerCase().trim(), c.id);
+    }
+    return map;
+  }
+
+  async _preloadManufacturers(tenantId) {
+    const mfrs = await prisma.manufacturer.findMany({
+      where: { tenantId, deletedAt: null },
+      select: { id: true, name: true },
+    });
+    const map = new Map();
+    for (const m of mfrs) {
+      map.set(m.name.toLowerCase().trim(), m.id);
+    }
+    return map;
   }
 
   async _preloadMedicines(tenantId) {
@@ -231,6 +284,13 @@ class CsvImportService {
       const priceStr = this._getColumn(row, ['price', 'rate', 'cost', 'inr']);
       const batchNo = this._getColumn(row, ['batch', 'lot', 'no', 'code']);
       const barcode = this._getColumn(row, ['barcode', 'upc', 'ean', 'sku']);
+      const category = this._getColumn(row, ['category', 'cat', 'type', 'group', 'classification']);
+      const manufacturer = this._getColumn(row, ['manufacturer', 'mfr', 'maker', 'brand', 'company', 'vendor']);
+      const genericName = this._getColumn(row, ['generic', 'gen', 'salt', 'composition']);
+      const strength = this._getColumn(row, ['strength', 'mg', 'ml', 'dose', 'concentration']);
+      const dosageForm = this._getColumn(row, ['dosage', 'form', 'type', 'drug_form']);
+      const hsnCode = this._getColumn(row, ['hsn', 'hsn_code', 'hsncode', 'sac', 'tariff']);
+      const gstStr = this._getColumn(row, ['gst', 'gst%', 'tax', 'tax_percent', 'gst_percent']);
 
       if (!name) {
         ctx.errors.push({
@@ -283,16 +343,55 @@ class CsvImportService {
       if (existingMedicine) {
         medicineId = existingMedicine.id;
       } else {
+        let resolvedCategoryId = null;
+        if (category) {
+          const normalizedCat = category.toLowerCase().trim();
+          if (ctx.categoryMap.has(normalizedCat)) {
+            resolvedCategoryId = ctx.categoryMap.get(normalizedCat);
+          } else {
+            const alreadyQueued = ctx.categoriesToCreate.some(
+              (c) => c.name.toLowerCase().trim() === normalizedCat,
+            );
+            if (!alreadyQueued) {
+              ctx.categoriesToCreate.push({ tenantId, name: category.trim() });
+            }
+          }
+        }
+
+        let resolvedManufacturerId = null;
+        if (manufacturer) {
+          const normalizedMfr = manufacturer.toLowerCase().trim();
+          if (ctx.manufacturerMap.has(normalizedMfr)) {
+            resolvedManufacturerId = ctx.manufacturerMap.get(normalizedMfr);
+          } else {
+            const alreadyQueued = ctx.manufacturersToCreate.some(
+              (m) => m.name.toLowerCase().trim() === normalizedMfr,
+            );
+            if (!alreadyQueued) {
+              ctx.manufacturersToCreate.push({ tenantId, name: manufacturer.trim() });
+            }
+          }
+        }
+
+        const parsedGst = parseFloat(gstStr);
         const newMed = {
           tenantId,
           userId,
           name: name.trim(),
           barcode: barcode || null,
           sku: `SKU-${crypto.randomUUID()}`,
-          gstPercentage: 0,
+          genericName: genericName || null,
+          strength: strength || null,
+          dosageForm: dosageForm || null,
+          hsnCode: hsnCode || null,
+          gstPercentage: isNaN(parsedGst) ? 0 : parsedGst,
           reorderLevel: 10,
           status: 'ACTIVE',
           isActive: true,
+          categoryId: resolvedCategoryId,
+          _categoryName: resolvedCategoryId ? null : (category ? category.trim() : null),
+          manufacturerId: resolvedManufacturerId,
+          _manufacturerName: resolvedManufacturerId ? null : (manufacturer ? manufacturer.trim() : null),
         };
         medicineId = `new:${crypto.randomUUID()}`;
         newMed._tempId = medicineId;
@@ -322,6 +421,7 @@ class CsvImportService {
           sellingPrice: price * 1.2,
           mrp: price * 1.2,
           status: 'ACTIVE',
+          supplierId: ctx.supplierId || null,
         });
         batchMap.set(batchKey, true);
       }
@@ -356,8 +456,36 @@ class CsvImportService {
     const medicineIdMap = new Map();
 
     await prisma.$transaction(async (tx) => {
+      const categoryNameToId = new Map();
+      for (const cat of ctx.categoriesToCreate) {
+        const key = cat.name.toLowerCase().trim();
+        if (!categoryNameToId.has(key)) {
+          const created = await tx.medicineCategory.create({
+            data: { tenantId, name: cat.name },
+          });
+          categoryNameToId.set(key, created.id);
+        }
+      }
+
+      const manufacturerNameToId = new Map();
+      for (const mfr of ctx.manufacturersToCreate) {
+        const key = mfr.name.toLowerCase().trim();
+        if (!manufacturerNameToId.has(key)) {
+          const created = await tx.manufacturer.create({
+            data: { tenantId, name: mfr.name },
+          });
+          manufacturerNameToId.set(key, created.id);
+        }
+      }
+
       for (const m of newMedicines) {
-        const { _tempId, ...data } = m;
+        const { _tempId, _categoryName, _manufacturerName, ...data } = m;
+        if (!data.categoryId && _categoryName) {
+          data.categoryId = categoryNameToId.get(_categoryName.toLowerCase().trim());
+        }
+        if (!data.manufacturerId && _manufacturerName) {
+          data.manufacturerId = manufacturerNameToId.get(_manufacturerName.toLowerCase().trim());
+        }
         const created = await tx.medicine.create({ data });
         medicineIdMap.set(_tempId, created.id);
       }

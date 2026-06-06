@@ -176,7 +176,7 @@ const handlers = {
   },
 
   'bulk-medicines-import': async (data) => {
-    const { filePath, jobId, tenantId, branchId, userId, duplicateStrategy, barcodeOptions } = data;
+    const { filePath, jobId, tenantId, branchId, userId, duplicateStrategy, barcodeOptions, supplier } = data;
     const { default: csvImportService } =
       await import('../modules/import/services/csv-import.service.js');
     await csvImportService.run(filePath, {
@@ -186,6 +186,7 @@ const handlers = {
       userId,
       duplicateStrategy,
       barcodeOptions,
+      supplier: supplier || 'None',
     });
   },
 

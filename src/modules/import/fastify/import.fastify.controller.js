@@ -105,8 +105,17 @@ class ImportFastifyController {
       );
       return reply.send(result);
     } catch (error) {
+      console.error('BULK IMPORT ERROR');
+      console.error(error);
+      console.error(error.stack);
+
       request.log.error(error);
-      return reply.code(400).send({ success: false, message: error.message });
+
+      return reply.code(400).send({
+        success: false,
+        message: error.message,
+        stack: error.stack,
+      });
     }
   }
 
@@ -117,6 +126,7 @@ class ImportFastifyController {
         fileContent,
         duplicateStrategy,
         barcodeOptions: rawBarcodeOpts,
+        supplier: supplierName,
       } = request.body || {};
       if (!fileContent) {
         return reply.code(400).send({ success: false, message: 'fileContent is required' });
@@ -150,6 +160,7 @@ class ImportFastifyController {
         userId: request.user.id,
         duplicateStrategy: duplicateStrategy || 'Skip',
         barcodeOptions,
+        supplier: supplierName || 'None',
       });
 
       return reply.code(202).send({
@@ -161,8 +172,17 @@ class ImportFastifyController {
         },
       });
     } catch (error) {
+      console.error('BULK IMPORT ERROR');
+      console.error(error);
+      console.error(error.stack);
+
       request.log.error(error);
-      return reply.code(400).send({ success: false, message: error.message });
+
+      return reply.code(400).send({
+        success: false,
+        message: error.message,
+        stack: error.stack,
+      });
     }
   }
 
