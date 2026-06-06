@@ -417,24 +417,6 @@ class BulkImportService {
                 ? await this._resolveManufacturer(tx, tenantId, row.manufacturer.trim())
                 : null;
 
-              console.log('IMPORT ROW');
-              console.log({
-                name: row.name,
-                category: row.category,
-                manufacturer: row.manufacturer,
-                genericName: row.genericName,
-                strength: row.strength,
-                dosageForm: row.dosageForm,
-                hsnCode: row.hsnCode,
-                gstPercentage: row.gstPercentage,
-              });
-
-              console.log('RESOLVED IDS');
-              console.log({
-                categoryId,
-                manufacturerId,
-              });
-
               const newMed = await tx.medicine.create({
                 data: {
                   tenantId,
@@ -457,13 +439,6 @@ class BulkImportService {
               });
               medicineId = newMed.id;
               commitSummary.newMedicinesCount++;
-
-              console.log('CREATED MEDICINE');
-              console.log({
-                id: newMed.id,
-                categoryId: newMed.categoryId,
-                manufacturerId: newMed.manufacturerId,
-              });
 
               const cachedMed = { id: medicineId, name: row.name, barcode: row.barcode };
               medicineMapByName.set(normName, cachedMed);

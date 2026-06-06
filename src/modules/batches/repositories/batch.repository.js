@@ -6,6 +6,7 @@ class BatchRepository {
     status,
     branchId,
     supplierId,
+    medicineId,
     expiryBefore,
     expiryAfter,
     sortBy,
@@ -19,6 +20,7 @@ class BatchRepository {
       ...(status && { status }),
       ...(branchId && { branchId }),
       ...(supplierId && { supplierId }),
+      ...(medicineId && { medicineId }),
       ...((expiryBefore || expiryAfter) && {
         expiryDate: {
           ...(expiryBefore && { lte: new Date(expiryBefore) }),
