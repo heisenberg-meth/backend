@@ -1,16 +1,4 @@
-/**
- * Domain event constants for the ERP event bus.
- * These events are emitted by modules and consumed by listeners/workers.
- *
- * Usage:
- *   import { DOMAIN_EVENTS } from '../constants/events.js';
- *   import { emitLocalEvent, emitEvent } from '../shared/events/local-event-bus.js';
- *
- *   emitLocalEvent(DOMAIN_EVENTS.SALE_COMPLETED, { saleId, total, items });
- *   await emitEvent(DOMAIN_EVENTS.INVOICE_GENERATED, { invoiceId, patientId });
- */
 export const DOMAIN_EVENTS = {
-  // ── Sales & Billing ──────────────────────────────────────────
   SALE_COMPLETED: 'sale.completed',
   SALE_CANCELLED: 'sale.cancelled',
   SALE_RETURNED: 'sale.returned',
@@ -22,8 +10,6 @@ export const DOMAIN_EVENTS = {
   PAYMENT_FAILED: 'payment.failed',
   CREDIT_NOTE_ISSUED: 'credit_note.issued',
   REFUND_PROCESSED: 'refund.processed',
-
-  // ── Inventory ────────────────────────────────────────────────
   STOCK_LOW: 'stock.low',
   STOCK_OUT: 'stock.out',
   STOCK_REPLENISHED: 'stock.replenished',
@@ -35,8 +21,6 @@ export const DOMAIN_EVENTS = {
   MEDICINE_CREATED: 'medicine.created',
   MEDICINE_UPDATED: 'medicine.updated',
   MEDICINE_ARCHIVED: 'medicine.archived',
-
-  // ── Procurement & Suppliers ─────────────────────────────────
   PURCHASE_ORDER_CREATED: 'purchase_order.created',
   PURCHASE_ORDER_APPROVED: 'purchase_order.approved',
   PURCHASE_ORDER_RECEIVED: 'purchase_order.received',
@@ -48,8 +32,6 @@ export const DOMAIN_EVENTS = {
   SUPPLIER_ARCHIVED: 'supplier.archived',
   SUPPLIER_STATUS_CHANGED: 'supplier.status_changed',
   SUPPLIER_SCORE_UPDATED: 'supplier.score_updated',
-
-  // ── Patients & CRM ───────────────────────────────────────────
   PATIENT_CREATED: 'patient.created',
   PATIENT_UPDATED: 'patient.updated',
   PATIENT_ARCHIVED: 'patient.archived',
@@ -63,8 +45,6 @@ export const DOMAIN_EVENTS = {
   INSURANCE_UPDATED: 'patient.insurance.updated',
   ADHERENCE_ALERT: 'patient.adherence.alert',
   CHRONIC_PATTERN_DETECTED: 'patient.chronic.detected',
-
-  // ── Notifications ────────────────────────────────────────────
   NOTIFICATION_QUEUED: 'notification.queued',
   NOTIFICATION_SENT: 'notification.sent',
   NOTIFICATION_DELIVERED: 'notification.delivered',
@@ -82,14 +62,10 @@ export const DOMAIN_EVENTS = {
   EMAIL_SENT: 'email.sent',
   SMS_SENT: 'sms.sent',
   WHATSAPP_SENT: 'whatsapp.sent',
-
-  // ── Settings & Governance ────────────────────────────────────
   SETTINGS_UPDATED: 'settings.updated',
   GST_SETTINGS_UPDATED: 'settings.gst.updated',
   TAX_POLICY_CHANGED: 'tax.policy_changed',
   SETTINGS_AUDIT_LOGGED: 'settings.audit_logged',
-
-  // ── Security & Access ────────────────────────────────────────
   USER_LOGIN: 'user.login',
   USER_LOGOUT: 'user.logout',
   USER_CREATED: 'user.created',
@@ -97,14 +73,10 @@ export const DOMAIN_EVENTS = {
   PERMISSION_CHANGED: 'permission.changed',
   SESSION_EXPIRED: 'session.expired',
   BRUTE_FORCE_DETECTED: 'brute_force.detected',
-
-  // ── Analytics & Reporting ────────────────────────────────────
   REPORT_GENERATED: 'report.generated',
   DAILY_SUMMARY_READY: 'daily_summary.ready',
   GST_FILING_READY: 'gst_filing.ready',
   ANALYTICS_SNAPSHOT: 'analytics.snapshot',
-
-  // ── System ───────────────────────────────────────────────────
   CACHE_INVALIDATED: 'cache.invalidated',
   WEBHOOK_RECEIVED: 'webhook.received',
   IMPORT_COMPLETED: 'import.completed',
@@ -112,24 +84,18 @@ export const DOMAIN_EVENTS = {
   OCR_PROCESSING_COMPLETE: 'ocr.processing_complete',
 };
 
-/**
- * Event priority levels for the distributed event bus.
- */
 export const EVENT_PRIORITY = {
-  CRITICAL: 0, // Security alerts, payment failures
-  HIGH: 1, // Stock alerts, prescription events
-  NORMAL: 2, // Standard business events
-  LOW: 3, // Analytics, reporting, logging
+  CRITICAL: 0,
+  HIGH: 1,
+  NORMAL: 2,
+  LOW: 3,
 };
 
-/**
- * Event retention periods (in seconds) for the distributed event bus.
- */
 export const EVENT_RETENTION = {
-  CRITICAL: 7 * 24 * 60 * 60, // 7 days
-  HIGH: 3 * 24 * 60 * 60, // 3 days
-  NORMAL: 24 * 60 * 60, // 1 day
-  LOW: 60 * 60, // 1 hour
+  CRITICAL: 7 * 24 * 60 * 60,
+  HIGH: 3 * 24 * 60 * 60,
+  NORMAL: 24 * 60 * 60,
+  LOW: 60 * 60,
 };
 
 export const PROCUREMENT_STATUS = {

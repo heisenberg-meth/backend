@@ -5,10 +5,6 @@ import { DOMAIN_EVENTS } from '../../../shared/constants/events.js';
 import logger from '../../../shared/utils/logger.js';
 import prisma from '../../../config/prisma.js';
 
-/**
- * Analytics Worker
- * Processes BullMQ events for pre-aggregating financial data.
- */
 class AnalyticsWorker {
   constructor() {
     this.worker = null;

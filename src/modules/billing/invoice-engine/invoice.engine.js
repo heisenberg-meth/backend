@@ -5,6 +5,7 @@ import movementService from '../../stock/service/movement.service.js';
 import gstService from '../services/gst.service.js';
 import { DOMAIN_EVENTS } from '../../../shared/constants/events.js';
 import { emitLocalEvent } from '../../../shared/events/local-event-bus.js';
+import { emitEvent } from '../../../shared/events/erp-event-bus.js';
 import pointsService from '../../loyalty/points/points.service.js';
 import creditService from '../../loyalty/credits/credit.service.js';
 
@@ -246,7 +247,15 @@ class InvoiceEngine {
       return updated;
     };
 
-    return tx ? execute(tx) : prisma.$transaction(execute);
+    const result = tx ? await execute(tx) : await prisma.$transaction(execute);
+
+    await emitEvent(DOMAIN_EVENTS.INVOICE_GENERATED, {
+      invoiceId: result.id,
+      tenantId: result.tenantId,
+      branchId: result.branchId,
+    });
+
+    return result;
   }
 
   /**

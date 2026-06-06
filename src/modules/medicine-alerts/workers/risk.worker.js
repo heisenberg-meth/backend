@@ -5,10 +5,6 @@ import { DOMAIN_EVENTS } from '../../../shared/constants/events.js';
 import logger from '../../../shared/utils/logger.js';
 import prisma from '../../../config/prisma.js';
 
-/**
- * Risk Worker
- * Processes BullMQ jobs for pharmaceutical risk monitoring.
- */
 class RiskWorker {
   constructor() {
     this.worker = null;
@@ -25,7 +21,6 @@ class RiskWorker {
         try {
           switch (name) {
             case DOMAIN_EVENTS.STOCK_UPDATED:
-              // Sync alert snapshots for this medicine
               await riskMonitoringService.handleStockMovement(data);
               break;
 
