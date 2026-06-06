@@ -7,12 +7,23 @@ class BatchFastifyController {
   }
 
   async getBatches(request, reply) {
-    const { page = 1, limit = 20, status, branchId, supplierId, sortBy, order } = request.query;
+    const {
+      page = 1,
+      limit = 20,
+      status,
+      branchId,
+      supplierId,
+      medicineId,
+      medicine_id,
+      sortBy,
+      order,
+    } = request.query;
     const result = await batchService.getBatches({
       tenantId: request.tenantId,
       status,
       branchId,
       supplierId,
+      medicineId: medicineId || medicine_id,
       sortBy: sortBy || 'expiryDate',
       order: order || 'asc',
       skip: (parseInt(page) - 1) * parseInt(limit),
