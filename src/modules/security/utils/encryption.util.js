@@ -5,11 +5,14 @@ const ALGORITHM = 'aes-256-gcm';
 if (!process.env.ENCRYPTION_KEY) {
   throw new Error(
     'FATAL: ENCRYPTION_KEY environment variable is required. ' +
-      'Set a cryptographically random 32-byte key before starting the application.',
+      'Set a 64-character hex string (32 bytes) before starting the application.',
   );
 }
 
-const KEY = Buffer.from(process.env.ENCRYPTION_KEY, 'utf8');
+const KEY = Buffer.from(process.env.ENCRYPTION_KEY, 'hex');
+if (KEY.length !== 32) {
+  throw new Error('ENCRYPTION_KEY must be exactly 64 hex characters (32 bytes for AES-256)');
+}
 
 export const encrypt = (text) => {
   const iv = crypto.randomBytes(12);

@@ -21,6 +21,7 @@ const envSchema = z.object({
   ENABLE_EVENTBUS: z.string().optional(),
   RAZORPAY_KEY_ID: z.string().optional(),
   RAZORPAY_KEY_SECRET: z.string().optional(),
+  ENCRYPTION_KEY: z.string().length(64, 'ENCRYPTION_KEY must be 64 hex chars (32 bytes)'),
 });
 
 const parsedEnv = envSchema.safeParse(process.env);

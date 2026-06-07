@@ -43,6 +43,7 @@ async function medicineRoutes(fastify) {
       tags: ['Inventory'],
       querystring: { type: 'object', properties: { q: { type: 'string' } } },
     },
+    preHandler: [requirePermission('VIEW_INVENTORY')],
     handler: medicineController.getMedicines,
   });
 
@@ -51,6 +52,7 @@ async function medicineRoutes(fastify) {
       tags: ['Inventory'],
       querystring: { type: 'object', properties: { q: { type: 'string' } } },
     },
+    preHandler: [requirePermission('VIEW_INVENTORY')],
     handler: medicineController.getMedicines,
   });
 

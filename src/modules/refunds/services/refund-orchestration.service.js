@@ -14,7 +14,7 @@ class RefundOrchestrationService {
   async createRefund(tenantId, data, userId) {
     const { invoiceId, items: requestedItems, reason, branchId } = data;
 
-    const invoice = await refundRepository.findInvoiceWithItems(invoiceId);
+    const invoice = await refundRepository.findInvoiceWithItems(invoiceId, tenantId);
     const invoiceValidation = refundEligibility.validateInvoice(invoice);
     if (!invoiceValidation.eligible) {
       throw new Error(invoiceValidation.reason);

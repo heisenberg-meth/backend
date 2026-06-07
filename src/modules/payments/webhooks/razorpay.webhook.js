@@ -104,14 +104,9 @@ class RazorpayWebhookHandler {
       where: { id: payment.id },
       data: {
         razorpayPaymentId: paymentId,
-        status: VALID_STATES.CAPTURED,
+        status: VALID_STATES.SUCCESS,
         paidAt: new Date(),
       },
-    });
-
-    await prisma.payment.update({
-      where: { id: payment.id },
-      data: { status: VALID_STATES.SUCCESS },
     });
 
     await prisma.transaction.updateMany({

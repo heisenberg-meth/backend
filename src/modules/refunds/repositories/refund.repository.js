@@ -71,9 +71,9 @@ class RefundRepository {
     return client.returnItem.update({ where: { id }, data });
   }
 
-  async findInvoiceWithItems(invoiceId) {
+  async findInvoiceWithItems(invoiceId, tenantId) {
     return prisma.invoice.findUnique({
-      where: { id: invoiceId },
+      where: { id: invoiceId, tenantId },
       include: {
         items: { include: { medicine: true, batch: true } },
         payments: true,

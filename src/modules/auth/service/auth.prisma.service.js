@@ -158,7 +158,8 @@ class AuthPrismaService {
       ipAddress,
     });
 
-    await sessionService.revokeOtherSessions(user.id, session.id);
+    // Sessions are now managed explicitly via DELETE /sessions/:id
+    // revokeOtherSessions removed — it broke multi-device use and was an impersonation vector
 
     const accessToken = this._signAccessToken(user, session.id);
 
