@@ -168,7 +168,17 @@ class InvoiceEngine {
       const batchIds = invoice.items.map((i) => i.batchId).filter(Boolean);
       let batchMap = new Map();
       if (batchIds.length > 0) {
-        const batches = await t.inventoryBatch.findMany({ where: { id: { in: batchIds } } });
+        const batches = await t.inventoryBatch.findMany({
+          where: { id: { in: batchIds }, tenantId, branchId: invoice.branchId },
+        });
+        if (batches.length !== batchIds.length) {
+          const foundIds = new Set(batches.map((b) => b.id));
+          const missingIds = batchIds.filter((id) => !foundIds.has(id));
+          throw new Error(
+            `Batch validation failed: ${missingIds.length} batch(es) not found within tenant scope. ` +
+              `IDs: ${missingIds.join(', ')}`,
+          );
+        }
         batchMap = new Map(batches.map((b) => [b.id, b]));
       }
 
@@ -208,9 +218,7 @@ class InvoiceEngine {
       });
 
       for (const item of invoice.items) {
-        const gstAmount = new Decimal(item.cgst || 0)
-          .plus(item.igst || 0)
-          .plus(item.sgst || 0);
+        const gstAmount = new Decimal(item.cgst || 0).plus(item.igst || 0).plus(item.sgst || 0);
         await t.saleItem.create({
           data: {
             saleId: sale.id,
@@ -429,9 +437,12 @@ class InvoiceEngine {
     let batchesToUse = [];
 
     if (item.batchId) {
-      const batch =
-        batchMap.get(item.batchId) ||
-        (await tx.inventoryBatch.findUnique({ where: { id: item.batchId } }));
+      const lockedBatches = await tx.$queryRaw`
+        SELECT * FROM "InventoryBatch" 
+        WHERE id = ${item.batchId} AND "tenantId" = ${tenantId} 
+        FOR UPDATE
+      `;
+      const batch = lockedBatches[0];
       if (!batch || batch.availableQuantity < item.quantity) {
         throw new Error(`Insufficient stock in batch ${batch?.batchNumber || 'unknown'}`);
       }

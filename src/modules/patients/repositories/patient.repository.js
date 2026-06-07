@@ -1,11 +1,43 @@
+import logger from '@/shared/utils/logger.js';
 import prisma from '../../../config/prisma.js';
 import sequenceService from '../../../shared/services/sequence.service.js';
+import { encrypt, decrypt } from '../../security/utils/encryption.util.js';
 
 const PHONE_REGEX = /^[+]?[(]?[0-9]{1,4}[)]?[-\s./0-9]*$/;
 const MIN_AGE = 0;
 const MAX_AGE = 150;
 
 class PatientRepository {
+  _encryptPatientData(data) {
+    if (!data) return data;
+    const encrypted = { ...data };
+    if (encrypted.medicalHistory) encrypted.medicalHistory = encrypt(encrypted.medicalHistory);
+    if (encrypted.allergies) encrypted.allergies = encrypt(encrypted.allergies);
+    if (encrypted.chronicConditions)
+      encrypted.chronicConditions = encrypt(encrypted.chronicConditions);
+    return encrypted;
+  }
+
+  _decryptPatientData(patient) {
+    if (!patient) return patient;
+    const result = { ...patient };
+    const safeDecrypt = (val) => {
+      if (!val || typeof val !== 'string') return val;
+      if (val.includes(':') && val.split(':').length === 3) {
+        try {
+          return decrypt(val);
+        } catch (e) {
+          logger.info({ e });
+          return val;
+        }
+      }
+      return val;
+    };
+    if (result.medicalHistory) result.medicalHistory = safeDecrypt(result.medicalHistory);
+    if (result.allergies) result.allergies = safeDecrypt(result.allergies);
+    if (result.chronicConditions) result.chronicConditions = safeDecrypt(result.chronicConditions);
+    return result;
+  }
   async findAll(tenantId, { search, chronic, page = 1, limit = 50 } = {}) {
     const skip = (page - 1) * limit;
     const where = { tenantId, deletedAt: null };
@@ -37,11 +69,17 @@ class PatientRepository {
       prisma.patient.count({ where }),
     ]);
 
-    return { patients, total, page, limit, totalPages: Math.ceil(total / limit) };
+    return {
+      patients: patients.map((p) => this._decryptPatientData(p)),
+      total,
+      page,
+      limit,
+      totalPages: Math.ceil(total / limit),
+    };
   }
 
   async findById(id, tenantId) {
-    return prisma.patient.findFirst({
+    const patient = await prisma.patient.findFirst({
       where: { id, tenantId, deletedAt: null },
       include: {
         prescriptions: {
@@ -56,10 +94,11 @@ class PatientRepository {
         sales: { take: 10, orderBy: { soldAt: 'desc' } },
       },
     });
+    return this._decryptPatientData(patient);
   }
 
   async search(tenantId, query) {
-    return prisma.patient.findMany({
+    const patients = await prisma.patient.findMany({
       where: {
         tenantId,
         deletedAt: null,
@@ -71,12 +110,14 @@ class PatientRepository {
       },
       take: 20,
     });
+    return patients.map((p) => this._decryptPatientData(p));
   }
 
   async findByPhone(phone, tenantId) {
-    return prisma.patient.findFirst({
+    const patient = await prisma.patient.findFirst({
       where: { phone, tenantId, deletedAt: null },
     });
+    return this._decryptPatientData(patient);
   }
 
   async findDuplicate(tenantId, { phone, fullName }) {
@@ -100,9 +141,10 @@ class PatientRepository {
 
     if (conditions.length === 0) return null;
 
-    return prisma.patient.findFirst({
+    const patient = await prisma.patient.findFirst({
       where: { OR: conditions },
     });
+    return this._decryptPatientData(patient);
   }
 
   validatePhone(phone) {
@@ -154,8 +196,9 @@ class PatientRepository {
 
     // Auto-generate patient code
     const patientCode = await this.getNextPatientCode(tenantId);
+    const encryptedData = this._encryptPatientData(data);
 
-    return prisma.patient.create({
+    const created = await prisma.patient.create({
       data: {
         tenantId,
         patientCode,
@@ -166,9 +209,9 @@ class PatientRepository {
         dateOfBirth: data.dateOfBirth || null,
         age: data.age || null,
         address: data.address || null,
-        medicalHistory: data.medicalHistory || null,
-        allergies: data.allergies || null,
-        chronicConditions: data.chronicConditions || null,
+        medicalHistory: encryptedData.medicalHistory || null,
+        allergies: encryptedData.allergies || null,
+        chronicConditions: encryptedData.chronicConditions || null,
         bloodGroup: data.bloodGroup || null,
         emergencyContact: data.emergencyContact || null,
         insuranceProvider: data.insuranceProvider || null,
@@ -177,6 +220,7 @@ class PatientRepository {
         status: data.status || 'ACTIVE',
       },
     });
+    return this._decryptPatientData(created);
   }
 
   async update(id, tenantId, data, updatedBy = null) {
@@ -237,9 +281,11 @@ class PatientRepository {
       }
     }
 
+    const encryptedData = this._encryptPatientData(data);
+
     const updated = await prisma.patient.update({
       where: { id },
-      data,
+      data: encryptedData,
     });
 
     // Create audit logs
@@ -249,7 +295,7 @@ class PatientRepository {
       });
     }
 
-    return updated;
+    return this._decryptPatientData(updated);
   }
 
   async delete(id, tenantId) {
@@ -258,21 +304,23 @@ class PatientRepository {
       throw new Error('Patient not found');
     }
     // Soft delete — NEVER hard delete healthcare entities
-    return prisma.patient.update({
+    const deleted = await prisma.patient.update({
       where: { id },
       data: { deletedAt: new Date(), status: 'ARCHIVED' },
     });
+    return this._decryptPatientData(deleted);
   }
 
   async updateStats(id, tenantId, amount) {
     await this.findById(id, tenantId);
-    return prisma.patient.update({
+    const updated = await prisma.patient.update({
       where: { id },
       data: {
         totalSpent: { increment: amount },
         lastPurchaseDate: new Date(),
       },
     });
+    return this._decryptPatientData(updated);
   }
 
   async getPurchaseHistory(id, tenantId) {
@@ -308,10 +356,11 @@ class PatientRepository {
 
   async addCredit(id, tenantId, amount) {
     await this.findById(id, tenantId);
-    return prisma.patient.update({
+    const updated = await prisma.patient.update({
       where: { id },
       data: { creditLimit: { increment: amount } },
     });
+    return this._decryptPatientData(updated);
   }
 }
 

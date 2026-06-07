@@ -33,7 +33,20 @@ let mainQueueInstance = null;
 let workerInstance = null;
 
 if (!isTest) {
-  mainQueueInstance = registerQueue(new Queue(QUEUE_NAME, { connection: getBullRedis() }));
+  mainQueueInstance = registerQueue(
+    new Queue(QUEUE_NAME, {
+      connection: getBullRedis(),
+      defaultJobOptions: {
+        attempts: 3,
+        backoff: {
+          type: 'exponential',
+          delay: 5000,
+        },
+        removeOnComplete: true,
+        removeOnFail: false,
+      },
+    }),
+  );
 } else {
   // Provide a dummy queue for tests to prevent null pointer errors
   mainQueueInstance = {
@@ -60,6 +73,12 @@ const handlers = {
 
   'process-csv-import': async (data) => {
     logger.info(`Processing CSV import for tenant: ${data.tenantId}`);
+    const { jobId, tenantId } = data;
+    if (jobId && tenantId) {
+      const { default: importService } =
+        await import('../modules/import/services/import.service.js');
+      await importService.processImportJob(jobId, tenantId);
+    }
   },
 
   'update-analytics': async (data) => {
@@ -116,11 +135,15 @@ const handlers = {
   'send-sms': async (data) => {
     const { notificationId, phone, message } = data;
     try {
-      logger.info(`[SMS MOCK] Sending to ${phone}: ${message}`);
+      const { default: smsService } =
+        await import('../modules/notifications/services/sms.service.js');
+      logger.info(`[SMS] Sending to ${phone}`);
+      await smsService.send(phone, message);
       await smsRepository.updateStatus(notificationId, 'SENT');
     } catch (err) {
       logger.error({ err }, `[SMS] Failed to send to ${phone}`);
       await smsRepository.updateStatus(notificationId, 'FAILED', err.message);
+      throw err; // Trigger BullMQ retry mechanism
     }
   },
 
@@ -176,7 +199,16 @@ const handlers = {
   },
 
   'bulk-medicines-import': async (data) => {
-    const { filePath, jobId, tenantId, branchId, userId, duplicateStrategy, barcodeOptions, supplier } = data;
+    const {
+      filePath,
+      jobId,
+      tenantId,
+      branchId,
+      userId,
+      duplicateStrategy,
+      barcodeOptions,
+      supplier,
+    } = data;
     const { default: csvImportService } =
       await import('../modules/import/services/csv-import.service.js');
     await csvImportService.run(filePath, {
@@ -310,7 +342,15 @@ if (!isTest) {
   );
 
   workerInstance.on('failed', (job, err) => {
-    logger.error(`[BULLMQ] Job ${job.id} failed: ${err.message}`);
+    logger.error(`[BULLMQ] Job ${job?.id} failed: ${err.message}`);
+
+    // DLQ handling for exhausted attempts
+    if (job && job.attemptsMade >= job.opts.attempts) {
+      logger.error(
+        `[BULLMQ_DLQ] Job ${job.id} (${job.name}) permanently failed. Moved to Dead Letter log. Payload: ${JSON.stringify(job.data)}`,
+      );
+      // Here we could persist to a DLQ Postgres table if required
+    }
   });
 }
 

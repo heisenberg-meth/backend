@@ -167,6 +167,18 @@ class MovementService {
         }
       }
 
+      const lockedBatches = await client.$queryRaw`
+        SELECT * FROM "InventoryBatch" WHERE id = ${batchId} FOR UPDATE
+      `;
+
+      if (!lockedBatches || lockedBatches.length === 0) {
+        throw new Error('Batch not found');
+      }
+
+      if (lockedBatches[0].availableQuantity + quantity < 0) {
+        throw new Error('Insufficient stock');
+      }
+
       const updatedBatch = await client.inventoryBatch.update({
         where: { id: batchId },
         data: {

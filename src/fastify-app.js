@@ -9,6 +9,7 @@ import metrics from 'fastify-metrics';
 import redis from '@fastify/redis';
 import fastifyJwt from '@fastify/jwt';
 import multipart from '@fastify/multipart';
+import rateLimit from '@fastify/rate-limit';
 import client from 'prom-client';
 import { Prisma } from '@prisma/client';
 import prisma from './config/prisma.js';
@@ -73,7 +74,7 @@ const redisHealthGauge = new client.Gauge({
 });
 
 const fastify = Fastify({
-  bodyLimit: 50 * 1024 * 1024,
+  bodyLimit: 1 * 1024 * 1024,
   logger: {
     transport:
       process.env.NODE_ENV === 'development'
@@ -102,7 +103,7 @@ const setupFastify = async () => {
           'validator.swagger.io',
           'https://medassist-backend-hryu.onrender.com',
         ],
-        scriptSrc: ["'self'", "https: 'unsafe-inline'"],
+        scriptSrc: ["'self'"],
       },
     },
     crossOriginResourcePolicy: {
@@ -166,6 +167,14 @@ const setupFastify = async () => {
     url: env.redis.url,
   });
 
+  // Global rate limit — 100 requests per minute per IP
+  await fastify.register(rateLimit, {
+    max: 100,
+    timeWindow: '1 minute',
+    redis: fastify.redis,
+    keyGenerator: (request) => request.ip,
+  });
+
   fastify.setErrorHandler((error, request, reply) => {
     fastify.log.error(error);
 
@@ -204,20 +213,22 @@ const setupFastify = async () => {
     });
   });
 
-  await fastify.register(swagger, {
-    openapi: {
-      info: {
-        title: 'Viyan MedAssist API',
-        description: 'Enterprise Scalable Backend',
-        version: '1.0.0',
+  if (env.nodeEnv !== 'production') {
+    await fastify.register(swagger, {
+      openapi: {
+        info: {
+          title: 'Viyan MedAssist API',
+          description: 'Enterprise Scalable Backend',
+          version: '1.0.0',
+        },
       },
-    },
-  });
+    });
 
-  await fastify.register(swaggerUi, {
-    routePrefix: '/api-docs',
-    staticCSP: true,
-  });
+    await fastify.register(swaggerUi, {
+      routePrefix: '/api-docs',
+      staticCSP: true,
+    });
+  }
 
   await fastify.register(metrics, {
     endpoint: '/metrics',

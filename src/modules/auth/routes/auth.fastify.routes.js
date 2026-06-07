@@ -113,6 +113,12 @@ async function authRoutes(fastify) {
   fastify.post(
     '/refresh',
     {
+      config: {
+        rateLimit: {
+          max: 10,
+          timeWindow: '15 minutes',
+        },
+      },
       schema: {
         tags: ['Auth'],
         summary: 'Refresh access token',

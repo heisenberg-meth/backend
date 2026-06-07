@@ -33,6 +33,15 @@ const COOKIE_OPTIONS = {
   maxAge: 30 * 24 * 60 * 60,
 };
 
+const ACCESS_COOKIE_OPTIONS = {
+  path: '/',
+  httpOnly: true,
+  sameSite: 'none',
+  secure: true,
+  partitioned: true,
+  maxAge: 15 * 60,
+};
+
 class AuthFastifyController {
   async register(request, reply) {
     try {
@@ -73,6 +82,7 @@ class AuthFastifyController {
       });
 
       reply.setCookie('refreshToken', result.refreshToken, COOKIE_OPTIONS);
+      reply.setCookie('accessToken', result.token, ACCESS_COOKIE_OPTIONS);
 
       return reply.send(success(result));
     } catch (error) {
@@ -116,6 +126,7 @@ class AuthFastifyController {
       const result = await authService.refreshSession(refreshToken);
 
       reply.setCookie('refreshToken', result.refreshToken, COOKIE_OPTIONS);
+      reply.setCookie('accessToken', result.token, ACCESS_COOKIE_OPTIONS);
 
       return reply.send(success(result));
     } catch (error) {
@@ -143,6 +154,7 @@ class AuthFastifyController {
       await authService.logout(request.sessionId);
 
       reply.clearCookie('refreshToken', { path: '/' });
+      reply.clearCookie('accessToken', { path: '/' });
       return reply.send(success({ message: 'Logged out successfully' }));
     } catch (error) {
       request.log.error(error);
@@ -155,6 +167,7 @@ class AuthFastifyController {
       await authService.logoutAll(request.user.id);
 
       reply.clearCookie('refreshToken', { path: '/' });
+      reply.clearCookie('accessToken', { path: '/' });
       return reply.send(success({ message: 'All sessions revoked' }));
     } catch (error) {
       request.log.error(error);

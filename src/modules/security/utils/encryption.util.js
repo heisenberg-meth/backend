@@ -1,7 +1,15 @@
 import crypto from 'crypto';
 
 const ALGORITHM = 'aes-256-gcm';
-const KEY = Buffer.from(process.env.ENCRYPTION_KEY || 'a-very-secure-32-byte-secret-key!!', 'utf8');
+
+if (!process.env.ENCRYPTION_KEY) {
+  throw new Error(
+    'FATAL: ENCRYPTION_KEY environment variable is required. ' +
+      'Set a cryptographically random 32-byte key before starting the application.',
+  );
+}
+
+const KEY = Buffer.from(process.env.ENCRYPTION_KEY, 'utf8');
 
 export const encrypt = (text) => {
   const iv = crypto.randomBytes(12);

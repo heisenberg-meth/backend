@@ -793,6 +793,7 @@ model InventoryBatch {
   @@unique([tenantId, branchId, medicineId, batchNumber])
   @@index([expiryDate])
   @@index([status])
+  @@index([tenantId, branchId, medicineId, status, expiryDate], name: "idx_batch_fefo")
 }
 
 model BatchAuditLog {
@@ -1624,6 +1625,7 @@ model Invoice {
   @@unique([tenantId, invoiceNumber])
   @@index([tenantId, createdAt])
   @@index([patientId])
+  @@index([tenantId, status], name: "idx_invoice_tenant_status", map: "idx_invoice_tenant_status")
 }
 
 model InvoiceEvent {

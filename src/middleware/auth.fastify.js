@@ -45,6 +45,11 @@ async function fetchAndCacheUser(userId) {
 }
 
 export const authenticate = async (request, reply) => {
+  const cookieToken = request.cookies?.accessToken;
+  if (cookieToken && !request.headers.authorization) {
+    request.headers.authorization = `Bearer ${cookieToken}`;
+  }
+
   try {
     await request.jwtVerify();
   } catch (err) {

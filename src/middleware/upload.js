@@ -21,20 +21,53 @@ const diskStorage = multer.diskStorage({
   },
 });
 
+import { fileTypeFromFile } from 'file-type';
+
+const validateMagicBytes = async (req, file, cb) => {
+  // This is a custom function that should be used as middleware *after* multer saves the file.
+  // Alternatively, we can export a wrapper.
+};
+
 const upload = multer({
   storage: diskStorage,
   limits: {
     fileSize: 50 * 1024 * 1024,
   },
   fileFilter: (_req, file, cb) => {
-    const allowed = ['.csv', '.xlsx', '.xls'];
+    const allowed = ['.csv', '.xlsx', '.xls', '.jpg', '.png', '.pdf'];
     const ext = path.extname(file.originalname).toLowerCase();
     if (allowed.includes(ext)) {
       cb(null, true);
     } else {
-      cb(new Error(`Unsupported file type: ${ext}. Only CSV and Excel files are allowed.`));
+      cb(new Error(`Unsupported file type: ${ext}. Only CSV, Excel, Images and PDF are allowed.`));
     }
   },
 });
 
-export default upload;
+const uploadMiddleware = async (req, res, next) => {
+  upload.single('file')(req, res, async (err) => {
+    if (err) return next(err);
+    if (!req.file) return next();
+
+    const allowedMimes = [
+      'text/csv',
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      'application/vnd.ms-excel',
+      'image/jpeg',
+      'image/png',
+      'application/pdf',
+    ];
+
+    const type = await fileTypeFromFile(req.file.path);
+
+    // CSVs might not have magic bytes recognized by file-type, so type could be undefined
+    if (type && !allowedMimes.includes(type.mime)) {
+      fs.unlinkSync(req.file.path);
+      return next(new Error('Invalid file content detected'));
+    }
+
+    next();
+  });
+};
+
+export default uploadMiddleware;
