@@ -434,6 +434,26 @@ class BulkImportService {
                 ? await this._resolveManufacturer(tx, tenantId, row.manufacturer.trim())
                 : null;
 
+              const existing = await tx.medicine.findFirst({
+                where: {
+                  tenantId,
+                  OR: [{ name: row.name }, { barcode: row.barcode || undefined }],
+                },
+              });
+
+              if (existing) {
+                medicineId = existing.id;
+                logger.info(
+                  {
+                    medicineId,
+                    barcode: row.barcode,
+                    name: row.name,
+                  },
+                  'DUPLICATE Medicine detected during import',
+                );
+                continue;
+              }
+
               const newMed = await tx.medicine.create({
                 data: {
                   tenantId,
