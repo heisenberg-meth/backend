@@ -9,6 +9,7 @@ export default async function (fastify) {
   fastify.addHook('preHandler', requireBranch);
 
   fastify.post('/pdf-invoice', {
+    bodyLimit: 50 * 1024 * 1024,
     schema: { tags: ['Import'], summary: 'Import PDF invoice' },
     preHandler: [requirePermission('CREATE_BILL')],
     handler: controller.importPdfInvoice,
@@ -45,6 +46,7 @@ export default async function (fastify) {
   });
 
   fastify.post('/supplier-invoice', {
+    bodyLimit: 50 * 1024 * 1024,
     schema: { tags: ['Import'], summary: 'Import supplier invoice' },
     preHandler: [requirePermission('CREATE_BILL')],
     handler: controller.importSupplierInvoice,
@@ -57,12 +59,14 @@ export default async function (fastify) {
   });
 
   fastify.post('/bulk', {
+    bodyLimit: 50 * 1024 * 1024,
     schema: { tags: ['Import'], summary: 'Bulk medicine import' },
     preHandler: [requirePermission('CREATE_BILL')],
     handler: controller.bulkImport,
   });
 
   fastify.post('/upload', {
+    bodyLimit: 50 * 1024 * 1024,
     schema: { tags: ['Import'], summary: 'Upload CSV for bulk import' },
     preHandler: [requirePermission('CREATE_BILL')],
     handler: controller.uploadCsv,

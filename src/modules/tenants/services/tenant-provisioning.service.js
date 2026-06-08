@@ -70,10 +70,31 @@ class TenantProvisioningService {
       });
 
       // 7. Create Subscription
+      const planMapping = {
+        STARTER: 'free-trial',
+        ENTERPRISE: 'pro-monthly',
+      };
+      const resolvedPlanId = planMapping[plan] || plan.toLowerCase();
+
+      await tx.subscriptionPlan.upsert({
+        where: { id: resolvedPlanId },
+        update: {},
+        create: {
+          id: resolvedPlanId,
+          name: resolvedPlanId
+            .split('-')
+            .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+            .join(' '),
+          price: plan === 'ENTERPRISE' ? 2999 : 0,
+          billingCycle: 'MONTHLY',
+          features: ['Access to platform features'],
+        },
+      });
+
       await tx.subscription.create({
         data: {
           tenantId: tenant.id,
-          planId: plan.toLowerCase(),
+          planId: resolvedPlanId,
           status: 'TRIAL',
           currentPeriodStart: new Date(),
           currentPeriodEnd: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000), // 14 day trial

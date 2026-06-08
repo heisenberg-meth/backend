@@ -15,25 +15,44 @@ class SalesService {
       }
     }
 
-    const sale = await salesRepository.createSale(
-      {
-        tenantId,
-        invoiceId: data.invoiceId,
-        branchId: data.branchId,
-        patientId: data.patientId,
-        totalItems: data.totalItems,
-        subtotal: data.subtotal,
-        discountAmount: data.discountAmount,
-        gstAmount: data.gstAmount,
-        totalAmount: data.totalAmount,
-        paymentMethod: data.paymentMethod,
-        paymentStatus: 'PAID',
-        status: 'COMPLETED',
-        soldBy: data.userId,
-        items: data.items,
-      },
-      client,
-    );
+    let sale = null;
+    if (data.invoiceId) {
+      sale = await client.sale.findUnique({
+        where: { invoiceId: data.invoiceId },
+        include: {
+          items: {
+            include: {
+              medicine: true,
+              batch: true,
+            },
+          },
+          invoice: true,
+          patient: true,
+        },
+      });
+    }
+
+    if (!sale) {
+      sale = await salesRepository.createSale(
+        {
+          tenantId,
+          invoiceId: data.invoiceId,
+          branchId: data.branchId,
+          patientId: data.patientId,
+          totalItems: data.totalItems,
+          subtotal: data.subtotal,
+          discountAmount: data.discountAmount,
+          gstAmount: data.gstAmount,
+          totalAmount: data.totalAmount,
+          paymentMethod: data.paymentMethod,
+          paymentStatus: 'PAID',
+          status: 'COMPLETED',
+          soldBy: data.userId,
+          items: data.items,
+        },
+        client,
+      );
+    }
 
     await anomalyService.detectSalesAnomaly(tenantId, sale);
 
