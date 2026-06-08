@@ -1625,7 +1625,7 @@ model Invoice {
   @@unique([tenantId, invoiceNumber])
   @@index([tenantId, createdAt])
   @@index([patientId])
-  @@index([tenantId, status], name: "idx_invoice_tenant_status", map: "idx_invoice_tenant_status")
+  @@index([tenantId, status], map: "idx_invoice_tenant_status")
 }
 
 model InvoiceEvent {
