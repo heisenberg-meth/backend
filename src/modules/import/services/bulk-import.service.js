@@ -49,24 +49,41 @@ class BulkImportService {
       if (barcode) barcodesToLookup.add(barcode);
     }
 
-    const existingMedicines = await prisma.medicine.findMany({
-      where: {
-        tenantId,
-        deletedAt: null,
-        OR: [
-          {
-            OR: Array.from(namesToLookup).map((name) => ({
-              name: {
-                equals: name,
-                mode: 'insensitive',
-              },
-            })),
+    const existingMedicines = [];
+    const BATCH_SIZE = 500;
+    const namesArray = Array.from(namesToLookup);
+    const barcodesArray = Array.from(barcodesToLookup);
+
+    for (let i = 0; i < namesArray.length; i += BATCH_SIZE) {
+      const batchNames = namesArray.slice(i, i + BATCH_SIZE);
+      const batchResult = await prisma.medicine.findMany({
+        where: {
+          tenantId,
+          deletedAt: null,
+          name: {
+            in: batchNames,
+            mode: 'insensitive',
           },
-          { barcode: { in: Array.from(barcodesToLookup) } },
-        ],
-      },
-      select: { id: true, name: true, barcode: true, categoryId: true, manufacturerId: true },
-    });
+        },
+        select: { id: true, name: true, barcode: true, categoryId: true, manufacturerId: true },
+      });
+      existingMedicines.push(...batchResult);
+    }
+
+    for (let i = 0; i < barcodesArray.length; i += BATCH_SIZE) {
+      const batchBarcodes = barcodesArray.slice(i, i + BATCH_SIZE);
+      const batchResult = await prisma.medicine.findMany({
+        where: {
+          tenantId,
+          deletedAt: null,
+          barcode: {
+            in: batchBarcodes,
+          },
+        },
+        select: { id: true, name: true, barcode: true, categoryId: true, manufacturerId: true },
+      });
+      existingMedicines.push(...batchResult);
+    }
 
     const medicineMapByName = new Map();
     const medicineMapByBarcode = new Map();
