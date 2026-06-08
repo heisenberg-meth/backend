@@ -29,7 +29,17 @@ class BillingFastifyController {
       const invoice = await billingService.checkout(request.tenantId, payload, request.user.id);
       return reply.code(201).send({ success: true, data: invoice });
     } catch (error) {
-      return reply.code(400).send({ success: false, message: error.message });
+      console.error('===== BILLING CHECKOUT ERROR =====');
+      console.error('Message:', error.message);
+      console.error('Stack:', error.stack);
+      console.error('Request Body:', request.body);
+
+      return reply.code(400).send({
+        success: false,
+        message: error.message,
+        errorType: error.name ?? 'BillingError',
+        details: process.env.NODE_ENV !== 'production' ? error.stack : undefined,
+      });
     }
   }
 
@@ -47,7 +57,17 @@ class BillingFastifyController {
       const invoice = await billingService.createDraft(request.tenantId, payload, request.user.id);
       return reply.code(201).send({ success: true, data: invoice });
     } catch (error) {
-      return reply.code(400).send({ success: false, message: error.message });
+      console.error('===== BILLING CREATE DRAFT ERROR =====');
+      console.error('Message:', error.message);
+      console.error('Stack:', error.stack);
+      console.error('Request Body:', request.body);
+
+      return reply.code(400).send({
+        success: false,
+        message: error.message,
+        errorType: error.name ?? 'BillingError',
+        details: process.env.NODE_ENV !== 'production' ? error.stack : undefined,
+      });
     }
   }
 

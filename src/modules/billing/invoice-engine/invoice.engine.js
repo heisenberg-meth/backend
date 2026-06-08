@@ -37,6 +37,14 @@ class InvoiceEngine {
       throw new Error('branchId is required for invoice creation');
     }
 
+    const normalizedItems = (items || []).map((item) => ({
+      medicineId: item.medicineId,
+      batchId: item.batchId,
+      quantity: this._safeNumber(item.quantity ?? item.qty),
+      unitPrice: this._safeNumber(item.unitPrice ?? item.price),
+      gstPercentage: this._safeNumber(item.gstPercentage ?? item.gst),
+    }));
+
     const execute = async (t) => {
       const invoiceNumber = await this._generateInvoiceNumber(tenantId, t);
 
@@ -63,7 +71,7 @@ class InvoiceEngine {
         tenantId,
         branchId,
         patientId,
-        items,
+        normalizedItems,
         discountAmount,
         t,
         discountPercentage,
@@ -92,7 +100,7 @@ class InvoiceEngine {
         },
       });
 
-      for (const item of items) {
+      for (const item of normalizedItems) {
         const unitPrice = this._safeNumber(item.unitPrice);
         const quantity = this._safeNumber(item.quantity);
         const gstPercentage = this._safeNumber(item.gstPercentage);
@@ -160,7 +168,7 @@ class InvoiceEngine {
     const execute = async (t) => {
       const invoice = await t.invoice.findFirst({
         where: { id: invoiceId, tenantId, status: 'DRAFT' },
-        include: { items: true },
+        include: { items: { include: { medicine: true } } },
       });
 
       if (!invoice) throw new Error('Draft invoice not found or already finalized');
@@ -444,10 +452,15 @@ class InvoiceEngine {
       `;
       const batch = lockedBatches[0];
       if (!batch || batch.availableQuantity < item.quantity) {
-        throw new Error(`Insufficient stock in batch ${batch?.batchNumber || 'unknown'}`);
+        throw new Error(
+          `Medicine "${item.medicine?.name || 'Unknown'}" only has ${batch?.availableQuantity || 0} stock available in batch ${batch?.batchNumber || 'unknown'}`,
+        );
       }
       if (batch.status !== 'ACTIVE') {
         throw new Error(`Batch ${batch.batchNumber} is ${batch.status}. Dispensing blocked.`);
+      }
+      if (batch.expiryDate && new Date(batch.expiryDate) <= new Date()) {
+        throw new Error(`Batch ${batch.batchNumber} is EXPIRED. Dispensing blocked.`);
       }
       batchesToUse.push({
         id: item.batchId,
@@ -476,7 +489,11 @@ class InvoiceEngine {
         remaining -= take;
       }
 
-      if (remaining > 0) throw new Error(`Insufficient stock for medicine ID ${item.medicineId}`);
+      if (remaining > 0) {
+        throw new Error(
+          `Medicine "${item.medicine?.name || 'Unknown'}" has insufficient stock available (missing ${remaining})`,
+        );
+      }
     }
 
     for (const bUsage of batchesToUse) {
