@@ -10,17 +10,11 @@ import pointsService from '../../loyalty/points/points.service.js';
 import creditService from '../../loyalty/credits/credit.service.js';
 
 class InvoiceEngine {
-  /**
-   * Helper to ensure a value is a finite number
-   */
   _safeNumber(value) {
     const num = Number(value);
     return Number.isFinite(num) ? num : 0;
   }
 
-  /**
-   * Create an invoice in DRAFT state. No inventory is deducted yet.
-   */
   async createDraft(tenantId, userId, data, tx = null) {
     const {
       items,
@@ -274,9 +268,6 @@ class InvoiceEngine {
     return result;
   }
 
-  /**
-   * Record payment for an invoice. Transitions to PAID if fully covered.
-   */
   async recordPayment(invoiceId, tenantId, userId, paymentData, tx = null) {
     const execute = async (t) => {
       const invoice = await t.invoice.findFirst({
