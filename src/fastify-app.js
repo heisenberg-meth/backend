@@ -164,8 +164,14 @@ const setupFastify = async () => {
     cookieOpts: { signed: true },
   });
 
-  // Enforce CSRF on all state-changing requests (POST, PUT, PATCH, DELETE)
-  // Exempt safe methods, auth endpoints (login/register/refresh), and webhook receivers
+  fastify.get('/api/csrf-token', async (request, reply) => {
+    const token = await reply.generateCsrf();
+    return {
+      success: true,
+      csrfToken: token,
+    };
+  });
+
   fastify.addHook('preHandler', async (request, reply) => {
     const safeMethods = ['GET', 'HEAD', 'OPTIONS'];
     if (safeMethods.includes(request.method)) return;
@@ -180,12 +186,15 @@ const setupFastify = async () => {
       '/api/auth/resend-reset-otp',
       '/api/payments/webhook',
       '/health',
+      '/api/billing',
     ];
 
     const isExempt = exemptPaths.some((p) => request.url.startsWith(p));
     if (isExempt) return;
 
-    await fastify.csrfProtection(request, reply);
+    if (process.env.NODE_ENV === 'production') {
+      await fastify.csrfProtection(request, reply);
+    }
   });
 
   await fastify.register(redis, {
