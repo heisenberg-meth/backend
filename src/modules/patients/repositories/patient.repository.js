@@ -1,4 +1,4 @@
-import logger from '@/shared/utils/logger.js';
+import logger from '../../../shared/utils/logger.js';
 import prisma from '../../../config/prisma.js';
 import sequenceService from '../../../shared/services/sequence.service.js';
 import { encrypt, decrypt } from '../../security/utils/encryption.util.js';

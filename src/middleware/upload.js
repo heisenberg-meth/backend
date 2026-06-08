@@ -2,6 +2,7 @@ import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
 import { fileURLToPath } from 'url';
+import { fileTypeFromFile } from 'file-type';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const uploadDir = path.resolve(__dirname, '../../uploads/imports');
@@ -20,13 +21,6 @@ const diskStorage = multer.diskStorage({
     cb(null, `import-${uniqueSuffix}${ext}`);
   },
 });
-
-import { fileTypeFromFile } from 'file-type';
-
-const validateMagicBytes = async (req, file, cb) => {
-  // This is a custom function that should be used as middleware *after* multer saves the file.
-  // Alternatively, we can export a wrapper.
-};
 
 const upload = multer({
   storage: diskStorage,
@@ -60,7 +54,6 @@ const uploadMiddleware = async (req, res, next) => {
 
     const type = await fileTypeFromFile(req.file.path);
 
-    // CSVs might not have magic bytes recognized by file-type, so type could be undefined
     if (type && !allowedMimes.includes(type.mime)) {
       fs.unlinkSync(req.file.path);
       return next(new Error('Invalid file content detected'));

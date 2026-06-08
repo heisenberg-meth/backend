@@ -433,7 +433,7 @@ class InvoiceEngine {
     };
   }
 
-  async _processItemDeduction(tenantId, invoice, item, userId, tx, batchMap = new Map()) {
+  async _processItemDeduction(tenantId, invoice, item, userId, tx = new Map()) {
     let batchesToUse = [];
 
     if (item.batchId) {
