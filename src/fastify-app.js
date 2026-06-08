@@ -152,6 +152,7 @@ const setupFastify = async () => {
       'Content-Type',
       'Authorization',
       'x-auth-token',
+      'x-csrf-token',
       'X-Idempotency-Key',
       'x-session-id',
       'ngrok-skip-browser-warning',
