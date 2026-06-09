@@ -75,6 +75,7 @@ class CsvImportService {
     let newMovements = [];
     let inventoryUpdates = [];
     let errors = [];
+    let batchQuantityUpdates = [];
     let importedCount = 0;
     const categoriesToCreate = [];
     const manufacturersToCreate = [];
@@ -113,6 +114,7 @@ class CsvImportService {
                 newMovements,
                 inventoryUpdates,
                 errors,
+                batchQuantityUpdates,
                 supplierId: resolvedSupplierId,
               });
               importedCount += chunk.length;
@@ -149,6 +151,7 @@ class CsvImportService {
                 newMovements,
                 inventoryUpdates,
                 errors,
+                batchQuantityUpdates,
                 supplierId: resolvedSupplierId,
               });
               importedCount += chunk.length;
@@ -177,6 +180,7 @@ class CsvImportService {
       newMovements,
       inventoryUpdates,
       errors,
+      batchQuantityUpdates,
       categoriesToCreate,
       manufacturersToCreate,
     });
@@ -438,7 +442,14 @@ class CsvImportService {
       const finalBatchNo = batchNo || `IMP-${crypto.randomUUID().toUpperCase()}`;
 
       const batchKey = `${medicineId}:${finalBatchNo}`.toLowerCase();
-      if (!batchMap.has(batchKey)) {
+      const existingEntry = batchMap.get(batchKey);
+      const isExistingDbBatch = existingEntry && typeof existingEntry === 'object';
+      let existingBatchId = null;
+
+      if (isExistingDbBatch) {
+        existingBatchId = existingEntry.id;
+        ctx.batchQuantityUpdates.push({ batchId: existingEntry.id, qty });
+      } else if (!existingEntry) {
         ctx.newBatches.push({
           tenantId,
           medicineId,
@@ -467,6 +478,8 @@ class CsvImportService {
         referenceType: 'BULK_IMPORT',
         performedBy: userId,
         notes: `Bulk imported from CSV`,
+        _existingBatchId: existingBatchId,
+        _pendingBatchNo: existingBatchId ? null : finalBatchNo,
       });
 
       ctx.inventoryUpdates.push({ medicineId, qty });
@@ -523,13 +536,30 @@ class CsvImportService {
       }
       logger.info({ count: newMedicines.length }, '[CSV-Import] Created medicines');
 
+      const batchIdMap = new Map();
       if (newBatches.length > 0) {
-        const resolved = newBatches.map((b) => ({
-          ...b,
-          medicineId: medicineIdMap.get(b.medicineId) || b.medicineId,
-        }));
-        await tx.inventoryBatch.createMany({ data: resolved, skipDuplicates: true });
-        logger.info({ count: resolved.length }, '[CSV-Import] Created batches');
+        for (const b of newBatches) {
+          const resolvedMedId = medicineIdMap.get(b.medicineId) || b.medicineId;
+          const created = await tx.inventoryBatch.create({
+            data: { ...b, medicineId: resolvedMedId },
+          });
+          batchIdMap.set(`${resolvedMedId}:${b.batchNumber}`.toLowerCase(), created.id);
+        }
+        logger.info({ count: newBatches.length }, '[CSV-Import] Created batches');
+      }
+
+      if (ctx.batchQuantityUpdates && ctx.batchQuantityUpdates.length > 0) {
+        for (const upd of ctx.batchQuantityUpdates) {
+          await tx.inventoryBatch.update({
+            where: { id: upd.batchId },
+            data: {
+              quantity: { increment: upd.qty },
+              receivedQuantity: { increment: upd.qty },
+              availableQuantity: { increment: upd.qty },
+            },
+          });
+        }
+        logger.info({ count: ctx.batchQuantityUpdates.length }, '[CSV-Import] Updated existing batch quantities');
       }
 
       for (const inv of inventoryUpdates) {
@@ -550,11 +580,26 @@ class CsvImportService {
       }
 
       if (newMovements.length > 0) {
-        const resolved = newMovements.map((m) => ({
-          ...m,
-          medicineId: medicineIdMap.get(m.medicineId) || m.medicineId,
-          idempotencyKey: `import-${jobId}-${m.medicineId}-${crypto.randomUUID()}`,
-        }));
+        const resolved = newMovements.map((m) => {
+          const medId = medicineIdMap.get(m.medicineId) || m.medicineId;
+          let batchId = m._existingBatchId || null;
+          if (!batchId && m._pendingBatchNo) {
+            const key = `${medId}:${m._pendingBatchNo}`.toLowerCase();
+            batchId = batchIdMap.get(key) || null;
+          }
+          return {
+            tenantId: m.tenantId,
+            branchId: m.branchId,
+            medicineId: medId,
+            movementType: m.movementType,
+            quantity: m.quantity,
+            referenceType: m.referenceType,
+            performedBy: m.performedBy,
+            notes: m.notes,
+            batchId,
+            idempotencyKey: `import-${jobId}-${m.medicineId}-${crypto.randomUUID()}`,
+          };
+        });
         await tx.stockMovement.createMany({ data: resolved });
         logger.info({ count: resolved.length }, '[CSV-Import] Created movements');
       }

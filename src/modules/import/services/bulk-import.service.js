@@ -486,7 +486,9 @@ class BulkImportService {
 
             if (row.qty > 0) {
               const defaultExpiry = new Date(new Date().setFullYear(new Date().getFullYear() + 2));
+              const _tempBatchId = crypto.randomUUID();
               batchesToCreate.push({
+                _tempBatchId,
                 tenantId,
                 medicineId,
                 branchId,
@@ -503,6 +505,7 @@ class BulkImportService {
               });
 
               movementsToCreate.push({
+                _tempBatchId,
                 tenantId,
                 branchId,
                 medicineId,
@@ -520,12 +523,21 @@ class BulkImportService {
             commitSummary.importedCount++;
           }
 
+          const batchIdMap = new Map();
           if (batchesToCreate.length > 0) {
-            await tx.inventoryBatch.createMany({ data: batchesToCreate, skipDuplicates: true });
+            for (const b of batchesToCreate) {
+              const { _tempBatchId, ...data } = b;
+              const created = await tx.inventoryBatch.create({ data });
+              batchIdMap.set(_tempBatchId, created.id);
+            }
           }
 
           if (movementsToCreate.length > 0) {
-            await tx.stockMovement.createMany({ data: movementsToCreate });
+            const resolvedMovements = movementsToCreate.map((m) => {
+              const { _tempBatchId, ...data } = m;
+              return { ...data, batchId: batchIdMap.get(_tempBatchId) || undefined };
+            });
+            await tx.stockMovement.createMany({ data: resolvedMovements });
           }
 
           const stockMap = new Map();

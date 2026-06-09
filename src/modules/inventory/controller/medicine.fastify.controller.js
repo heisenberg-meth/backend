@@ -31,7 +31,25 @@ class MedicineFastifyController {
     const dataArray = Array.isArray(result)
       ? result
       : result.docs || result.data || result.medicines || [];
-    return success(dataArray);
+    const total = result.total || (Array.isArray(result) ? result.length : 0);
+    const p = parseInt(page) || 1;
+    const lmt = parseInt(limit) || 20;
+    return success({
+      items: dataArray,
+      total,
+      page: p,
+      limit: lmt,
+      totalPages: Math.ceil(total / lmt),
+    });
+  }
+
+  async getInventorySummaryData(request) {
+    const { branchId } = request.query;
+    const summary = await medicineService.getInventorySummary(
+      request.tenantId,
+      branchId || request.branchId,
+    );
+    return success(summary);
   }
 
   async getMedicine(request, reply) {

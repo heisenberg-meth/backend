@@ -28,6 +28,19 @@ class RefundInventoryService {
         },
       });
 
+      await client.inventory.update({
+        where: {
+          tenantId_branchId_medicineId: {
+            tenantId,
+            branchId: batch.branchId,
+            medicineId: item.medicineId,
+          },
+        },
+        data: {
+          currentStock: { increment: item.returnedQuantity },
+        },
+      });
+
       const movement = await client.stockMovement.create({
         data: {
           tenantId,

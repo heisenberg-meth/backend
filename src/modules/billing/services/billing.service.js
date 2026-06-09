@@ -1,5 +1,5 @@
 import invoiceService from './invoice.service.js';
-import refundOrchestrationService from '../../refunds/services/refund-orchestration.service.js';
+import refundEngine from '../refund-engine/refund.engine.js';
 import medicineRepository from '../../inventory/repository/medicine.prisma.repository.js';
 import auditService from '../../audit/service/audit.prisma.service.js';
 import patientService from '../../patients/services/patient.service.js';
@@ -105,7 +105,7 @@ class BillingService {
   }
 
   async processRefund(tenantId, userId, data) {
-    const result = await refundOrchestrationService.createRefund(tenantId, data, userId);
+    const result = await refundEngine.processRefund(tenantId, userId, data);
 
     await auditService.log({
       tenantId,

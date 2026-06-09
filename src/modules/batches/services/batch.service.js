@@ -4,6 +4,8 @@ import eventBus from '../../../shared/services/eventbus.service.js';
 import { mainQueue } from '../../../queue/index.js';
 import prisma from '../../../config/prisma.js';
 import movementService from '../../stock/service/movement.service.js';
+import redisClient from '../../../config/redis.js';
+import { scanKeys } from '../../../shared/utils/scan-keys.js';
 
 class BatchService {
   async getBatches(params) {
@@ -68,18 +70,58 @@ class BatchService {
     const batch = await batchRepository.findById(id);
     if (!batch) throw new Error('Batch not found');
 
-    const sensitiveFields = ['quantity', 'availableQuantity', 'reservedQuantity', 'purchasePrice'];
-    const hasSensitiveUpdate = sensitiveFields.some(
-      (f) => data[f] !== undefined && data[f] !== batch[f],
-    );
+    const updateData = { ...data };
+    delete updateData.reason;
 
-    if (hasSensitiveUpdate) {
-      throw new Error(
-        'Direct updates to quantity or purchase price are blocked. Use stock movements or price adjustments.',
-      );
+    if (data.quantity !== undefined) {
+      updateData.availableQuantity = data.quantity - (batch.reservedQuantity || 0);
     }
 
-    const updated = await batchRepository.update(id, data);
+    if (data.mrp !== undefined) {
+      updateData.sellingPrice = data.mrp;
+    }
+
+    const updated = await batchRepository.update(id, updateData);
+
+    // Recalculate Inventory.currentStock for this medicine in this branch & tenant
+    const totalQty = await prisma.inventoryBatch.aggregate({
+      where: {
+        medicineId: batch.medicineId,
+        tenantId: batch.tenantId,
+        branchId: batch.branchId,
+        deletedAt: null,
+      },
+      _sum: {
+        quantity: true,
+      },
+    });
+
+    const newStock = totalQty._sum.quantity || 0;
+
+    const inventory = await prisma.inventory.findFirst({
+      where: {
+        medicineId: batch.medicineId,
+        tenantId: batch.tenantId,
+        branchId: batch.branchId,
+      },
+    });
+
+    if (inventory) {
+      let status = 'HEALTHY';
+      if (newStock <= 0) {
+        status = 'OUT_OF_STOCK';
+      } else if (newStock <= (inventory.reorderPoint || 10)) {
+        status = 'LOW_STOCK';
+      }
+
+      await prisma.inventory.update({
+        where: { id: inventory.id },
+        data: {
+          currentStock: newStock,
+          status,
+        },
+      });
+    }
 
     await batchAuditRepository.log({
       tenantId: batch.tenantId,
@@ -88,10 +130,26 @@ class BatchService {
       beforeState: batch,
       afterState: updated,
       performedBy: userId,
-      reason: data.reason,
+      reason: data.reason || 'Manual stock/batch update',
       ipAddress: reqInfo.ip,
       userAgent: reqInfo.userAgent,
     });
+
+    await mainQueue.add('update-analytics', { tenantId: batch.tenantId });
+    await eventBus.publish('BATCH_UPDATED', {
+      batchId: id,
+      medicineId: batch.medicineId,
+      tenantId: batch.tenantId,
+    });
+
+    try {
+      const keys = await scanKeys(`inventory:${batch.tenantId}:*`);
+      if (keys.length > 0) {
+        await redisClient.del(...keys);
+      }
+    } catch (err) {
+      console.error('[REDIS CACHE ERROR]', err);
+    }
 
     return updated;
   }

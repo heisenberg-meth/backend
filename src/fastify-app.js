@@ -207,7 +207,11 @@ const setupFastify = async () => {
     max: 100,
     timeWindow: '1 minute',
     redis: fastify.redis,
-    keyGenerator: (request) => request.ip,
+    keyGenerator: (request) => {
+      const clientIp = request.ip;
+      const userId = request.user?.id;
+      return userId ? `rl:${userId}:${clientIp}` : `rl:ip:${clientIp}`;
+    },
   });
 
   fastify.setErrorHandler((error, request, reply) => {

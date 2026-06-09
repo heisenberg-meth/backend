@@ -6,6 +6,7 @@ class MedicinePrismaRepository {
     branchId,
     search,
     categoryId,
+    status,
     manufacturerId,
     isActive,
     lowStock,
@@ -33,9 +34,7 @@ class MedicinePrismaRepository {
     let medicines = [];
     let total = 0;
 
-    if (lowStock) {
-      // Application-side filtering for lowStock because Prisma does not support comparing
-      // currentStock <= reorderPoint in a where clause without raw SQL.
+    if (lowStock || status) {
       const allMedicines = await prisma.medicine.findMany({
         where: baseWhere,
         include: {
@@ -52,6 +51,9 @@ class MedicinePrismaRepository {
         orderBy: { [sortBy || 'name']: order || 'asc' },
       });
 
+      const now = new Date();
+      const thirtyDaysLater = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
+
       const filtered = allMedicines.filter((m) => {
         const inv = m.inventory?.[0];
         const currentStock = inv?.currentStock ? Number(inv.currentStock) : 0;
@@ -60,7 +62,37 @@ class MedicinePrismaRepository {
           : m.reorderLevel
             ? Number(m.reorderLevel)
             : 10;
-        return currentStock <= reorderPt;
+
+        const latestBatch = m.inventoryBatches?.[0] || null;
+        const expDate = latestBatch?.expiryDate ? new Date(latestBatch.expiryDate) : null;
+
+        if (lowStock && !(currentStock <= reorderPt)) {
+          return false;
+        }
+
+        if (status) {
+          const upperStatus = status.toUpperCase().replace(' ', '_');
+          if (upperStatus === 'IN_STOCK' && !(currentStock > reorderPt)) {
+            return false;
+          }
+          if (upperStatus === 'LOW_STOCK' && !(currentStock > 0 && currentStock <= reorderPt)) {
+            return false;
+          }
+          if (upperStatus === 'OUT_OF_STOCK' && !(currentStock === 0)) {
+            return false;
+          }
+          if (
+            upperStatus === 'EXPIRING_SOON' &&
+            !(expDate && expDate > now && expDate <= thirtyDaysLater)
+          ) {
+            return false;
+          }
+          if (upperStatus === 'EXPIRED' && !(expDate && expDate <= now)) {
+            return false;
+          }
+        }
+
+        return true;
       });
 
       total = filtered.length;

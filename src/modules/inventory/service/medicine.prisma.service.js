@@ -29,7 +29,8 @@ class MedicinePrismaService {
         logger.error({ err }, '[REDIS CACHE ERROR]');
       }
 
-      const { search, categoryId, manufacturerId, isActive, lowStock, sortBy, order } = query;
+      const { search, categoryId, manufacturerId, isActive, lowStock, status, sortBy, order } =
+        query;
       const { page = 1, limit = 20 } = pagination;
 
       const skip = (page - 1) * limit;
@@ -42,6 +43,7 @@ class MedicinePrismaService {
         manufacturerId,
         isActive: isActive === 'true' ? true : isActive === 'false' ? false : undefined,
         lowStock: lowStock === 'true' || lowStock === true,
+        status,
         sortBy,
         order,
         skip,
@@ -59,6 +61,73 @@ class MedicinePrismaService {
       logger.error({ err }, '[MEDICINE SERVICE] getMedicines failed');
       throw err;
     }
+  }
+
+  async getInventorySummary(tenantId, branchId = null) {
+    const cacheKey = `inventory:${tenantId}:${branchId || 'all'}:summary`;
+    try {
+      const cached = await redisClient.get(cacheKey);
+      if (cached) {
+        return JSON.parse(cached);
+      }
+    } catch (err) {
+      logger.error({ err }, '[REDIS CACHE ERROR]');
+    }
+
+    const bId = branchId || null;
+
+    const [summary] = await prisma.$queryRaw`
+      SELECT
+        COUNT(*)::int FILTER (WHERE m."isActive" = true AND m."deletedAt" IS NULL) as "totalProducts",
+        COUNT(*)::int FILTER (WHERE m."isActive" = true AND m."deletedAt" IS NULL AND COALESCE(inv."currentStock", 0) > COALESCE(inv."reorderPoint", m."reorderLevel", 10)) as "inStock",
+        COUNT(*)::int FILTER (WHERE m."isActive" = true AND m."deletedAt" IS NULL AND COALESCE(inv."currentStock", 0) <= COALESCE(inv."reorderPoint", m."reorderLevel", 10) AND COALESCE(inv."currentStock", 0) > 0) as "lowStock",
+        COUNT(*)::int FILTER (WHERE m."isActive" = true AND m."deletedAt" IS NULL AND COALESCE(inv."currentStock", 0) = 0) as "outOfStock",
+        (
+          SELECT COUNT(*)::int
+          FROM "InventoryBatch" ib
+          INNER JOIN "Medicine" m2 ON ib."medicineId" = m2."id"
+          WHERE m2."tenantId" = ${tenantId}
+            AND m2."deletedAt" IS NULL
+            AND ib."deletedAt" IS NULL
+            AND ib."expiryDate" < NOW()
+            AND ib."quantity" > 0
+            AND (ib."branchId" = ${bId} OR (${bId}::text IS NULL AND ib."branchId" IS NULL))
+        ) as "expired",
+        COALESCE(
+          (
+            SELECT SUM(ib."quantity" * COALESCE(ib."purchasePrice", 0))::float
+            FROM "InventoryBatch" ib
+            INNER JOIN "Medicine" m3 ON ib."medicineId" = m3."id"
+            WHERE m3."tenantId" = ${tenantId}
+              AND m3."deletedAt" IS NULL
+              AND ib."deletedAt" IS NULL
+              AND ib."quantity" > 0
+              AND (ib."branchId" = ${bId} OR (${bId}::text IS NULL AND ib."branchId" IS NULL))
+          ),
+          0
+        ) as "inventoryValue"
+      FROM "Medicine" m
+      LEFT JOIN "Inventory" inv ON m."id" = inv."medicineId" AND (inv."branchId" = ${bId} OR (${bId}::text IS NULL AND inv."branchId" IS NULL))
+      WHERE m."tenantId" = ${tenantId}
+        AND m."deletedAt" IS NULL;
+    `;
+
+    const result = {
+      totalProducts: summary?.totalProducts || 0,
+      inStock: summary?.inStock || 0,
+      lowStock: summary?.lowStock || 0,
+      outOfStock: summary?.outOfStock || 0,
+      expired: summary?.expired || 0,
+      inventoryValue: summary?.inventoryValue || 0,
+    };
+
+    try {
+      await redisClient.set(cacheKey, JSON.stringify(result), 'EX', 300);
+    } catch (err) {
+      logger.error({ err }, '[REDIS CACHE ERROR]');
+    }
+
+    return result;
   }
 
   async invalidateCache(tenantId) {

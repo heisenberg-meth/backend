@@ -27,6 +27,7 @@ async function medicineRoutes(fastify) {
             manufacturerId: { type: 'string' },
             isActive: { type: ['string', 'boolean'] },
             lowStock: { type: ['string', 'boolean'] },
+            status: { type: 'string' },
             branchId: { type: 'string' },
             minQty: { type: 'integer' },
             sortBy: { type: 'string' },
@@ -36,6 +37,24 @@ async function medicineRoutes(fastify) {
       },
     },
     medicineController.getMedicines,
+  );
+
+  fastify.get(
+    '/summary',
+    {
+      schema: {
+        tags: ['Inventory'],
+        summary: 'Get inventory summary statistics',
+        querystring: {
+          type: 'object',
+          properties: {
+            branchId: { type: 'string' },
+          },
+        },
+      },
+      preHandler: [requirePermission('VIEW_INVENTORY')],
+    },
+    medicineController.getInventorySummaryData,
   );
 
   fastify.get('/medicines/search', {

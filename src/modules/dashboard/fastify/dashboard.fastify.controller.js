@@ -20,8 +20,8 @@ class DashboardFastifyController {
             _sum: { totalAmount: true },
           }),
           prisma.inventoryBatch.aggregate({
-            where: { tenantId, isActive: true },
-            _sum: { currentStock: true },
+            where: { tenantId, status: 'ACTIVE', deletedAt: null },
+            _sum: { quantity: true },
           }),
           prisma.invoice.count({
             where: { tenantId, createdAt: { gte: today } },
@@ -29,8 +29,9 @@ class DashboardFastifyController {
           prisma.inventoryBatch.count({
             where: {
               tenantId,
-              expiryDate: { lte: today },
-              currentStock: { gt: 0 },
+              expiryDate: { lt: today },
+              quantity: { gt: 0 },
+              deletedAt: null,
             },
           }),
         ]);
@@ -40,7 +41,7 @@ class DashboardFastifyController {
         data: {
           todaySales: todaySalesAgg._sum.totalAmount || 0,
           monthlySales: monthlySalesAgg._sum.totalAmount || 0,
-          stockValue: stockAgg._sum.currentStock || 0,
+          stockValue: stockAgg._sum.quantity || 0,
           totalInvoices: invoiceCount,
           expiredMedicines: expiredCount,
         },
