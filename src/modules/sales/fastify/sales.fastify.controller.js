@@ -6,11 +6,13 @@ import { success } from '../../../shared/helpers/response.js';
 
 class SalesFastifyController {
   async getSalesHistory(request, reply) {
-    const { page, limit } = request.query;
+    const { page, limit, startDate, endDate } = request.query;
     const history = await salesService.getSalesHistory(
       request.tenantId,
       parseInt(page) || 1,
       parseInt(limit) || 20,
+      startDate,
+      endDate,
     );
     return reply.send(success(history));
   }

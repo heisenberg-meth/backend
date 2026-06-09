@@ -25,6 +25,7 @@ export function normalizeInvoice(invoice) {
 
   return {
     id: invoice.id,
+    invoiceId: invoice.invoiceId || invoice.id,
     invoiceNumber: invoice.invoiceNumber || invoice.billNumber || `INV-${invoice.id.slice(0, 8)}`,
     date: invoice.createdAt || invoice.soldAt || new Date().toISOString(),
     status: invoice.status,

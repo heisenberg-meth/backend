@@ -30,12 +30,16 @@ class ExpiryReportService {
 
         return {
           id: batch.id,
+          batchId: batch.id,
+          medicineId: batch.medicineId,
+          supplierId: batch.supplierId,
           medicineName: batch.medicine.name,
           batchNumber: batch.batchNumber,
           quantity: batch.quantity,
           expiryDate: batch.expiryDate,
           daysToExpiry: diffDays,
           severity,
+          purchasePrice: Number(batch.purchasePrice || 0),
           estimatedLoss: batch.quantity * Number(batch.purchasePrice || 0),
           supplierName: batch.supplier?.name || 'Default Supplier',
         };

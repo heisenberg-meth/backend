@@ -42,6 +42,7 @@ import notificationSettingsRoutes from './modules/notification-settings/notifica
 import alertSettingsRoutes from './modules/alert-settings/alert-settings.fastify.routes.js';
 import integrationRoutes from './modules/integrations/routes/integration.fastify.routes.js';
 import supplierRoutes from './modules/suppliers/routes/supplier.fastify.routes.js';
+import purchaseRoutes from './modules/purchase/routes/purchase.fastify.routes.js';
 import returnsRoutes from './modules/returns/routes/returns.fastify.routes.js';
 import salesRoutes from './modules/sales/routes/sales.fastify.routes.js';
 import accountingRoutes from './modules/finance/routes/accounting.fastify.routes.js';
@@ -337,6 +338,7 @@ const setupFastify = async () => {
   await fastify.register(medicineSearchFastifyRoutes, { prefix: '/api/medicines' });
   await fastify.register(patientFeaturesRoutes, { prefix: '/api/patients' });
   await fastify.register(supplierRoutes, { prefix: '/api/suppliers' });
+  await fastify.register(purchaseRoutes, { prefix: '/api/purchase' });
   await fastify.register(returnsRoutes, { prefix: '/api/billing' });
   await fastify.register(salesRoutes, { prefix: '/api/sales' });
   await fastify.register(accountingRoutes, { prefix: '/api/accounting' });

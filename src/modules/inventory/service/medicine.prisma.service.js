@@ -75,11 +75,11 @@ class MedicinePrismaService {
       logger.error({ err }, '[REDIS CACHE ERROR]');
     }
 
-    const bId = branchId || null;
+    const bId = branchId === 'null' || !branchId ? null : branchId;
 
-    const branchCondition = bId ? Prisma.sql`ib."branchId" = ${bId}` : Prisma.sql`TRUE`;
+    const branchCondition = bId ? Prisma.sql`ib."branchId" = ${bId}` : Prisma.sql`1=1`;
 
-    const invBranchCondition = bId ? Prisma.sql`inv."branchId" = ${bId}` : Prisma.sql`TRUE`;
+    const invBranchCondition = bId ? Prisma.sql`inv."branchId" = ${bId}` : Prisma.sql`1=1`;
 
     const [summary] = await prisma.$queryRaw`
       SELECT

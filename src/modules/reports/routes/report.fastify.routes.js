@@ -54,10 +54,19 @@ async function reportFastifyRoutes(fastify) {
   fastify.post(
     '/aggregate/manual',
     {
-      schema: { tags: ['Reports'], summary: 'Trigger manual aggregation' },
+      schema: { tags: ['Reports'], summary: 'Trigger manual aggregation for a single date' },
       preHandler: [requirePermission('reports.admin')],
     },
     reportController.triggerManualAggregation,
+  );
+
+  fastify.post(
+    '/reaggregate',
+    {
+      schema: { tags: ['Reports'], summary: 'Rebuild all daily summaries for a date range' },
+      preHandler: [requirePermission('reports.admin')],
+    },
+    reportController.reaggregateRange,
   );
 }
 

@@ -4,25 +4,52 @@ import refundEngine from '../refund-engine/refund.engine.js';
 import inventoryReversalService from '../inventory-reversal/inventory-reversal.service.js';
 import gstAdjustmentService from '../gst-adjustments/gst-adjustment.service.js';
 import fraudDetectionService from '../fraud-detection/fraud-detection.service.js';
+import { createReturnSchema } from '../validators/returns.validator.js';
+import { ZodError } from 'zod';
 
 class ReturnsFastifyController {
   async createReturn(request, reply) {
-    const result = await returnService.createReturn(
-      request.tenantId,
-      request.user.id,
-      request.body,
-    );
-    return reply.code(201).send({
-      success: true,
-      data: {
-        return: result.return,
-        approvalRequired: result.approvalRequired,
-        nextAction: result.nextAction,
-      },
-      message: result.approvalRequired
-        ? 'Return created, awaiting approval'
-        : 'Return created, under review',
-    });
+    try {
+      // Validate request body against Zod schema
+      const { body: validatedBody } = createReturnSchema.parse({ body: request.body });
+
+      const result = await returnService.createReturn(
+        request.tenantId,
+        request.user.id,
+        validatedBody,
+      );
+      return reply.code(201).send({
+        success: true,
+        data: {
+          return: result.return,
+          approvalRequired: result.approvalRequired,
+          nextAction: result.nextAction,
+        },
+        message: result.approvalRequired
+          ? 'Return created, awaiting approval'
+          : 'Return created, under review',
+      });
+    } catch (error) {
+      if (error instanceof ZodError) {
+        const firstIssue = error.issues?.[0];
+        return reply.code(400).send({
+          success: false,
+          error: {
+            message: firstIssue?.message || 'Validation failed',
+            code: 'VALIDATION_ERROR',
+            details: error.issues,
+          },
+        });
+      }
+      request.log.error({ err: error }, '[RETURN ERROR]');
+      return reply.code(400).send({
+        success: false,
+        error: {
+          message: error.message,
+          code: 'RETURN_CREATION_FAILED',
+        },
+      });
+    }
   }
 
   async getReturns(request, reply) {

@@ -31,6 +31,13 @@ class ReturnService {
       throw new Error('Invoice not found');
     }
 
+    const sale = saleId
+      ? await prisma.sale.findUnique({
+          where: { id: saleId },
+          include: { items: true },
+        })
+      : null;
+
     if (invoice.status === 'CANCELLED' || invoice.status === 'VOID') {
       throw new Error('Cannot create return for cancelled or voided invoice');
     }
@@ -53,7 +60,18 @@ class ReturnService {
 
     let totalReturnAmount = 0;
     const returnItems = items.map((item) => {
-      const invoiceItem = invoice.items.find((ii) => ii.id === item.invoiceItemId);
+      let invoiceItem = invoice.items.find((ii) => ii.id === item.invoiceItemId);
+
+      // If not found by ID, try to match via sale items if we have a sale
+      if (!invoiceItem && sale) {
+        const saleItem = sale.items.find((si) => si.id === item.invoiceItemId);
+        if (saleItem) {
+          invoiceItem = invoice.items.find(
+            (ii) => ii.batchId === saleItem.batchId && ii.medicineId === saleItem.medicineId,
+          );
+        }
+      }
+
       if (!invoiceItem) {
         throw new Error(`Invoice item not found: ${item.invoiceItemId}`);
       }

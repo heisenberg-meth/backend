@@ -59,11 +59,12 @@ class SalesService {
     return normalizeInvoice(sale);
   }
 
-  async getSalesHistory(tenantId, page = 1, limit = 20) {
+  async getSalesHistory(tenantId, page = 1, limit = 20, from, to) {
     const skip = (page - 1) * limit;
+    const dateFilter = from || to ? { from, to } : null;
     const [sales, total] = await Promise.all([
-      salesRepository.findAll(tenantId, skip, limit),
-      salesRepository.countAll(tenantId),
+      salesRepository.findAll(tenantId, skip, limit, dateFilter),
+      salesRepository.countAll(tenantId, dateFilter),
     ]);
 
     return {

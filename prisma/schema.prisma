@@ -636,6 +636,7 @@ model Medicine {
   @@index([tenantId, categoryId])
   @@index([tenantId, dosageForm])
   @@index([tenantId, scheduleType])
+  @@index([tenantId, deletedAt])
 }
 
 model MedicinePricing {
@@ -741,6 +742,7 @@ model Inventory {
   @@unique([tenantId, branchId, medicineId])
   @@index([medicineId])
   @@index([tenantId, branchId, status])
+  @@index([tenantId, branchId, currentStock])
 }
 
 model InventoryBatch {
@@ -794,6 +796,9 @@ model InventoryBatch {
   @@index([expiryDate])
   @@index([status])
   @@index([tenantId, branchId, medicineId, status, expiryDate], name: "idx_batch_fefo")
+  @@index([tenantId, deletedAt])
+  @@index([tenantId, status, expiryDate])
+  @@index([barcode])
 }
 
 model BatchAuditLog {
@@ -1272,6 +1277,14 @@ model PurchaseInvoice {
   supplier        Supplier                    @relation(fields: [supplierId], references: [id])
   tenant          Tenant                      @relation(fields: [tenantId], references: [id])
   allocations     SupplierPaymentAllocation[]
+
+  @@unique([tenantId, invoiceNumber])
+  @@index([tenantId, invoiceDate])
+  @@index([tenantId, supplierId, invoiceDate])
+  @@index([tenantId, paymentStatus])
+  @@index([tenantId, purchaseOrderId])
+  @@index([tenantId, createdAt])
+  @@index([tenantId, dueDate])
 }
 
 model Patient {
@@ -1626,6 +1639,8 @@ model Invoice {
   @@index([tenantId, createdAt])
   @@index([patientId])
   @@index([tenantId, status], map: "idx_invoice_tenant_status")
+  @@index([tenantId, deletedAt])
+  @@index([tenantId, branchId, createdAt])
 }
 
 model InvoiceEvent {
@@ -1760,6 +1775,8 @@ model Sale {
   salesReturns   SalesReturn[]
 
   @@index([tenantId, soldAt])
+  @@index([tenantId, branchId, soldAt])
+  @@index([tenantId, status, soldAt])
 }
 
 model SaleItem {
@@ -1779,6 +1796,7 @@ model SaleItem {
   returns        SalesReturn[]
 
   @@index([saleId])
+  @@index([medicineId])
 }
 
 model SalesReturn {
@@ -1850,6 +1868,9 @@ model Return {
   @@index([invoiceId])
   @@index([status])
   @@index([tenantId, status])
+  @@index([tenantId, branchId, createdAt])
+  @@index([tenantId, patientId, createdAt])
+  @@index([saleId])
 }
 
 model ReturnItem {
@@ -2069,6 +2090,8 @@ model Expense {
   tenant        Tenant          @relation(fields: [tenantId], references: [id])
 
   @@index([tenantId, expenseDate])
+  @@index([tenantId, branchId, expenseDate])
+  @@index([tenantId, deletedAt])
 }
 
 model GstSummary {

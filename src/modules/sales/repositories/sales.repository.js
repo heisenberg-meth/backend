@@ -60,9 +60,24 @@ class SalesRepository {
     });
   }
 
-  async findAll(tenantId, skip = 0, take = 20) {
+  _dateFilter(dateFilter) {
+    if (!dateFilter) return {};
+    const where = {};
+    if (dateFilter.from || dateFilter.to) {
+      where.soldAt = {};
+      if (dateFilter.from) where.soldAt.gte = new Date(dateFilter.from);
+      if (dateFilter.to) {
+        const end = new Date(dateFilter.to);
+        end.setHours(23, 59, 59, 999);
+        where.soldAt.lte = end;
+      }
+    }
+    return where;
+  }
+
+  async findAll(tenantId, skip = 0, take = 20, dateFilter = null) {
     return prisma.sale.findMany({
-      where: { tenantId },
+      where: { tenantId, ...this._dateFilter(dateFilter) },
       include: {
         items: true,
         patient: true,
@@ -73,9 +88,9 @@ class SalesRepository {
     });
   }
 
-  async countAll(tenantId) {
+  async countAll(tenantId, dateFilter = null) {
     return prisma.sale.count({
-      where: { tenantId },
+      where: { tenantId, ...this._dateFilter(dateFilter) },
     });
   }
 }

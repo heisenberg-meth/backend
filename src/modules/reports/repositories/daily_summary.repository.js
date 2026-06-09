@@ -3,16 +3,14 @@ import prisma from '../../../config/prisma.js';
 class DailySummaryRepository {
   // Sales Summaries
   async upsertSalesSummary(data) {
-    if (!data.branchId) {
-      console.warn('Skipping DailySalesSummary because branchId is missing', data);
-      return null;
-    }
+    // We allow branchId to be null for tenant-wide summaries or when branch is unknown
+    const branchId = data.branchId || null;
 
     return prisma.dailySalesSummary.upsert({
       where: {
         tenantId_branchId_salesDate: {
           tenantId: data.tenantId,
-          branchId: data.branchId,
+          branchId,
           salesDate: data.salesDate,
         },
       },

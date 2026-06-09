@@ -165,6 +165,51 @@ class ReportFastifyController {
       return reply.code(500).send(error(err.message, 'INTERNAL_SERVER_ERROR'));
     }
   }
+
+  async reaggregateRange(request, reply) {
+    const startTime = Date.now();
+    try {
+      const { from, to } = request.body;
+      if (!from || !to) {
+        return reply.code(400).send(error('from and to dates are required', 'VALIDATION_ERROR'));
+      }
+      const fromDate = new Date(from);
+      fromDate.setHours(0, 0, 0, 0);
+      const toDate = new Date(to);
+      toDate.setHours(23, 59, 59, 999);
+
+      let current = new Date(fromDate);
+      const results = [];
+      while (current <= toDate) {
+        try {
+          await aggregationService.runDailyAggregation(request.tenantId, current);
+          results.push(current.toISOString().split('T')[0]);
+        } catch (err) {
+          logger.error({ err, date: current, tenantId: request.tenantId }, 'Reaggregate date failed');
+        }
+        current.setDate(current.getDate() + 1);
+      }
+
+      await reportService.invalidateCache(request.tenantId);
+      return reply.send(success({
+        message: `Reaggregation complete for ${results.length} days`,
+        dates: results,
+      }));
+    } catch (err) {
+      logger.error(
+        {
+          err,
+          requestId: request.id,
+          route: request.url,
+          tenantId: request.tenantId,
+          body: request.body,
+          duration: Date.now() - startTime,
+        },
+        'Reaggregate range failed',
+      );
+      return reply.code(500).send(error(err.message, 'INTERNAL_SERVER_ERROR'));
+    }
+  }
 }
 
 export default new ReportFastifyController();

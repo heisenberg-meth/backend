@@ -31,6 +31,8 @@ class MedicinePrismaRepository {
       ...(isActive !== undefined && { isActive }),
     };
 
+    const targetBranchId = branchId === 'null' || !branchId ? undefined : branchId;
+
     let medicines = [];
     let total = 0;
 
@@ -41,10 +43,10 @@ class MedicinePrismaRepository {
           category: true,
           manufacturer: true,
           inventory: {
-            where: branchId ? { branchId } : {},
+            where: targetBranchId ? { branchId: targetBranchId } : {},
           },
           inventoryBatches: {
-            where: { ...(branchId ? { branchId } : {}), deletedAt: null },
+            where: { ...(targetBranchId ? { branchId: targetBranchId } : {}), deletedAt: null },
             orderBy: { expiryDate: 'asc' },
           },
         },
@@ -105,10 +107,10 @@ class MedicinePrismaRepository {
             category: true,
             manufacturer: true,
             inventory: {
-              where: branchId ? { branchId } : {},
+              where: targetBranchId ? { branchId: targetBranchId } : {},
             },
             inventoryBatches: {
-              where: { ...(branchId ? { branchId } : {}), deletedAt: null },
+              where: { ...(targetBranchId ? { branchId: targetBranchId } : {}), deletedAt: null },
               orderBy: { expiryDate: 'asc' },
             },
           },
@@ -156,16 +158,18 @@ class MedicinePrismaRepository {
   }
 
   async findById(id, tenantId, branchId = null) {
+    const targetBranchId = branchId === 'null' || !branchId ? undefined : branchId;
+
     const medicine = await prisma.medicine.findFirst({
       where: { id, tenantId, deletedAt: null },
       include: {
         category: true,
         manufacturer: true,
         inventory: {
-          where: branchId ? { branchId } : {},
+          where: targetBranchId ? { branchId: targetBranchId } : {},
         },
         inventoryBatches: {
-          where: { ...(branchId ? { branchId } : {}), deletedAt: null },
+          where: { ...(targetBranchId ? { branchId: targetBranchId } : {}), deletedAt: null },
           orderBy: { expiryDate: 'asc' },
         },
       },
