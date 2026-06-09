@@ -72,6 +72,13 @@ class AuthFastifyController {
 
   async login(request, reply) {
     try {
+      request.log.info(
+        {
+          ip: request.ip,
+          forwardedFor: request.headers['x-forwarded-for'],
+        },
+        'LOGIN ATTEMPT',
+      );
       const parsed = loginSchema.parse(request.body);
       const result = await authService.login({
         ...parsed,

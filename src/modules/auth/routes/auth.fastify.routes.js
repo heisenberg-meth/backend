@@ -98,7 +98,7 @@ async function authRoutes(fastify) {
     {
       config: {
         rateLimit: {
-          max: 5,
+          max: 20,
           timeWindow: '15 minutes',
         },
       },

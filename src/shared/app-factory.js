@@ -41,6 +41,7 @@ const createServiceApp = async (options = {}) => {
             }
           : undefined,
     },
+    trustProxy: true,
   });
 
   // Register Shared Plugins

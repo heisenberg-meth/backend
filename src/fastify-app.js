@@ -87,6 +87,7 @@ const fastify = Fastify({
           }
         : undefined,
   },
+  trustProxy: true,
 });
 
 const setupFastify = async () => {
