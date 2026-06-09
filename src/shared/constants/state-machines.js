@@ -118,18 +118,23 @@ export const billingStateMachine = new StateMachine({
 });
 
 export const RETURN_STATUS = {
+  PENDING: 'PENDING',
   REQUESTED: 'REQUESTED',
   UNDER_REVIEW: 'UNDER_REVIEW',
   APPROVED: 'APPROVED',
   REJECTED: 'REJECTED',
   REFUNDED: 'REFUNDED',
-  COMPLETED: 'COMPLETED',
 };
 
 export const returnStateMachine = new StateMachine({
   name: 'Return Workflow',
   initial: RETURN_STATUS.REQUESTED,
   states: {
+    [RETURN_STATUS.PENDING]: {
+      on: {
+        SUBMIT: RETURN_STATUS.REQUESTED,
+      },
+    },
     [RETURN_STATUS.REQUESTED]: {
       on: {
         SUBMIT_REVIEW: RETURN_STATUS.UNDER_REVIEW,
@@ -145,18 +150,12 @@ export const returnStateMachine = new StateMachine({
     [RETURN_STATUS.APPROVED]: {
       on: {
         PROCESS_REFUND: RETURN_STATUS.REFUNDED,
-        COMPLETE: RETURN_STATUS.COMPLETED,
       },
     },
     [RETURN_STATUS.REJECTED]: {
       on: {},
     },
     [RETURN_STATUS.REFUNDED]: {
-      on: {
-        COMPLETE: RETURN_STATUS.COMPLETED,
-      },
-    },
-    [RETURN_STATUS.COMPLETED]: {
       on: {},
     },
   },

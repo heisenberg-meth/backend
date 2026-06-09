@@ -325,7 +325,7 @@ describe('RefundApprovalService', () => {
   });
 
   it('throws if refund in wrong status for approval', async () => {
-    mockPrisma.return.findUnique.mockResolvedValue(mockReturn({ status: 'COMPLETED' }));
+    mockPrisma.return.findUnique.mockResolvedValue(mockReturn({ status: 'REFUNDED' }));
     await expect(refundApproval.approveRefund('return-1', 'user-1')).rejects.toThrow(
       'cannot approve',
     );

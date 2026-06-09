@@ -33,7 +33,7 @@ class RefundEngine {
       if (invoice.status === 'REFUNDED') throw new Error('Invoice has already been fully refunded');
 
       const previousRefunds = await tx.salesReturn.aggregate({
-        where: { invoiceId: invoice.id, status: 'COMPLETED' },
+        where: { invoiceId: invoice.id, status: 'REFUNDED' },
         _sum: { refundAmount: true },
       });
       const previouslyRefunded = Number(previousRefunds._sum.refundAmount || 0);
@@ -109,7 +109,7 @@ class RefundEngine {
           quantity: items.reduce((sum, i) => sum + i.quantity, 0),
           reason,
           refundAmount: actualRefundAmount,
-          status: 'COMPLETED',
+          status: 'REFUNDED',
           createdBy: userId,
         },
       });

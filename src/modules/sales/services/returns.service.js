@@ -45,7 +45,7 @@ class ReturnsService {
           quantity,
           reason,
           refundAmount: parseFloat(refundAmount.toFixed(2)),
-          status: 'COMPLETED',
+          status: 'REFUNDED',
           createdBy: userId,
         },
         tx,

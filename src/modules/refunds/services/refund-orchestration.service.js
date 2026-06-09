@@ -205,12 +205,12 @@ class RefundOrchestrationService {
         await refundRepository.updateRefundStatus(
           created.id,
           {
-            status: 'COMPLETED',
+            status: 'REFUNDED',
             refundStatus: 'COMPLETED',
           },
           tx,
         );
-        created.status = 'COMPLETED';
+        created.status = 'REFUNDED';
         created.refundStatus = 'COMPLETED';
       }
 
@@ -218,7 +218,7 @@ class RefundOrchestrationService {
     });
 
     const eventStatus =
-      refund.status === 'COMPLETED' ? EVENTS.REFUND_COMPLETED : EVENTS.RETURN_CREATED;
+      refund.status === 'REFUNDED' ? EVENTS.REFUND_COMPLETED : EVENTS.RETURN_CREATED;
     emitLocalEvent(eventStatus, {
       returnId: refund.id,
       returnNumber: refund.returnNumber,
@@ -230,7 +230,7 @@ class RefundOrchestrationService {
       timestamp: new Date().toISOString(),
     });
 
-    if (refund.status === 'COMPLETED') {
+    if (refund.status === 'REFUNDED') {
       refundAudit.logInvoiceAudit(invoiceId, 'REFUNDED', userId);
 
       emitLocalEvent(EVENTS.GST_ADJUSTED, {
