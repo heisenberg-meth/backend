@@ -138,7 +138,7 @@ model Tenant {
   supplierLedger             SupplierLedger[]
   supplierPayments           SupplierPayment[]
   supplierPaymentAllocations SupplierPaymentAllocation[]
-  supplierReturns            SupplierReturn[]
+  supplierReturns            SupplierReturn[]           @relation("SupplierReturnCreator")
   tallyExports               TallyExport[]
   tenantBranding             TenantBranding?
   tenantDomains              TenantDomain[]
@@ -626,6 +626,7 @@ model Medicine {
   stockAlerts              StockAlert[]
   stockMovements           StockMovement[]
   stockSnapshots           StockSnapshot[]
+  supplierReturns          SupplierReturn[]
 
   @@unique([tenantId, barcode])
   @@index([tenantId, name])
@@ -1144,18 +1145,27 @@ model SupplierMetrics {
 }
 
 model SupplierReturn {
-  id         String               @id @default(uuid())
-  tenantId   String
-  supplierId String
-  batchId    String
-  quantity   Int
-  reason     String?
-  createdAt  DateTime             @default(now())
-  updatedAt  DateTime             @updatedAt
-  status     SupplierReturnStatus @default(PENDING)
-  batch      InventoryBatch       @relation(fields: [batchId], references: [id])
-  supplier   Supplier             @relation(fields: [supplierId], references: [id])
-  tenant     Tenant               @relation(fields: [tenantId], references: [id])
+  id           String               @id @default(uuid())
+  tenantId     String
+  supplierId   String
+  batchId      String
+  medicineId   String?
+  quantity     Int
+  returnAmount Decimal              @default(0) @db.Decimal(12, 2)
+  reason       String?
+  createdBy    String?
+  createdAt    DateTime             @default(now())
+  updatedAt    DateTime             @updatedAt
+  status       SupplierReturnStatus @default(PENDING)
+  batch        InventoryBatch       @relation(fields: [batchId], references: [id])
+  medicine     Medicine?            @relation(fields: [medicineId], references: [id])
+  supplier     Supplier             @relation(fields: [supplierId], references: [id])
+  tenant       Tenant               @relation(fields: [tenantId], references: [id])
+  creator      User?                @relation("SupplierReturnCreator", fields: [createdBy], references: [id])
+
+  @@index([tenantId, createdAt])
+  @@index([tenantId, supplierId])
+  @@index([tenantId, status])
 }
 
 model PurchaseOrder {

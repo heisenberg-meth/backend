@@ -52,6 +52,63 @@ class SupplierReturnService {
     logger.info(`[SupplierReturn] Processed return for batch ${data.batchId} (${data.quantity})`);
     return returnRecord;
   }
+
+  async getReturns(tenantId, page = 1, limit = 20) {
+    const skip = (page - 1) * limit;
+
+    const [returns, total] = await Promise.all([
+      prisma.supplierReturn.findMany({
+        where: { tenantId },
+        include: {
+          supplier: {
+            select: { id: true, name: true, phone: true },
+          },
+          batch: {
+            select: {
+              id: true,
+              batchNumber: true,
+              expiryDate: true,
+              medicine: {
+                select: { id: true, name: true },
+              },
+            },
+          },
+        },
+        orderBy: { createdAt: 'desc' },
+        skip,
+        take: limit,
+      }),
+      prisma.supplierReturn.count({ where: { tenantId } }),
+    ]);
+
+    return {
+      returns,
+      pagination: {
+        page,
+        limit,
+        total,
+        totalPages: Math.ceil(total / limit),
+      },
+    };
+  }
+
+  async getReturnById(tenantId, returnId) {
+    const returnRecord = await prisma.supplierReturn.findUnique({
+      where: { id: returnId },
+      include: {
+        supplier: true,
+        batch: {
+          include: { medicine: true },
+        },
+      },
+    });
+
+    if (!returnRecord || returnRecord.tenantId !== tenantId) {
+      throw new Error('Supplier return not found');
+    }
+
+    return returnRecord;
+  }
 }
 
 export default new SupplierReturnService();

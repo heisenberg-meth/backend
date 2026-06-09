@@ -54,7 +54,11 @@ class PurchaseFastifyController {
         parseInt(page) || 1,
         parseInt(limit) || 20,
       );
-      return reply.send({ success: true, data: result });
+      return reply.send({
+        success: true,
+        data: result.returns,
+        pagination: result.pagination,
+      });
     } catch (error) {
       request.log.error({ err: error, tenantId: request.tenantId }, 'Get purchase returns failed');
       return reply.code(500).send({ success: false, message: error.message });
