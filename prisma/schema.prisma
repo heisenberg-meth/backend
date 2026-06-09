@@ -138,7 +138,7 @@ model Tenant {
   supplierLedger             SupplierLedger[]
   supplierPayments           SupplierPayment[]
   supplierPaymentAllocations SupplierPaymentAllocation[]
-  supplierReturns            SupplierReturn[]           @relation("SupplierReturnCreator")
+  supplierReturns            SupplierReturn[]
   tallyExports               TallyExport[]
   tenantBranding             TenantBranding?
   tenantDomains              TenantDomain[]
@@ -259,6 +259,7 @@ model User {
   salesReturns                 SalesReturn[]
   approvedApprovals            SettingsApproval[]         @relation("ApprovalApprover")
   proposedApprovals            SettingsApproval[]         @relation("ApprovalProposer")
+  createdSupplierReturns       SupplierReturn[]           @relation("SupplierReturnCreator")
   settingsAuditLogs            SettingsAuditLog[]
   shifts                       Shift[]
   stockMovements               StockMovement[]
