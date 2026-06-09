@@ -2,7 +2,11 @@ import batchService from '../services/batch.service.js';
 
 class BatchFastifyController {
   async createBatch(request, reply) {
-    const batch = await batchService.createBatch(request.body, request.tenantId, request.user.id);
+    const data = {
+      ...request.body,
+      branchId: request.body.branchId || request.branchId,
+    };
+    const batch = await batchService.createBatch(data, request.tenantId, request.user.id);
     return reply.code(201).send({ success: true, data: batch });
   }
 

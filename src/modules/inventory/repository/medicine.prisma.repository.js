@@ -41,10 +41,10 @@ class MedicinePrismaRepository {
           category: true,
           manufacturer: true,
           inventory: {
-            where: { branchId: branchId || null },
+            where: branchId ? { branchId } : {},
           },
           inventoryBatches: {
-            where: { branchId: branchId || null, deletedAt: null },
+            where: { ...(branchId ? { branchId } : {}), deletedAt: null },
             orderBy: { expiryDate: 'asc' },
           },
         },
@@ -105,10 +105,10 @@ class MedicinePrismaRepository {
             category: true,
             manufacturer: true,
             inventory: {
-              where: { branchId: branchId || null },
+              where: branchId ? { branchId } : {},
             },
             inventoryBatches: {
-              where: { branchId: branchId || null, deletedAt: null },
+              where: { ...(branchId ? { branchId } : {}), deletedAt: null },
               orderBy: { expiryDate: 'asc' },
             },
           },
@@ -162,10 +162,10 @@ class MedicinePrismaRepository {
         category: true,
         manufacturer: true,
         inventory: {
-          where: { branchId },
+          where: branchId ? { branchId } : {},
         },
         inventoryBatches: {
-          where: { branchId, deletedAt: null },
+          where: { ...(branchId ? { branchId } : {}), deletedAt: null },
           orderBy: { expiryDate: 'asc' },
         },
       },
@@ -247,10 +247,10 @@ class MedicinePrismaRepository {
       where: { barcode, tenantId, deletedAt: null },
       include: {
         inventory: {
-          where: { branchId },
+          where: branchId ? { branchId } : {},
         },
         inventoryBatches: {
-          where: { branchId, deletedAt: null },
+          where: { ...(branchId ? { branchId } : {}), deletedAt: null },
           orderBy: { expiryDate: 'asc' },
         },
       },

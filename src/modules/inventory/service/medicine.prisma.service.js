@@ -77,22 +77,22 @@ class MedicinePrismaService {
 
     const bId = branchId || null;
 
-    const branchCondition = bId
-      ? Prisma.sql`ib."branchId" = ${bId}`
-      : Prisma.sql`ib."branchId" IS NULL`;
+    const branchCondition = bId ? Prisma.sql`ib."branchId" = ${bId}` : Prisma.sql`TRUE`;
 
-    const invBranchCondition = bId
-      ? Prisma.sql`inv."branchId" = ${bId}`
-      : Prisma.sql`inv."branchId" IS NULL`;
+    const invBranchCondition = bId ? Prisma.sql`inv."branchId" = ${bId}` : Prisma.sql`TRUE`;
 
     const [summary] = await prisma.$queryRaw`
       SELECT
-        COUNT(*)::int FILTER (WHERE m."isActive" = true AND m."deletedAt" IS NULL) as "totalProducts",
-        COUNT(*)::int FILTER (WHERE m."isActive" = true AND m."deletedAt" IS NULL AND COALESCE(inv."currentStock", 0) > COALESCE(inv."reorderPoint", m."reorderLevel", 10)) as "inStock",
-        COUNT(*)::int FILTER (WHERE m."isActive" = true AND m."deletedAt" IS NULL AND COALESCE(inv."currentStock", 0) <= COALESCE(inv."reorderPoint", m."reorderLevel", 10) AND COALESCE(inv."currentStock", 0) > 0) as "lowStock",
-        COUNT(*)::int FILTER (WHERE m."isActive" = true AND m."deletedAt" IS NULL AND COALESCE(inv."currentStock", 0) = 0) as "outOfStock",
+        COUNT(*) FILTER (WHERE m."isActive" = true AND m."deletedAt" IS NULL) as "totalProducts",
+        COUNT(*) FILTER (WHERE m."isActive" = true AND m."deletedAt" IS NULL) as "totalMedicines",
+        COALESCE(SUM(inv."currentStock"), 0) as "totalStock",
+        COUNT(*) FILTER (WHERE m."isActive" = true AND m."deletedAt" IS NULL AND COALESCE(inv."currentStock", 0) > COALESCE(inv."reorderPoint", m."reorderLevel", 10)) as "inStock",
+        COUNT(*) FILTER (WHERE m."isActive" = true AND m."deletedAt" IS NULL AND COALESCE(inv."currentStock", 0) <= COALESCE(inv."reorderPoint", m."reorderLevel", 10) AND COALESCE(inv."currentStock", 0) > 0) as "lowStock",
+        COUNT(*) FILTER (WHERE m."isActive" = true AND m."deletedAt" IS NULL AND COALESCE(inv."currentStock", 0) <= COALESCE(inv."reorderPoint", m."reorderLevel", 10) AND COALESCE(inv."currentStock", 0) > 0) as "lowStockCount",
+        COUNT(*) FILTER (WHERE m."isActive" = true AND m."deletedAt" IS NULL AND COALESCE(inv."currentStock", 0) = 0) as "outOfStock",
+        COUNT(*) FILTER (WHERE m."isActive" = true AND m."deletedAt" IS NULL AND COALESCE(inv."currentStock", 0) = 0) as "outOfStockCount",
         (
-          SELECT COUNT(*)::int
+          SELECT COUNT(*)
           FROM "InventoryBatch" ib
           INNER JOIN "Medicine" m2 ON ib."medicineId" = m2."id"
           WHERE m2."tenantId" = ${tenantId}
@@ -104,7 +104,7 @@ class MedicinePrismaService {
         ) as "expired",
         COALESCE(
           (
-            SELECT SUM(ib."quantity" * COALESCE(ib."purchasePrice", 0))::float
+            SELECT SUM(ib."quantity" * COALESCE(ib."mrp", 0))::float
             FROM "InventoryBatch" ib
             INNER JOIN "Medicine" m3 ON ib."medicineId" = m3."id"
             WHERE m3."tenantId" = ${tenantId}
@@ -122,12 +122,18 @@ class MedicinePrismaService {
     `;
 
     const result = {
-      totalProducts: summary?.totalProducts || 0,
-      inStock: summary?.inStock || 0,
-      lowStock: summary?.lowStock || 0,
-      outOfStock: summary?.outOfStock || 0,
-      expired: summary?.expired || 0,
-      inventoryValue: summary?.inventoryValue || 0,
+      totalMedicines: Number(summary?.totalMedicines || 0),
+      totalStock: Number(summary?.totalStock || 0),
+      inventoryValue: Number(summary?.inventoryValue || 0),
+      lowStockCount: Number(summary?.lowStockCount || 0),
+      outOfStockCount: Number(summary?.outOfStockCount || 0),
+      expired: Number(summary?.expired || 0),
+
+      // Legacy compatibility keys for frontend component
+      totalProducts: Number(summary?.totalProducts || 0),
+      inStock: Number(summary?.inStock || 0),
+      lowStock: Number(summary?.lowStock || 0),
+      outOfStock: Number(summary?.outOfStock || 0),
     };
 
     try {

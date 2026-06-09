@@ -5,17 +5,29 @@ import alertService from '../service/alert.service.js';
 
 class StockFastifyController {
   async stockIn(request, reply) {
-    const batch = await stockService.stockIn(request.tenantId, request.body, request.user.id);
+    const data = {
+      ...request.body,
+      branchId: request.body.branchId || request.branchId,
+    };
+    const batch = await stockService.stockIn(request.tenantId, data, request.user.id);
     return reply.code(201).send(batch);
   }
 
   async stockOut(request, reply) {
-    const result = await stockService.stockOut(request.tenantId, request.body, request.user.id);
+    const data = {
+      ...request.body,
+      branchId: request.body.branchId || request.branchId,
+    };
+    const result = await stockService.stockOut(request.tenantId, data, request.user.id);
     return reply.send(result);
   }
 
   async recordDamage(request, reply) {
-    const record = await stockService.recordDamage(request.tenantId, request.body, request.user.id);
+    const data = {
+      ...request.body,
+      branchId: request.body.branchId || request.branchId,
+    };
+    const record = await stockService.recordDamage(request.tenantId, data, request.user.id);
     return reply.code(201).send(record);
   }
 

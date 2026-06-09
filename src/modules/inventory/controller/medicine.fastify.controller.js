@@ -160,10 +160,14 @@ class MedicineFastifyController {
 
   async addBatch(request, reply) {
     try {
+      const batchData = {
+        ...request.body,
+        branchId: request.body.branchId || request.branchId,
+      };
       const batch = await medicineService.addBatch(
         request.params.id,
         request.tenantId,
-        request.body,
+        batchData,
         request.user.id,
       );
       return reply.code(201).send(success(batch));

@@ -67,7 +67,7 @@ class DashboardAggregationService {
     const topRisks = await dashboardAggregationRepository.getTopLowStockMedicines(tenantId, 5);
 
     const [valueResult] = await prisma.$queryRaw`
-      SELECT SUM("quantity" * COALESCE("purchasePrice", 0)) as "totalValue"
+      SELECT SUM("quantity" * COALESCE("mrp", 0)) as "totalValue"
       FROM "InventoryBatch" as "ib"
       INNER JOIN "Medicine" as "m" ON "ib"."medicineId" = "m"."id"
       WHERE "m"."tenantId" = ${tenantId}
