@@ -1,3 +1,4 @@
+import { Prisma } from '@prisma/client';
 import prisma from '../../../config/prisma.js';
 import redisClient from '../../../config/redis.js';
 import logger from '../../../shared/utils/logger.js';
@@ -76,6 +77,14 @@ class MedicinePrismaService {
 
     const bId = branchId || null;
 
+    const branchCondition = bId
+      ? Prisma.sql`ib."branchId" = ${bId}`
+      : Prisma.sql`ib."branchId" IS NULL`;
+
+    const invBranchCondition = bId
+      ? Prisma.sql`inv."branchId" = ${bId}`
+      : Prisma.sql`inv."branchId" IS NULL`;
+
     const [summary] = await prisma.$queryRaw`
       SELECT
         COUNT(*)::int FILTER (WHERE m."isActive" = true AND m."deletedAt" IS NULL) as "totalProducts",
@@ -91,7 +100,7 @@ class MedicinePrismaService {
             AND ib."deletedAt" IS NULL
             AND ib."expiryDate" < NOW()
             AND ib."quantity" > 0
-            AND (ib."branchId" = ${bId} OR (${bId}::text IS NULL AND ib."branchId" IS NULL))
+            AND ${branchCondition}
         ) as "expired",
         COALESCE(
           (
@@ -102,12 +111,12 @@ class MedicinePrismaService {
               AND m3."deletedAt" IS NULL
               AND ib."deletedAt" IS NULL
               AND ib."quantity" > 0
-              AND (ib."branchId" = ${bId} OR (${bId}::text IS NULL AND ib."branchId" IS NULL))
+              AND ${branchCondition}
           ),
           0
         ) as "inventoryValue"
       FROM "Medicine" m
-      LEFT JOIN "Inventory" inv ON m."id" = inv."medicineId" AND (inv."branchId" = ${bId} OR (${bId}::text IS NULL AND inv."branchId" IS NULL))
+      LEFT JOIN "Inventory" inv ON m."id" = inv."medicineId" AND ${invBranchCondition}
       WHERE m."tenantId" = ${tenantId}
         AND m."deletedAt" IS NULL;
     `;
