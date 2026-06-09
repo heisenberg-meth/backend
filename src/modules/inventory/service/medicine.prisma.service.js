@@ -18,7 +18,6 @@ class MedicinePrismaService {
     try {
       const { tenantId, branchId, query = {}, pagination = {} } = params;
 
-      // Caching Key
       const cacheKey = `inventory:${tenantId}:${branchId || 'all'}:${JSON.stringify(query)}:${JSON.stringify(pagination)}`;
 
       try {

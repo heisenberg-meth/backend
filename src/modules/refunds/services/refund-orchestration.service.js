@@ -1,6 +1,7 @@
 import prisma from '../../../config/prisma.js';
 import logger from '../../../shared/utils/logger.js';
 import { emitLocalEvent } from '../../../shared/events/local-event-bus.js';
+import { emitEvent } from '../../../shared/events/erp-event-bus.js';
 import { EVENTS } from '../../../shared/constants/events.js';
 import refundEligibility from './refund-eligibility.service.js';
 import refundCalculation from './refund-calculation.service.js';
@@ -9,6 +10,7 @@ import refundInventory from './refund-inventory.service.js';
 import refundFraud from './refund-fraud.service.js';
 import refundAudit from './refund-audit.service.js';
 import refundRepository from '../repositories/refund.repository.js';
+import refundPayment from './refund-payment.service.js';
 
 class RefundOrchestrationService {
   async createRefund(tenantId, data, userId) {
@@ -33,10 +35,34 @@ class RefundOrchestrationService {
     const approvalReasons = [];
 
     for (const req of requestedItems) {
-      const invoiceItem = invoice.items.find((i) => i.id === req.invoiceItemId);
-      if (!invoiceItem) {
-        throw new Error(`Invoice item ${req.invoiceItemId} not found`);
+      let invoiceItem = null;
+      if (req.invoiceItemId) {
+        invoiceItem = invoice.items.find((i) => i.id === req.invoiceItemId);
       }
+
+      // Fallback 1: check if req.medicineId actually refers to InvoiceItem.id
+      if (!invoiceItem && req.medicineId) {
+        invoiceItem = invoice.items.find((i) => i.id === req.medicineId);
+      }
+
+      // Fallback 2: find by medicineId and batchId
+      if (!invoiceItem && req.medicineId) {
+        invoiceItem = invoice.items.find(
+          (i) => i.medicineId === req.medicineId && (!req.batchId || i.batchId === req.batchId),
+        );
+        if (!invoiceItem) {
+          invoiceItem = invoice.items.find((i) => i.medicineId === req.medicineId);
+        }
+      }
+
+      if (!invoiceItem) {
+        throw new Error(
+          `Invoice item not found for requested item (invoiceItemId: ${req.invoiceItemId}, medicineId: ${req.medicineId})`,
+        );
+      }
+
+      // Ensure req.invoiceItemId is set to the resolved item ID for downstream logic
+      req.invoiceItemId = invoiceItem.id;
 
       const quantityValidation = refundEligibility.validateRefundQuantity(
         invoiceItem,
@@ -161,6 +187,21 @@ class RefundOrchestrationService {
           },
         });
 
+        // Record the refund payment and update the invoice payment state
+        await refundPayment.createRefundPayment(
+          tenantId,
+          created.id,
+          invoiceId,
+          [
+            {
+              paymentMode: invoice.paymentMethod || 'CASH',
+              amount: totalRefundAmount,
+              transactionReference: `REF-CN-${created.returnNumber}`,
+            },
+          ],
+          tx,
+        );
+
         await refundRepository.updateRefundStatus(
           created.id,
           {
@@ -198,6 +239,19 @@ class RefundOrchestrationService {
         gstAdjustment: totalGstAdjustment,
         timestamp: new Date().toISOString(),
       });
+
+      // Emit domain event for async processors / analytics worker to update sales & profit
+      try {
+        await emitEvent(EVENTS.REFUND_PROCESSED, {
+          tenantId,
+          branchId: refund.branchId || invoice.branchId || branchId || null,
+          invoiceId,
+          refundAmount: totalRefundAmount,
+          refundedAt: new Date(),
+        });
+      } catch (err) {
+        logger.error(`[Refund Event] Failed to emit refund.processed event: ${err.message}`);
+      }
     }
 
     refundAudit.logAction(tenantId, refund.id, `REFUND_CREATED:${refund.status}`, userId, {

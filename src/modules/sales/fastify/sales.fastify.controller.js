@@ -59,15 +59,13 @@ class SalesFastifyController {
     const { id } = request.params;
     const sale = await salesService.getSaleById(id, request.tenantId);
     const refundData = {
-      saleId: id,
       invoiceId: sale.invoiceId,
-      tenantId: request.tenantId,
       items: request.body.items || [],
       reason: request.body.reason || 'Customer Request',
       refundAmount: request.body.refundAmount || 0,
-      processedBy: request.user.id,
+      branchId: request.branchId || sale.branchId || null,
     };
-    const result = await refundService.processRefund(refundData);
+    const result = await refundService.createRefund(request.tenantId, refundData, request.user.id);
     return reply.send(success(result));
   }
 }
