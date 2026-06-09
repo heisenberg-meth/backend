@@ -106,6 +106,9 @@ class BillingFastifyController {
 
   async processRefund(request, reply) {
     try {
+      console.log('invoice', request.params.id);
+      console.log('body', JSON.stringify(request.body, null, 2));
+
       const { id } = request.params;
       const { items, reason, refundAmount } = request.body;
       const result = await billingService.processRefund(request.tenantId, request.user.id, {
@@ -115,9 +118,16 @@ class BillingFastifyController {
         refundAmount,
         branchId: request.branchId,
       });
+
       return reply.send({ success: true, data: result });
     } catch (error) {
-      return reply.code(400).send({ success: false, message: error.message });
+      console.error(error.message);
+      console.error(error.stack);
+
+      return reply.code(400).send({
+        success: false,
+        message: error.message,
+      });
     }
   }
 
