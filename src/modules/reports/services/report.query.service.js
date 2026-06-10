@@ -211,10 +211,8 @@ class ReportQueryService {
     const grossProfitPct = Math.round((grossProfit / safeRevenue) * 100);
     const expensePct = Math.round((totalExpenses / safeRevenue) * 100);
     const netMargin = Math.round((netProfit / safeRevenue) * 100);
-
-    // P1 Fix: Use groupBy for expense categories
     const expenseGroups = await prisma.expense.groupBy({
-      by: ['categoryId', 'categoryName'],
+      by: ['categoryId'],
       where: {
         tenantId,
         expenseDate: { gte: fromDate, lte: toDate },
@@ -230,11 +228,10 @@ class ReportQueryService {
       select: { id: true, name: true },
     });
     const catNameMap = Object.fromEntries(categories.map((c) => [c.id, c.name]));
-
     const expensesDistribution = expenseGroups
       .map((group, idx) => {
         const amount = Number(group._sum.amount || 0);
-        const name = catNameMap[group.categoryId] || group.categoryName || 'Operational';
+        const name = catNameMap[group.categoryId] || 'Operational';
         const pct = Math.round((amount / (totalExpenses || 1)) * 100);
         return {
           name,
