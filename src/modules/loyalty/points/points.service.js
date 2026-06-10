@@ -11,12 +11,13 @@ class PointsService {
     return 10;
   }
 
-  async getAccount(patientId, tenantId) {
-    let account = await prisma.patientLoyaltyAccount.findUnique({
+  async getAccount(patientId, tenantId, tx = null) {
+    const client = tx || prisma;
+    let account = await client.patientLoyaltyAccount.findUnique({
       where: { patientId },
     });
     if (!account) {
-      account = await prisma.patientLoyaltyAccount.create({
+      account = await client.patientLoyaltyAccount.create({
         data: { tenantId, patientId },
       });
     }
@@ -27,10 +28,8 @@ class PointsService {
     const points = Math.floor(amount / this.getRewardRatio());
     if (points <= 0) return;
 
-    const client = tx || prisma;
-
-    return await client.$transaction(async (ctx) => {
-      const account = await this.getAccount(patientId, tenantId);
+    const execute = async (client) => {
+      const account = await this.getAccount(patientId, tenantId, client);
       const newBalance = account.availablePoints + points;
       const newLifetime = account.lifetimePoints + points;
 
@@ -45,10 +44,10 @@ class PointsService {
           referenceId: invoiceId,
           notes: `Earned from invoice #${invoiceId}`,
         },
-        ctx,
+        client,
       );
 
-      const updatedAccount = await ctx.patientLoyaltyAccount.update({
+      const updatedAccount = await client.patientLoyaltyAccount.update({
         where: { id: account.id },
         data: {
           availablePoints: newBalance,
@@ -60,7 +59,13 @@ class PointsService {
       eventBus.emit('LOYALTY_POINTS_EARNED', { tenantId, patientId, points, newBalance });
 
       return updatedAccount;
-    });
+    };
+
+    if (tx) {
+      return await execute(tx);
+    } else {
+      return await prisma.$transaction(execute);
+    }
   }
 
   calculateTier(lifetimePoints) {

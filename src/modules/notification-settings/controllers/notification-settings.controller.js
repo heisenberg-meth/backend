@@ -12,7 +12,10 @@ import logger from '../../../shared/utils/logger.js';
 class NotificationSettingsController {
   // ── GET /api/settings/notifications ──
   async getSettings(req, reply) {
-    const tenantId = req.tenant.id;
+    if (!req.tenantId) {
+      return reply.code(401).send({ success: false, error: 'Unauthorized: tenant not found' });
+    }
+    const tenantId = req.tenantId;
     const { branchId } = req.query;
     try {
       const settings = await service.getSettings(tenantId, branchId || null);
@@ -32,7 +35,10 @@ class NotificationSettingsController {
 
   // ── PUT /api/settings/notifications ──
   async updateSettings(req, reply) {
-    const tenantId = req.tenant.id;
+    if (!req.tenantId) {
+      return reply.code(401).send({ success: false, error: 'Unauthorized: tenant not found' });
+    }
+    const tenantId = req.tenantId;
     const { branchId } = req.query;
     const updatedBy = req.user?.email || req.user?.id;
     try {
@@ -69,7 +75,7 @@ class NotificationSettingsController {
   // ── GET /api/settings/notifications/channels ──
   async getChannels(req, reply) {
     try {
-      const tenantId = req.tenant.id;
+      const tenantId = req.tenantId;
       const { channelType } = req.query;
 
       const channels = await service.getChannelConfigs(tenantId, channelType);
@@ -87,7 +93,7 @@ class NotificationSettingsController {
   // ── PUT /api/settings/notifications/channels ──
   async upsertChannel(req, reply) {
     try {
-      const tenantId = req.tenant.id;
+      const tenantId = req.tenantId;
       const validated = channelConfigSchema.parse(req.body);
 
       const config = await service.upsertChannelConfig(tenantId, validated);
@@ -109,7 +115,7 @@ class NotificationSettingsController {
 
   // ── DELETE /api/settings/notifications/channels/:id ──
   async deleteChannel(req, reply) {
-    const tenantId = req.tenant.id;
+    const tenantId = req.tenantId;
     const { id } = req.params;
     try {
       await service.deleteChannelConfig(tenantId, id);
@@ -123,7 +129,7 @@ class NotificationSettingsController {
 
   // ── GET /api/settings/notifications/escalations ──
   async getEscalations(req, reply) {
-    const tenantId = req.tenant.id;
+    const tenantId = req.tenantId;
     try {
       const { triggerType } = req.query;
 
@@ -141,7 +147,7 @@ class NotificationSettingsController {
   // ── POST /api/settings/notifications/escalations ──
   async createEscalation(req, reply) {
     try {
-      const tenantId = req.tenant.id;
+      const tenantId = req.tenantId;
       const validated = escalationPolicySchema.parse(req.body);
 
       const policy = await service.createEscalationPolicy(tenantId, validated);
@@ -162,7 +168,7 @@ class NotificationSettingsController {
   // ── PUT /api/settings/notifications/escalations/:id ──
   async updateEscalation(req, reply) {
     try {
-      const tenantId = req.tenant.id;
+      const tenantId = req.tenantId;
       const { id } = req.params;
       const validated = escalationPolicySchema.parse(req.body);
 
@@ -181,7 +187,7 @@ class NotificationSettingsController {
 
   // ── DELETE /api/settings/notifications/escalations/:id ──
   async deleteEscalation(req, reply) {
-    const tenantId = req.tenant.id;
+    const tenantId = req.tenantId;
     const { id } = req.params;
     try {
       await service.deleteEscalationPolicy(tenantId, id);
@@ -195,7 +201,7 @@ class NotificationSettingsController {
 
   // ── GET /api/settings/notifications/reminders ──
   async getReminders(req, reply) {
-    const tenantId = req.tenant.id;
+    const tenantId = req.tenantId;
     try {
       const { reminderType } = req.query;
 
@@ -211,7 +217,7 @@ class NotificationSettingsController {
   // ── POST /api/settings/notifications/reminders ──
   async createReminder(req, reply) {
     try {
-      const tenantId = req.tenant.id;
+      const tenantId = req.tenantId;
       const validated = reminderRuleSchema.parse(req.body);
 
       const rule = await service.createReminderRule(tenantId, validated);
@@ -230,7 +236,7 @@ class NotificationSettingsController {
   // ── PUT /api/settings/notifications/reminders/:id ──
   async updateReminder(req, reply) {
     try {
-      const tenantId = req.tenant.id;
+      const tenantId = req.tenantId;
       const { id } = req.params;
       const validated = reminderRuleSchema.parse(req.body);
 
@@ -249,7 +255,7 @@ class NotificationSettingsController {
 
   // ── DELETE /api/settings/notifications/reminders/:id ──
   async deleteReminder(req, reply) {
-    const tenantId = req.tenant.id;
+    const tenantId = req.tenantId;
     const { id } = req.params;
     try {
       await service.deleteReminderRule(tenantId, id);
@@ -264,7 +270,7 @@ class NotificationSettingsController {
   // ── POST /api/settings/notifications/opt-outs ──
   async createOptOut(req, reply) {
     try {
-      const tenantId = req.tenant.id;
+      const tenantId = req.tenantId;
       const validated = optOutSchema.parse(req.body);
       const optedOutBy = req.user?.role === 'owner' ? 'staff' : 'patient';
 
@@ -283,7 +289,7 @@ class NotificationSettingsController {
 
   // ── POST /api/settings/notifications/opt-outs/:id/revoke ──
   async revokeOptOut(req, reply) {
-    const tenantId = req.tenant.id;
+    const tenantId = req.tenantId;
     const { id } = req.params;
     try {
       const optOut = await service.revokeOptOut(tenantId, id);
@@ -297,7 +303,7 @@ class NotificationSettingsController {
 
   // ── GET /api/settings/notifications/opt-outs ──
   async getOptOuts(req, reply) {
-    const tenantId = req.tenant.id;
+    const tenantId = req.tenantId;
     try {
       const { patientId, phoneNumber, channel } = req.query;
 
@@ -312,7 +318,7 @@ class NotificationSettingsController {
 
   // ── GET /api/settings/notifications/retries ──
   async getRetries(req, reply) {
-    const tenantId = req.tenant.id;
+    const tenantId = req.tenantId;
     try {
       const { type = 'pending' } = req.query;
 
@@ -330,7 +336,7 @@ class NotificationSettingsController {
 
   // ── POST /api/settings/notifications/retries/:id/recover ──
   async recoverFromDLQ(req, reply) {
-    const tenantId = req.tenant.id;
+    const tenantId = req.tenantId;
     const { id } = req.params;
     try {
       const retryLog = await service.recoverFromDLQ(tenantId, id);
@@ -345,7 +351,7 @@ class NotificationSettingsController {
   // ── POST /api/settings/notifications/test ──
   async testNotification(req, reply) {
     try {
-      const tenantId = req.tenant.id;
+      const tenantId = req.tenantId;
       const validated = testNotificationSchema.parse(req.body);
 
       const result = await service.testNotification(tenantId, validated);

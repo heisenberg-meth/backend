@@ -208,7 +208,78 @@ export const initListeners = () => {
     }
   });
 
+  localEventBus.on(DOMAIN_EVENTS.SALE_CANCELLED, async (data) => {
+    const { invoiceId, tenantId, branchId, reason } = data;
+    logger.warn({ invoiceId, reason }, '[SALE] Sale cancelled, updating daily summary');
+
+    try {
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      await prisma.dailySalesSummary.updateMany({
+        where: {
+          tenantId,
+          branchId: branchId || null,
+          salesDate: today,
+        },
+        data: {
+          totalInvoices: { decrement: 1 },
+        },
+      });
+    } catch (err) {
+      logger.error({ err, invoiceId }, '[SALE-LISTENER] Failed to update daily summary on cancel');
+    }
+  });
+
+  localEventBus.on(DOMAIN_EVENTS.PURCHASE_ORDER_CREATED, async (data) => {
+    const { orderId, supplierId, totalAmount, tenantId } = data;
+    logger.info({ orderId, supplierId, totalAmount }, '[PROCUREMENT] PO created');
+
+    try {
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      await prisma.dailyProcurementSummary.upsert({
+        where: {
+          tenantId_reportDate: { tenantId, reportDate: today },
+        },
+        update: {
+          totalAmount: { increment: totalAmount || 0 },
+          totalOrders: { increment: 1 },
+        },
+        create: {
+          tenantId,
+          reportDate: today,
+          totalAmount: totalAmount || 0,
+          totalOrders: 1,
+        },
+      });
+    } catch (err) {
+      logger.error({ err, orderId }, '[PROCUREMENT-LISTENER] Failed to update daily summary');
+    }
+  });
+
   // ── PROCUREMENT LISTENERS ───────────────────────────────────
+
+  localEventBus.on(DOMAIN_EVENTS.SALE_RETURNED, async (data) => {
+    const { invoiceId, tenantId, branchId, refundAmount } = data;
+    logger.info({ invoiceId, refundAmount }, '[RETURN] Sale returned, updating daily summary');
+
+    try {
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      await prisma.dailySalesSummary.updateMany({
+        where: {
+          tenantId,
+          branchId: branchId || null,
+          salesDate: today,
+        },
+        data: {
+          totalReturns: { increment: refundAmount || 0 },
+        },
+      });
+    } catch (err) {
+      logger.error({ err, invoiceId }, '[RETURN-LISTENER] Failed to update daily summary');
+    }
+  });
 
   localEventBus.on(DOMAIN_EVENTS.PURCHASE_ORDER_RECEIVED, async (orderId) => {
     logger.info({ orderId }, '[PROCUREMENT] PO received');
@@ -222,11 +293,6 @@ export const initListeners = () => {
     } catch (err) {
       logger.error({ err, orderId }, '[PROCUREMENT-LISTENER] Failed to update PO status');
     }
-  });
-
-  localEventBus.on(DOMAIN_EVENTS.PURCHASE_ORDER_CREATED, async (data) => {
-    const { orderId, supplierId, totalAmount } = data;
-    logger.info({ orderId, supplierId, totalAmount }, '[PROCUREMENT] PO created');
   });
 
   // ── CLINICAL LISTENERS ──────────────────────────────────────

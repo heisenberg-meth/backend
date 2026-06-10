@@ -14,7 +14,12 @@ class SettingsFastifyController {
   }
 
   async updateCategorySettings(request, reply) {
-    const category = request.url.split('?')[0].split('/').pop();
+    const rawCategory = request.url.split('?')[0].split('/').pop();
+    const categoryMap = {
+      'store-profile': 'storeProfile',
+      'invoice-template': 'invoiceTemplate',
+    };
+    const category = categoryMap[rawCategory] || rawCategory;
     const settings = await settingsService.updateCategorySettings(
       request.tenantId,
       category,

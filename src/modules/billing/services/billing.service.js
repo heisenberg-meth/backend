@@ -5,7 +5,7 @@ import auditService from '../../audit/service/audit.prisma.service.js';
 import patientService from '../../patients/services/patient.service.js';
 import notificationService from '../../patients/services/notification.service.js';
 import prisma from '../../../config/prisma.js';
-import salesService from '../../sales/services/sales.service.js';
+import anomalyService from '../../fraud-detection/services/anomaly.service.js';
 
 class BillingService {
   /**
@@ -53,34 +53,12 @@ class BillingService {
       }
 
       const completeInvoice = await invoiceService.getInvoice(finalized.id, tenantId, tx);
-      await salesService.recordSale(
-        tenantId,
-        {
-          invoiceId: completeInvoice.id,
-          branchId: data.branchId,
-          patientId: completeInvoice.patient?.id || null,
-          totalItems: completeInvoice.items.reduce(
-            (sum, item) => sum + (item.qty || item.quantity || 0),
-            0,
-          ),
-          subtotal: completeInvoice.subtotal,
-          discountAmount: completeInvoice.discount || completeInvoice.discountAmount || 0,
-          gstAmount: completeInvoice.gst || completeInvoice.gstAmount || 0,
-          totalAmount: completeInvoice.total || completeInvoice.totalAmount || 0,
-          paymentMethod: data.paymentMode || completeInvoice.paymentMethod || 'CASH',
-          userId,
-          items: completeInvoice.items.map((item) => ({
-            medicineId: item.medicineId,
-            batchId: item.batchId,
-            quantity: item.qty || item.quantity || 0,
-            unitPrice: item.price || item.unitPrice || 0,
-            discountAmount: 0,
-            gstAmount: item.gstAmount || 0,
-            totalAmount: item.total || item.totalAmount || 0,
-          })),
-        },
-        tx,
-      );
+
+      try {
+        await anomalyService.detectSalesAnomaly(tenantId, finalized);
+      } catch (anomalyErr) {
+        console.error('[ANOMALY] Detection failed:', anomalyErr.message);
+      }
 
       return completeInvoice;
     });

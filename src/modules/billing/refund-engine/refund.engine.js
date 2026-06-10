@@ -129,6 +129,12 @@ class RefundEngine {
         refundAmount: actualRefundAmount,
         tenantId,
       });
+      emitLocalEvent(DOMAIN_EVENTS.SALE_RETURNED, {
+        invoiceId,
+        tenantId,
+        branchId: invoice.branchId,
+        refundAmount: actualRefundAmount,
+      });
       await emitEvent(DOMAIN_EVENTS.REFUND_PROCESSED, { invoiceId, tenantId });
 
       return { salesReturn, isFullRefund };

@@ -253,6 +253,14 @@ class InvoiceEngine {
       await this._audit(invoiceId, 'FINALIZED', userId, t);
 
       emitLocalEvent(DOMAIN_EVENTS.INVOICE_FINALIZED, { invoiceId, tenantId });
+      emitLocalEvent(DOMAIN_EVENTS.SALE_COMPLETED, {
+        invoiceId,
+        tenantId,
+        branchId: invoice.branchId,
+        total: invoice.totalAmount,
+        items: invoice.items,
+        patientId: invoice.patientId,
+      });
 
       return updated;
     };
@@ -358,6 +366,14 @@ class InvoiceEngine {
       });
 
       await this._audit(invoiceId, 'CANCELLED', userId, tx, reason);
+
+      emitLocalEvent(DOMAIN_EVENTS.INVOICE_CANCELLED, { invoiceId, tenantId, reason });
+      emitLocalEvent(DOMAIN_EVENTS.SALE_CANCELLED, {
+        invoiceId,
+        tenantId,
+        branchId: invoice.branchId,
+        reason,
+      });
 
       return updated;
     });

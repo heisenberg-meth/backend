@@ -21,10 +21,27 @@ class PurchaseOrderPrismaRepository {
           : {}),
       },
       include: {
-        items: true,
-        supplier: { select: { name: true } },
+        items: {
+          include: {
+            medicine: {
+              select: {
+                id: true,
+                name: true,
+              },
+            },
+          },
+        },
+        supplier: {
+          select: {
+            id: true,
+            name: true,
+          },
+        },
         user: {
-          select: { fullName: true, email: true },
+          select: {
+            fullName: true,
+            email: true,
+          },
         },
       },
       orderBy: { createdAt: 'desc' },
@@ -34,7 +51,18 @@ class PurchaseOrderPrismaRepository {
   async findById(id, tenantId) {
     return prisma.purchaseOrder.findFirst({
       where: { id, tenantId, deletedAt: null },
-      include: { items: true },
+      include: {
+        items: {
+          include: {
+            medicine: {
+              select: {
+                id: true,
+                name: true,
+              },
+            },
+          },
+        },
+      },
     });
   }
 
@@ -50,7 +78,18 @@ class PurchaseOrderPrismaRepository {
           create: items,
         },
       },
-      include: { items: true },
+      include: {
+        items: {
+          include: {
+            medicine: {
+              select: {
+                id: true,
+                name: true,
+              },
+            },
+          },
+        },
+      },
     });
   }
 
@@ -58,6 +97,18 @@ class PurchaseOrderPrismaRepository {
     return prisma.purchaseOrder.update({
       where: { id, tenantId },
       data: { status },
+      include: {
+        items: {
+          include: {
+            medicine: {
+              select: {
+                id: true,
+                name: true,
+              },
+            },
+          },
+        },
+      },
     });
   }
 
@@ -65,6 +116,18 @@ class PurchaseOrderPrismaRepository {
     return prisma.purchaseOrder.update({
       where: { id, tenantId },
       data: { deletedAt: new Date() },
+      include: {
+        items: {
+          include: {
+            medicine: {
+              select: {
+                id: true,
+                name: true,
+              },
+            },
+          },
+        },
+      },
     });
   }
 }

@@ -37,6 +37,7 @@ class BillingFastifyController {
       return reply.code(400).send({
         success: false,
         message: error.message,
+        error: error.message,
         errorType: error.name ?? 'BillingError',
         details: process.env.NODE_ENV !== 'production' ? error.stack : undefined,
       });
@@ -65,6 +66,7 @@ class BillingFastifyController {
       return reply.code(400).send({
         success: false,
         message: error.message,
+        error: error.message,
         errorType: error.name ?? 'BillingError',
         details: process.env.NODE_ENV !== 'production' ? error.stack : undefined,
       });
@@ -91,7 +93,7 @@ class BillingFastifyController {
       );
       return { success: true, data: result };
     } catch (error) {
-      return reply.code(400).send({ success: false, message: error.message });
+      return reply.code(400).send({ success: false, message: error.message, error: error.message });
     }
   }
 
@@ -100,7 +102,7 @@ class BillingFastifyController {
       const pdfUrl = await invoiceActionService.generatePdf(request.params.id, request.tenantId);
       return { success: true, data: { pdfUrl } };
     } catch (error) {
-      return reply.code(400).send({ success: false, message: error.message });
+      return reply.code(400).send({ success: false, message: error.message, error: error.message });
     }
   }
 
@@ -127,6 +129,7 @@ class BillingFastifyController {
       return reply.code(400).send({
         success: false,
         message: error.message,
+        error: error.message,
       });
     }
   }

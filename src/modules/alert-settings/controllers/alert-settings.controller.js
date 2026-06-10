@@ -4,7 +4,7 @@ import { alertSettingsSchema, overrideSchema } from '../validators/alert-setting
 
 class AlertSettingsController {
   async getSettings(req, reply) {
-    const tenantId = req.tenant.id;
+    const tenantId = req.tenantId;
     const { branchId } = req.query;
     try {
       const settings = await service.getSettings(tenantId, branchId || null);
@@ -16,7 +16,7 @@ class AlertSettingsController {
   }
 
   async updateSettings(req, reply) {
-    const tenantId = req.tenant.id;
+    const tenantId = req.tenantId;
     const { branchId } = req.query;
     const updatedBy = req.user?.email || req.user?.id;
     try {
@@ -42,7 +42,7 @@ class AlertSettingsController {
   }
 
   async createOverride(req, reply) {
-    const tenantId = req.tenant.id;
+    const tenantId = req.tenantId;
     const { settingsId } = req.params;
     try {
       const validated = overrideSchema.parse(req.body);
@@ -61,7 +61,7 @@ class AlertSettingsController {
   }
 
   async updateOverride(req, reply) {
-    const tenantId = req.tenant.id;
+    const tenantId = req.tenantId;
     const { id } = req.params;
     try {
       const validated = overrideSchema.partial().parse(req.body);
@@ -78,7 +78,7 @@ class AlertSettingsController {
   }
 
   async getOverrides(req, reply) {
-    const tenantId = req.tenant.id;
+    const tenantId = req.tenantId;
     const { settingsId } = req.params;
     try {
       const overrides = await service.getOverrides(tenantId, settingsId);
@@ -90,7 +90,7 @@ class AlertSettingsController {
   }
 
   async testAlertRules(req, reply) {
-    const tenantId = req.tenant.id;
+    const tenantId = req.tenantId;
     try {
       const result = await service.testAlertRules(tenantId, req.body);
       return reply.send({ success: true, data: result });
@@ -100,7 +100,7 @@ class AlertSettingsController {
   }
 
   async deleteOverride(req, reply) {
-    const tenantId = req.tenant.id;
+    const tenantId = req.tenantId;
     const { id } = req.params;
     try {
       await service.deleteOverride(tenantId, id);

@@ -5,12 +5,13 @@ import analyticsService from '../analytics/analytics.service.js';
 import { Decimal } from '@prisma/client/runtime/library';
 
 class CreditService {
-  async getAccount(patientId, tenantId) {
-    let account = await prisma.patientCreditAccount.findUnique({
+  async getAccount(patientId, tenantId, tx = null) {
+    const client = tx || prisma;
+    let account = await client.patientCreditAccount.findUnique({
       where: { patientId },
     });
     if (!account) {
-      account = await prisma.patientCreditAccount.create({
+      account = await client.patientCreditAccount.create({
         data: {
           tenantId,
           patientId,
@@ -32,10 +33,8 @@ class CreditService {
     dueDate = null,
     tx,
   ) {
-    const client = tx || prisma;
-
-    return await client.$transaction(async (ctx) => {
-      const account = await this.getAccount(patientId, tenantId);
+    const execute = async (client) => {
+      const account = await this.getAccount(patientId, tenantId, client);
 
       if (account.accountStatus === 'BLOCKED') {
         throw new Error('Credit account is blocked');
@@ -60,10 +59,10 @@ class CreditService {
           notes,
           dueDate,
         },
-        ctx,
+        client,
       );
 
-      await ctx.patientCreditAccount.update({
+      await client.patientCreditAccount.update({
         where: { id: account.id },
         data: { outstandingBalance: newBalance },
       });
@@ -71,14 +70,18 @@ class CreditService {
       eventBus.emit('CREDIT_ISSUED', { tenantId, patientId, amount, newBalance });
 
       return { amount, newBalance };
-    });
+    };
+
+    if (tx) {
+      return await execute(tx);
+    } else {
+      return await prisma.$transaction(execute);
+    }
   }
 
   async recordPayment(tenantId, patientId, amount, notes = '', tx) {
-    const client = tx || prisma;
-
-    return await client.$transaction(async (ctx) => {
-      const account = await this.getAccount(patientId, tenantId);
+    const execute = async (client) => {
+      const account = await this.getAccount(patientId, tenantId, client);
 
       const newBalance = new Decimal(account.outstandingBalance).sub(amount);
 
@@ -93,10 +96,10 @@ class CreditService {
           referenceType: 'PAYMENT',
           notes,
         },
-        ctx,
+        client,
       );
 
-      await ctx.patientCreditAccount.update({
+      await client.patientCreditAccount.update({
         where: { id: account.id },
         data: {
           outstandingBalance: newBalance,
@@ -107,7 +110,13 @@ class CreditService {
       eventBus.emit('CREDIT_PAYMENT_RECEIVED', { tenantId, patientId, amount, newBalance });
 
       return { amount, newBalance };
-    });
+    };
+
+    if (tx) {
+      return await execute(tx);
+    } else {
+      return await prisma.$transaction(execute);
+    }
   }
 
   async getLedger(patientId) {

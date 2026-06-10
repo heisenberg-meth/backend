@@ -68,7 +68,7 @@ class NotificationSettingsService {
       tenantId,
       userId: updatedBy,
       entityType: 'NOTIFICATION_SETTINGS',
-      entityId: settings.id,
+      entityId: settings?.id,
       action: 'UPDATE',
       previousData: oldSettings,
       newData: settings,
