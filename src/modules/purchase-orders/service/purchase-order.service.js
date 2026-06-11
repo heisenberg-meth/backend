@@ -222,24 +222,7 @@ class PurchaseOrderService {
           },
         });
 
-        // 4. Record Inventory Transaction (Movement Log)
-        const medicine = await tx.medicine.findUnique({ where: { id: item.medicineId } });
-        const currentStock = medicine ? medicine.totalQuantity : 0;
 
-        await tx.inventoryTransaction.create({
-          data: {
-            tenantId,
-            branchId: order.branchId,
-            medicineId: item.medicineId,
-            batchId: batch.id,
-            transactionType: 'PURCHASE',
-            quantityChange: item.receivedQuantity,
-            quantityAfter: currentStock + item.receivedQuantity,
-            referenceType: 'GRN',
-            referenceId: grn.id,
-            performedBy: userId,
-          },
-        });
 
         // 5. Record Stock Movement in Immutable Ledger
         await tx.stockMovement.create({
