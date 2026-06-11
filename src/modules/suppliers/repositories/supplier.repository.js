@@ -22,7 +22,21 @@ class SupplierRepository {
     const [suppliers, total] = await Promise.all([
       prisma.supplier.findMany({
         where,
-        include: {
+        select: {
+          id: true,
+          supplierCode: true,
+          name: true,
+          supplierType: true,
+          contactPerson: true,
+          phone: true,
+          email: true,
+          gstNumber: true,
+          address: true,
+          status: true,
+          isPreferred: true,
+          rating: true,
+          leadTimeDays: true,
+          paymentTermsDays: true,
           _count: { select: { purchaseOrders: true } },
           metrics: { select: { qualityScore: true, reliabilityScore: true } },
         },

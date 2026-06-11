@@ -8,6 +8,7 @@ export function toSupplierListDto(supplier) {
     phone: supplier.phone,
     email: supplier.email,
     gstNumber: supplier.gstNumber,
+    address: supplier.address,
     status: supplier.status,
     isPreferred: supplier.isPreferred,
     rating: supplier.rating,
