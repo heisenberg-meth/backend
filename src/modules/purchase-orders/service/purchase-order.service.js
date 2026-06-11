@@ -30,12 +30,10 @@ class PurchaseOrderService {
 
     const { items, ...details } = data;
 
-    // Explicitly reject null branchId from client
     if (details.branchId === null) {
       delete details.branchId;
     }
 
-    // Fallback to user's branchId if not specified
     if (!details.branchId) {
       const creator = await prisma.user.findUnique({
         where: { id: userId },
@@ -54,40 +52,6 @@ class PurchaseOrderService {
       if (resolvedBranchId) {
         details.branchId = resolvedBranchId;
       }
-    }
-
-    // Final validation - branchId must be a non-empty string
-    if (!details.branchId || typeof details.branchId !== 'string') {
-      throw new Error(
-        'Cannot create purchase order: no branch found for this tenant. Please create a branch first.',
-      );
-    }
-
-    const { items, ...details } = data;
-
-    // Fallback to user's branchId if not specified
-    if (!details.branchId) {
-      const creator = await prisma.user.findUnique({
-        where: { id: userId },
-        select: { branchId: true },
-      });
-      let resolvedBranchId = creator?.branchId;
-
-      if (!resolvedBranchId) {
-        const firstBranch = await prisma.branch.findFirst({
-          where: { tenantId },
-          select: { id: true },
-        });
-        resolvedBranchId = firstBranch?.id;
-      }
-
-      if (resolvedBranchId) {
-        details.branchId = resolvedBranchId;
-      }
-    }
-
-    if (!details.branchId) {
-      throw new Error('Branch is required for Purchase Order creation');
     }
 
     if (details.invoiceDate) {
@@ -221,13 +185,13 @@ class PurchaseOrderService {
     return updated;
   }
 
-  /**
-   * Record a Goods Receipt Note (GRN) and update inventory.
-   * Never mutates stock silently; always creates batches and logs transactions.
-   */
   async receiveOrder(tenantId, id, userId, payload) {
     try {
       const { receivedItems, notes } = payload;
+
+      if (!receivedItems?.length) {
+        throw new Error('No items provided for receipt');
+      }
       logger.info('Receive Goods Started');
       logger.info({ purchaseOrderId: id });
 
@@ -237,7 +201,6 @@ class PurchaseOrderService {
       // Resolve branchId if missing (for legacy POs)
       let resolvedBranchId = order.branchId;
       if (!resolvedBranchId) {
-        // Try to get branch from the user receiving the goods
         const user = await prisma.user.findUnique({
           where: { id: userId },
           select: { branchId: true },
@@ -259,15 +222,19 @@ class PurchaseOrderService {
             where: { id },
             data: { branchId: resolvedBranchId },
           });
-          order.branchId = resolvedBranchId;
-          logger.info({ purchaseOrderId: id, branchId: resolvedBranchId }, 'Auto-resolved branchId for PO');
+          logger.info(
+            { purchaseOrderId: id, branchId: resolvedBranchId },
+            'Auto-resolved branchId for PO',
+          );
         }
       }
 
-      if (!order.branchId) {
+      const branchId = resolvedBranchId || order.branchId;
+
+      if (!branchId) {
         throw new Error(
           `Cannot receive stock for PO ${order.orderNumber}: no branch found. ` +
-          `Please assign a branch to this purchase order or create a branch for this tenant.`,
+            `Please assign a branch to this purchase order or create a branch for this tenant.`,
         );
       }
 
@@ -319,11 +286,27 @@ class PurchaseOrderService {
           });
 
           // 3. Create Inventory Batch (Primary mutation)
+          // Check if batch already exists for this medicine at this branch
+          const existingBatch = await tx.inventoryBatch.findFirst({
+            where: {
+              tenantId,
+              medicineId: item.medicineId,
+              batchNumber: item.batchNumber,
+              branchId,
+            },
+          });
+
+          if (existingBatch) {
+            throw new Error(
+              `Batch ${item.batchNumber} already exists for this medicine`
+            );
+          }
+
           const batch = await tx.inventoryBatch.create({
             data: {
               tenantId,
               medicineId: item.medicineId,
-              branchId: order.branchId,
+              branchId,
               batchNumber: item.batchNumber,
               quantity: item.receivedQuantity,
               availableQuantity: item.receivedQuantity,
@@ -343,7 +326,7 @@ class PurchaseOrderService {
           await tx.stockMovement.create({
             data: {
               tenantId,
-              branchId: order.branchId,
+              branchId,
               medicineId: item.medicineId,
               batchId: batch.id,
               movementType: 'PURCHASE',
@@ -361,7 +344,7 @@ class PurchaseOrderService {
           const existingInventory = await tx.inventory.findFirst({
             where: {
               tenantId,
-              branchId: order.branchId,
+              branchId,
               medicineId: item.medicineId,
             },
           });
@@ -377,7 +360,7 @@ class PurchaseOrderService {
             await tx.inventory.create({
               data: {
                 tenantId,
-                branchId: order.branchId,
+                branchId,
                 medicineId: item.medicineId,
                 currentStock: item.receivedQuantity,
               },
