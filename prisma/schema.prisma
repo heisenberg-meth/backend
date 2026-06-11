@@ -269,6 +269,8 @@ model User {
   assignedRole                 AccessRole?                @relation(fields: [roleId], references: [id])
   tenant                       Tenant                     @relation(fields: [tenantId], references: [id])
   userSessions                 UserSession[]
+  devices                      Device[]
+  browserLock                  BrowserLock?
 
   @@index([tenantId])
 }
@@ -3137,6 +3139,29 @@ model MobileDevice {
   lastActiveAt DateTime @default(now())
   createdAt    DateTime @default(now())
   user         User     @relation(fields: [userId], references: [id])
+}
+
+model Device {
+  id             String    @id @default(uuid())
+  userId         String
+  fingerprintId  String
+  deviceToken    String    @unique
+  browser        String?
+  os             String?
+  lastSeen       DateTime  @default(now())
+  createdAt      DateTime  @default(now())
+  user           User      @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+  @@index([fingerprintId])
+}
+
+model BrowserLock {
+  id             String    @id @default(uuid())
+  fingerprintId  String    @unique
+  userId         String    @unique
+  user           User      @relation(fields: [userId], references: [id])
+  createdAt      DateTime  @default(now())
 }
 
 model RevenueSnapshot {

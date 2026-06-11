@@ -42,6 +42,9 @@ export const loginSchema = z.object({
     .toLowerCase()
     .trim(),
   password: z.string({ required_error: 'Password is required' }).trim(),
+  fingerprint: z.string().optional().nullable(),
+  deviceToken: z.string().optional().nullable(),
+  otp: z.string().optional().nullable(),
 });
 
 export const forgotPasswordSchema = z.object({

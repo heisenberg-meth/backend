@@ -4,6 +4,7 @@ import { PROCUREMENT_STATUS, DOMAIN_EVENTS } from '../../../shared/constants/eve
 import { procurementStateMachine } from '../../../shared/constants/state-machines.js';
 import { emitLocalEvent } from '../../../shared/events/local-event-bus.js';
 import { emitEvent } from '../../../shared/events/erp-event-bus.js';
+import logger from '../../../shared/utils/logger.js';
 
 class PurchaseOrderService {
   async getOrders(tenantId, filters = {}) {
@@ -25,6 +26,41 @@ class PurchaseOrderService {
         String(now.getDate()).padStart(2, '0');
       const random = Math.floor(1000 + Math.random() * 9000);
       data.orderNumber = `PO-${dateStr}-${random}`;
+    }
+
+    const { items, ...details } = data;
+
+    // Explicitly reject null branchId from client
+    if (details.branchId === null) {
+      delete details.branchId;
+    }
+
+    // Fallback to user's branchId if not specified
+    if (!details.branchId) {
+      const creator = await prisma.user.findUnique({
+        where: { id: userId },
+        select: { branchId: true },
+      });
+      let resolvedBranchId = creator?.branchId;
+
+      if (!resolvedBranchId) {
+        const firstBranch = await prisma.branch.findFirst({
+          where: { tenantId },
+          select: { id: true },
+        });
+        resolvedBranchId = firstBranch?.id;
+      }
+
+      if (resolvedBranchId) {
+        details.branchId = resolvedBranchId;
+      }
+    }
+
+    // Final validation - branchId must be a non-empty string
+    if (!details.branchId || typeof details.branchId !== 'string') {
+      throw new Error(
+        'Cannot create purchase order: no branch found for this tenant. Please create a branch first.',
+      );
     }
 
     const { items, ...details } = data;
@@ -51,9 +87,7 @@ class PurchaseOrderService {
     }
 
     if (!details.branchId) {
-      throw new Error(
-        'Cannot create purchase order: no branch found for this tenant. Please create a branch first.',
-      );
+      throw new Error('Branch is required for Purchase Order creation');
     }
 
     if (details.invoiceDate) {
@@ -125,6 +159,13 @@ class PurchaseOrderService {
   async approveOrder(tenantId, id, userId, notes) {
     const order = await this.getOrderById(tenantId, id);
 
+    // Validate branchId before approving
+    if (!order.branchId || typeof order.branchId !== 'string') {
+      throw new Error(
+        'Cannot approve purchase order: branchId is missing. Please assign a branch to this order first.',
+      );
+    }
+
     const nextStatus = procurementStateMachine.transition(order.status, 'APPROVE');
 
     return prisma.$transaction(async (tx) => {
@@ -187,50 +228,54 @@ class PurchaseOrderService {
   async receiveOrder(tenantId, id, userId, payload) {
     try {
       const { receivedItems, notes } = payload;
-      console.log('RECEIVE ORDER START');
-      console.log('PO ID:', id);
-      console.log('PAYLOAD:', receivedItems);
+      logger.info('Receive Goods Started');
+      logger.info({ purchaseOrderId: id });
 
       const order = await purchaseOrderRepository.findById(id, tenantId);
       if (!order) throw new Error('Order not found');
-      console.log('PO FOUND:', order?.id);
 
-      return await prisma.$transaction(async (tx) => {
-        // Resolve branchId if it is null inside transaction
-        if (!order.branchId) {
-          const user = await tx.user.findUnique({
-            where: { id: userId },
-            select: { branchId: true },
+      // Resolve branchId if missing (for legacy POs)
+      let resolvedBranchId = order.branchId;
+      if (!resolvedBranchId) {
+        // Try to get branch from the user receiving the goods
+        const user = await prisma.user.findUnique({
+          where: { id: userId },
+          select: { branchId: true },
+        });
+        resolvedBranchId = user?.branchId;
+
+        // Fallback to first branch in tenant
+        if (!resolvedBranchId) {
+          const firstBranch = await prisma.branch.findFirst({
+            where: { tenantId },
+            select: { id: true },
           });
-          let resolvedBranchId = user?.branchId;
-
-          if (!resolvedBranchId) {
-            const firstBranch = await tx.branch.findFirst({
-              where: { tenantId },
-              select: { id: true },
-            });
-            resolvedBranchId = firstBranch?.id;
-          }
-
-          if (resolvedBranchId) {
-            await tx.purchaseOrder.update({
-              where: { id },
-              data: { branchId: resolvedBranchId },
-            });
-            order.branchId = resolvedBranchId;
-          }
+          resolvedBranchId = firstBranch?.id;
         }
 
-        if (!order.branchId) {
-          throw new Error(
-            'Cannot receive stock: no branch found for this tenant. Please create a branch first.',
-          );
+        // If we found a branch, update the PO
+        if (resolvedBranchId) {
+          await prisma.purchaseOrder.update({
+            where: { id },
+            data: { branchId: resolvedBranchId },
+          });
+          order.branchId = resolvedBranchId;
+          logger.info({ purchaseOrderId: id, branchId: resolvedBranchId }, 'Auto-resolved branchId for PO');
         }
+      }
 
+      if (!order.branchId) {
+        throw new Error(
+          `Cannot receive stock for PO ${order.orderNumber}: no branch found. ` +
+          `Please assign a branch to this purchase order or create a branch for this tenant.`,
+        );
+      }
+
+      const result = await prisma.$transaction(async (tx) => {
         const now = new Date();
         const grnNumber = `GRN-${now.getTime()}`;
 
-        console.log('CREATING GRN');
+        logger.info('Creating GRN');
         // 1. Create Goods Receipt Note
         const grn = await tx.goodsReceiptNote.create({
           data: {
@@ -241,7 +286,6 @@ class PurchaseOrderService {
             notes,
           },
         });
-        console.log('GRN CREATED');
 
         for (const item of receivedItems) {
           const poItem = order.items.find((i) => i.medicineId === item.medicineId);
@@ -312,8 +356,8 @@ class PurchaseOrderService {
             },
           });
 
-          console.log('UPDATING INVENTORY');
-          // 6. Upsert Inventory Aggregate Snapshot (handling potential null branchId)
+          logger.info('Updating Inventory');
+          // 6. Upsert Inventory Aggregate Snapshot
           const existingInventory = await tx.inventory.findFirst({
             where: {
               tenantId,
@@ -363,11 +407,11 @@ class PurchaseOrderService {
 
         const nextStatus = procurementStateMachine.transition(order.status, action);
 
+        logger.info('Updating Purchase Order Status');
         await tx.purchaseOrder.update({
           where: { id },
           data: { status: nextStatus },
         });
-        console.log('PO STATUS UPDATED');
 
         // 8. Generate Purchase Invoice (Goods Received Invoice)
         let invoiceSubtotal = 0;
@@ -396,7 +440,7 @@ class PurchaseOrderService {
 
         const invoiceNumber = `PINV-GRN-${grn.grnNumber.replace('GRN-', '')}`;
 
-        console.log('CREATING PURCHASE INVOICE');
+        logger.info('Creating Purchase Invoice');
         const purchaseInvoice = await tx.purchaseInvoice.create({
           data: {
             tenantId,
@@ -413,7 +457,6 @@ class PurchaseOrderService {
             paymentStatus: 'PENDING',
           },
         });
-        console.log('PURCHASE INVOICE CREATED');
 
         // 9. Create/Update Supplier Ledger Entry (Financial Responsibility)
         const lastBalance = await tx.supplierLedger.findFirst({
@@ -453,10 +496,12 @@ class PurchaseOrderService {
 
         return { grn, orderStatus: nextStatus, purchaseInvoice };
       });
-    } catch (err) {
-      console.error('RECEIVE ORDER FAILED');
-      console.error(err);
-      throw err;
+
+      logger.info('Receive Goods Completed');
+      return result;
+    } catch (error) {
+      logger.error(error);
+      throw error;
     }
   }
 

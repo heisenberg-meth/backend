@@ -86,6 +86,36 @@ async function validateDatabaseHealth() {
 
     logger.info('[BOOT] Relational schema consistency check passed');
 
+    // Repair legacy PurchaseOrders with null branchId (Fix 3)
+    try {
+      const nullPOs = await prisma.purchaseOrder.findMany({
+        where: { branchId: null },
+        select: { id: true },
+      });
+      if (nullPOs.length > 0) {
+        const branches = await prisma.branch.findMany({ select: { id: true } });
+        if (branches.length > 0) {
+          const targetBranchId = '24ac4f09-4833-46cf-be3a-b71b77ea6461';
+          const hasTargetBranch = branches.some((b) => b.id === targetBranchId);
+          const finalBranchId = hasTargetBranch ? targetBranchId : branches[0].id;
+
+          const updated = await prisma.purchaseOrder.updateMany({
+            where: { branchId: null },
+            data: { branchId: finalBranchId },
+          });
+          logger.info(
+            `[BOOT] Repaired ${updated.count} legacy PurchaseOrders by setting branchId to ${finalBranchId}`,
+          );
+        } else {
+          logger.warn(
+            '[BOOT] Legacy PurchaseOrders found with null branchId, but no branches exist to assign',
+          );
+        }
+      }
+    } catch (repairErr) {
+      logger.error({ err: repairErr.message }, '[BOOT] Failed to repair legacy PurchaseOrders');
+    }
+
     await redisClient.ping();
     logger.info('[BOOT] Redis connectivity verified');
 

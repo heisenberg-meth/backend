@@ -8,11 +8,24 @@ import secretManager from '../../../config/secrets.js';
 import eventBus from '../../../shared/services/eventbus.service.js';
 import logger from '../../../shared/utils/logger.js';
 import { TRIAL_DAYS } from '../../subscriptions/subscription.constants.js';
+import { queueEmail } from '../../../shared/services/email.service.js';
 
 class AuthPrismaService {
   async register(userData) {
     const email = userData.email.toLowerCase().trim();
-    const { password, fullName, shopName, branchName } = userData;
+    const { password, fullName, shopName, branchName, fingerprint } = userData;
+
+    if (fingerprint) {
+      const fingerprintId = sessionService.hashFingerprint(fingerprint);
+      if (fingerprintId) {
+        const existingLock = await prisma.browserLock.findUnique({
+          where: { fingerprintId },
+        });
+        if (existingLock) {
+          throw new Error('This browser is already linked to another account');
+        }
+      }
+    }
 
     const existingUser = await authRepository.findUserByEmail(email);
     if (existingUser) {
@@ -25,7 +38,7 @@ class AuthPrismaService {
     const trialEnd = new Date(trialStart);
     trialEnd.setDate(trialEnd.getDate() + TRIAL_DAYS);
 
-    const { user } = await prisma.$transaction(async (tx) => {
+    const { user, registeredDeviceToken } = await prisma.$transaction(async (tx) => {
       const tenant = await tx.tenant.create({
         data: {
           email,
@@ -54,6 +67,27 @@ class AuthPrismaService {
         },
       });
 
+      let registeredDeviceToken = null;
+      if (fingerprint) {
+        const fingerprintId = sessionService.hashFingerprint(fingerprint);
+        if (fingerprintId) {
+          registeredDeviceToken = crypto.randomUUID();
+          await tx.device.create({
+            data: {
+              userId: user.id,
+              fingerprintId,
+              deviceToken: registeredDeviceToken,
+            },
+          });
+          await tx.browserLock.create({
+            data: {
+              fingerprintId,
+              userId: user.id,
+            },
+          });
+        }
+      }
+
       await tx.subscriptionPlan.upsert({
         where: { id: 'free-trial' },
         update: {},
@@ -77,7 +111,7 @@ class AuthPrismaService {
         },
       });
 
-      return { user, branch };
+      return { user, branch, registeredDeviceToken };
     });
 
     try {
@@ -100,10 +134,20 @@ class AuthPrismaService {
       message: 'User registered successfully',
       userId: user.id,
       branchId: user.branchId,
+      deviceToken: registeredDeviceToken,
     };
   }
 
-  async login({ email, password, fingerprint, deviceName, userAgent, ipAddress }) {
+  async login({
+    email,
+    password,
+    fingerprint,
+    deviceName,
+    userAgent,
+    ipAddress,
+    deviceToken,
+    otp,
+  }) {
     const normalizedEmail = email.toLowerCase().trim();
     const user = await authRepository.findUserByEmail(normalizedEmail);
 
@@ -130,6 +174,120 @@ class AuthPrismaService {
     if (!isMatch) {
       logger.warn({ email: normalizedEmail }, 'Login failed: Password mismatch');
       throw new Error('Invalid credentials');
+    }
+
+    // --- DEVICE BINDING & BROWSER LOCKS VALIDATION ---
+    const fingerprintId = fingerprint ? sessionService.hashFingerprint(fingerprint) : null;
+
+    if (fingerprintId) {
+      // 1. Browser Lock check: One Browser = One Account
+      const existingLock = await prisma.browserLock.findUnique({
+        where: { fingerprintId },
+      });
+      if (existingLock && existingLock.userId !== user.id) {
+        throw new Error('This browser is already linked to another account');
+      }
+
+      // 2. Account Device Binding check: One Account = One Browser / Device
+      const userDevices = await prisma.device.findMany({
+        where: { userId: user.id },
+      });
+
+      if (userDevices.length > 0) {
+        // Find if this is a recognized device
+        const matchingDevice = userDevices.find(
+          (d) =>
+            (deviceToken && d.deviceToken === deviceToken) || d.fingerprintId === fingerprintId,
+        );
+
+        if (!matchingDevice) {
+          // If a new device is attempting to log in, require OTP verification
+          if (!otp) {
+            const deviceOtp = Math.floor(100000 + Math.random() * 900000).toString();
+            const hashedOtp = await bcrypt.hash(deviceOtp, 10);
+
+            await prisma.user.update({
+              where: { id: user.id },
+              data: {
+                resetOtp: hashedOtp,
+                resetOtpExpiry: new Date(Date.now() + 10 * 60 * 1000), // 10 minutes
+                resetOtpVerified: false,
+              },
+            });
+
+            await queueEmail(
+              user.email,
+              'New Device Login Verification',
+              `We detected a login attempt from a new device. Please use the following code to approve this device: ${deviceOtp}`,
+            );
+
+            return {
+              deviceVerificationRequired: true,
+              message: 'Verification code sent to your email to approve this new device.',
+            };
+          } else {
+            // Verify OTP
+            if (!user.resetOtp || !user.resetOtpExpiry || new Date() > user.resetOtpExpiry) {
+              throw new Error('Verification code has expired or is invalid');
+            }
+
+            const isOtpMatch = await bcrypt.compare(otp, user.resetOtp);
+            if (!isOtpMatch) {
+              throw new Error('Invalid verification code');
+            }
+
+            // Clear OTP fields
+            await prisma.user.update({
+              where: { id: user.id },
+              data: {
+                resetOtp: null,
+                resetOtpExpiry: null,
+                resetOtpVerified: false,
+              },
+            });
+
+            // Clean/release old devices and old browser locks for this user to enforce "One active device/browser"
+            await prisma.device.deleteMany({
+              where: { userId: user.id },
+            });
+            await prisma.browserLock.deleteMany({
+              where: { userId: user.id },
+            });
+          }
+        }
+      }
+    }
+
+    // If device binding verification passed, or if this is user's first login:
+    // Generate/register the device token if not already stored
+    let finalDeviceToken = deviceToken;
+    if (!finalDeviceToken) {
+      finalDeviceToken = crypto.randomUUID();
+    }
+
+    if (fingerprintId) {
+      await prisma.device.upsert({
+        where: { deviceToken: finalDeviceToken },
+        update: {
+          lastSeen: new Date(),
+          browser: userAgent,
+        },
+        create: {
+          userId: user.id,
+          fingerprintId,
+          deviceToken: finalDeviceToken,
+          browser: userAgent,
+        },
+      });
+
+      await prisma.browserLock.upsert({
+        where: { fingerprintId },
+        update: {},
+        create: {
+          fingerprintId,
+          userId: user.id,
+        },
+      });
     }
 
     const subscription = user.tenant?.subscription;
@@ -166,6 +324,7 @@ class AuthPrismaService {
     return {
       token: accessToken,
       refreshToken,
+      deviceToken: finalDeviceToken,
       sessionId: session.id,
       user: {
         id: user.id,

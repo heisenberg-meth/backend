@@ -82,11 +82,17 @@ class AuthFastifyController {
       const parsed = loginSchema.parse(request.body);
       const result = await authService.login({
         ...parsed,
-        fingerprint: request.body.fingerprint,
+        fingerprint: parsed.fingerprint || request.body.fingerprint,
+        deviceToken: parsed.deviceToken || request.body.deviceToken,
+        otp: parsed.otp || request.body.otp,
         deviceName: request.body.deviceName,
         userAgent: request.headers['user-agent'],
         ipAddress: request.ip,
       });
+
+      if (result.deviceVerificationRequired) {
+        return reply.send(success(result));
+      }
 
       reply.setCookie('refreshToken', result.refreshToken, COOKIE_OPTIONS);
       reply.setCookie('accessToken', result.token, ACCESS_COOKIE_OPTIONS);
@@ -102,6 +108,15 @@ class AuthFastifyController {
       }
       if (error?.message === 'Invalid credentials') {
         return reply.code(401).send(errorResponse(error.message, 'INVALID_CREDENTIALS'));
+      }
+      if (error?.message === 'This browser is already linked to another account') {
+        return reply.code(403).send(errorResponse(error.message, 'BROWSER_LOCKED'));
+      }
+      if (
+        error?.message === 'Verification code has expired or is invalid' ||
+        error?.message === 'Invalid verification code'
+      ) {
+        return reply.code(400).send(errorResponse(error.message, 'INVALID_VERIFICATION_CODE'));
       }
       if (error?.message?.includes('active on another device')) {
         return reply.code(403).send(errorResponse(error.message, 'SESSION_LIMIT'));

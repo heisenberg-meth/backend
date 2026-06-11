@@ -82,13 +82,16 @@ export async function queueDashboardRefresh(tenantId, branchId = null, snapshotT
 
   const jobName = snapshotType ? `REFRESH_${snapshotType.toUpperCase()}` : 'REFRESH_ALL_SNAPSHOTS';
 
+  // Convert null branchId to empty string to avoid Redis/BullMQ issues
+  const jobData = {
+    tenantId,
+    branchId: branchId || '',
+    snapshotType,
+  };
+
   await dashboardQueue.add(
     jobName,
-    {
-      tenantId,
-      branchId,
-      snapshotType,
-    },
+    jobData,
     {
       removeOnComplete: true,
       removeOnFail: 100,
@@ -102,12 +105,15 @@ export async function queueCacheInvalidation(tenantId, branchId = null) {
     return;
   }
 
+  // Convert null branchId to empty string to avoid Redis/BullMQ issues
+  const jobData = {
+    tenantId,
+    branchId: branchId || '',
+  };
+
   await dashboardQueue.add(
     'INVALIDATE_CACHE',
-    {
-      tenantId,
-      branchId,
-    },
+    jobData,
     {
       removeOnComplete: true,
       removeOnFail: 100,
