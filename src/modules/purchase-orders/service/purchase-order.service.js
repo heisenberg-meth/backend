@@ -51,7 +51,9 @@ class PurchaseOrderService {
     }
 
     if (!details.branchId) {
-      throw new Error('Cannot create purchase order: no branch found for this tenant. Please create a branch first.');
+      throw new Error(
+        'Cannot create purchase order: no branch found for this tenant. Please create a branch first.',
+      );
     }
 
     if (details.invoiceDate) {
@@ -183,263 +185,279 @@ class PurchaseOrderService {
    * Never mutates stock silently; always creates batches and logs transactions.
    */
   async receiveOrder(tenantId, id, userId, payload) {
-    const { receivedItems, notes } = payload;
+    try {
+      const { receivedItems, notes } = payload;
+      console.log('RECEIVE ORDER START');
+      console.log('PO ID:', id);
+      console.log('PAYLOAD:', receivedItems);
 
-    const order = await purchaseOrderRepository.findById(id, tenantId);
-    if (!order) throw new Error('Order not found');
+      const order = await purchaseOrderRepository.findById(id, tenantId);
+      if (!order) throw new Error('Order not found');
+      console.log('PO FOUND:', order?.id);
 
-    return prisma.$transaction(async (tx) => {
-      // Resolve branchId if it is null inside transaction
-      if (!order.branchId) {
-        const user = await tx.user.findUnique({
-          where: { id: userId },
-          select: { branchId: true },
-        });
-        let resolvedBranchId = user?.branchId;
-
-        if (!resolvedBranchId) {
-          const firstBranch = await tx.branch.findFirst({
-            where: { tenantId },
-            select: { id: true },
+      return await prisma.$transaction(async (tx) => {
+        // Resolve branchId if it is null inside transaction
+        if (!order.branchId) {
+          const user = await tx.user.findUnique({
+            where: { id: userId },
+            select: { branchId: true },
           });
-          resolvedBranchId = firstBranch?.id;
+          let resolvedBranchId = user?.branchId;
+
+          if (!resolvedBranchId) {
+            const firstBranch = await tx.branch.findFirst({
+              where: { tenantId },
+              select: { id: true },
+            });
+            resolvedBranchId = firstBranch?.id;
+          }
+
+          if (resolvedBranchId) {
+            await tx.purchaseOrder.update({
+              where: { id },
+              data: { branchId: resolvedBranchId },
+            });
+            order.branchId = resolvedBranchId;
+          }
         }
 
-        if (resolvedBranchId) {
-          await tx.purchaseOrder.update({
-            where: { id },
-            data: { branchId: resolvedBranchId },
-          });
-          order.branchId = resolvedBranchId;
-        }
-      }
-
-      if (!order.branchId) {
-        throw new Error(
-          'Cannot receive stock: no branch found for this tenant. Please create a branch first.'
-        );
-      }
-
-      const now = new Date();
-      const grnNumber = `GRN-${now.getTime()}`;
-
-      // 1. Create Goods Receipt Note
-      const grn = await tx.goodsReceiptNote.create({
-        data: {
-          tenantId,
-          purchaseOrderId: id,
-          grnNumber,
-          receivedBy: userId,
-          notes,
-        },
-      });
-
-      for (const item of receivedItems) {
-        const poItem = order.items.find((i) => i.medicineId === item.medicineId);
-        if (!poItem) throw new Error(`Medicine ${item.medicineId} not found in PO`);
-
-        const remainingQty = poItem.quantity - poItem.receivedQuantity;
-        if (item.receivedQuantity > remainingQty) {
+        if (!order.branchId) {
           throw new Error(
-            `Received quantity (${item.receivedQuantity}) exceeds remaining ordered quantity (${remainingQty}) for ${poItem.medicineName}`,
+            'Cannot receive stock: no branch found for this tenant. Please create a branch first.',
           );
         }
 
-        // 2. Create GRN Item
-        await tx.goodsReceiptNoteItem.create({
-          data: {
-            grnId: grn.id,
-            purchaseOrderItemId: poItem.id,
-            medicineId: item.medicineId,
-            receivedQuantity: item.receivedQuantity,
-            batchNumber: item.batchNumber,
-            expiryDate: new Date(item.expiryDate),
-            purchasePrice: poItem.unitPrice,
-            sellingPrice: item.sellingPrice ? Number(item.sellingPrice) : Number(poItem.unitPrice) * 1.2,
-          },
-        });
+        const now = new Date();
+        const grnNumber = `GRN-${now.getTime()}`;
 
-        // 3. Create Inventory Batch (Primary mutation)
-        const batch = await tx.inventoryBatch.create({
+        console.log('CREATING GRN');
+        // 1. Create Goods Receipt Note
+        const grn = await tx.goodsReceiptNote.create({
           data: {
             tenantId,
-            medicineId: item.medicineId,
-            branchId: order.branchId,
-            batchNumber: item.batchNumber,
-            quantity: item.receivedQuantity,
-            availableQuantity: item.receivedQuantity,
-            receivedQuantity: item.receivedQuantity,
-            expiryDate: new Date(item.expiryDate),
-            purchasePrice: poItem.unitPrice,
-            sellingPrice: item.sellingPrice ? Number(item.sellingPrice) : Number(poItem.unitPrice) * 1.2,
-            supplierId: order.supplierId,
-            status: 'ACTIVE',
-            purchaseOrderItemId: poItem.id,
+            purchaseOrderId: id,
+            grnNumber,
+            receivedBy: userId,
+            notes,
           },
         });
+        console.log('GRN CREATED');
 
+        for (const item of receivedItems) {
+          const poItem = order.items.find((i) => i.medicineId === item.medicineId);
+          if (!poItem) throw new Error(`Medicine ${item.medicineId} not found in PO`);
 
+          if (item.receivedQuantity < 0) {
+            throw new Error(`Received quantity cannot be negative for ${poItem.medicineName}`);
+          }
 
-        // 5. Record Stock Movement in Immutable Ledger
-        await tx.stockMovement.create({
-          data: {
-            tenantId,
-            branchId: order.branchId,
-            medicineId: item.medicineId,
-            batchId: batch.id,
-            movementType: 'PURCHASE',
-            quantity: item.receivedQuantity,
-            quantityAfter: batch.quantity,
-            referenceType: 'GRN',
-            referenceId: grn.id,
-            performedBy: userId,
-            notes: `GRN ${grnNumber} for PO ${order.orderNumber}: ${item.batchNumber}`,
-          },
-        });
+          const remainingQty = poItem.quantity - poItem.receivedQuantity;
+          if (item.receivedQuantity > remainingQty) {
+            throw new Error(
+              `Received quantity (${item.receivedQuantity}) exceeds remaining ordered quantity (${remainingQty}) for ${poItem.medicineName}`,
+            );
+          }
 
-        // 6. Upsert Inventory Aggregate Snapshot (handling potential null branchId)
-        const existingInventory = await tx.inventory.findFirst({
-          where: {
-            tenantId,
-            branchId: order.branchId,
-            medicineId: item.medicineId,
-          },
-        });
-
-        if (existingInventory) {
-          await tx.inventory.update({
-            where: { id: existingInventory.id },
+          // 2. Create GRN Item
+          await tx.goodsReceiptNoteItem.create({
             data: {
-              currentStock: { increment: item.receivedQuantity },
+              grnId: grn.id,
+              purchaseOrderItemId: poItem.id,
+              medicineId: item.medicineId,
+              receivedQuantity: item.receivedQuantity,
+              batchNumber: item.batchNumber,
+              expiryDate: new Date(item.expiryDate),
+              purchasePrice: poItem.unitPrice,
+              sellingPrice: item.sellingPrice
+                ? Number(item.sellingPrice)
+                : Number(poItem.unitPrice) * 1.2,
             },
           });
-        } else {
-          await tx.inventory.create({
+
+          // 3. Create Inventory Batch (Primary mutation)
+          const batch = await tx.inventoryBatch.create({
+            data: {
+              tenantId,
+              medicineId: item.medicineId,
+              branchId: order.branchId,
+              batchNumber: item.batchNumber,
+              quantity: item.receivedQuantity,
+              availableQuantity: item.receivedQuantity,
+              receivedQuantity: item.receivedQuantity,
+              expiryDate: new Date(item.expiryDate),
+              purchasePrice: poItem.unitPrice,
+              sellingPrice: item.sellingPrice
+                ? Number(item.sellingPrice)
+                : Number(poItem.unitPrice) * 1.2,
+              supplierId: order.supplierId,
+              status: 'ACTIVE',
+              purchaseOrderItemId: poItem.id,
+            },
+          });
+
+          // 5. Record Stock Movement in Immutable Ledger
+          await tx.stockMovement.create({
             data: {
               tenantId,
               branchId: order.branchId,
               medicineId: item.medicineId,
-              currentStock: item.receivedQuantity,
+              batchId: batch.id,
+              movementType: 'PURCHASE',
+              quantity: item.receivedQuantity,
+              quantityAfter: batch.quantity,
+              referenceType: 'GRN',
+              referenceId: grn.id,
+              performedBy: userId,
+              notes: `GRN ${grnNumber} for PO ${order.orderNumber}: ${item.batchNumber}`,
             },
+          });
+
+          console.log('UPDATING INVENTORY');
+          // 6. Upsert Inventory Aggregate Snapshot (handling potential null branchId)
+          const existingInventory = await tx.inventory.findFirst({
+            where: {
+              tenantId,
+              branchId: order.branchId,
+              medicineId: item.medicineId,
+            },
+          });
+
+          if (existingInventory) {
+            await tx.inventory.update({
+              where: { id: existingInventory.id },
+              data: {
+                currentStock: { increment: item.receivedQuantity },
+              },
+            });
+          } else {
+            await tx.inventory.create({
+              data: {
+                tenantId,
+                branchId: order.branchId,
+                medicineId: item.medicineId,
+                currentStock: item.receivedQuantity,
+              },
+            });
+          }
+
+          // 8. Update PO Item received quantity tracking
+          await tx.purchaseOrderItem.update({
+            where: { id: poItem.id },
+            data: { receivedQuantity: { increment: item.receivedQuantity } },
           });
         }
 
-        // 7. Update Medicine Aggregate Quantity
-        await tx.medicine.update({
-          where: { id: item.medicineId },
-          data: { totalQuantity: { increment: item.receivedQuantity } },
+        // 7. Determine next PO status using state machine
+        const updatedOrder = await tx.purchaseOrder.findUnique({
+          where: { id },
+          include: { items: true },
         });
 
-        // 8. Update PO Item received quantity tracking
-        await tx.purchaseOrderItem.update({
-          where: { id: poItem.id },
-          data: { receivedQuantity: { increment: item.receivedQuantity } },
+        const allReceived = updatedOrder.items.every((i) => i.receivedQuantity >= i.quantity);
+
+        // Determine transition action
+        let action = allReceived ? 'RECEIVE_FULL' : 'RECEIVE_PARTIAL';
+        if (order.status === PROCUREMENT_STATUS.PARTIALLY_RECEIVED) {
+          action = allReceived ? 'RECEIVE_FINAL' : 'RECEIVE_MORE';
+        }
+
+        const nextStatus = procurementStateMachine.transition(order.status, action);
+
+        await tx.purchaseOrder.update({
+          where: { id },
+          data: { status: nextStatus },
         });
-      }
+        console.log('PO STATUS UPDATED');
 
-      // 7. Determine next PO status using state machine
-      const updatedOrder = await tx.purchaseOrder.findUnique({
-        where: { id },
-        include: { items: true },
-      });
+        // 8. Generate Purchase Invoice (Goods Received Invoice)
+        let invoiceSubtotal = 0;
+        let invoiceGstAmount = 0;
 
-      const allReceived = updatedOrder.items.every((i) => i.receivedQuantity >= i.quantity);
+        for (const item of receivedItems) {
+          const poItem = order.items.find((i) => i.medicineId === item.medicineId);
+          if (!poItem) throw new Error(`Medicine ${item.medicineId} not found in PO`);
 
-      // Determine transition action
-      let action = allReceived ? 'RECEIVE_FULL' : 'RECEIVE_PARTIAL';
-      if (order.status === PROCUREMENT_STATUS.PARTIALLY_RECEIVED) {
-        action = allReceived ? 'RECEIVE_FINAL' : 'RECEIVE_MORE';
-      }
+          const lineSubtotal = item.receivedQuantity * poItem.unitPrice;
+          const lineGst = lineSubtotal * (poItem.gstPercentage / 100);
+          invoiceSubtotal += lineSubtotal;
+          invoiceGstAmount += lineGst;
+        }
 
-      const nextStatus = procurementStateMachine.transition(order.status, action);
+        const subtotalVal = Number(invoiceSubtotal.toFixed(2));
+        const gstVal = Number(invoiceGstAmount.toFixed(2));
+        const totalVal = Number((subtotalVal + gstVal).toFixed(2));
 
-      await tx.purchaseOrder.update({
-        where: { id },
-        data: { status: nextStatus },
-      });
+        const supplier = await tx.supplier.findUnique({
+          where: { id: order.supplierId },
+        });
+        const paymentTermsDays = supplier?.paymentTermsDays ?? 30;
+        const dueDate = new Date();
+        dueDate.setDate(dueDate.getDate() + paymentTermsDays);
 
-      // 8. Generate Purchase Invoice (Goods Received Invoice)
-      let invoiceSubtotal = 0;
-      let invoiceGstAmount = 0;
+        const invoiceNumber = `PINV-GRN-${grn.grnNumber.replace('GRN-', '')}`;
 
-      for (const item of receivedItems) {
-        const poItem = order.items.find((i) => i.medicineId === item.medicineId);
-        if (!poItem) throw new Error(`Medicine ${item.medicineId} not found in PO`);
+        console.log('CREATING PURCHASE INVOICE');
+        const purchaseInvoice = await tx.purchaseInvoice.create({
+          data: {
+            tenantId,
+            supplierId: order.supplierId,
+            purchaseOrderId: id,
+            invoiceNumber,
+            invoiceDate: new Date(),
+            dueDate,
+            subtotal: subtotalVal,
+            gstAmount: gstVal,
+            totalAmount: totalVal,
+            balanceAmount: totalVal,
+            paidAmount: 0,
+            paymentStatus: 'PENDING',
+          },
+        });
+        console.log('PURCHASE INVOICE CREATED');
 
-        const lineSubtotal = item.receivedQuantity * poItem.unitPrice;
-        const lineGst = lineSubtotal * (poItem.gstPercentage / 100);
-        invoiceSubtotal += lineSubtotal;
-        invoiceGstAmount += lineGst;
-      }
+        // 9. Create/Update Supplier Ledger Entry (Financial Responsibility)
+        const lastBalance = await tx.supplierLedger.findFirst({
+          where: { supplierId: order.supplierId, tenantId },
+          orderBy: { createdAt: 'desc' },
+          select: { balanceAfter: true },
+        });
 
-      const subtotalVal = Number(invoiceSubtotal.toFixed(2));
-      const gstVal = Number(invoiceGstAmount.toFixed(2));
-      const totalVal = Number((subtotalVal + gstVal).toFixed(2));
+        const currentBalance = lastBalance?.balanceAfter || 0;
+        const balanceAfter = currentBalance + totalVal;
 
-      const supplier = await tx.supplier.findUnique({
-        where: { id: order.supplierId },
-      });
-      const paymentTermsDays = supplier?.paymentTermsDays ?? 30;
-      const dueDate = new Date();
-      dueDate.setDate(dueDate.getDate() + paymentTermsDays);
+        await tx.supplierLedger.create({
+          data: {
+            tenantId,
+            supplierId: order.supplierId,
+            type: 'PURCHASE',
+            referenceType: 'PURCHASE_INVOICE',
+            referenceId: purchaseInvoice.id,
+            debitAmount: 0,
+            creditAmount: totalVal,
+            balanceAfter,
+            notes: `Goods received via GRN ${grnNumber} for PO ${order.orderNumber}. Invoice ${invoiceNumber} created.`,
+          },
+        });
 
-      const invoiceNumber = `PINV-GRN-${grn.grnNumber.replace('GRN-', '')}`;
-
-      const purchaseInvoice = await tx.purchaseInvoice.create({
-        data: {
+        emitLocalEvent(DOMAIN_EVENTS.PURCHASE_ORDER_RECEIVED, {
+          orderId: id,
           tenantId,
-          supplierId: order.supplierId,
-          purchaseOrderId: id,
-          invoiceNumber,
-          invoiceDate: new Date(),
-          dueDate,
-          subtotal: subtotalVal,
-          gstAmount: gstVal,
+          grnId: grn.id,
+          allReceived,
           totalAmount: totalVal,
-          balanceAmount: totalVal,
-          paidAmount: 0,
-          paymentStatus: 'PENDING',
-        },
+        });
+        emitLocalEvent(DOMAIN_EVENTS.STOCK_UPDATED, { tenantId, type: 'PURCHASE' });
+
+        await emitEvent(DOMAIN_EVENTS.PURCHASE_ORDER_RECEIVED, { orderId: id, tenantId });
+        await emitEvent(DOMAIN_EVENTS.STOCK_UPDATED, { tenantId });
+
+        return { grn, orderStatus: nextStatus, purchaseInvoice };
       });
-
-      // 9. Create/Update Supplier Ledger Entry (Financial Responsibility)
-      const lastBalance = await tx.supplierLedger.findFirst({
-        where: { supplierId: order.supplierId, tenantId },
-        orderBy: { createdAt: 'desc' },
-        select: { balanceAfter: true },
-      });
-
-      const currentBalance = lastBalance?.balanceAfter || 0;
-      const balanceAfter = currentBalance + totalVal;
-
-      await tx.supplierLedger.create({
-        data: {
-          tenantId,
-          supplierId: order.supplierId,
-          type: 'PURCHASE',
-          referenceType: 'PURCHASE_INVOICE',
-          referenceId: purchaseInvoice.id,
-          debitAmount: 0,
-          creditAmount: totalVal,
-          balanceAfter,
-          notes: `Goods received via GRN ${grnNumber} for PO ${order.orderNumber}. Invoice ${invoiceNumber} created.`,
-        },
-      });
-
-      emitLocalEvent(DOMAIN_EVENTS.PURCHASE_ORDER_RECEIVED, {
-        orderId: id,
-        tenantId,
-        grnId: grn.id,
-        allReceived,
-        totalAmount: totalVal,
-      });
-      emitLocalEvent(DOMAIN_EVENTS.STOCK_UPDATED, { tenantId, type: 'PURCHASE' });
-
-      await emitEvent(DOMAIN_EVENTS.PURCHASE_ORDER_RECEIVED, { orderId: id, tenantId });
-      await emitEvent(DOMAIN_EVENTS.STOCK_UPDATED, { tenantId });
-
-      return { grn, orderStatus: nextStatus, purchaseInvoice };
-    });
+    } catch (err) {
+      console.error('RECEIVE ORDER FAILED');
+      console.error(err);
+      throw err;
+    }
   }
 
   async getOrdersByStatus(tenantId, statuses) {
@@ -480,9 +498,7 @@ class PurchaseOrderService {
       orderBy: { createdAt: 'desc' },
     });
 
-    const grnNumbers = invoices.map((inv) =>
-      inv.invoiceNumber.replace('PINV-GRN-', 'GRN-'),
-    );
+    const grnNumbers = invoices.map((inv) => inv.invoiceNumber.replace('PINV-GRN-', 'GRN-'));
 
     const grns = await prisma.goodsReceiptNote.findMany({
       where: {
