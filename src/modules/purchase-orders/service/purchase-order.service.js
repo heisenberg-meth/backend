@@ -35,9 +35,23 @@ class PurchaseOrderService {
         where: { id: userId },
         select: { branchId: true },
       });
-      if (creator?.branchId) {
-        details.branchId = creator.branchId;
+      let resolvedBranchId = creator?.branchId;
+
+      if (!resolvedBranchId) {
+        const firstBranch = await prisma.branch.findFirst({
+          where: { tenantId },
+          select: { id: true },
+        });
+        resolvedBranchId = firstBranch?.id;
       }
+
+      if (resolvedBranchId) {
+        details.branchId = resolvedBranchId;
+      }
+    }
+
+    if (!details.branchId) {
+      throw new Error('Cannot create purchase order: no branch found for this tenant. Please create a branch first.');
     }
 
     if (details.invoiceDate) {
@@ -198,6 +212,12 @@ class PurchaseOrderService {
           });
           order.branchId = resolvedBranchId;
         }
+      }
+
+      if (!order.branchId) {
+        throw new Error(
+          'Cannot receive stock: no branch found for this tenant. Please create a branch first.'
+        );
       }
 
       const now = new Date();
