@@ -26,6 +26,15 @@ async function purchaseOrderRoutes(fastify) {
   );
 
   fastify.get(
+    '/invoices',
+    {
+      schema: { tags: ['Purchase Orders', 'Invoices'], summary: 'Get all generated purchase invoices' },
+      preHandler: [requirePermission('purchase-orders.read')],
+    },
+    purchaseOrderController.getInvoices,
+  );
+
+  fastify.get(
     '/by-supplier/:supplierId',
     {
       schema: {

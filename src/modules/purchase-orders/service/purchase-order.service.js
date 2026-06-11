@@ -311,32 +311,71 @@ class PurchaseOrderService {
         data: { status: nextStatus },
       });
 
-      // 8. Create/Update Supplier Ledger Entry (Financial Responsibility)
+      // 8. Generate Purchase Invoice (Goods Received Invoice)
+      let invoiceSubtotal = 0;
+      let invoiceGstAmount = 0;
+
+      for (const item of receivedItems) {
+        const poItem = order.items.find((i) => i.medicineId === item.medicineId);
+        if (!poItem) throw new Error(`Medicine ${item.medicineId} not found in PO`);
+
+        const lineSubtotal = item.receivedQuantity * poItem.unitPrice;
+        const lineGst = lineSubtotal * (poItem.gstPercentage / 100);
+        invoiceSubtotal += lineSubtotal;
+        invoiceGstAmount += lineGst;
+      }
+
+      const subtotalVal = Number(invoiceSubtotal.toFixed(2));
+      const gstVal = Number(invoiceGstAmount.toFixed(2));
+      const totalVal = Number((subtotalVal + gstVal).toFixed(2));
+
+      const supplier = await tx.supplier.findUnique({
+        where: { id: order.supplierId },
+      });
+      const paymentTermsDays = supplier?.paymentTermsDays ?? 30;
+      const dueDate = new Date();
+      dueDate.setDate(dueDate.getDate() + paymentTermsDays);
+
+      const invoiceNumber = `PINV-GRN-${grn.grnNumber.replace('GRN-', '')}`;
+
+      const purchaseInvoice = await tx.purchaseInvoice.create({
+        data: {
+          tenantId,
+          supplierId: order.supplierId,
+          purchaseOrderId: id,
+          invoiceNumber,
+          invoiceDate: new Date(),
+          dueDate,
+          subtotal: subtotalVal,
+          gstAmount: gstVal,
+          totalAmount: totalVal,
+          balanceAmount: totalVal,
+          paidAmount: 0,
+          paymentStatus: 'PENDING',
+        },
+      });
+
+      // 9. Create/Update Supplier Ledger Entry (Financial Responsibility)
       const lastBalance = await tx.supplierLedger.findFirst({
         where: { supplierId: order.supplierId, tenantId },
         orderBy: { createdAt: 'desc' },
         select: { balanceAfter: true },
       });
 
-      const grnTotal = receivedItems.reduce((sum, item) => {
-        const poItem = order.items.find((i) => i.medicineId === item.medicineId);
-        return sum + item.receivedQuantity * (poItem?.unitPrice || 0);
-      }, 0);
-
       const currentBalance = lastBalance?.balanceAfter || 0;
-      const balanceAfter = currentBalance + grnTotal;
+      const balanceAfter = currentBalance + totalVal;
 
       await tx.supplierLedger.create({
         data: {
           tenantId,
           supplierId: order.supplierId,
           type: 'PURCHASE',
-          referenceType: 'GRN',
-          referenceId: grn.id,
+          referenceType: 'PURCHASE_INVOICE',
+          referenceId: purchaseInvoice.id,
           debitAmount: 0,
-          creditAmount: grnTotal,
+          creditAmount: totalVal,
           balanceAfter,
-          notes: `Goods received via GRN ${grnNumber} for PO ${order.orderNumber}`,
+          notes: `Goods received via GRN ${grnNumber} for PO ${order.orderNumber}. Invoice ${invoiceNumber} created.`,
         },
       });
 
@@ -345,14 +384,14 @@ class PurchaseOrderService {
         tenantId,
         grnId: grn.id,
         allReceived,
-        totalAmount: grnTotal,
+        totalAmount: totalVal,
       });
       emitLocalEvent(DOMAIN_EVENTS.STOCK_UPDATED, { tenantId, type: 'PURCHASE' });
 
       await emitEvent(DOMAIN_EVENTS.PURCHASE_ORDER_RECEIVED, { orderId: id, tenantId });
       await emitEvent(DOMAIN_EVENTS.STOCK_UPDATED, { tenantId });
 
-      return { grn, orderStatus: nextStatus };
+      return { grn, orderStatus: nextStatus, purchaseInvoice };
     });
   }
 
@@ -381,6 +420,58 @@ class PurchaseOrderService {
       },
       include: { items: true, supplier: { select: { name: true } } },
       orderBy: { createdAt: 'desc' },
+    });
+  }
+
+  async getPurchaseInvoices(tenantId) {
+    const invoices = await prisma.purchaseInvoice.findMany({
+      where: { tenantId },
+      include: {
+        supplier: { select: { name: true } },
+        purchaseOrder: { select: { orderNumber: true } },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    const grnNumbers = invoices.map((inv) =>
+      inv.invoiceNumber.replace('PINV-GRN-', 'GRN-'),
+    );
+
+    const grns = await prisma.goodsReceiptNote.findMany({
+      where: {
+        tenantId,
+        grnNumber: { in: grnNumbers },
+      },
+      include: {
+        items: {
+          include: {
+            medicine: { select: { name: true } },
+          },
+        },
+      },
+    });
+
+    const grnMap = new Map(grns.map((g) => [g.grnNumber, g]));
+
+    return invoices.map((inv) => {
+      const grnNumber = inv.invoiceNumber.replace('PINV-GRN-', 'GRN-');
+      const grn = grnMap.get(grnNumber);
+      const items = grn
+        ? grn.items.map((item) => ({
+            id: item.id,
+            medicineId: item.medicineId,
+            medicine: item.medicine,
+            quantity: item.receivedQuantity,
+            purchasePrice: item.purchasePrice ? Number(item.purchasePrice) : 0,
+            batchNumber: item.batchNumber,
+            expiryDate: item.expiryDate,
+          }))
+        : [];
+
+      return {
+        ...inv,
+        items,
+      };
     });
   }
 

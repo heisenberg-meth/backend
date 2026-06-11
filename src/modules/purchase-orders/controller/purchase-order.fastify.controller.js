@@ -108,6 +108,17 @@ class PurchaseOrderFastifyController {
     }
   }
 
+  async getInvoices(request, reply) {
+    const tenantId = request.tenantId;
+    try {
+      const invoices = await purchaseOrderService.getPurchaseInvoices(tenantId);
+      return reply.send({ success: true, data: invoices });
+    } catch (error) {
+      logger.error({ error, tenantId }, 'Failed to get purchase invoices');
+      return reply.code(500).send({ success: false, error: 'Failed to retrieve purchase invoices' });
+    }
+  }
+
   async cancelOrder(request, reply) {
     const { id } = request.params;
     const { reason } = request.body;
