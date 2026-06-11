@@ -83,7 +83,6 @@ class BatchService {
 
     const updated = await batchRepository.update(id, updateData);
 
-    // Recalculate Inventory.currentStock for this medicine in this branch & tenant
     const totalQty = await prisma.inventoryBatch.aggregate({
       where: {
         medicineId: batch.medicineId,

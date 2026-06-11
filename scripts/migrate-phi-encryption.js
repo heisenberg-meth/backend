@@ -10,7 +10,6 @@ async function main() {
   let encryptedCount = 0;
   let skippedCount = 0;
 
-  // Process in batches
   const batchSize = 100;
   let cursor = null;
   let hasMore = true;
