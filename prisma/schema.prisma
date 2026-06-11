@@ -1170,32 +1170,53 @@ model SupplierReturn {
 }
 
 model PurchaseOrder {
-  id                   String                  @id @default(uuid())
+  id                   String              @id @default(uuid())
+
   tenantId             String
   branchId             String?
   userId               String?
-  supplierId           String?
+
+  supplierId           String
+
   orderNumber          String
-  status               PurchaseOrderStatus     @default(DRAFT)
-  subtotal             Decimal                 @default(0) @db.Decimal(12, 2)
-  gstAmount            Decimal                 @default(0) @db.Decimal(12, 2)
-  totalAmount          Decimal                 @default(0) @db.Decimal(12, 2)
+
+  status               PurchaseOrderStatus @default(DRAFT)
+
+  subtotal             Decimal @default(0) @db.Decimal(12,2)
+  gstAmount            Decimal @default(0) @db.Decimal(12,2)
+  discountAmount       Decimal @default(0) @db.Decimal(12,2)
+
+  totalAmount          Decimal @default(0) @db.Decimal(12,2)
+
+  paymentMode          PaymentMode?
+
+  advancePaid          Decimal @default(0) @db.Decimal(12,2)
+  balanceAmount        Decimal @default(0) @db.Decimal(12,2)
+
   notes                String?
+
   expectedDeliveryDate DateTime?
-  createdAt            DateTime                @default(now())
-  updatedAt            DateTime                @updatedAt
+  receivedAt           DateTime?
+
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
   deletedAt            DateTime?
+
   approvedAt           DateTime?
   approvedBy           String?
+
   cancelledAt          DateTime?
+
   goodsReceiptNotes    GoodsReceiptNote[]
-  importJobs           ImportJob[]
   purchaseInvoices     PurchaseInvoice[]
-  approver             User?                   @relation("POApprover", fields: [approvedBy], references: [id])
-  branch               Branch?                 @relation(fields: [branchId], references: [id])
-  supplier             Supplier?               @relation(fields: [supplierId], references: [id])
-  tenant               Tenant                  @relation(fields: [tenantId], references: [id])
-  user                 User?                   @relation(fields: [userId], references: [id])
+  importJobs           ImportJob[]
+
+  approver             User? @relation("POApprover", fields: [approvedBy], references: [id])
+  branch               Branch? @relation(fields: [branchId], references: [id])
+  supplier             Supplier @relation(fields: [supplierId], references: [id])
+  tenant               Tenant @relation(fields: [tenantId], references: [id])
+  user                 User? @relation(fields: [userId], references: [id])
+
   approvals            PurchaseOrderApproval[]
   items                PurchaseOrderItem[]
   stockAlerts          StockAlert[]

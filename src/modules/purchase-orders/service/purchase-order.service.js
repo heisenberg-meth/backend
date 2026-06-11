@@ -27,9 +27,11 @@ class PurchaseOrderService {
       data.orderNumber = `PO-${dateStr}-${random}`;
     }
 
+    const { ...validData } = data;
+
     const order = await purchaseOrderRepository.create(
       {
-        ...data,
+        ...validData,
         status: PROCUREMENT_STATUS.DRAFT,
       },
       tenantId,
