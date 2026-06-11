@@ -29,6 +29,17 @@ class PurchaseOrderService {
 
     const { items, ...details } = data;
 
+    // Fallback to user's branchId if not specified
+    if (!details.branchId) {
+      const creator = await prisma.user.findUnique({
+        where: { id: userId },
+        select: { branchId: true },
+      });
+      if (creator?.branchId) {
+        details.branchId = creator.branchId;
+      }
+    }
+
     if (details.invoiceDate) {
       details.invoiceDate = new Date(details.invoiceDate);
     }
@@ -164,6 +175,31 @@ class PurchaseOrderService {
     if (!order) throw new Error('Order not found');
 
     return prisma.$transaction(async (tx) => {
+      // Resolve branchId if it is null inside transaction
+      if (!order.branchId) {
+        const user = await tx.user.findUnique({
+          where: { id: userId },
+          select: { branchId: true },
+        });
+        let resolvedBranchId = user?.branchId;
+
+        if (!resolvedBranchId) {
+          const firstBranch = await tx.branch.findFirst({
+            where: { tenantId },
+            select: { id: true },
+          });
+          resolvedBranchId = firstBranch?.id;
+        }
+
+        if (resolvedBranchId) {
+          await tx.purchaseOrder.update({
+            where: { id },
+            data: { branchId: resolvedBranchId },
+          });
+          order.branchId = resolvedBranchId;
+        }
+      }
+
       const now = new Date();
       const grnNumber = `GRN-${now.getTime()}`;
 
@@ -241,25 +277,32 @@ class PurchaseOrderService {
           },
         });
 
-        // 6. Upsert Inventory Aggregate Snapshot
-        await tx.inventory.upsert({
+        // 6. Upsert Inventory Aggregate Snapshot (handling potential null branchId)
+        const existingInventory = await tx.inventory.findFirst({
           where: {
-            tenantId_branchId_medicineId: {
-              tenantId,
-              branchId: order.branchId,
-              medicineId: item.medicineId,
-            },
-          },
-          update: {
-            currentStock: { increment: item.receivedQuantity },
-          },
-          create: {
             tenantId,
             branchId: order.branchId,
             medicineId: item.medicineId,
-            currentStock: item.receivedQuantity,
           },
         });
+
+        if (existingInventory) {
+          await tx.inventory.update({
+            where: { id: existingInventory.id },
+            data: {
+              currentStock: { increment: item.receivedQuantity },
+            },
+          });
+        } else {
+          await tx.inventory.create({
+            data: {
+              tenantId,
+              branchId: order.branchId,
+              medicineId: item.medicineId,
+              currentStock: item.receivedQuantity,
+            },
+          });
+        }
 
         // 7. Update Medicine Aggregate Quantity
         await tx.medicine.update({
