@@ -4143,6 +4143,119 @@ enum VerificationStatus {
   EXPIRED
 }
 
+model AdminUser {
+  id            String       @id @default(uuid())
+  email         String       @unique
+  passwordHash  String
+  name          String
+  role          AdminRole    @default(SUPPORT)
+  permissions   String[]
+  lastLoginAt   DateTime?
+  isActive      Boolean      @default(true)
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+
+  @@index([email])
+  @@index([role])
+  @@index([isActive])
+}
+
+model AdminAuditLog {
+  id           String   @id @default(uuid())
+  adminUserId  String?
+  action       String
+  targetType   String
+  targetId     String
+  metadata     Json?
+  ipAddress    String?
+  userAgent    String?
+  createdAt    DateTime @default(now())
+
+  @@index([adminUserId])
+  @@index([targetType, targetId])
+  @@index([action])
+  @@index([createdAt])
+}
+
+model AdminDevice {
+  id             String   @id @default(uuid())
+  shopId         String
+  fingerprintHash String
+  deviceToken    String?
+  browser        String?
+  os             String?
+  ipAddress      String?
+  country        String?
+  firstSeen      DateTime @default(now())
+  lastSeen       DateTime @updatedAt
+  riskScore      Int      @default(0)
+  isBlocked      Boolean  @default(false)
+  blockedAt      DateTime?
+  blockedBy      String?
+  blockReason    String?
+
+  @@index([shopId])
+  @@index([fingerprintHash])
+  @@index([ipAddress])
+  @@index([riskScore])
+  @@index([isBlocked])
+}
+
+model AdminFeatureFlag {
+  id          String   @id @default(uuid())
+  key         String   @unique
+  name        String
+  description String?
+  enabled     Boolean  @default(false)
+  targetType  String?  // ALL, PLAN, SHOP
+  targetIds   String[]
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([enabled])
+  @@index([targetType])
+}
+
+enum AdminRole {
+  ROOT_ADMIN
+  ADMIN
+  SUPPORT
+  SALES
+  FINANCE
+}
+
+enum AdminAuditAction {
+  USER_CREATED
+  USER_UPDATED
+  USER_SUSPENDED
+  USER_ACTIVATED
+  USER_BLOCKED
+  USER_DELETED
+  USER_PASSWORD_RESET
+  USER_DEVICE_RESET
+  SHOP_CREATED
+  SHOP_UPDATED
+  SHOP_APPROVED
+  SHOP_SUSPENDED
+  SHOP_BLACKLISTED
+  SHOP_DELETED
+  SUBSCRIPTION_CREATED
+  SUBSCRIPTION_EXTENDED
+  SUBSCRIPTION_UPGRADED
+  SUBSCRIPTION_DOWNGRADED
+  SUBSCRIPTION_CANCELLED
+  SUBSCRIPTION_RENEWED
+  PAYMENT_RECEIVED
+  PAYMENT_REFUNDED
+  PAYMENT_FAILED
+  DEVICE_BLOCKED
+  DEVICE_UNBLOCKED
+  FEATURE_FLAG_TOGGLED
+  BROADCAST_SENT
+  ADMIN_LOGIN
+  ADMIN_LOGOUT
+}
+
 enum ActorType {
   SYSTEM
   USER

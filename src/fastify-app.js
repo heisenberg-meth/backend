@@ -63,6 +63,7 @@ import stockRoutes from './modules/stock/routes/stock.fastify.routes.js';
 import auditRoutes from './modules/audit/audit.fastify.routes.js';
 import communicationsRoutes from './modules/communications/routes/communications.fastify.routes.js';
 import loyaltyRoutes from './modules/loyalty/routes/loyalty.fastify.routes.js';
+import adminRoutes from './modules/admin/routes/admin.routes.js';
 
 const dbHealthGauge = new client.Gauge({
   name: 'health_db_status',
@@ -189,6 +190,8 @@ const setupFastify = async () => {
       '/api/payments/webhook',
       '/health',
       '/api/billing',
+      '/api/admin/login',
+      '/api/admin/refresh',
     ];
 
     const isExempt = exemptPaths.some((p) => request.url.startsWith(p));
@@ -362,6 +365,7 @@ const setupFastify = async () => {
   await fastify.register(auditRoutes, { prefix: '/api/audit' });
   await fastify.register(communicationsRoutes, { prefix: '/api/communications' });
   await fastify.register(loyaltyRoutes, { prefix: '/api/loyalty' });
+  await fastify.register(adminRoutes, { prefix: '/api/admin' });
 
   return fastify;
 };
