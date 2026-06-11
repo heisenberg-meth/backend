@@ -27,12 +27,52 @@ class PurchaseOrderService {
       data.orderNumber = `PO-${dateStr}-${random}`;
     }
 
-    const { ...validData } = data;
+    const { items, ...details } = data;
+
+    if (details.invoiceDate) {
+      details.invoiceDate = new Date(details.invoiceDate);
+    }
+
+    // Fetch medicine metadata to populate PurchaseOrderItem fields
+    const medicineIds = items.map((it) => it.medicineId);
+    const medicines = await prisma.medicine.findMany({
+      where: { id: { in: medicineIds } },
+      include: {
+        inventory: {
+          where: { tenantId },
+        },
+      },
+    });
+
+    const medicineMap = new Map(medicines.map((m) => [m.id, m]));
+
+    const mappedItems = items.map((item) => {
+      const med = medicineMap.get(item.medicineId);
+      if (!med) throw new Error(`Medicine with ID ${item.medicineId} not found`);
+
+      const currentStock = med.inventory?.[0]?.currentStock || 0;
+      const reorderQty = med.reorderLevel || 0;
+      const unitPrice = Number(item.purchasePrice || item.unitPrice || 0);
+      const gstPercentage = Number(item.gstPercentage || med.gstPercentage || 0);
+      const qty = Number(item.quantity || 0);
+
+      return {
+        medicineId: item.medicineId,
+        medicineName: med.name,
+        currentStock,
+        reorderQty,
+        quantity: qty,
+        unitPrice,
+        gstPercentage,
+        totalAmount: qty * unitPrice,
+      };
+    });
 
     const order = await purchaseOrderRepository.create(
       {
-        ...validData,
+        ...details,
         status: PROCUREMENT_STATUS.DRAFT,
+        items: mappedItems,
       },
       tenantId,
       userId,

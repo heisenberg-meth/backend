@@ -216,8 +216,6 @@ model User {
   updatedAt                    DateTime                   @updatedAt
   deletedAt                    DateTime?
   avatar                       String?
-  avatarData                   Bytes?
-  avatarMimeType               String?
   phone                        String?
   username                     String?
   pharmacistRegistrationNumber String?
@@ -229,6 +227,8 @@ model User {
   resetToken                   String?
   resetTokenExpiry             DateTime?
   roleId                       String?
+  avatarData                   Bytes?
+  avatarMimeType               String?
   alertSettings                AlertSettings[]
   auditLogs                    AuditLog[]
   batchAuditLogs               BatchAuditLog[]
@@ -259,11 +259,11 @@ model User {
   salesReturns                 SalesReturn[]
   approvedApprovals            SettingsApproval[]         @relation("ApprovalApprover")
   proposedApprovals            SettingsApproval[]         @relation("ApprovalProposer")
-  createdSupplierReturns       SupplierReturn[]           @relation("SupplierReturnCreator")
   settingsAuditLogs            SettingsAuditLog[]
   shifts                       Shift[]
   stockMovements               StockMovement[]
   supplierPayments             SupplierPayment[]
+  createdSupplierReturns       SupplierReturn[]           @relation("SupplierReturnCreator")
   transactions                 Transaction[]
   branch                       Branch?                    @relation(fields: [branchId], references: [id])
   assignedRole                 AccessRole?                @relation(fields: [roleId], references: [id])
@@ -565,7 +565,6 @@ model Medicine {
   sku                      String?                    @unique
   hsnCode                  String?
   dosageForm               String?
-  packagingType            String?
   strength                 String?
   gstPercentage            Float                      @default(0)
   reorderLevel             Int                        @default(10)
@@ -584,6 +583,7 @@ model Medicine {
   status                   MedicineStatus             @default(ACTIVE)
   storageCondition         String?
   unit                     String?
+  packagingType            String?
   alertThresholdOverrides  AlertThresholdOverride[]
   barcodeMappings          BarcodeMapping[]
   deadStockAnalyses        DeadStockAnalysis[]
@@ -797,7 +797,7 @@ model InventoryBatch {
   @@unique([tenantId, branchId, medicineId, batchNumber])
   @@index([expiryDate])
   @@index([status])
-  @@index([tenantId, branchId, medicineId, status, expiryDate], name: "idx_batch_fefo")
+  @@index([tenantId, branchId, medicineId, status, expiryDate], map: "idx_batch_fefo")
   @@index([tenantId, deletedAt])
   @@index([tenantId, status, expiryDate])
   @@index([barcode])
@@ -1150,23 +1150,27 @@ model SupplierReturn {
   tenantId     String
   supplierId   String
   batchId      String
-  medicineId   String?
   quantity     Int
-  returnAmount Decimal              @default(0) @db.Decimal(12, 2)
   reason       String?
-  createdBy    String?
   createdAt    DateTime             @default(now())
   updatedAt    DateTime             @updatedAt
   status       SupplierReturnStatus @default(PENDING)
+  returnAmount Decimal?             @default(0) @db.Decimal(12, 2)
+  createdBy    String?
+  medicineId   String?
   batch        InventoryBatch       @relation(fields: [batchId], references: [id])
-  medicine     Medicine?            @relation(fields: [medicineId], references: [id])
+  creator      User?                @relation("SupplierReturnCreator", fields: [createdBy], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  medicine     Medicine?            @relation(fields: [medicineId], references: [id], onDelete: NoAction, onUpdate: NoAction)
   supplier     Supplier             @relation(fields: [supplierId], references: [id])
   tenant       Tenant               @relation(fields: [tenantId], references: [id])
-  creator      User?                @relation("SupplierReturnCreator", fields: [createdBy], references: [id])
+}
 
-  @@index([tenantId, createdAt])
-  @@index([tenantId, supplierId])
-  @@index([tenantId, status])
+enum PaymentMode {
+  CASH
+  CARD
+  UPI
+  NET_BANKING
+  CREDIT
 }
 
 model PurchaseOrder {
@@ -1185,18 +1189,20 @@ model PurchaseOrder {
   subtotal       Decimal @default(0) @db.Decimal(12, 2)
   gstAmount      Decimal @default(0) @db.Decimal(12, 2)
   discountAmount Decimal @default(0) @db.Decimal(12, 2)
-
-  totalAmount Decimal @default(0) @db.Decimal(12, 2)
+  totalAmount    Decimal @default(0) @db.Decimal(12, 2)
 
   paymentMode PaymentMode?
 
   advancePaid   Decimal @default(0) @db.Decimal(12, 2)
   balanceAmount Decimal @default(0) @db.Decimal(12, 2)
 
-  notes String?
+  supplierInvoiceNumber String?
+  invoiceDate           DateTime?
 
   expectedDeliveryDate DateTime?
   receivedAt           DateTime?
+
+  notes String?
 
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
@@ -1205,21 +1211,18 @@ model PurchaseOrder {
   approvedAt DateTime?
   approvedBy String?
 
-  cancelledAt DateTime?
-
+  cancelledAt       DateTime?
   goodsReceiptNotes GoodsReceiptNote[]
-  purchaseInvoices  PurchaseInvoice[]
   importJobs        ImportJob[]
-
-  approver User?    @relation("POApprover", fields: [approvedBy], references: [id])
-  branch   Branch?  @relation(fields: [branchId], references: [id])
-  supplier Supplier @relation(fields: [supplierId], references: [id])
-  tenant   Tenant   @relation(fields: [tenantId], references: [id])
-  user     User?    @relation(fields: [userId], references: [id])
-
-  approvals   PurchaseOrderApproval[]
-  items       PurchaseOrderItem[]
-  stockAlerts StockAlert[]
+  purchaseInvoices  PurchaseInvoice[]
+  approver          User?                   @relation("POApprover", fields: [approvedBy], references: [id])
+  branch            Branch?                 @relation(fields: [branchId], references: [id])
+  supplier          Supplier?               @relation(fields: [supplierId], references: [id])
+  tenant            Tenant                  @relation(fields: [tenantId], references: [id])
+  user              User?                   @relation(fields: [userId], references: [id])
+  approvals         PurchaseOrderApproval[]
+  items             PurchaseOrderItem[]
+  stockAlerts       StockAlert[]
 
   @@unique([tenantId, orderNumber])
   @@index([tenantId, status])
@@ -3660,14 +3663,6 @@ enum TransactionStatus {
   RECOVERY_PENDING
   PARTIALLY_PAID
   REVERSED
-}
-
-enum PaymentMode {
-  CASH
-  CARD
-  UPI
-  NET_BANKING
-  CREDIT
 }
 
 enum PurchaseOrderStatus {
