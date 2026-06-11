@@ -193,12 +193,13 @@ class PurchaseOrderService {
         await tx.goodsReceiptNoteItem.create({
           data: {
             grnId: grn.id,
+            purchaseOrderItemId: poItem.id,
             medicineId: item.medicineId,
-            orderedQuantity: poItem.quantity,
             receivedQuantity: item.receivedQuantity,
             batchNumber: item.batchNumber,
             expiryDate: new Date(item.expiryDate),
-            unitPrice: poItem.unitPrice,
+            purchasePrice: poItem.unitPrice,
+            sellingPrice: item.sellingPrice ? Number(item.sellingPrice) : Number(poItem.unitPrice) * 1.2,
           },
         });
 
@@ -214,7 +215,7 @@ class PurchaseOrderService {
             receivedQuantity: item.receivedQuantity,
             expiryDate: new Date(item.expiryDate),
             purchasePrice: poItem.unitPrice,
-            sellingPrice: poItem.unitPrice * 1.2, // Default markup
+            sellingPrice: item.sellingPrice ? Number(item.sellingPrice) : Number(poItem.unitPrice) * 1.2,
             supplierId: order.supplierId,
             status: 'ACTIVE',
             purchaseOrderItemId: poItem.id,
