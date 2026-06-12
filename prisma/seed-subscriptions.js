@@ -3,9 +3,32 @@
 import prisma from '../src/config/prisma.js';
 
 const PLANS = [
-  { id: 'plan-basic', name: 'Basic', price: 499, billingCycle: 'MONTHLY', features: ['Inventory Management', 'Billing', 'Basic Reports'] },
-  { id: 'plan-professional', name: 'Professional', price: 999, billingCycle: 'MONTHLY', features: ['All Basic Features', 'CRM', 'Analytics', 'Multi-Branch'] },
-  { id: 'plan-enterprise', name: 'Enterprise', price: 2499, billingCycle: 'MONTHLY', features: ['All Professional Features', 'AI Forecasting', 'Hospital Module', 'Priority Support'] },
+  {
+    id: 'plan-basic',
+    name: 'Basic',
+    price: 499,
+    billingCycle: 'MONTHLY',
+    features: ['Inventory Management', 'Billing', 'Basic Reports'],
+  },
+  {
+    id: 'plan-professional',
+    name: 'Professional',
+    price: 999,
+    billingCycle: 'MONTHLY',
+    features: ['All Basic Features', 'CRM', 'Analytics', 'Multi-Branch'],
+  },
+  {
+    id: 'plan-enterprise',
+    name: 'Enterprise',
+    price: 2499,
+    billingCycle: 'MONTHLY',
+    features: [
+      'All Professional Features',
+      'AI Forecasting',
+      'Hospital Module',
+      'Priority Support',
+    ],
+  },
 ];
 
 async function main() {
@@ -15,7 +38,12 @@ async function main() {
   for (const plan of PLANS) {
     await prisma.subscriptionPlan.upsert({
       where: { id: plan.id },
-      update: { name: plan.name, price: plan.price, features: plan.features, billingCycle: plan.billingCycle },
+      update: {
+        name: plan.name,
+        price: plan.price,
+        features: plan.features,
+        billingCycle: plan.billingCycle,
+      },
       create: plan,
     });
     console.log(`  Plan "${plan.name}" (${plan.id}) ready`);
@@ -28,7 +56,6 @@ async function main() {
   });
 
   let created = 0;
-  let updated = 0;
 
   for (const tenant of tenants) {
     if (!tenant.subscription) {

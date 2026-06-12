@@ -12,7 +12,6 @@ class SupplierReturnService {
     const returnNumber = await supplierReturnRepository.generateReturnNumber(tenantId);
 
     const items = [];
-    let totalLoss = 0;
     for (const item of data.items) {
       const batch = await prisma.inventoryBatch.findUnique({
         where: { id: item.batchId },
@@ -22,7 +21,6 @@ class SupplierReturnService {
 
       const qty = Math.min(item.quantity, batch.quantity);
       const loss = Number(batch.purchasePrice) * qty;
-      totalLoss += loss;
 
       items.push({
         medicineId: item.medicineId,
@@ -73,9 +71,16 @@ class SupplierReturnService {
     }
 
     if (status === 'APPROVED') {
-      const items = returnRecord.items?.length > 0
-        ? returnRecord.items
-        : [{ batchId: returnRecord.batchId, medicineId: returnRecord.medicineId, quantity: returnRecord.quantity }];
+      const items =
+        returnRecord.items?.length > 0
+          ? returnRecord.items
+          : [
+              {
+                batchId: returnRecord.batchId,
+                medicineId: returnRecord.medicineId,
+                quantity: returnRecord.quantity,
+              },
+            ];
 
       const movements = [];
       for (const item of items) {
@@ -102,25 +107,35 @@ class SupplierReturnService {
               null,
             );
           } catch (err) {
-            logger.error({ err, batchId: item.batchId }, 'Failed to process stock out for return item');
+            logger.error(
+              { err, batchId: item.batchId },
+              'Failed to process stock out for return item',
+            );
           }
         }
       }
     }
 
     if (status === 'COMPLETED') {
-      const creditData = { amount: returnRecord.returnAmount || 0, notes: 'Auto-generated on completion' };
+      const creditData = {
+        amount: returnRecord.returnAmount || 0,
+        notes: 'Auto-generated on completion',
+      };
       await supplierReturnRepository.createCreditNote(id, creditData);
     }
 
     const updated = await supplierReturnRepository.updateReturnStatus(id, tenantId, status, userId);
-    logger.info(`[SupplierReturn] ${returnRecord.returnNumber} status: ${returnRecord.status} -> ${status}`);
+    logger.info(
+      `[SupplierReturn] ${returnRecord.returnNumber} status: ${returnRecord.status} -> ${status}`,
+    );
     return updated;
   }
 
   async generateCreditNote(returnId, data) {
     const creditNote = await supplierReturnRepository.createCreditNote(returnId, data);
-    logger.info(`[SupplierReturn] Credit note ${creditNote.creditNoteNumber} generated for return ${returnId}`);
+    logger.info(
+      `[SupplierReturn] Credit note ${creditNote.creditNoteNumber} generated for return ${returnId}`,
+    );
     return creditNote;
   }
 

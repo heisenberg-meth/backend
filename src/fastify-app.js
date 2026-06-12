@@ -67,6 +67,7 @@ import communicationsRoutes from './modules/communications/routes/communications
 import loyaltyRoutes from './modules/loyalty/routes/loyalty.fastify.routes.js';
 import supplierReturnsRoutes from './modules/supplier-returns/routes/supplier-returns.routes.js';
 import adminRoutes from './modules/admin/routes/admin.routes.js';
+import logger from './shared/utils/logger.js';
 
 const dbHealthGauge = new client.Gauge({
   name: 'health_db_status',
@@ -324,15 +325,17 @@ const setupFastify = async () => {
       await prisma.$queryRaw`SELECT 1`;
     } catch (error) {
       dbStatus = 'unhealthy';
+      logger.info(error);
     }
 
     try {
       await fastify.redis.ping();
     } catch (error) {
+      logger.info(error);
       redisStatus = 'unhealthy';
     }
 
-    const statusCode = (dbStatus === 'healthy' && redisStatus === 'healthy') ? 200 : 500;
+    const statusCode = dbStatus === 'healthy' && redisStatus === 'healthy' ? 200 : 500;
     return reply.code(statusCode).send({
       database: dbStatus,
       redis: redisStatus,
@@ -406,8 +409,14 @@ const setupFastify = async () => {
 
   // SPA fallback: all non-API, non-file routes → index.html
   fastify.setNotFoundHandler((request, reply) => {
-    if (request.url.startsWith('/api/') || request.url.startsWith('/avatars/') || request.url.startsWith('/uploads/')) {
-      return reply.code(404).send({ error: 'Not Found', message: `Route ${request.method}:${request.url} not found` });
+    if (
+      request.url.startsWith('/api/') ||
+      request.url.startsWith('/avatars/') ||
+      request.url.startsWith('/uploads/')
+    ) {
+      return reply
+        .code(404)
+        .send({ error: 'Not Found', message: `Route ${request.method}:${request.url} not found` });
     }
     return reply.sendFile('index.html');
   });

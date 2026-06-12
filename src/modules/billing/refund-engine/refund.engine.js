@@ -3,7 +3,7 @@ import { DOMAIN_EVENTS } from '../../../shared/constants/events.js';
 import { emitLocalEvent } from '../../../shared/events/local-event-bus.js';
 import { emitEvent } from '../../../shared/events/erp-event-bus.js';
 import movementService from '../../stock/service/movement.service.js';
-import logger from '@/shared/utils/logger.js';
+import logger from '../../../shared/utils/logger.js';
 
 class RefundEngine {
   _findInvoiceItem(invoiceItems, refundItem) {

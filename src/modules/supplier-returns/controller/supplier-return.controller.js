@@ -1,5 +1,4 @@
 import supplierReturnService from '../service/supplier-return.service.js';
-import logger from '../../../shared/utils/logger.js';
 
 class SupplierReturnController {
   async getExpiredGroupedBySupplier(request, reply) {

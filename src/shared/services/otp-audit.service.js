@@ -1,6 +1,5 @@
 import prisma from '../../config/prisma.js';
 import logger from '../utils/logger.js';
-import env from '../../config/env.js';
 
 const LOG_OTP = process.env.LOG_OTP !== 'false';
 
@@ -32,13 +31,16 @@ class OtpAuditService {
   }
 
   async logOtpVerified({ email, otp, userId, channel, ipAddress }) {
-    logger.info({
-      event: 'OTP_VERIFIED',
-      email,
-      otp: LOG_OTP ? otp : '******',
-      status: 'SUCCESS',
-      verifiedAt: new Date().toISOString(),
-    }, 'OTP Verified');
+    logger.info(
+      {
+        event: 'OTP_VERIFIED',
+        email,
+        otp: LOG_OTP ? otp : '******',
+        status: 'SUCCESS',
+        verifiedAt: new Date().toISOString(),
+      },
+      'OTP Verified',
+    );
 
     await prisma.otpAuditLog.create({
       data: {
@@ -55,13 +57,16 @@ class OtpAuditService {
   }
 
   async logOtpFailed({ email, enteredOtp, reason, attempt, userId, channel, purpose, ipAddress }) {
-    logger.warn({
-      event: 'OTP_VERIFICATION_FAILED',
-      email,
-      enteredOtp,
-      reason,
-      attempt,
-    }, 'OTP Verification Failed');
+    logger.warn(
+      {
+        event: 'OTP_VERIFICATION_FAILED',
+        email,
+        enteredOtp,
+        reason,
+        attempt,
+      },
+      'OTP Verification Failed',
+    );
 
     await prisma.otpAuditLog.create({
       data: {
@@ -77,12 +82,15 @@ class OtpAuditService {
   }
 
   async logOtpExpired({ email, otp, userId, purpose, channel }) {
-    logger.info({
-      event: 'OTP_EXPIRED',
-      email,
-      otp: LOG_OTP ? otp : '******',
-      expiredAt: new Date().toISOString(),
-    }, 'OTP Expired');
+    logger.info(
+      {
+        event: 'OTP_EXPIRED',
+        email,
+        otp: LOG_OTP ? otp : '******',
+        expiredAt: new Date().toISOString(),
+      },
+      'OTP Expired',
+    );
 
     await prisma.otpAuditLog.create({
       data: {
