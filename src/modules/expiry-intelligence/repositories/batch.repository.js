@@ -46,6 +46,10 @@ class BatchRepository {
     const thresholdDate = new Date();
     thresholdDate.setDate(thresholdDate.getDate() + days);
 
+    const isExpiredCheck = days <= 0
+      ? { expiryDate: { lte: thresholdDate } }
+      : { expiryDate: { gte: new Date(), lte: thresholdDate } };
+
     return prisma.inventoryBatch.findMany({
       where: {
         medicine: {
@@ -53,8 +57,8 @@ class BatchRepository {
           deletedAt: null,
           isActive: true,
         },
-        expiryDate: { lte: thresholdDate },
-        status: { notIn: ['EXPIRED', 'QUARANTINED'] },
+        ...isExpiredCheck,
+        status: { not: 'QUARANTINED' },
         quantity: { gt: 0 },
         deletedAt: null,
       },

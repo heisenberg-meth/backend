@@ -5,7 +5,10 @@ class SupplierReturnRepository {
     const batches = await prisma.inventoryBatch.findMany({
       where: {
         tenantId,
-        status: { in: ['EXPIRED', 'DAMAGED'] },
+        OR: [
+          { expiryDate: { lt: new Date() } },
+          { status: 'DAMAGED' },
+        ],
         deletedAt: null,
         supplierId: { not: null },
         quantity: { gt: 0 },

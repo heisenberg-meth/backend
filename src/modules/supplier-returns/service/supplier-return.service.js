@@ -144,7 +144,7 @@ class SupplierReturnService {
     const expired = await prisma.inventoryBatch.findMany({
       where: {
         tenantId,
-        status: 'EXPIRED',
+        expiryDate: { lt: new Date() },
         deletedAt: null,
         quantity: { gt: 0 },
       },
