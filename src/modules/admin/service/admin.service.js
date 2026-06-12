@@ -325,11 +325,73 @@ export const adminService = {
     });
   },
 
+  async updateUserStatus(tenantId, userId, status, adminId, ipAddress, userAgent) {
+    const user = await adminRepository.findUser(tenantId, userId);
+    if (!user) throw new Error('User not found');
+    const valid = ['ACTIVE', 'SUSPENDED', 'BLOCKED'];
+    if (!valid.includes(status)) throw new Error('Invalid status. Must be: ACTIVE, SUSPENDED, or BLOCKED');
+    const updated = await adminRepository.updateUser(userId, { status });
+    await logAdminAction({
+      adminUserId: adminId,
+      action: status === 'BLOCKED' ? 'USER_BLOCKED' : status === 'SUSPENDED' ? 'USER_SUSPENDED' : 'USER_ACTIVATED',
+      targetType: 'USER',
+      targetId: userId,
+      metadata: { tenantId, status, previousStatus: user.status },
+      ipAddress,
+      userAgent,
+    });
+    return updated;
+  },
+
+  async blockUser(tenantId, userId, reason, adminId, ipAddress, userAgent) {
+    const user = await adminRepository.findUser(tenantId, userId);
+    if (!user) throw new Error('User not found');
+    const updated = await adminRepository.updateUser(userId, {
+      status: 'BLOCKED',
+      blockedAt: new Date(),
+      blockedReason: reason,
+    });
+    await adminRepository.revokeUserSessions(userId);
+    await logAdminAction({
+      adminUserId: adminId,
+      action: 'USER_BLOCKED',
+      targetType: 'USER',
+      targetId: userId,
+      metadata: { tenantId, reason, previousStatus: user.status },
+      ipAddress,
+      userAgent,
+    });
+    return updated;
+  },
+
+  async unblockUser(tenantId, userId, adminId, ipAddress, userAgent) {
+    const user = await adminRepository.findUser(tenantId, userId);
+    if (!user) throw new Error('User not found');
+    const updated = await adminRepository.updateUser(userId, {
+      status: 'ACTIVE',
+      blockedAt: null,
+      blockedReason: null,
+    });
+    await logAdminAction({
+      adminUserId: adminId,
+      action: 'USER_ACTIVATED',
+      targetType: 'USER',
+      targetId: userId,
+      metadata: { tenantId, previousStatus: user.status },
+      ipAddress,
+      userAgent,
+    });
+    return updated;
+  },
+
+  async listAllUsers(query) {
+    return adminRepository.listAllUsers(query);
+  },
+
   async resetUserPassword(tenantId, userId) {
     const user = await adminRepository.findUser(tenantId, userId);
     if (!user) throw new Error('User not found');
     const tempPassword = Math.random().toString(36).slice(-10) + 'A1!';
-    const bcrypt = await import('bcrypt');
     const hash = await bcrypt.hash(tempPassword, 10);
     await adminRepository.updateUser(userId, { password: hash, resetOtpVerified: false });
     await adminRepository.createAuditLog({

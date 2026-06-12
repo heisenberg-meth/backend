@@ -250,6 +250,54 @@ export const adminRepository = {
     });
   },
 
+  async revokeUserSessions(userId) {
+    await prisma.userSession.updateMany({
+      where: { userId, revoked: false },
+      data: { revoked: true },
+    });
+  },
+
+  async listAllUsers({ page, limit, search, status, role, tenantId }) {
+    const pageNum = parseInt(page) || 1;
+    const limitNum = parseInt(limit) || 20;
+    const where = { deletedAt: null };
+    if (search) {
+      where.OR = [
+        { fullName: { contains: search, mode: 'insensitive' } },
+        { email: { contains: search, mode: 'insensitive' } },
+        { phone: { contains: search } },
+      ];
+    }
+    if (status) where.status = status;
+    if (role) where.role = role;
+    if (tenantId) where.tenantId = tenantId;
+
+    const [users, total] = await Promise.all([
+      prisma.user.findMany({
+        where,
+        skip: (pageNum - 1) * limitNum,
+        take: limitNum,
+        orderBy: { createdAt: 'desc' },
+        select: {
+          id: true,
+          email: true,
+          fullName: true,
+          role: true,
+          status: true,
+          blockedAt: true,
+          blockedReason: true,
+          phone: true,
+          createdAt: true,
+          tenantId: true,
+          tenant: { select: { name: true, email: true } },
+        },
+      }),
+      prisma.user.count({ where }),
+    ]);
+
+    return { users, total, page: pageNum, limit: limitNum, totalPages: Math.ceil(total / limitNum) };
+  },
+
   async listShops({ search, status, verified, page = 1, limit = 20 }) {
     const pageNum = parseInt(page) || 1;
     const limitNum = parseInt(limit) || 20;
@@ -375,6 +423,9 @@ export const adminRepository = {
             fullName: true,
             email: true,
             role: true,
+            status: true,
+            blockedAt: true,
+            blockedReason: true,
             phone: true,
             createdAt: true,
           },

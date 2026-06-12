@@ -156,6 +156,31 @@ class AuthPrismaService {
       throw new Error('Invalid credentials');
     }
 
+    if (user.status === 'BLOCKED') {
+      logger.warn({ email: normalizedEmail }, 'Login failed: User is blocked');
+      throw new Error('Your account has been blocked. Contact support.');
+    }
+
+    if (user.status === 'SUSPENDED') {
+      logger.warn({ email: normalizedEmail }, 'Login failed: User is suspended');
+      throw new Error('Your account has been suspended. Contact support.');
+    }
+
+    if (user.tenant?.blacklisted) {
+      logger.warn({ email: normalizedEmail }, 'Login failed: Tenant is blacklisted');
+      throw new Error('Your organization has been blocked. Contact support.');
+    }
+
+    if (user.tenant?.status === 'SUSPENDED') {
+      logger.warn({ email: normalizedEmail }, 'Login failed: Tenant is suspended');
+      throw new Error('Your organization has been suspended. Contact support.');
+    }
+
+    if (user.tenant?.status === 'EXPIRED') {
+      logger.warn({ email: normalizedEmail }, 'Login failed: Tenant subscription expired');
+      throw new Error('Your subscription has expired. Please renew.');
+    }
+
     const isBcrypt =
       user.password &&
       (user.password.startsWith('$2a$') ||
@@ -366,6 +391,31 @@ class AuthPrismaService {
     const user = await authRepository.findUserById(session.userId);
     if (!user) {
       throw new Error('User not found');
+    }
+
+    if (user.status === 'BLOCKED') {
+      await sessionService.revokeSession(session.id);
+      throw new Error('Your account has been blocked. Contact support.');
+    }
+
+    if (user.status === 'SUSPENDED') {
+      await sessionService.revokeSession(session.id);
+      throw new Error('Your account has been suspended. Contact support.');
+    }
+
+    if (user.tenant?.blacklisted) {
+      await sessionService.revokeSession(session.id);
+      throw new Error('Your organization has been blocked. Contact support.');
+    }
+
+    if (user.tenant?.status === 'SUSPENDED') {
+      await sessionService.revokeSession(session.id);
+      throw new Error('Your organization has been suspended. Contact support.');
+    }
+
+    if (user.tenant?.status === 'EXPIRED') {
+      await sessionService.revokeSession(session.id);
+      throw new Error('Your subscription has expired. Please renew.');
     }
 
     const newRefreshToken = sessionService.generateDeviceToken();

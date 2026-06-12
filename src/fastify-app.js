@@ -60,10 +60,12 @@ import rbacRoutes from './modules/access-control/routes/rbac.fastify.routes.js';
 import deliveryRoutes from './modules/delivery/routes/delivery.fastify.routes.js';
 import ecommerceRoutes from './modules/ecommerce/routes/ecommerce.fastify.routes.js';
 import importRoutes from './modules/import/routes/import.fastify.routes.js';
+import disposalRoutes from './modules/disposal/disposal.fastify.routes.js';
 import stockRoutes from './modules/stock/routes/stock.fastify.routes.js';
 import auditRoutes from './modules/audit/audit.fastify.routes.js';
 import communicationsRoutes from './modules/communications/routes/communications.fastify.routes.js';
 import loyaltyRoutes from './modules/loyalty/routes/loyalty.fastify.routes.js';
+import supplierReturnsRoutes from './modules/supplier-returns/routes/supplier-returns.routes.js';
 import adminRoutes from './modules/admin/routes/admin.routes.js';
 
 const dbHealthGauge = new client.Gauge({
@@ -359,6 +361,7 @@ const setupFastify = async () => {
   await fastify.register(deliveryRoutes, { prefix: '/api/delivery' });
   await fastify.register(ecommerceRoutes, { prefix: '/api/ecommerce' });
   await fastify.register(stockRoutes, { prefix: '/api/stock' });
+  await fastify.register(disposalRoutes, { prefix: '/api/inventory' });
   await fastify.register(importRoutes, {
     prefix: '/api/import',
     bodyLimit: 50 * 1024 * 1024,
@@ -366,6 +369,7 @@ const setupFastify = async () => {
   await fastify.register(auditRoutes, { prefix: '/api/audit' });
   await fastify.register(communicationsRoutes, { prefix: '/api/communications' });
   await fastify.register(loyaltyRoutes, { prefix: '/api/loyalty' });
+  await fastify.register(supplierReturnsRoutes, { prefix: '/api/supplier-returns' });
   await fastify.register(adminRoutes, { prefix: '/api/admin' });
 
   // ── Serve frontend static files (SPA) ──

@@ -160,6 +160,24 @@ async function adminRoutes(fastify) {
   );
 
   // ---- User Management (individual users, not tenants) ----
+  fastify.put(
+    '/users/:tenantId/users/:userId/status',
+    { preHandler: [authenticateAdmin, requireAdminRole('ROOT_ADMIN', 'ADMIN')] },
+    adminController.updateUserStatus,
+  );
+
+  fastify.put(
+    '/users/:tenantId/users/:userId/block',
+    { preHandler: [authenticateAdmin, requireAdminRole('ROOT_ADMIN', 'ADMIN')] },
+    adminController.blockUser,
+  );
+
+  fastify.put(
+    '/users/:tenantId/users/:userId/unblock',
+    { preHandler: [authenticateAdmin, requireAdminRole('ROOT_ADMIN', 'ADMIN')] },
+    adminController.unblockUser,
+  );
+
   fastify.delete(
     '/users/:tenantId/users/:userId',
     { preHandler: [authenticateAdmin, requireAdminRole('ROOT_ADMIN', 'ADMIN')] },
@@ -176,6 +194,13 @@ async function adminRoutes(fastify) {
     '/users/:tenantId/users/:userId/reset-device',
     { preHandler: [authenticateAdmin, requireAdminRole('ROOT_ADMIN', 'ADMIN')] },
     adminController.resetUserDevice,
+  );
+
+  // ---- List all users across all tenants ----
+  fastify.get(
+    '/users/list-all',
+    { preHandler: [authenticateAdmin] },
+    adminController.listAllUsers,
   );
 
   // ---- Tenant / Shop Management ----

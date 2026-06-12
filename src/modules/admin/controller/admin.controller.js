@@ -377,6 +377,82 @@ class AdminController {
     }
   }
 
+  async updateUserStatus(request, reply) {
+    try {
+      const { tenantId, userId } = request.params;
+      const user = await adminService.updateUserStatus(
+        tenantId,
+        userId,
+        request.body.status,
+        request.admin.id,
+        request.ip,
+        request.headers['user-agent'],
+      );
+      return reply.send(success(user));
+    } catch (error) {
+      return reply.code(400).send(errorResponse(error.message, 'UPDATE_USER_STATUS_FAILED'));
+    }
+  }
+
+  async blockUser(request, reply) {
+    try {
+      const { tenantId, userId } = request.params;
+      const user = await adminService.blockUser(
+        tenantId,
+        userId,
+        request.body.reason || 'Blocked by admin',
+        request.admin.id,
+        request.ip,
+        request.headers['user-agent'],
+      );
+      return reply.send(success(user));
+    } catch (error) {
+      return reply.code(400).send(errorResponse(error.message, 'BLOCK_USER_FAILED'));
+    }
+  }
+
+  async unblockUser(request, reply) {
+    try {
+      const { tenantId, userId } = request.params;
+      const user = await adminService.unblockUser(
+        tenantId,
+        userId,
+        request.admin.id,
+        request.ip,
+        request.headers['user-agent'],
+      );
+      return reply.send(success(user));
+    } catch (error) {
+      return reply.code(400).send(errorResponse(error.message, 'UNBLOCK_USER_FAILED'));
+    }
+  }
+
+  async listAllUsers(request, reply) {
+    try {
+      const query = {
+        page: parseInt(request.query.page) || 1,
+        limit: parseInt(request.query.limit) || 20,
+        search: request.query.search,
+        status: request.query.status,
+        role: request.query.role,
+        tenantId: request.query.tenantId,
+      };
+      const result = await adminService.listAllUsers(query);
+      return reply.send(
+        success(result.users, {
+          pagination: {
+            total: result.total,
+            page: result.page,
+            limit: result.limit,
+            totalPages: result.totalPages,
+          },
+        }),
+      );
+    } catch (error) {
+      return reply.code(400).send(errorResponse(error.message, 'LIST_USERS_FAILED'));
+    }
+  }
+
   async resetUserPassword(request, reply) {
     try {
       const result = await adminService.resetUserPassword(

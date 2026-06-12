@@ -98,6 +98,41 @@ export const authenticate = async (request, reply) => {
     });
   }
 
+  if (user.status === 'BLOCKED') {
+    return reply.code(403).send({
+      success: false,
+      error: { message: 'Your account has been blocked', code: 'USER_BLOCKED' },
+    });
+  }
+
+  if (user.status === 'SUSPENDED') {
+    return reply.code(403).send({
+      success: false,
+      error: { message: 'Your account has been suspended', code: 'USER_SUSPENDED' },
+    });
+  }
+
+  if (user.tenant?.blacklisted) {
+    return reply.code(403).send({
+      success: false,
+      error: { message: 'Your organization has been blocked', code: 'TENANT_BLACKLISTED' },
+    });
+  }
+
+  if (user.tenant?.status === 'SUSPENDED') {
+    return reply.code(403).send({
+      success: false,
+      error: { message: 'Your organization has been suspended', code: 'TENANT_SUSPENDED' },
+    });
+  }
+
+  if (user.tenant?.status === 'EXPIRED') {
+    return reply.code(403).send({
+      success: false,
+      error: { message: 'Your subscription has expired', code: 'SUBSCRIPTION_EXPIRED' },
+    });
+  }
+
   request.user = user;
   request.sessionId = sessionId;
   request.tenantId = user.tenantId;

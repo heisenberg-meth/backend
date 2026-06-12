@@ -69,6 +69,7 @@ model Tenant {
   hardwareDevices            HardwareDevice[]
   hsnSummaries               HsnSummary[]
   importJobs                 ImportJob[]
+  inventoryDisposals         InventoryDisposal[]
   integrationProviders       IntegrationProvider[]
   inventories                Inventory[]
   inventoryBatches           InventoryBatch[]
@@ -155,6 +156,7 @@ model Tenant {
   usageMetrics               UsageMetric[]
   users                      User[]
   warehouses                 Warehouse[]
+  supplierCreditNotes        SupplierCreditNote[]
 }
 
 model Branch {
@@ -207,6 +209,7 @@ model Branch {
   storeProfiles             StoreProfile[]
   storeProfileDocuments     StoreProfileDocument[]
   users                     User[]
+  inventoryDisposals        InventoryDisposal[]
 
   @@unique([tenantId, code])
   @@index([tenantId])
@@ -218,6 +221,9 @@ model User {
   password                     String
   fullName                     String
   role                         Role                       @default(OWNER)
+  status                       UserStatus                 @default(ACTIVE)
+  blockedAt                    DateTime?
+  blockedReason                String?
   tenantId                     String
   branchId                     String?
   createdAt                    DateTime                   @default(now())
@@ -279,6 +285,8 @@ model User {
   userSessions                 UserSession[]
   devices                      Device[]
   browserLock                  BrowserLock?
+  inventoryDisposals           InventoryDisposal[]        @relation("UserDisposals")
+  approvedSupplierReturns      SupplierReturn[]            @relation("SupplierReturnApprover")
 
   @@index([tenantId])
 }
@@ -638,6 +646,8 @@ model Medicine {
   stockMovements           StockMovement[]
   stockSnapshots           StockSnapshot[]
   supplierReturns          SupplierReturn[]
+  supplierReturnItems      SupplierReturnItem[]
+  inventoryDisposals       InventoryDisposal[]
 
   @@unique([tenantId, barcode])
   @@index([tenantId, name])
@@ -783,6 +793,8 @@ model InventoryBatch {
   storageType           BatchStorageType       @default(NORMAL)
   tenantId              String
   status                BatchStatus            @default(ACTIVE)
+  purchaseInvoiceId     String?
+  receivedDate          DateTime?
   auditLogs             BatchAuditLog[]
   damagedRecords        DamagedStock[]
   expiryAlerts          ExpiryAlert[]
@@ -793,6 +805,7 @@ model InventoryBatch {
   purchaseOrderItem     PurchaseOrderItem?     @relation(fields: [purchaseOrderItemId], references: [id])
   supplier              Supplier?              @relation(fields: [supplierId], references: [id])
   tenant                Tenant                 @relation(fields: [tenantId], references: [id])
+  purchaseInvoice       PurchaseInvoice?       @relation(fields: [purchaseInvoiceId], references: [id])
   invoiceItems          InvoiceItem[]
   medicineBarcodes      MedicineBarcode[]
   onlineOrderItems      OnlineOrderItem[]
@@ -803,6 +816,8 @@ model InventoryBatch {
   stockMovements        StockMovement[]
   transferItems         StockTransferItem[]
   supplierReturns       SupplierReturn[]
+  supplierReturnItems   SupplierReturnItem[]
+  inventoryDisposals    InventoryDisposal[]
 
   @@unique([tenantId, branchId, medicineId, batchNumber])
   @@index([expiryDate])
@@ -1047,6 +1062,7 @@ model Supplier {
   metrics            SupplierMetrics?
   payments           SupplierPayment[]
   supplierReturns    SupplierReturn[]
+  creditNotes        SupplierCreditNote[]
 
   @@unique([tenantId, gstNumber])
   @@unique([tenantId, supplierCode])
@@ -1159,8 +1175,9 @@ model SupplierReturn {
   id           String               @id @default(uuid())
   tenantId     String
   supplierId   String
-  batchId      String
-  quantity     Int
+  returnNumber String
+  batchId      String?
+  quantity     Int?
   reason       String?
   createdAt    DateTime             @default(now())
   updatedAt    DateTime             @updatedAt
@@ -1168,11 +1185,62 @@ model SupplierReturn {
   returnAmount Decimal?             @default(0) @db.Decimal(12, 2)
   createdBy    String?
   medicineId   String?
-  batch        InventoryBatch       @relation(fields: [batchId], references: [id])
+  approvedAt   DateTime?
+  approvedBy   String?
+  pickedUpAt   DateTime?
+  notes        String?
+  batch        InventoryBatch?      @relation(fields: [batchId], references: [id])
   creator      User?                @relation("SupplierReturnCreator", fields: [createdBy], references: [id], onDelete: NoAction, onUpdate: NoAction)
   medicine     Medicine?            @relation(fields: [medicineId], references: [id], onDelete: NoAction, onUpdate: NoAction)
   supplier     Supplier             @relation(fields: [supplierId], references: [id])
   tenant       Tenant               @relation(fields: [tenantId], references: [id])
+  creditNotes  SupplierCreditNote[]
+  items        SupplierReturnItem[]
+  approver     User?                @relation("SupplierReturnApprover", fields: [approvedBy], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@unique([tenantId, returnNumber])
+  @@index([tenantId, supplierId, status])
+  @@index([tenantId, createdAt])
+}
+
+model SupplierReturnItem {
+  id             String          @id @default(uuid())
+  returnId       String
+  medicineId     String
+  batchId        String
+  quantity       Int
+  expiryDate     DateTime?       @db.Date
+  purchasePrice  Decimal         @default(0) @db.Decimal(12, 2)
+  lossAmount     Decimal         @default(0) @db.Decimal(12, 2)
+  reason         String?
+  createdAt      DateTime        @default(now())
+  return         SupplierReturn  @relation(fields: [returnId], references: [id], onDelete: Cascade)
+  medicine       Medicine        @relation(fields: [medicineId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  batch          InventoryBatch  @relation(fields: [batchId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([returnId])
+  @@index([batchId])
+}
+
+model SupplierCreditNote {
+  id          String         @id @default(uuid())
+  tenantId    String
+  supplierId  String
+  returnId    String
+  creditNoteNumber String
+  amount      Decimal        @db.Decimal(12, 2)
+  status      CreditNoteStatus @default(ISSUED)
+  issuedAt    DateTime       @default(now())
+  appliedAt   DateTime?
+  notes       String?
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+  return      SupplierReturn @relation(fields: [returnId], references: [id])
+  supplier    Supplier       @relation(fields: [supplierId], references: [id])
+  tenant      Tenant         @relation(fields: [tenantId], references: [id])
+
+  @@unique([tenantId, creditNoteNumber])
+  @@index([tenantId, supplierId, status])
 }
 
 enum PaymentMode {
@@ -1322,6 +1390,7 @@ model PurchaseInvoice {
   supplier        Supplier                    @relation(fields: [supplierId], references: [id])
   tenant          Tenant                      @relation(fields: [tenantId], references: [id])
   allocations     SupplierPaymentAllocation[]
+  inventoryBatches InventoryBatch[]
 
   @@unique([tenantId, invoiceNumber])
   @@index([tenantId, invoiceDate])
@@ -3644,12 +3713,40 @@ model SequenceCounter {
   @@index([tenantId])
 }
 
+model InventoryDisposal {
+  id         String         @id @default(uuid())
+  tenantId   String
+  branchId   String?
+  medicineId String
+  batchId    String
+  quantity   Int
+  reason     String         @default("Expired Stock")
+  disposedBy String?
+  disposedAt DateTime       @default(now())
+  batch      InventoryBatch @relation(fields: [batchId], references: [id])
+  medicine   Medicine       @relation(fields: [medicineId], references: [id])
+  tenant     Tenant         @relation(fields: [tenantId], references: [id])
+  branch     Branch?        @relation(fields: [branchId], references: [id])
+  disposer   User?          @relation("UserDisposals", fields: [disposedBy], references: [id])
+
+  @@index([tenantId])
+  @@index([tenantId, disposedAt])
+  @@index([medicineId])
+  @@index([batchId])
+}
+
 enum Role {
   OWNER
   STAFF
   ADMIN
   PHARMACIST
   CASHIER
+}
+
+enum UserStatus {
+  ACTIVE
+  SUSPENDED
+  BLOCKED
 }
 
 enum SubscriptionStatus {
@@ -3968,11 +4065,15 @@ enum ReturnRefundStatus {
 }
 
 enum SupplierReturnStatus {
+  DRAFT
   PENDING
   APPROVED
-  REJECTED
+  PICKED_UP
   COMPLETED
+  REJECTED
 }
+
+
 
 enum SupplierPaymentStatus {
   PENDING
@@ -4119,6 +4220,8 @@ enum MovementType {
   RETURN
   DAMAGE
   EXPIRED
+  DISPOSAL
+  SUPPLIER_RETURN
   TRANSFER_IN
   TRANSFER_OUT
 }
