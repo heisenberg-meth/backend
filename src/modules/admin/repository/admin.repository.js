@@ -393,7 +393,7 @@ export const adminRepository = {
 
   async listTenants({ page, limit, search, status, sortBy, sortOrder, verified, blacklisted }) {
     const pageNum = parseInt(page) || 1;
-    const limitNum = parseInt(limit) || 20;
+    const limitNum = parseInt(limit) || 25;
     const where = {};
     if (search) {
       where.OR = [

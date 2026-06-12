@@ -316,7 +316,7 @@ class PurchaseOrderService {
               receivedQuantity: item.receivedQuantity,
               batchNumber: item.batchNumber,
               expiryDate: parsedExpiryDate,
-              purchasePrice: poItem.unitPrice,
+              purchasePrice: Number(poItem.unitPrice),
               sellingPrice: item.sellingPrice
                 ? Number(item.sellingPrice)
                 : Number(poItem.unitPrice) * 1.2,
@@ -372,7 +372,7 @@ class PurchaseOrderService {
                 availableQuantity: item.receivedQuantity,
                 receivedQuantity: item.receivedQuantity,
                 expiryDate: parsedExpiryDate,
-                purchasePrice: poItem.unitPrice,
+                purchasePrice: Number(poItem.unitPrice),
                 sellingPrice: item.sellingPrice
                   ? Number(item.sellingPrice)
                   : Number(poItem.unitPrice) * 1.2,
@@ -467,8 +467,8 @@ class PurchaseOrderService {
           const poItem = order.items.find((i) => i.medicineId === item.medicineId);
           if (!poItem) throw new Error(`Medicine ${item.medicineId} not found in PO`);
 
-          const lineSubtotal = item.receivedQuantity * poItem.unitPrice;
-          const lineGst = lineSubtotal * (poItem.gstPercentage / 100);
+          const lineSubtotal = item.receivedQuantity * Number(poItem.unitPrice);
+          const lineGst = lineSubtotal * (Number(poItem.gstPercentage) / 100);
           invoiceSubtotal += lineSubtotal;
           invoiceGstAmount += lineGst;
         }

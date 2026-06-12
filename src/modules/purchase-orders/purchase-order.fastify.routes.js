@@ -135,6 +135,7 @@ async function purchaseOrderRoutes(fastify) {
                   receivedQuantity: { type: 'integer', minimum: 1 },
                   batchNumber: { type: 'string' },
                   expiryDate: { type: 'string', format: 'date-time' },
+                  sellingPrice: { type: 'number' },
                 },
               },
             },

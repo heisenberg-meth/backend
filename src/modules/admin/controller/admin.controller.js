@@ -573,7 +573,7 @@ class AdminController {
     try {
       const query = {
         page: parseInt(request.query.page) || 1,
-        limit: parseInt(request.query.limit) || 20,
+        limit: parseInt(request.query.limit) || 25,
         search: request.query.search,
         status: request.query.status,
         verified: request.query.verified,
