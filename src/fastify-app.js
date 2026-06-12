@@ -10,6 +10,7 @@ import redis from '@fastify/redis';
 import fastifyJwt from '@fastify/jwt';
 import multipart from '@fastify/multipart';
 import rateLimit from '@fastify/rate-limit';
+import fastifyStatic from '@fastify/static';
 import client from 'prom-client';
 import { Prisma } from '@prisma/client';
 import prisma from './config/prisma.js';
@@ -366,6 +367,22 @@ const setupFastify = async () => {
   await fastify.register(communicationsRoutes, { prefix: '/api/communications' });
   await fastify.register(loyaltyRoutes, { prefix: '/api/loyalty' });
   await fastify.register(adminRoutes, { prefix: '/api/admin' });
+
+  // ── Serve frontend static files (SPA) ──
+  const frontendDist = new URL('../../frontend/dist', import.meta.url).pathname;
+  await fastify.register(fastifyStatic, {
+    root: frontendDist,
+    prefix: '/',
+    wildcard: false,
+  });
+
+  // SPA fallback: all non-API, non-file routes → index.html
+  fastify.setNotFoundHandler((request, reply) => {
+    if (request.url.startsWith('/api/') || request.url.startsWith('/avatars/') || request.url.startsWith('/uploads/')) {
+      return reply.code(404).send({ error: 'Not Found', message: `Route ${request.method}:${request.url} not found` });
+    }
+    return reply.sendFile('index.html');
+  });
 
   return fastify;
 };

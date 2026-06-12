@@ -12,7 +12,14 @@ model Tenant {
   email                      String                      @unique
   name                       String?
   address                    String?
-  gstNumber                  String?
+  gstNumber                  String?                     @unique
+  drugLicenseNumber          String?                     @unique
+  phone                      String?
+  isVerified                 Boolean                     @default(false)
+  verifiedAt                 DateTime?
+  blacklisted                Boolean                     @default(false)
+  blacklistedAt              DateTime?
+  blacklistReason            String?
   createdAt                  DateTime                    @default(now())
   updatedAt                  DateTime                    @updatedAt
   deletedAt                  DateTime?
@@ -139,6 +146,7 @@ model Tenant {
   supplierPayments           SupplierPayment[]
   supplierPaymentAllocations SupplierPaymentAllocation[]
   supplierReturns            SupplierReturn[]
+  supportTickets             SupportTicket[]
   tallyExports               TallyExport[]
   tenantBranding             TenantBranding?
   tenantDomains              TenantDomain[]
@@ -3142,26 +3150,26 @@ model MobileDevice {
 }
 
 model Device {
-  id             String    @id @default(uuid())
-  userId         String
-  fingerprintId  String
-  deviceToken    String    @unique
-  browser        String?
-  os             String?
-  lastSeen       DateTime  @default(now())
-  createdAt      DateTime  @default(now())
-  user           User      @relation(fields: [userId], references: [id])
+  id            String   @id @default(uuid())
+  userId        String
+  fingerprintId String
+  deviceToken   String   @unique
+  browser       String?
+  os            String?
+  lastSeen      DateTime @default(now())
+  createdAt     DateTime @default(now())
+  user          User     @relation(fields: [userId], references: [id])
 
   @@index([userId])
   @@index([fingerprintId])
 }
 
 model BrowserLock {
-  id             String    @id @default(uuid())
-  fingerprintId  String    @unique
-  userId         String    @unique
-  user           User      @relation(fields: [userId], references: [id])
-  createdAt      DateTime  @default(now())
+  id            String   @id @default(uuid())
+  fingerprintId String   @unique
+  userId        String   @unique
+  user          User     @relation(fields: [userId], references: [id])
+  createdAt     DateTime @default(now())
 }
 
 model RevenueSnapshot {
@@ -4144,16 +4152,16 @@ enum VerificationStatus {
 }
 
 model AdminUser {
-  id            String       @id @default(uuid())
-  email         String       @unique
-  passwordHash  String
-  name          String
-  role          AdminRole    @default(SUPPORT)
-  permissions   String[]
-  lastLoginAt   DateTime?
-  isActive      Boolean      @default(true)
-  createdAt     DateTime     @default(now())
-  updatedAt     DateTime     @updatedAt
+  id           String    @id @default(uuid())
+  email        String    @unique
+  passwordHash String
+  name         String
+  role         AdminRole @default(SUPPORT)
+  permissions  String[]
+  lastLoginAt  DateTime?
+  isActive     Boolean   @default(true)
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
 
   @@index([email])
   @@index([role])
@@ -4161,15 +4169,15 @@ model AdminUser {
 }
 
 model AdminAuditLog {
-  id           String   @id @default(uuid())
-  adminUserId  String?
-  action       String
-  targetType   String
-  targetId     String
-  metadata     Json?
-  ipAddress    String?
-  userAgent    String?
-  createdAt    DateTime @default(now())
+  id          String   @id @default(uuid())
+  adminUserId String?
+  action      String
+  targetType  String
+  targetId    String
+  metadata    Json?
+  ipAddress   String?
+  userAgent   String?
+  createdAt   DateTime @default(now())
 
   @@index([adminUserId])
   @@index([targetType, targetId])
@@ -4178,21 +4186,21 @@ model AdminAuditLog {
 }
 
 model AdminDevice {
-  id             String   @id @default(uuid())
-  shopId         String
+  id              String    @id @default(uuid())
+  shopId          String
   fingerprintHash String
-  deviceToken    String?
-  browser        String?
-  os             String?
-  ipAddress      String?
-  country        String?
-  firstSeen      DateTime @default(now())
-  lastSeen       DateTime @updatedAt
-  riskScore      Int      @default(0)
-  isBlocked      Boolean  @default(false)
-  blockedAt      DateTime?
-  blockedBy      String?
-  blockReason    String?
+  deviceToken     String?
+  browser         String?
+  os              String?
+  ipAddress       String?
+  country         String?
+  firstSeen       DateTime  @default(now())
+  lastSeen        DateTime  @updatedAt
+  riskScore       Int       @default(0)
+  isBlocked       Boolean   @default(false)
+  blockedAt       DateTime?
+  blockedBy       String?
+  blockReason     String?
 
   @@index([shopId])
   @@index([fingerprintHash])
@@ -4207,13 +4215,63 @@ model AdminFeatureFlag {
   name        String
   description String?
   enabled     Boolean  @default(false)
-  targetType  String?  // ALL, PLAN, SHOP
+  targetType  String? // ALL, PLAN, SHOP
   targetIds   String[]
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
   @@index([enabled])
   @@index([targetType])
+}
+
+model SupportTicket {
+  id         String                @id @default(uuid())
+  tenantId   String
+  subject    String
+  message    String
+  priority   SupportTicketPriority @default(MEDIUM)
+  status     SupportTicketStatus   @default(OPEN)
+  assignedTo String?
+  createdBy  String
+  resolvedAt DateTime?
+  createdAt  DateTime              @default(now())
+  updatedAt  DateTime              @updatedAt
+
+  tenant  Tenant               @relation(fields: [tenantId], references: [id])
+  replies SupportTicketReply[]
+
+  @@index([tenantId])
+  @@index([status])
+  @@index([priority])
+  @@index([assignedTo])
+}
+
+model SupportTicketReply {
+  id         String   @id @default(uuid())
+  ticketId   String
+  message    String
+  authorId   String
+  authorRole String // ADMIN, TENANT, SYSTEM
+  createdAt  DateTime @default(now())
+
+  ticket SupportTicket @relation(fields: [ticketId], references: [id])
+
+  @@index([ticketId])
+}
+
+enum SupportTicketPriority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
+}
+
+enum SupportTicketStatus {
+  OPEN
+  IN_PROGRESS
+  WAITING_ON_CUSTOMER
+  RESOLVED
+  CLOSED
 }
 
 enum AdminRole {

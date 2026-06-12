@@ -213,6 +213,15 @@ class AdminController {
     }
   }
 
+  async unlinkDevice(request, reply) {
+    try {
+      await adminService.unlinkDevice(request.params.id);
+      return reply.send(success({ unlinked: true }));
+    } catch (error) {
+      return reply.code(400).send(errorResponse(error.message, 'UNLINK_DEVICE_FAILED'));
+    }
+  }
+
   async unblockDevice(request, reply) {
     try {
       const device = await adminService.unblockDevice(
@@ -280,6 +289,142 @@ class AdminController {
     }
   }
 
+  async listSubscriptions(request, reply) {
+    try {
+      const subs = await adminService.listSubscriptions(request.query);
+      return reply.send(success(subs));
+    } catch (error) {
+      return reply.code(500).send(errorResponse(error.message, 'LIST_SUBS_FAILED'));
+    }
+  }
+
+  async updateSubscription(request, reply) {
+    try {
+      const sub = await adminService.updateSubscription(request.params.id, request.body);
+      return reply.send(success(sub));
+    } catch (error) {
+      return reply.code(400).send(errorResponse(error.message, 'UPDATE_SUB_FAILED'));
+    }
+  }
+
+  async renewSubscription(request, reply) {
+    try {
+      const sub = await adminService.renewSubscription(request.params.id, request.body);
+      return reply.send(success(sub));
+    } catch (error) {
+      return reply.code(400).send(errorResponse(error.message, 'RENEW_SUB_FAILED'));
+    }
+  }
+
+  async extendSubscription(request, reply) {
+    try {
+      const sub = await adminService.extendSubscription(request.params.id, request.body);
+      return reply.send(success(sub));
+    } catch (error) {
+      return reply.code(400).send(errorResponse(error.message, 'EXTEND_SUB_FAILED'));
+    }
+  }
+
+  async cancelSubscription(request, reply) {
+    try {
+      const sub = await adminService.cancelSubscription(request.params.id);
+      return reply.send(success(sub));
+    } catch (error) {
+      return reply.code(400).send(errorResponse(error.message, 'CANCEL_SUB_FAILED'));
+    }
+  }
+
+  async deleteUser(request, reply) {
+    try {
+      const { tenantId, userId } = request.params;
+      await adminService.deleteUser(tenantId, userId);
+      return reply.send(success({ deleted: true }));
+    } catch (error) {
+      return reply.code(400).send(errorResponse(error.message, 'DELETE_USER_FAILED'));
+    }
+  }
+
+  async resetUserPassword(request, reply) {
+    try {
+      const result = await adminService.resetUserPassword(request.params.tenantId, request.params.userId);
+      return reply.send(success(result));
+    } catch (error) {
+      return reply.code(400).send(errorResponse(error.message, 'RESET_PASSWORD_FAILED'));
+    }
+  }
+
+  async resetUserDevice(request, reply) {
+    try {
+      await adminService.resetUserDevice(request.params.tenantId, request.params.userId);
+      return reply.send(success({ reset: true }));
+    } catch (error) {
+      return reply.code(400).send(errorResponse(error.message, 'RESET_DEVICE_FAILED'));
+    }
+  }
+
+  async listShops(request, reply) {
+    try {
+      const shops = await adminService.listShops(request.query);
+      return reply.send(success(shops));
+    } catch (error) {
+      return reply.code(500).send(errorResponse(error.message, 'LIST_SHOPS_FAILED'));
+    }
+  }
+
+  async getShopDetail(request, reply) {
+    try {
+      const shop = await adminService.getShopDetail(request.params.id);
+      return reply.send(success(shop));
+    } catch (error) {
+      return reply.code(404).send(errorResponse(error.message, 'SHOP_NOT_FOUND'));
+    }
+  }
+
+  async updateShop(request, reply) {
+    try {
+      const shop = await adminService.updateShop(request.params.id, request.body);
+      return reply.send(success(shop));
+    } catch (error) {
+      return reply.code(400).send(errorResponse(error.message, 'UPDATE_SHOP_FAILED'));
+    }
+  }
+
+  async approveShop(request, reply) {
+    try {
+      const shop = await adminService.approveShop(request.params.id);
+      return reply.send(success(shop));
+    } catch (error) {
+      return reply.code(400).send(errorResponse(error.message, 'APPROVE_SHOP_FAILED'));
+    }
+  }
+
+  async suspendShop(request, reply) {
+    try {
+      const shop = await adminService.suspendShop(request.params.id);
+      return reply.send(success(shop));
+    } catch (error) {
+      return reply.code(400).send(errorResponse(error.message, 'SUSPEND_SHOP_FAILED'));
+    }
+  }
+
+  async blockShop(request, reply) {
+    try {
+      const shop = await adminService.blockShop(request.params.id, request.body?.reason);
+      return reply.send(success(shop));
+    } catch (error) {
+      return reply.code(400).send(errorResponse(error.message, 'BLOCK_SHOP_FAILED'));
+    }
+  }
+
+  async deleteShop(request, reply) {
+    try {
+      await adminService.deleteShop(request.params.id);
+      return reply.send(success({ deleted: true }));
+    } catch (error) {
+      return reply.code(400).send(errorResponse(error.message, 'DELETE_SHOP_FAILED'));
+    }
+  }
+
   async listTenants(request, reply) {
     try {
       const query = {
@@ -287,6 +432,8 @@ class AdminController {
         limit: parseInt(request.query.limit) || 20,
         search: request.query.search,
         status: request.query.status,
+        verified: request.query.verified,
+        blacklisted: request.query.blacklisted,
         sortBy: request.query.sortBy || 'createdAt',
         sortOrder: request.query.sortOrder || 'desc',
       };
@@ -297,6 +444,61 @@ class AdminController {
       }}));
     } catch (error) {
       return reply.code(400).send(errorResponse(error.message, 'LIST_TENANTS_FAILED'));
+    }
+  }
+
+  async getTenantDetail(request, reply) {
+    try {
+      const tenant = await adminService.getTenantDetail(request.params.id);
+      return reply.send(success(tenant));
+    } catch (error) {
+      if (error.message === 'Tenant not found') {
+        return reply.code(404).send(errorResponse(error.message, 'TENANT_NOT_FOUND'));
+      }
+      return reply.code(400).send(errorResponse(error.message, 'TENANT_DETAIL_FAILED'));
+    }
+  }
+
+  async verifyTenant(request, reply) {
+    try {
+      const tenant = await adminService.verifyTenant(
+        request.params.id,
+        request.admin.id,
+        request.ip,
+        request.headers['user-agent'],
+      );
+      return reply.send(success(tenant));
+    } catch (error) {
+      return reply.code(400).send(errorResponse(error.message, 'TENANT_VERIFY_FAILED'));
+    }
+  }
+
+  async blacklistTenant(request, reply) {
+    try {
+      const tenant = await adminService.blacklistTenant(
+        request.params.id,
+        request.body.reason || 'Admin action',
+        request.admin.id,
+        request.ip,
+        request.headers['user-agent'],
+      );
+      return reply.send(success(tenant));
+    } catch (error) {
+      return reply.code(400).send(errorResponse(error.message, 'TENANT_BLACKLIST_FAILED'));
+    }
+  }
+
+  async unblacklistTenant(request, reply) {
+    try {
+      const tenant = await adminService.unblacklistTenant(
+        request.params.id,
+        request.admin.id,
+        request.ip,
+        request.headers['user-agent'],
+      );
+      return reply.send(success(tenant));
+    } catch (error) {
+      return reply.code(400).send(errorResponse(error.message, 'TENANT_UNBLACKLIST_FAILED'));
     }
   }
 
@@ -320,7 +522,16 @@ class AdminController {
       const stats = await adminService.getDashboardStats();
       return reply.send(success(stats));
     } catch (error) {
-      return reply.code(500).send(errorResponse(error.message, 'DASHBOARD_STATS_FAILED'));
+      return reply.code(500).send(errorResponse(error.message, 'DASHBOARD_FAILED'));
+    }
+  }
+
+  async getDashboardTrends(request, reply) {
+    try {
+      const trends = await adminService.getDashboardTrends();
+      return reply.send(success(trends));
+    } catch (error) {
+      return reply.code(500).send(errorResponse(error.message, 'TRENDS_FAILED'));
     }
   }
 
@@ -331,6 +542,207 @@ class AdminController {
       return reply.send(success(subscriptions));
     } catch (error) {
       return reply.code(400).send(errorResponse(error.message, 'EXPIRING_SUBS_FAILED'));
+    }
+  }
+
+  async getSystemHealth(request, reply) {
+    try {
+      const health = await adminService.getSystemHealth();
+      return reply.send(success(health));
+    } catch (error) {
+      return reply.code(500).send(errorResponse(error.message, 'SYSTEM_HEALTH_FAILED'));
+    }
+  }
+
+  async listSupportTickets(request, reply) {
+    try {
+      const tickets = await adminService.listSupportTickets(request.query);
+      return reply.send(success(tickets));
+    } catch (error) {
+      return reply.code(500).send(errorResponse(error.message, 'LIST_TICKETS_FAILED'));
+    }
+  }
+
+  async getSupportTicket(request, reply) {
+    try {
+      const ticket = await adminService.getSupportTicket(request.params.id);
+      return reply.send(success(ticket));
+    } catch (error) {
+      return reply.code(404).send(errorResponse(error.message, 'TICKET_NOT_FOUND'));
+    }
+  }
+
+  async replySupportTicket(request, reply) {
+    try {
+      const { id } = request.params;
+      const { message } = request.body;
+      const adminId = request.admin.id;
+      const result = await adminService.replySupportTicket(id, message, adminId);
+      return reply.send(success(result));
+    } catch (error) {
+      return reply.code(400).send(errorResponse(error.message, 'TICKET_REPLY_FAILED'));
+    }
+  }
+
+  async updateSupportTicketStatus(request, reply) {
+    try {
+      const { id } = request.params;
+      const { status } = request.body;
+      const result = await adminService.updateSupportTicketStatus(id, status);
+      return reply.send(success(result));
+    } catch (error) {
+      return reply.code(400).send(errorResponse(error.message, 'TICKET_UPDATE_FAILED'));
+    }
+  }
+
+  async getExpiryOverview(request, reply) {
+    try {
+      const overview = await adminService.getExpiryOverview();
+      return reply.send(success(overview));
+    } catch (error) {
+      return reply.code(500).send(errorResponse(error.message, 'EXPIRY_OVERVIEW_FAILED'));
+    }
+  }
+
+  async sendExpiryReminders(request, reply) {
+    try {
+      const result = await adminService.sendExpiryReminders(request.body);
+      return reply.send(success(result));
+    } catch (error) {
+      return reply.code(400).send(errorResponse(error.message, 'EXPIRY_REMINDER_FAILED'));
+    }
+  }
+
+  async sendBroadcast(request, reply) {
+    try {
+      const result = await adminService.sendBroadcast(request.body);
+      return reply.send(success(result));
+    } catch (error) {
+      return reply.code(400).send(errorResponse(error.message, 'BROADCAST_FAILED'));
+    }
+  }
+
+  async getRevenueOverview(request, reply) {
+    try {
+      const overview = await adminService.getRevenueOverview();
+      return reply.send(success(overview));
+    } catch (error) {
+      return reply.code(500).send(errorResponse(error.message, 'REVENUE_OVERVIEW_FAILED'));
+    }
+  }
+
+  async getMonthlyRevenue(request, reply) {
+    try {
+      const months = parseInt(request.query.months) || 12;
+      const data = await adminService.getMonthlyRevenue(months);
+      return reply.send(success(data));
+    } catch (error) {
+      return reply.code(400).send(errorResponse(error.message, 'MONTHLY_REVENUE_FAILED'));
+    }
+  }
+
+  async generateInvoice(request, reply) {
+    try {
+      const invoice = await adminService.generateInvoice(request.body);
+      return reply.send(success(invoice));
+    } catch (error) {
+      return reply.code(400).send(errorResponse(error.message, 'INVOICE_FAILED'));
+    }
+  }
+
+  async listPayments(request, reply) {
+    try {
+      const query = {
+        page: parseInt(request.query.page) || 1,
+        limit: parseInt(request.query.limit) || 20,
+        search: request.query.search,
+        status: request.query.status,
+        from: request.query.from,
+        to: request.query.to,
+      };
+      const result = await adminService.listPayments(query);
+      return reply.send(success(result.payments, { pagination: {
+        total: result.total, page: result.page,
+        limit: result.limit, totalPages: result.totalPages,
+      }}));
+    } catch (error) {
+      return reply.code(400).send(errorResponse(error.message, 'LIST_PAYMENTS_FAILED'));
+    }
+  }
+
+  async getPaymentDetail(request, reply) {
+    try {
+      const payment = await adminService.getPaymentDetail(request.params.id);
+      return reply.send(success(payment));
+    } catch (error) {
+      return reply.code(404).send(errorResponse(error.message, 'PAYMENT_NOT_FOUND'));
+    }
+  }
+
+  async refundPayment(request, reply) {
+    try {
+      const payment = await adminService.refundPayment(
+        request.params.id,
+        request.body.reason || 'Admin initiated refund',
+        request.admin.id,
+        request.ip,
+        request.headers['user-agent'],
+      );
+      return reply.send(success(payment));
+    } catch (error) {
+      return reply.code(400).send(errorResponse(error.message, 'PAYMENT_REFUND_FAILED'));
+    }
+  }
+
+  async updatePaymentStatus(request, reply) {
+    try {
+      const payment = await adminService.updatePaymentStatus(
+        request.params.id,
+        request.body.status,
+        request.admin.id,
+        request.ip,
+        request.headers['user-agent'],
+      );
+      return reply.send(success(payment));
+    } catch (error) {
+      return reply.code(400).send(errorResponse(error.message, 'PAYMENT_STATUS_FAILED'));
+    }
+  }
+
+  async getSecurityOverview(request, reply) {
+    try {
+      const overview = await adminService.getSecurityOverview();
+      return reply.send(success(overview));
+    } catch (error) {
+      return reply.code(500).send(errorResponse(error.message, 'SECURITY_OVERVIEW_FAILED'));
+    }
+  }
+
+  async getLoginAttempts(request, reply) {
+    try {
+      const query = {
+        page: parseInt(request.query.page) || 1,
+        limit: parseInt(request.query.limit) || 50,
+        outcome: request.query.outcome,
+        from: request.query.from,
+        to: request.query.to,
+      };
+      const result = await adminService.getLoginAttempts(query);
+      return reply.send(success(result.attempts, { pagination: {
+        total: result.total, page: result.page,
+        limit: result.limit, totalPages: result.totalPages,
+      }}));
+    } catch (error) {
+      return reply.code(400).send(errorResponse(error.message, 'LOGIN_ATTEMPTS_FAILED'));
+    }
+  }
+
+  async getSecurityAlerts(request, reply) {
+    try {
+      const alerts = await adminService.getSecurityAlerts();
+      return reply.send(success(alerts));
+    } catch (error) {
+      return reply.code(400).send(errorResponse(error.message, 'SECURITY_ALERTS_FAILED'));
     }
   }
 }
