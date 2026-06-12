@@ -63,7 +63,8 @@ class DashboardFastifyController {
     } catch (error) {
       request.log.error(
         {
-          err: error.message,
+          endpoint: 'dashboard-overview',
+          message: error.message,
           stack: error.stack,
           tenantId: request.tenantId,
           userRole: request.user?.role,

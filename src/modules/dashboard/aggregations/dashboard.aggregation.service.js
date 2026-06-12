@@ -13,6 +13,10 @@ const ROLE_DASHBOARD_CONFIG = {
 
 class DashboardAggregationService {
   async getExecutiveSummary(tenantId, userRole = 'OWNER') {
+    if (!tenantId) {
+      throw new Error('Tenant missing');
+    }
+
     if (!this._hasAccess(userRole, 'overview')) {
       const error = new Error('Insufficient permissions for overview');
       error.statusCode = 403;
@@ -22,7 +26,7 @@ class DashboardAggregationService {
     const cached = await dashboardCacheManager.get(tenantId, 'executive_summary');
     if (cached) return cached;
 
-    const [financials, inventory, pendingOrders, today, activeAlerts] = await Promise.all([
+    const results = await Promise.allSettled([
       this.getFinancialSummary(tenantId, userRole),
       this.getLowStockSummary(tenantId, userRole),
       this.getPendingOrders(tenantId, userRole),
@@ -30,23 +34,63 @@ class DashboardAggregationService {
       prisma.stockAlert.count({ where: { tenantId, isResolved: false } }),
     ]);
 
+    const safeValue = (result, fallback) => {
+      if (result.status === 'fulfilled') return result.value;
+      logger.error(
+        { err: result.reason, endpoint: 'dashboard-overview' },
+        'Dashboard metric failed',
+      );
+      return fallback;
+    };
+
+    const financials = safeValue(results[0], {
+      totalSuppliers: 0,
+      todayRevenue: 0,
+      todayInvoices: 0,
+      monthRevenue: 0,
+      monthInvoices: 0,
+      pendingOrders: 0,
+    });
+    const inventory = safeValue(results[1], {
+      critical: 0,
+      low: 0,
+      outOfStock: 0,
+      totalSku: 0,
+      lowStock: 0,
+      expiring30d: 0,
+      inventoryValue: 0,
+      topRisks: [],
+    });
+    const pendingOrders = safeValue(results[2], {
+      pendingPOs: 0,
+      delayedDeliveries: 0,
+      awaitingApproval: 0,
+    });
+    const today = safeValue(results[3], { invoices: 0, patients: 0, prescriptions: 0, revenue: 0 });
+    const activeAlerts = safeValue(results[4], 0);
+
+    const warnings = results
+      .map((r, i) => (r.status === 'rejected' ? `metric_${i}_failed` : null))
+      .filter(Boolean);
+
     const data = {
       financials,
       inventory,
       pendingOrders,
       today,
-      totalSuppliers: financials.totalSuppliers,
-      totalCustomers: today.patients,
-      activeAlerts: activeAlerts,
+      totalSuppliers: financials.totalSuppliers || 0,
+      totalCustomers: today.patients || 0,
+      activeAlerts: activeAlerts || 0,
       suppliers: {
-        total: financials.totalSuppliers,
+        total: financials.totalSuppliers || 0,
       },
       patients: {
-        total: today.patients,
+        total: today.patients || 0,
       },
       alerts: {
-        active: activeAlerts,
+        active: activeAlerts || 0,
       },
+      warnings,
       generatedAt: new Date().toISOString(),
     };
 
@@ -176,8 +220,28 @@ class DashboardAggregationService {
   }
 
   async getSystemHealth() {
+    let dbStatus = 'healthy';
+    let redisStatus = 'healthy';
+
+    try {
+      await prisma.$queryRaw`SELECT 1`;
+    } catch (error) {
+      dbStatus = 'unhealthy';
+      logger.error({ err: error }, 'Database health check failed');
+    }
+
+    try {
+      // Just test a get/set or simple ping if available. We will rely on our cache manager.
+      await dashboardCacheManager.client.ping();
+    } catch (error) {
+      redisStatus = 'unhealthy';
+      logger.error({ err: error }, 'Redis health check failed');
+    }
+
     return {
-      status: 'healthy',
+      database: dbStatus,
+      redis: redisStatus,
+      server: 'healthy',
       uptime: process.uptime(),
       computedAt: new Date().toISOString(),
     };
