@@ -74,10 +74,7 @@ class DisposalService {
       (s, b) => s + Number(b.quantity) * Number(b.purchasePrice),
       0,
     );
-    const totalMrpLoss = batches.reduce(
-      (s, b) => s + Number(b.quantity) * Number(b.mrp),
-      0,
-    );
+    const totalMrpLoss = batches.reduce((s, b) => s + Number(b.quantity) * Number(b.mrp), 0);
 
     return {
       totalExpiredProducts: totalItems,
@@ -120,12 +117,17 @@ class DisposalService {
       await prisma.$transaction(async (tx) => {
         const batchBranchId = batch.branchId;
 
+        const remainingQuantity = batch.quantity - quantity;
+        const remainingAvailable = batch.availableQuantity - quantity;
+        const newStatus =
+          remainingQuantity <= 0 && remainingAvailable <= 0 ? 'ARCHIVED' : 'EXPIRED';
+
         await tx.inventoryBatch.update({
           where: { id: batchId },
           data: {
             quantity: { decrement: quantity },
             availableQuantity: { decrement: quantity },
-            status: 'EXPIRED',
+            status: newStatus,
           },
         });
 
