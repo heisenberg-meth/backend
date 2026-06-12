@@ -3,6 +3,7 @@ import { DOMAIN_EVENTS } from '../../../shared/constants/events.js';
 import { emitLocalEvent } from '../../../shared/events/local-event-bus.js';
 import { emitEvent } from '../../../shared/events/erp-event-bus.js';
 import movementService from '../../stock/service/movement.service.js';
+import logger from '@/shared/utils/logger.js';
 
 class RefundEngine {
   _findInvoiceItem(invoiceItems, refundItem) {
@@ -22,7 +23,7 @@ class RefundEngine {
   async processRefund(tenantId, userId, data) {
     const { invoiceId, reason, items = [], refundAmount } = data;
 
-    return prisma.$transaction(async (tx) => {
+    const result = await prisma.$transaction(async (tx) => {
       const invoice = await tx.invoice.findUnique({
         where: { id: invoiceId },
         include: { items: true, sale: true },
@@ -124,21 +125,34 @@ class RefundEngine {
         },
       });
 
+      return {
+        salesReturn,
+        isFullRefund,
+        invoiceId,
+        tenantId,
+        branchId: invoice.branchId,
+        actualRefundAmount,
+      };
+    });
+
+    try {
       emitLocalEvent(DOMAIN_EVENTS.REFUND_PROCESSED, {
         invoiceId,
-        refundAmount: actualRefundAmount,
+        refundAmount: result.actualRefundAmount,
         tenantId,
       });
       emitLocalEvent(DOMAIN_EVENTS.SALE_RETURNED, {
         invoiceId,
         tenantId,
-        branchId: invoice.branchId,
-        refundAmount: actualRefundAmount,
+        branchId: result.branchId,
+        refundAmount: result.actualRefundAmount,
       });
       await emitEvent(DOMAIN_EVENTS.REFUND_PROCESSED, { invoiceId, tenantId });
+    } catch (err) {
+      logger.info(err);
+    }
 
-      return { salesReturn, isFullRefund };
-    });
+    return { salesReturn: result.salesReturn, isFullRefund: result.isFullRefund };
   }
 
   async cancelInvoice(tenantId, invoiceId, userId, reason) {

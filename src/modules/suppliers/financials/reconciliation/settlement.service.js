@@ -4,6 +4,7 @@ import { DOMAIN_EVENTS } from '../../../../shared/constants/events.js';
 import { emitLocalEvent } from '../../../../shared/events/local-event-bus.js';
 import { emitEvent } from '../../../../shared/events/erp-event-bus.js';
 import auditService from '../../../audit/service/audit.prisma.service.js';
+import logger from '@/shared/utils/logger.js';
 
 class SettlementService {
   /**
@@ -20,7 +21,7 @@ class SettlementService {
       invoiceIds = [],
     } = data;
 
-    return prisma.$transaction(async (tx) => {
+    const result = await prisma.$transaction(async (tx) => {
       // 1. Create Payment Record
       const payment = await tx.supplierPayment.create({
         data: {
@@ -50,6 +51,7 @@ class SettlementService {
       // 3. Reconciliation: Allocate payment to invoices
       let remainingAmount = amount;
       const allocations = [];
+      const reconciledInvoices = [];
 
       for (const invoiceId of invoiceIds) {
         if (remainingAmount <= 0) break;
@@ -90,8 +92,7 @@ class SettlementService {
         allocations.push(allocation);
         remainingAmount -= allocatedAmount;
 
-        // Emit Reconciliation Event
-        emitLocalEvent(DOMAIN_EVENTS.SUPPLIER_INVOICE_RECONCILED, {
+        reconciledInvoices.push({
           invoiceId,
           paymentId: payment.id,
           amount: allocatedAmount,
@@ -107,16 +108,29 @@ class SettlementService {
         type: 'FINANCIAL',
       });
 
-      // 5. Emit Global Events
+      return { payment, allocations, unallocatedAmount: remainingAmount, reconciledInvoices };
+    });
+
+    // Publish events AFTER transaction commits
+    try {
+      for (const recon of result.reconciledInvoices) {
+        emitLocalEvent(DOMAIN_EVENTS.SUPPLIER_INVOICE_RECEIVED, recon);
+      }
+
       emitLocalEvent(DOMAIN_EVENTS.SUPPLIER_PAYMENT_MADE, {
-        paymentId: payment.id,
+        paymentId: result.payment.id,
         supplierId,
         tenantId,
       });
-      await emitEvent(DOMAIN_EVENTS.SUPPLIER_PAYMENT_MADE, { paymentId: payment.id, tenantId });
+      await emitEvent(DOMAIN_EVENTS.SUPPLIER_PAYMENT_MADE, {
+        paymentId: result.payment.id,
+        tenantId,
+      });
+    } catch (eventError) {
+      logger.info(eventError);
+    }
 
-      return { payment, allocations, unallocatedAmount: remainingAmount };
-    });
+    return result;
   }
 
   /**

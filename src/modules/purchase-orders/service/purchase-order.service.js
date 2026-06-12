@@ -132,8 +132,8 @@ class PurchaseOrderService {
 
     const nextStatus = procurementStateMachine.transition(order.status, 'APPROVE');
 
-    return prisma.$transaction(async (tx) => {
-      const updated = await tx.purchaseOrder.update({
+    const updated = await prisma.$transaction(async (tx) => {
+      const result = await tx.purchaseOrder.update({
         where: { id, tenantId },
         data: {
           status: nextStatus,
@@ -152,11 +152,20 @@ class PurchaseOrderService {
         },
       });
 
+      return result;
+    });
+
+    try {
       emitLocalEvent(DOMAIN_EVENTS.PURCHASE_ORDER_APPROVED, { orderId: id, tenantId, userId });
       await emitEvent(DOMAIN_EVENTS.PURCHASE_ORDER_APPROVED, { orderId: id, tenantId });
+    } catch (eventError) {
+      logger.error(
+        { message: eventError.message, orderId: id },
+        'EVENT_PUBLISH_FAILED_AFTER_APPROVE',
+      );
+    }
 
-      return updated;
-    });
+    return updated;
   }
 
   async cancelOrder(tenantId, id, userId, reason) {
@@ -191,9 +200,9 @@ class PurchaseOrderService {
 
       logger.info(
         {
-          receivedItems
+          receivedItems,
         },
-        'RECEIVED_ITEMS_PAYLOAD'
+        'RECEIVED_ITEMS_PAYLOAD',
       );
 
       if (!receivedItems?.length) {
@@ -213,8 +222,14 @@ class PurchaseOrderService {
       if (!order.tenantId || order.tenantId !== tenantId) {
         throw new Error('Purchase order tenantId mismatch or missing');
       }
-      if (order.status !== PROCUREMENT_STATUS.APPROVED && order.status !== PROCUREMENT_STATUS.ORDERED && order.status !== PROCUREMENT_STATUS.PARTIALLY_RECEIVED) {
-        throw new Error(`Purchase order must be APPROVED, ORDERED, or PARTIALLY_RECEIVED to receive goods. Current status: ${order.status}`);
+      if (
+        order.status !== PROCUREMENT_STATUS.APPROVED &&
+        order.status !== PROCUREMENT_STATUS.ORDERED &&
+        order.status !== PROCUREMENT_STATUS.PARTIALLY_RECEIVED
+      ) {
+        throw new Error(
+          `Purchase order must be APPROVED, ORDERED, or PARTIALLY_RECEIVED to receive goods. Current status: ${order.status}`,
+        );
       }
       if (!order.items?.length) {
         throw new Error('Purchase order has no items to receive');
@@ -263,6 +278,9 @@ class PurchaseOrderService {
       }
 
       const result = await prisma.$transaction(async (tx) => {
+        // Lock the Purchase Order to prevent concurrent receive operations
+        await tx.$queryRaw`SELECT id FROM "PurchaseOrder" WHERE id = ${id} FOR UPDATE`;
+
         const now = new Date();
         const grnNumber = `GRN-${now.getTime()}`;
 
@@ -336,13 +354,24 @@ class PurchaseOrderService {
 
           let batch;
           if (existingBatch) {
-            logger.info({ medicineId: item.medicineId, batchNumber: item.batchNumber, existingBatchId: existingBatch.id }, 'UPDATING_EXISTING_BATCH');
-            
+            logger.info(
+              {
+                medicineId: item.medicineId,
+                batchNumber: item.batchNumber,
+                existingBatchId: existingBatch.id,
+              },
+              'UPDATING_EXISTING_BATCH',
+            );
+
             // Verify that the existing batch has the same expiry date
-            const existingExpiryStr = new Date(existingBatch.expiryDate).toISOString().split('T')[0];
+            const existingExpiryStr = new Date(existingBatch.expiryDate)
+              .toISOString()
+              .split('T')[0];
             const newExpiryStr = parsedExpiryDate.toISOString().split('T')[0];
             if (existingExpiryStr !== newExpiryStr) {
-              throw new Error(`Batch '${item.batchNumber}' already exists at this branch with a different expiry date (${existingExpiryStr})`);
+              throw new Error(
+                `Batch '${item.batchNumber}' already exists at this branch with a different expiry date (${existingExpiryStr})`,
+              );
             }
 
             const updateData = {
@@ -361,7 +390,10 @@ class PurchaseOrderService {
               data: updateData,
             });
           } else {
-            logger.info({ medicineId: item.medicineId, batchNumber: item.batchNumber }, 'CREATING_INVENTORY_BATCH');
+            logger.info(
+              { medicineId: item.medicineId, batchNumber: item.batchNumber },
+              'CREATING_INVENTORY_BATCH',
+            );
             batch = await tx.inventoryBatch.create({
               data: {
                 tenantId,
@@ -486,7 +518,10 @@ class PurchaseOrderService {
 
         const invoiceNumber = `PINV-GRN-${grn.grnNumber.replace('GRN-', '')}`;
 
-        logger.info({ invoiceNumber, supplierId: order.supplierId, totalAmount: totalVal }, 'CREATING_PURCHASE_INVOICE');
+        logger.info(
+          { invoiceNumber, supplierId: order.supplierId, totalAmount: totalVal },
+          'CREATING_PURCHASE_INVOICE',
+        );
         const purchaseInvoice = await tx.purchaseInvoice.create({
           data: {
             tenantId,
@@ -530,30 +565,60 @@ class PurchaseOrderService {
           },
         });
 
+        return {
+          grn,
+          orderStatus: nextStatus,
+          purchaseInvoice,
+          allReceived,
+          totalAmount: totalVal,
+        };
+      });
+
+      // Publish events AFTER transaction commits — if Redis/BullMQ fails,
+      // the DB changes are already committed and won't roll back.
+      try {
         emitLocalEvent(DOMAIN_EVENTS.PURCHASE_ORDER_RECEIVED, {
           orderId: id,
           tenantId,
-          grnId: grn.id,
-          allReceived,
-          totalAmount: totalVal,
+          grnId: result.grn.id,
+          allReceived: result.allReceived,
+          totalAmount: result.totalAmount,
         });
         emitLocalEvent(DOMAIN_EVENTS.STOCK_UPDATED, { tenantId, type: 'PURCHASE' });
 
         await emitEvent(DOMAIN_EVENTS.PURCHASE_ORDER_RECEIVED, { orderId: id, tenantId });
         await emitEvent(DOMAIN_EVENTS.STOCK_UPDATED, { tenantId });
+      } catch (eventError) {
+        // Event publishing failure should NOT fail the request
+        logger.error(
+          {
+            message: eventError.message,
+            stack: eventError.stack,
+            orderId: id,
+          },
+          'EVENT_PUBLISH_FAILED_AFTER_RECEIVE',
+        );
+      }
 
-        return { grn, orderStatus: nextStatus, purchaseInvoice };
-      });
-
-      logger.info({ grnId: result.grn.id, invoiceId: result.purchaseInvoice?.id, orderStatus: result.orderStatus }, 'RECEIVE_GOODS_COMPLETED');
+      logger.info(
+        {
+          grnId: result.grn.id,
+          invoiceId: result.purchaseInvoice?.id,
+          orderStatus: result.orderStatus,
+        },
+        'RECEIVE_GOODS_COMPLETED',
+      );
       return result;
     } catch (error) {
-      logger.error({
-        message: error.message,
-        stack: error.stack,
-        prismaCode: error.code,
-        meta: error.meta,
-      }, 'RECEIVE_GOODS_FAILED');
+      logger.error(
+        {
+          message: error.message,
+          stack: error.stack,
+          prismaCode: error.code,
+          meta: error.meta,
+        },
+        'RECEIVE_GOODS_FAILED',
+      );
 
       throw error;
     }

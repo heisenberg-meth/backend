@@ -106,7 +106,7 @@ class DashboardAggregationRepository {
       quantity: { gt: 0 },
       deletedAt: null,
     };
-    if (branchId) where.medicine.branchId = branchId;
+    if (branchId) where.branchId = branchId;
 
     return prisma.inventoryBatch.count({ where });
   }
@@ -136,46 +136,49 @@ class DashboardAggregationRepository {
       medicine: { tenantId, deletedAt: null, isActive: true },
       deletedAt: null,
     };
-    if (branchId) where.medicine.branchId = branchId;
+    const batchWhere = { ...where };
+    const medicineWhere = {
+      tenantId,
+      deletedAt: null,
+      isActive: true,
+      inventoryBatches: {
+        none: { quantity: { gt: 0 }, deletedAt: null },
+      },
+    };
+    if (branchId) {
+      batchWhere.branchId = branchId;
+      medicineWhere.inventoryBatches.none.branchId = branchId;
+    }
 
     const results = await Promise.allSettled([
-      prisma.inventoryBatch.count({ where }),
+      prisma.inventoryBatch.count({ where: batchWhere }),
       prisma.inventoryBatch.aggregate({
-        where,
+        where: batchWhere,
         _sum: { quantity: true },
       }),
       prisma.inventoryBatch.count({
         where: {
-          ...where,
+          ...batchWhere,
           expiryDate: { lt: now },
           quantity: { gt: 0 },
         },
       }),
       prisma.inventoryBatch.count({
         where: {
-          ...where,
+          ...batchWhere,
           expiryDate: { gte: now, lte: thirtyDaysLater },
           quantity: { gt: 0 },
         },
       }),
       prisma.medicine.count({
-        where: {
-          tenantId,
-          deletedAt: null,
-          isActive: true,
-          inventoryBatches: {
-            none: {
-              quantity: { gt: 0 },
-              deletedAt: null,
-            },
-          },
-        },
+        where: medicineWhere,
       }),
       this.getLowStockCount(tenantId, branchId),
     ]);
 
     const totalBatches = results[0].status === 'fulfilled' ? results[0].value : 0;
-    const stockValueAgg = results[1].status === 'fulfilled' ? results[1].value : { _sum: { quantity: 0 } };
+    const stockValueAgg =
+      results[1].status === 'fulfilled' ? results[1].value : { _sum: { quantity: 0 } };
     const expiredCount = results[2].status === 'fulfilled' ? results[2].value : 0;
     const expiringCount = results[3].status === 'fulfilled' ? results[3].value : 0;
     const outOfStockCount = results[4].status === 'fulfilled' ? results[4].value : 0;
@@ -213,7 +216,7 @@ class DashboardAggregationRepository {
           expiryDate: { lt: new Date() },
           quantity: { gt: 0 },
           deletedAt: null,
-          ...(branchId && { medicine: { branchId } }),
+          ...(branchId && { branchId }),
         },
         select: {
           id: true,
@@ -225,7 +228,7 @@ class DashboardAggregationRepository {
         },
         take: limit,
         orderBy: { expiryDate: 'asc' },
-      })
+      }),
     ]);
 
     const alerts = results[0].status === 'fulfilled' ? results[0].value : [];

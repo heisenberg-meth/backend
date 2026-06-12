@@ -116,11 +116,8 @@ class DisposalService {
 
       await prisma.$transaction(async (tx) => {
         const batchBranchId = batch.branchId;
-
-        const remainingQuantity = batch.quantity - quantity;
-        const remainingAvailable = batch.availableQuantity - quantity;
-        const newStatus =
-          remainingQuantity <= 0 && remainingAvailable <= 0 ? 'ARCHIVED' : 'EXPIRED';
+        const remainingQuantity = Number(batch.quantity) - Number(quantity);
+        const newStatus = remainingQuantity <= 0 ? 'ARCHIVED' : batch.status;
 
         await tx.inventoryBatch.update({
           where: { id: batchId },

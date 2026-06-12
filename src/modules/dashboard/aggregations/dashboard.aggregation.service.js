@@ -76,7 +76,12 @@ class DashboardAggregationService {
         delayedDeliveries: 0,
         awaitingApproval: 0,
       });
-      const today = safeValue(results[3], { invoices: 0, patients: 0, prescriptions: 0, revenue: 0 });
+      const today = safeValue(results[3], {
+        invoices: 0,
+        patients: 0,
+        prescriptions: 0,
+        revenue: 0,
+      });
       const activeAlerts = safeValue(results[4], 0);
 
       const metricNames = [
@@ -146,25 +151,29 @@ class DashboardAggregationService {
           AND "ib"."quantity" > 0
           AND "ib"."deletedAt" IS NULL
           AND "m"."deletedAt" IS NULL
-      `
+      `,
     ]);
 
-    const metrics = metricsResult.status === 'fulfilled' ? metricsResult.value : {
-      outOfStockCount: 0,
-      lowStockCount: 0,
-      expiringCount: 0,
-      totalBatches: 0,
-      totalStock: 0,
-    };
+    const metrics =
+      metricsResult.status === 'fulfilled'
+        ? metricsResult.value
+        : {
+            outOfStockCount: 0,
+            lowStockCount: 0,
+            expiringCount: 0,
+            totalBatches: 0,
+            totalStock: 0,
+          };
     const topRisks = topRisksResult.status === 'fulfilled' ? topRisksResult.value : [];
     const queryValue = valueResult.status === 'fulfilled' ? valueResult.value : null;
     const inventoryValue = Number(queryValue?.[0]?.totalValue || 0);
 
     const totalSku = await safeMetric(
-      () => prisma.medicine.count({
-        where: { tenantId, deletedAt: null, isActive: true },
-      }),
-      0
+      () =>
+        prisma.medicine.count({
+          where: { tenantId, deletedAt: null, isActive: true },
+        }),
+      0,
     );
 
     const data = {
@@ -177,7 +186,9 @@ class DashboardAggregationService {
       inventoryValue: inventoryValue,
       topRisks: topRisks.map((m) => ({
         medicine: m.name,
-        totalStock: m.inventoryBatches ? m.inventoryBatches.reduce((sum, b) => sum + b.quantity, 0) : 0,
+        totalStock: m.inventoryBatches
+          ? m.inventoryBatches.reduce((sum, b) => sum + b.quantity, 0)
+          : 0,
       })),
       computedAt: new Date().toISOString(),
     };
@@ -202,8 +213,14 @@ class DashboardAggregationService {
       prisma.supplier.count({ where: { tenantId, deletedAt: null } }),
     ]);
 
-    const todaySales = results[0].status === 'fulfilled' ? results[0].value : { _sum: { totalAmount: 0 }, _count: { id: 0 } };
-    const monthSales = results[1].status === 'fulfilled' ? results[1].value : { _sum: { totalAmount: 0 }, _count: { id: 0 } };
+    const todaySales =
+      results[0].status === 'fulfilled'
+        ? results[0].value
+        : { _sum: { totalAmount: 0 }, _count: { id: 0 } };
+    const monthSales =
+      results[1].status === 'fulfilled'
+        ? results[1].value
+        : { _sum: { totalAmount: 0 }, _count: { id: 0 } };
     const pendingPOs = results[2].status === 'fulfilled' ? results[2].value : 0;
     const totalSuppliers = results[3].status === 'fulfilled' ? results[3].value : 0;
 
@@ -227,17 +244,19 @@ class DashboardAggregationService {
       dashboardAggregationRepository.getTopSellingMedicines(tenantId, branchId, 10),
     ]);
 
-    const paymentBreakdown = paymentBreakdownRes.status === 'fulfilled' ? paymentBreakdownRes.value : [];
+    const paymentBreakdown =
+      paymentBreakdownRes.status === 'fulfilled' ? paymentBreakdownRes.value : [];
     const topSelling = topSellingRes.status === 'fulfilled' ? topSellingRes.value : [];
 
     const medicineIds = topSelling.map((s) => s.medicineId);
     const medicines = medicineIds.length
       ? await safeMetric(
-          () => prisma.medicine.findMany({
-            where: { id: { in: medicineIds }, tenantId },
-            select: { id: true, name: true },
-          }),
-          []
+          () =>
+            prisma.medicine.findMany({
+              where: { id: { in: medicineIds }, tenantId },
+              select: { id: true, name: true },
+            }),
+          [],
         )
       : [];
     const medicineMap = {};
@@ -298,8 +317,8 @@ class DashboardAggregationService {
     }
 
     try {
-      // Just test a get/set or simple ping if available. We will rely on our cache manager.
-      await dashboardCacheManager.client.ping();
+      const redisClient = (await import('../../../config/redis.js')).default;
+      await redisClient.ping();
     } catch (error) {
       redisStatus = 'unhealthy';
       logger.error({ err: error }, 'Redis health check failed');
@@ -328,7 +347,7 @@ class DashboardAggregationService {
 
     const pendingPOs = await safeMetric(
       () => dashboardAggregationRepository.getPendingPurchaseOrders(tenantId),
-      0
+      0,
     );
 
     const data = {
@@ -359,7 +378,10 @@ class DashboardAggregationService {
       prisma.patient.count({ where: { tenantId, deletedAt: null } }),
     ]);
 
-    const todaySales = results[0].status === 'fulfilled' ? results[0].value : { _sum: { totalAmount: 0 }, _count: { id: 0 } };
+    const todaySales =
+      results[0].status === 'fulfilled'
+        ? results[0].value
+        : { _sum: { totalAmount: 0 }, _count: { id: 0 } };
     const totalPatients = results[1].status === 'fulfilled' ? results[1].value : 0;
 
     const data = {
@@ -602,25 +624,30 @@ class DashboardAggregationService {
       dashboardAggregationRepository.getPendingPurchaseOrders(tenantId, branchId),
     ]);
 
-    const todaySales = results[0].status === 'fulfilled' ? results[0].value : { _sum: { totalAmount: 0 }, _count: { id: 0 } };
-    const monthSales = results[1].status === 'fulfilled' ? results[1].value : { _sum: { totalAmount: 0 } };
+    const todaySales =
+      results[0].status === 'fulfilled'
+        ? results[0].value
+        : { _sum: { totalAmount: 0 }, _count: { id: 0 } };
+    const monthSales =
+      results[1].status === 'fulfilled' ? results[1].value : { _sum: { totalAmount: 0 } };
     const lowStockCount = results[2].status === 'fulfilled' ? results[2].value : 0;
     const expiringCount = results[3].status === 'fulfilled' ? results[3].value : 0;
     const pendingPOs = results[4].status === 'fulfilled' ? results[4].value : 0;
 
     const topSelling = await safeMetric(
       () => dashboardAggregationRepository.getTopSellingMedicines(tenantId, branchId, 1),
-      []
+      [],
     );
 
     let topSellingMedicine = null;
     if (topSelling && topSelling.length > 0) {
       const medicine = await safeMetric(
-        () => prisma.medicine.findFirst({
-          where: { id: topSelling[0].medicineId, tenantId },
-          select: { name: true },
-        }),
-        null
+        () =>
+          prisma.medicine.findFirst({
+            where: { id: topSelling[0].medicineId, tenantId },
+            select: { name: true },
+          }),
+        null,
       );
       topSellingMedicine = medicine?.name || 'Unknown';
     }
@@ -640,7 +667,7 @@ class DashboardAggregationService {
   async _computeSalesSummary(tenantId, branchId) {
     const dailySummary = await safeMetric(
       () => dashboardAggregationRepository.getDailySalesSummary(tenantId, branchId),
-      null
+      null,
     );
 
     if (dailySummary) {
@@ -649,17 +676,19 @@ class DashboardAggregationService {
         dashboardAggregationRepository.getTopSellingMedicines(tenantId, branchId),
       ]);
 
-      const paymentBreakdown = paymentBreakdownRes.status === 'fulfilled' ? paymentBreakdownRes.value : [];
+      const paymentBreakdown =
+        paymentBreakdownRes.status === 'fulfilled' ? paymentBreakdownRes.value : [];
       const topSelling = topSellingRes.status === 'fulfilled' ? topSellingRes.value : [];
 
       const medicineIds = topSelling.map((s) => s.medicineId);
       const medicines = medicineIds.length
         ? await safeMetric(
-            () => prisma.medicine.findMany({
-              where: { id: { in: medicineIds }, tenantId },
-              select: { id: true, name: true },
-            }),
-            []
+            () =>
+              prisma.medicine.findMany({
+                where: { id: { in: medicineIds }, tenantId },
+                select: { id: true, name: true },
+              }),
+            [],
           )
         : [];
       const medicineMap = {};
@@ -691,26 +720,35 @@ class DashboardAggregationService {
       };
     }
 
-    const [todaySalesRes, monthSalesRes, paymentBreakdownRes, topSellingRes] = await Promise.allSettled([
-      dashboardAggregationRepository.getTodaySales(tenantId, branchId),
-      dashboardAggregationRepository.getMonthSales(tenantId, branchId),
-      dashboardAggregationRepository.getPaymentMethodBreakdown(tenantId, branchId),
-      dashboardAggregationRepository.getTopSellingMedicines(tenantId, branchId),
-    ]);
+    const [todaySalesRes, monthSalesRes, paymentBreakdownRes, topSellingRes] =
+      await Promise.allSettled([
+        dashboardAggregationRepository.getTodaySales(tenantId, branchId),
+        dashboardAggregationRepository.getMonthSales(tenantId, branchId),
+        dashboardAggregationRepository.getPaymentMethodBreakdown(tenantId, branchId),
+        dashboardAggregationRepository.getTopSellingMedicines(tenantId, branchId),
+      ]);
 
-    const todaySales = todaySalesRes.status === 'fulfilled' ? todaySalesRes.value : { _sum: { totalAmount: 0 }, _count: { id: 0 } };
-    const monthSales = monthSalesRes.status === 'fulfilled' ? monthSalesRes.value : { _sum: { totalAmount: 0 }, _count: { id: 0 } };
-    const paymentBreakdown = paymentBreakdownRes.status === 'fulfilled' ? paymentBreakdownRes.value : [];
+    const todaySales =
+      todaySalesRes.status === 'fulfilled'
+        ? todaySalesRes.value
+        : { _sum: { totalAmount: 0 }, _count: { id: 0 } };
+    const monthSales =
+      monthSalesRes.status === 'fulfilled'
+        ? monthSalesRes.value
+        : { _sum: { totalAmount: 0 }, _count: { id: 0 } };
+    const paymentBreakdown =
+      paymentBreakdownRes.status === 'fulfilled' ? paymentBreakdownRes.value : [];
     const topSelling = topSellingRes.status === 'fulfilled' ? topSellingRes.value : [];
 
     const medicineIds = topSelling.map((s) => s.medicineId);
     const medicines = medicineIds.length
       ? await safeMetric(
-          () => prisma.medicine.findMany({
-            where: { id: { in: medicineIds }, tenantId },
-            select: { id: true, name: true },
-          }),
-          []
+          () =>
+            prisma.medicine.findMany({
+              where: { id: { in: medicineIds }, tenantId },
+              select: { id: true, name: true },
+            }),
+          [],
         )
       : [];
     const medicineMap = {};

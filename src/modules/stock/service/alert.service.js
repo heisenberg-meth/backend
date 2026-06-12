@@ -7,6 +7,20 @@ import logger from '../../../shared/utils/logger.js';
 
 class AlertService {
   async processDailyExpiryChecks() {
+    logger.info('Running bulk expiry status update...');
+    try {
+      const { count } = await prisma.inventoryBatch.updateMany({
+        where: {
+          expiryDate: { lt: new Date() },
+          status: { not: 'EXPIRED' },
+        },
+        data: { status: 'EXPIRED' },
+      });
+      logger.info(`Updated ${count} batches to EXPIRED status`);
+    } catch (error) {
+      logger.error({ error }, 'Failed to update expired batches');
+    }
+
     const tenants = await prisma.tenant.findMany({ where: { deletedAt: null } });
 
     for (const tenant of tenants) {

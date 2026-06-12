@@ -223,10 +223,60 @@ const handlers = {
   },
 
   'inventory-reconciliation': async () => {
-    logger.info('Starting inventory reconciliation & drift detection...');
+    logger.info('Starting inventory & supplier reconciliation...');
+    try {
+      // Reconcile Inventory currentStock with sum of InventoryBatch quantities
+      const inventoryReconciled = await prisma.$executeRaw`
+        UPDATE "Inventory" i
+        SET "currentStock" = COALESCE((
+          SELECT SUM("quantity")
+          FROM "InventoryBatch" b
+          WHERE b."medicineId" = i."medicineId"
+            AND b."branchId" = i."branchId"
+            AND b."tenantId" = i."tenantId"
+            AND b."deletedAt" IS NULL
+        ), 0)
+        WHERE "currentStock" != COALESCE((
+          SELECT SUM("quantity")
+          FROM "InventoryBatch" b
+          WHERE b."medicineId" = i."medicineId"
+            AND b."branchId" = i."branchId"
+            AND b."tenantId" = i."tenantId"
+            AND b."deletedAt" IS NULL
+        ), 0);
+      `;
+      logger.info(
+        `[RECONCILIATION] Reconciled ${inventoryReconciled} Inventory records with Batch sums.`,
+      );
+
+      // Reconcile Supplier outstandingBalance with SupplierLedger balance
+      const supplierReconciled = await prisma.$executeRaw`
+        UPDATE "Supplier" s
+        SET "outstandingBalance" = COALESCE((
+          SELECT "balanceAfter"
+          FROM "SupplierLedger" l
+          WHERE l."supplierId" = s."id"
+          ORDER BY "createdAt" DESC
+          LIMIT 1
+        ), 0)
+        WHERE "outstandingBalance" != COALESCE((
+          SELECT "balanceAfter"
+          FROM "SupplierLedger" l
+          WHERE l."supplierId" = s."id"
+          ORDER BY "createdAt" DESC
+          LIMIT 1
+        ), 0);
+      `;
+      logger.info(
+        `[RECONCILIATION] Reconciled ${supplierReconciled} Supplier balances with Ledger.`,
+      );
+    } catch (error) {
+      logger.error({ error }, '[RECONCILIATION_ERROR] Failed to run SQL reconciliation scripts.');
+    }
+
+    // Existing integrity checks for StockMovement vs InventoryBatch
     const tenants = await prisma.tenant.findMany({ where: { deletedAt: null } });
     for (const tenant of tenants) {
-      logger.info(`Reconciling inventory for tenant: ${tenant.id}`);
       const medicines = await prisma.medicine.findMany({
         where: { tenantId: tenant.id, deletedAt: null },
       });
@@ -246,7 +296,7 @@ const handlers = {
         }
       }
     }
-    logger.info('Inventory reconciliation completed.');
+    logger.info('Inventory and Supplier reconciliation completed.');
   },
 
   'patient-refill-reminders': async () => {
