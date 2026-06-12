@@ -213,6 +213,14 @@ export const adminService = {
     return adminRepository.listAuditLogs(query);
   },
 
+  async getOtpLogs(query) {
+    return adminRepository.listOtpLogs(query);
+  },
+
+  async getLatestOtp(email) {
+    return adminRepository.getLatestOtp(email);
+  },
+
   async getDevices(query) {
     return adminRepository.listDevices(query);
   },
@@ -329,11 +337,17 @@ export const adminService = {
     const user = await adminRepository.findUser(tenantId, userId);
     if (!user) throw new Error('User not found');
     const valid = ['ACTIVE', 'SUSPENDED', 'BLOCKED'];
-    if (!valid.includes(status)) throw new Error('Invalid status. Must be: ACTIVE, SUSPENDED, or BLOCKED');
+    if (!valid.includes(status))
+      throw new Error('Invalid status. Must be: ACTIVE, SUSPENDED, or BLOCKED');
     const updated = await adminRepository.updateUser(userId, { status });
     await logAdminAction({
       adminUserId: adminId,
-      action: status === 'BLOCKED' ? 'USER_BLOCKED' : status === 'SUSPENDED' ? 'USER_SUSPENDED' : 'USER_ACTIVATED',
+      action:
+        status === 'BLOCKED'
+          ? 'USER_BLOCKED'
+          : status === 'SUSPENDED'
+            ? 'USER_SUSPENDED'
+            : 'USER_ACTIVATED',
       targetType: 'USER',
       targetId: userId,
       metadata: { tenantId, status, previousStatus: user.status },

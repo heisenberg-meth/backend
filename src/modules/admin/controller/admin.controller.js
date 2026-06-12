@@ -193,6 +193,31 @@ class AdminController {
     }
   }
 
+  async getOtpLogs(request, reply) {
+    try {
+      const query = {
+        page: parseInt(request.query.page) || 1,
+        limit: parseInt(request.query.limit) || 20,
+        search: request.query.search,
+        status: request.query.status,
+        purpose: request.query.purpose,
+      };
+      const result = await adminService.getOtpLogs(query);
+      return reply.send(
+        success(result.logs, {
+          pagination: {
+            total: result.total,
+            page: result.page,
+            limit: result.limit,
+            totalPages: result.totalPages,
+          },
+        }),
+      );
+    } catch (error) {
+      return reply.code(400).send(errorResponse(error.message, 'OTP_LOGS_FAILED'));
+    }
+  }
+
   async getDevices(request, reply) {
     try {
       const query = {
@@ -853,6 +878,19 @@ class AdminController {
       return reply.send(success(overview));
     } catch (error) {
       return reply.code(500).send(errorResponse(error.message, 'SECURITY_OVERVIEW_FAILED'));
+    }
+  }
+
+  async getLatestOtp(request, reply) {
+    try {
+      const { email } = request.query;
+      if (!email) {
+        return reply.code(400).send(errorResponse('Email is required', 'MISSING_EMAIL'));
+      }
+      const log = await adminService.getLatestOtp(email);
+      return reply.send(success(log));
+    } catch (error) {
+      return reply.code(400).send(errorResponse(error.message, 'LATEST_OTP_FAILED'));
     }
   }
 

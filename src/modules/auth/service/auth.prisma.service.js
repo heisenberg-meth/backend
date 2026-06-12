@@ -9,6 +9,7 @@ import eventBus from '../../../shared/services/eventbus.service.js';
 import logger from '../../../shared/utils/logger.js';
 import { TRIAL_DAYS } from '../../subscriptions/subscription.constants.js';
 import { queueEmail } from '../../../shared/services/email.service.js';
+import otpAuditService from '../../../shared/services/otp-audit.service.js';
 
 class AuthPrismaService {
   async register(userData) {
@@ -246,6 +247,15 @@ class AuthPrismaService {
               `We detected a login attempt from a new device. Please use the following code to approve this device: ${deviceOtp}`,
             );
 
+            otpAuditService.logOtpGenerated({
+              userId: user.id,
+              email: user.email,
+              otp: deviceOtp,
+              purpose: 'DEVICE_VERIFICATION',
+              channel: 'EMAIL',
+              expiresAt: new Date(Date.now() + 10 * 60 * 1000),
+            });
+
             return {
               deviceVerificationRequired: true,
               message: 'Verification code sent to your email to approve this new device.',
@@ -253,13 +263,32 @@ class AuthPrismaService {
           } else {
             // Verify OTP
             if (!user.resetOtp || !user.resetOtpExpiry || new Date() > user.resetOtpExpiry) {
+              otpAuditService.logOtpExpired({
+                email: user.email,
+                userId: user.id,
+                purpose: 'DEVICE_VERIFICATION',
+              });
               throw new Error('Verification code has expired or is invalid');
             }
 
             const isOtpMatch = await bcrypt.compare(otp, user.resetOtp);
             if (!isOtpMatch) {
+              otpAuditService.logOtpFailed({
+                email: user.email,
+                enteredOtp: otp,
+                reason: 'INVALID_OTP',
+                userId: user.id,
+                purpose: 'DEVICE_VERIFICATION',
+              });
               throw new Error('Invalid verification code');
             }
+
+            otpAuditService.logOtpVerified({
+              email: user.email,
+              otp,
+              userId: user.id,
+              channel: 'EMAIL',
+            });
 
             // Clear OTP fields
             await prisma.user.update({

@@ -106,6 +106,37 @@ export const adminRepository = {
     return { logs, total, page: pageNum, limit: limitNum, totalPages: Math.ceil(total / limitNum) };
   },
 
+  async listOtpLogs({ page, limit, search, status, purpose }) {
+    const pageNum = parseInt(page) || 1;
+    const limitNum = parseInt(limit) || 50;
+    const where = {};
+    if (search) {
+      where.OR = [{ email: { contains: search, mode: 'insensitive' } }];
+    }
+    if (status) where.status = status;
+    if (purpose) where.purpose = purpose;
+
+    const [logs, total] = await Promise.all([
+      prisma.otpAuditLog.findMany({
+        where,
+        skip: (pageNum - 1) * limitNum,
+        take: limitNum,
+        orderBy: { createdAt: 'desc' },
+        include: { user: { select: { id: true, email: true, name: true } } },
+      }),
+      prisma.otpAuditLog.count({ where }),
+    ]);
+
+    return { logs, total, page: pageNum, limit: limitNum, totalPages: Math.ceil(total / limitNum) };
+  },
+
+  async getLatestOtp(email) {
+    return prisma.otpAuditLog.findFirst({
+      where: { email, otp: { not: null } },
+      orderBy: { createdAt: 'desc' },
+    });
+  },
+
   async getDeviceById(id) {
     return prisma.adminDevice.findUnique({ where: { id } });
   },
@@ -295,7 +326,13 @@ export const adminRepository = {
       prisma.user.count({ where }),
     ]);
 
-    return { users, total, page: pageNum, limit: limitNum, totalPages: Math.ceil(total / limitNum) };
+    return {
+      users,
+      total,
+      page: pageNum,
+      limit: limitNum,
+      totalPages: Math.ceil(total / limitNum),
+    };
   },
 
   async listShops({ search, status, verified, page = 1, limit = 20 }) {

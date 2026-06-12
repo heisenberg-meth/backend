@@ -17,6 +17,7 @@ import {
 import { success, error as errorResponse } from '../../../shared/helpers/response.js';
 import { queueEmail } from '../../../shared/services/email.service.js';
 import { RESET_OTP_TEMPLATE } from '../../notifications/templates/email.templates.js';
+import otpAuditService from '../../../shared/services/otp-audit.service.js';
 import {
   OTP_EXPIRY_MS,
   RESEND_COOLDOWN_MS,
@@ -233,12 +234,13 @@ class AuthFastifyController {
       if (user) {
         const otp = Math.floor(100000 + Math.random() * 900000).toString();
         const hashedOtp = await bcrypt.hash(otp, 10);
+        const expiresAt = new Date(Date.now() + OTP_EXPIRY_MS);
 
         await prisma.user.update({
           where: { email },
           data: {
             resetOtp: hashedOtp,
-            resetOtpExpiry: new Date(Date.now() + OTP_EXPIRY_MS),
+            resetOtpExpiry: expiresAt,
             resetOtpVerified: false,
             resetOtpAttempts: 0,
             resetOtpLastSentAt: new Date(),
@@ -248,6 +250,16 @@ class AuthFastifyController {
         });
 
         await queueEmail(email, 'Password Reset OTP', RESET_OTP_TEMPLATE(otp));
+
+        otpAuditService.logOtpGenerated({
+          userId: user.id,
+          email,
+          otp,
+          purpose: 'PASSWORD_RESET',
+          channel: 'EMAIL',
+          ipAddress: request.ip,
+          expiresAt,
+        });
       }
 
       return reply.send(
@@ -279,12 +291,25 @@ class AuthFastifyController {
       }
 
       if (user.resetOtpAttempts >= MAX_OTP_ATTEMPTS) {
+        otpAuditService.logOtpFailed({
+          email,
+          reason: 'MAX_ATTEMPTS',
+          attempt: user.resetOtpAttempts,
+          userId: user.id,
+          purpose: 'PASSWORD_RESET',
+          ipAddress: request.ip,
+        });
         return reply
           .code(429)
           .send(errorResponse('Too many failed attempts. Request a new OTP.', 'OTP_LOCKED'));
       }
 
       if (new Date() > user.resetOtpExpiry) {
+        otpAuditService.logOtpExpired({
+          email,
+          userId: user.id,
+          purpose: 'PASSWORD_RESET',
+        });
         return reply.code(400).send(errorResponse('OTP has expired', 'OTP_EXPIRED'));
       }
 
@@ -293,6 +318,15 @@ class AuthFastifyController {
         await prisma.user.update({
           where: { email },
           data: { resetOtpAttempts: { increment: 1 } },
+        });
+        otpAuditService.logOtpFailed({
+          email,
+          enteredOtp: otp,
+          reason: 'INVALID_OTP',
+          attempt: user.resetOtpAttempts + 1,
+          userId: user.id,
+          purpose: 'PASSWORD_RESET',
+          ipAddress: request.ip,
         });
         return reply.code(400).send(errorResponse('Invalid OTP', 'INVALID_OTP'));
       }
@@ -310,6 +344,14 @@ class AuthFastifyController {
           resetToken,
           resetTokenExpiry: new Date(Date.now() + RESET_TOKEN_EXPIRY_MS),
         },
+      });
+
+      otpAuditService.logOtpVerified({
+        email,
+        otp,
+        userId: user.id,
+        channel: 'EMAIL',
+        ipAddress: request.ip,
       });
 
       return reply.send(
@@ -434,6 +476,16 @@ class AuthFastifyController {
         });
 
         await queueEmail(email, 'Resend Password Reset OTP', RESET_OTP_TEMPLATE(otp));
+
+        otpAuditService.logOtpGenerated({
+          userId: user.id,
+          email,
+          otp,
+          purpose: 'PASSWORD_RESET',
+          channel: 'EMAIL',
+          ipAddress: request.ip,
+          expiresAt: new Date(Date.now() + OTP_EXPIRY_MS),
+        });
       }
 
       return reply.send(

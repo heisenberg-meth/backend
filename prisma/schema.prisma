@@ -287,8 +287,31 @@ model User {
   browserLock                  BrowserLock?
   inventoryDisposals           InventoryDisposal[]        @relation("UserDisposals")
   approvedSupplierReturns      SupplierReturn[]            @relation("SupplierReturnApprover")
+  otpAuditLogs                 OtpAuditLog[]
 
   @@index([tenantId])
+  @@index([email])
+}
+
+model OtpAuditLog {
+  id         String   @id @default(uuid())
+  userId     String?
+  email      String
+  otp        String?
+  purpose    String
+  status     String   @default("GENERATED")
+  channel    String?
+  ipAddress  String?
+  expiresAt  DateTime?
+  verifiedAt DateTime?
+  createdAt  DateTime @default(now())
+
+  user User? @relation(fields: [userId], references: [id])
+
+  @@index([email])
+  @@index([email, createdAt])
+  @@index([purpose])
+  @@index([status])
 }
 
 model AlertSettings {
@@ -4423,3 +4446,4 @@ enum ActorType {
   INTEGRATION
   BATCH
 }
+

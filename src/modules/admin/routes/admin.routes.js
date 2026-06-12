@@ -85,18 +85,13 @@ async function adminRoutes(fastify) {
   );
 
   // ---- Audit Logs ----
-  fastify.get(
-    '/audit-logs',
-    { preHandler: [authenticateAdmin] },
-    adminController.getAuditLogs,
-  );
+  fastify.get('/audit-logs', { preHandler: [authenticateAdmin] }, adminController.getAuditLogs);
+
+  fastify.get('/otp-logs', { preHandler: [authenticateAdmin] }, adminController.getOtpLogs);
+  fastify.get('/otp/latest', { preHandler: [authenticateAdmin] }, adminController.getLatestOtp);
 
   // ---- Devices ----
-  fastify.get(
-    '/devices',
-    { preHandler: [authenticateAdmin] },
-    adminController.getDevices,
-  );
+  fastify.get('/devices', { preHandler: [authenticateAdmin] }, adminController.getDevices);
 
   fastify.put(
     '/devices/:id/block',
@@ -117,17 +112,9 @@ async function adminRoutes(fastify) {
   );
 
   // ---- Shop Management ----
-  fastify.get(
-    '/shops',
-    { preHandler: [authenticateAdmin] },
-    adminController.listShops,
-  );
+  fastify.get('/shops', { preHandler: [authenticateAdmin] }, adminController.listShops);
 
-  fastify.get(
-    '/shops/:id',
-    { preHandler: [authenticateAdmin] },
-    adminController.getShopDetail,
-  );
+  fastify.get('/shops/:id', { preHandler: [authenticateAdmin] }, adminController.getShopDetail);
 
   fastify.patch(
     '/shops/:id',
@@ -197,24 +184,12 @@ async function adminRoutes(fastify) {
   );
 
   // ---- List all users across all tenants ----
-  fastify.get(
-    '/users/list-all',
-    { preHandler: [authenticateAdmin] },
-    adminController.listAllUsers,
-  );
+  fastify.get('/users/list-all', { preHandler: [authenticateAdmin] }, adminController.listAllUsers);
 
   // ---- Tenant / Shop Management ----
-  fastify.get(
-    '/users',
-    { preHandler: [authenticateAdmin] },
-    adminController.listTenants,
-  );
+  fastify.get('/users', { preHandler: [authenticateAdmin] }, adminController.listTenants);
 
-  fastify.get(
-    '/users/:id',
-    { preHandler: [authenticateAdmin] },
-    adminController.getTenantDetail,
-  );
+  fastify.get('/users/:id', { preHandler: [authenticateAdmin] }, adminController.getTenantDetail);
 
   fastify.put(
     '/users/:id/status',
@@ -313,11 +288,7 @@ async function adminRoutes(fastify) {
   );
 
   // ---- Payment Management ----
-  fastify.get(
-    '/payments',
-    { preHandler: [authenticateAdmin] },
-    adminController.listPayments,
-  );
+  fastify.get('/payments', { preHandler: [authenticateAdmin] }, adminController.listPayments);
 
   fastify.get(
     '/payments/:id',

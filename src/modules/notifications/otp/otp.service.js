@@ -4,6 +4,7 @@ import logger from '../../../shared/utils/logger.js';
 import deliveryTrackingService from '../services/delivery-tracking.service.js';
 import { emitLocalEvent } from '../../../shared/events/local-event-bus.js';
 import { DOMAIN_EVENTS } from '../../../shared/constants/events.js';
+import otpAuditService from '../../../shared/services/otp-audit.service.js';
 
 const OTP_TTL_SECONDS = 600;
 const MAX_VERIFY_ATTEMPTS = 5;
@@ -18,6 +19,14 @@ class OtpService {
     await redisClient.del(attemptsKey);
 
     logger.info(`[OTP] Generated OTP for ${recipient} via ${channel}`);
+
+    otpAuditService.logOtpGenerated({
+      email: recipient,
+      otp,
+      purpose: 'VERIFICATION',
+      channel,
+    });
+
     return { otp, ttl: OTP_TTL_SECONDS };
   }
 
@@ -33,6 +42,13 @@ class OtpService {
         recipient,
         reason: 'OTP_MAX_ATTEMPTS',
       });
+      otpAuditService.logOtpFailed({
+        email: recipient,
+        reason: 'MAX_ATTEMPTS',
+        attempt: attempts,
+        purpose: 'VERIFICATION',
+        channel,
+      });
       return { verified: false, reason: 'MAX_ATTEMPTS_EXCEEDED' };
     }
 
@@ -41,10 +57,23 @@ class OtpService {
 
     const storedOtp = await redisClient.get(key);
     if (!storedOtp) {
+      otpAuditService.logOtpExpired({
+        email: recipient,
+        purpose: 'VERIFICATION',
+        channel,
+      });
       return { verified: false, reason: 'OTP_EXPIRED' };
     }
 
     if (storedOtp !== otp) {
+      otpAuditService.logOtpFailed({
+        email: recipient,
+        enteredOtp: otp,
+        reason: 'INVALID_OTP',
+        attempt: attempts + 1,
+        purpose: 'VERIFICATION',
+        channel,
+      });
       return {
         verified: false,
         reason: 'INVALID_OTP',
@@ -54,6 +83,12 @@ class OtpService {
 
     await redisClient.del(key);
     await redisClient.del(attemptsKey);
+
+    otpAuditService.logOtpVerified({
+      email: recipient,
+      otp,
+      channel,
+    });
 
     emitLocalEvent(DOMAIN_EVENTS.OTP_VERIFIED, { tenantId, recipient, channel });
     return { verified: true };

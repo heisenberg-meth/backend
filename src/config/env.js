@@ -7,6 +7,7 @@ const envSchema = z.object({
   FRONTEND_URL: z.string().url().default('https://medassist.viyaninfo.com/'),
   CORS_ORIGIN: z.string().optional(),
   LOG_LEVEL: z.string().default('info'),
+  LOG_OTP: z.string().optional(),
   COOKIE_SECRET: z.string().min(10),
   JWT_SECRET: z.string().min(10),
   AWS_BUCKET_NAME: z.string().optional(),
