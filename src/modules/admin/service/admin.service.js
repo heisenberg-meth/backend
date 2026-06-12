@@ -8,22 +8,28 @@ const ACCESS_TOKEN_EXPIRY = '15m';
 const REFRESH_TOKEN_EXPIRY = '30d';
 
 function generateTokens(admin) {
-  const accessToken = jwt.sign(
-    { adminId: admin.id, role: admin.role },
-    env.jwtSecrets[0],
-    { expiresIn: ACCESS_TOKEN_EXPIRY, algorithm: 'HS256' },
-  );
+  const accessToken = jwt.sign({ adminId: admin.id, role: admin.role }, env.jwtSecrets[0], {
+    expiresIn: ACCESS_TOKEN_EXPIRY,
+    algorithm: 'HS256',
+  });
 
-  const refreshToken = jwt.sign(
-    { adminId: admin.id, type: 'refresh' },
-    env.jwtSecrets[0],
-    { expiresIn: REFRESH_TOKEN_EXPIRY, algorithm: 'HS256' },
-  );
+  const refreshToken = jwt.sign({ adminId: admin.id, type: 'refresh' }, env.jwtSecrets[0], {
+    expiresIn: REFRESH_TOKEN_EXPIRY,
+    algorithm: 'HS256',
+  });
 
   return { accessToken, refreshToken };
 }
 
-async function logAdminAction({ adminUserId, action, targetType, targetId, metadata, ipAddress, userAgent }) {
+async function logAdminAction({
+  adminUserId,
+  action,
+  targetType,
+  targetId,
+  metadata,
+  ipAddress,
+  userAgent,
+}) {
   try {
     await adminRepository.createAuditLog({
       adminUserId,
@@ -80,8 +86,11 @@ export const adminService = {
 
     return {
       admin: {
-        id: admin.id, email: admin.email, name: admin.name,
-        role: admin.role, permissions: admin.permissions,
+        id: admin.id,
+        email: admin.email,
+        name: admin.name,
+        role: admin.role,
+        permissions: admin.permissions,
       },
       ...tokens,
     };
@@ -98,8 +107,11 @@ export const adminService = {
       const tokens = generateTokens(admin);
       return {
         admin: {
-          id: admin.id, email: admin.email, name: admin.name,
-          role: admin.role, permissions: admin.permissions,
+          id: admin.id,
+          email: admin.email,
+          name: admin.name,
+          role: admin.role,
+          permissions: admin.permissions,
         },
         ...tokens,
       };
@@ -115,9 +127,13 @@ export const adminService = {
     const admin = await adminRepository.findAdminById(adminId);
     if (!admin) throw new Error('Admin not found');
     return {
-      id: admin.id, email: admin.email, name: admin.name,
-      role: admin.role, permissions: admin.permissions,
-      isActive: admin.isActive, lastLoginAt: admin.lastLoginAt,
+      id: admin.id,
+      email: admin.email,
+      name: admin.name,
+      role: admin.role,
+      permissions: admin.permissions,
+      isActive: admin.isActive,
+      lastLoginAt: admin.lastLoginAt,
       createdAt: admin.createdAt,
     };
   },
@@ -129,7 +145,11 @@ export const adminService = {
     const passwordHash = await bcrypt.hash(password, 12);
 
     const admin = await adminRepository.createAdmin({
-      email, passwordHash, name, role, permissions,
+      email,
+      passwordHash,
+      name,
+      role,
+      permissions,
     });
 
     await logAdminAction({
@@ -138,7 +158,8 @@ export const adminService = {
       targetType: 'ADMIN',
       targetId: admin.id,
       metadata: { email, role, createdBy: creatorId },
-      ipAddress, userAgent,
+      ipAddress,
+      userAgent,
     });
 
     return { id: admin.id, email: admin.email, name: admin.name, role: admin.role };
@@ -161,7 +182,8 @@ export const adminService = {
       targetType: 'ADMIN',
       targetId: id,
       metadata: { changes: Object.keys(data), updatedBy: updaterId },
-      ipAddress, userAgent,
+      ipAddress,
+      userAgent,
     });
 
     return updated;
@@ -182,7 +204,8 @@ export const adminService = {
       targetType: 'ADMIN',
       targetId: id,
       metadata: { deletedBy: deleterId },
-      ipAddress, userAgent,
+      ipAddress,
+      userAgent,
     });
   },
 
@@ -203,7 +226,8 @@ export const adminService = {
       targetType: 'DEVICE',
       targetId: id,
       metadata: { reason: blockReason, blockedBy },
-      ipAddress, userAgent,
+      ipAddress,
+      userAgent,
     });
 
     return device;
@@ -230,7 +254,8 @@ export const adminService = {
       targetType: 'DEVICE',
       targetId: id,
       metadata: { unblockedBy },
-      ipAddress, userAgent,
+      ipAddress,
+      userAgent,
     });
 
     return device;
@@ -249,7 +274,8 @@ export const adminService = {
       targetType: 'FEATURE_FLAG',
       targetId: id,
       metadata: { key: flag.key, enabled },
-      ipAddress, userAgent,
+      ipAddress,
+      userAgent,
     });
 
     return flag;
@@ -264,7 +290,8 @@ export const adminService = {
       targetType: 'FEATURE_FLAG',
       targetId: flag.id,
       metadata: { key: flag.key, name: flag.name },
-      ipAddress, userAgent,
+      ipAddress,
+      userAgent,
     });
 
     return flag;
@@ -279,7 +306,8 @@ export const adminService = {
       targetType: 'FEATURE_FLAG',
       targetId: id,
       metadata: { key: flag.key, changes: Object.keys(data) },
-      ipAddress, userAgent,
+      ipAddress,
+      userAgent,
     });
 
     return flag;
@@ -354,9 +382,10 @@ export const adminService = {
     const sub = await adminRepository.findSubscription(id);
     if (!sub) throw new Error('Subscription not found');
     const daysNum = parseInt(days) || 365;
-    const endDate = sub.endDate && new Date(sub.endDate) > new Date()
-      ? new Date(new Date(sub.endDate).getTime() + daysNum * 86400000)
-      : new Date(Date.now() + daysNum * 86400000);
+    const endDate =
+      sub.endDate && new Date(sub.endDate) > new Date()
+        ? new Date(new Date(sub.endDate).getTime() + daysNum * 86400000)
+        : new Date(Date.now() + daysNum * 86400000);
     await adminRepository.updateSubscription(id, {
       status: 'ACTIVE',
       endDate,
@@ -375,7 +404,8 @@ export const adminService = {
     const sub = await adminRepository.findSubscription(id);
     if (!sub) throw new Error('Subscription not found');
     const daysNum = parseInt(days) || 30;
-    const currentEnd = sub.endDate && new Date(sub.endDate) > new Date() ? new Date(sub.endDate) : new Date();
+    const currentEnd =
+      sub.endDate && new Date(sub.endDate) > new Date() ? new Date(sub.endDate) : new Date();
     const newEnd = new Date(currentEnd.getTime() + daysNum * 86400000);
     await adminRepository.updateSubscription(id, { endDate: newEnd });
     await adminRepository.createAuditLog({
@@ -443,7 +473,11 @@ export const adminService = {
   async blockShop(id, reason) {
     const shop = await adminRepository.getShopDetail(id);
     if (!shop) throw new Error('Shop not found');
-    await adminRepository.updateTenant(id, { blacklisted: true, blacklistedAt: new Date(), blacklistReason: reason || null });
+    await adminRepository.updateTenant(id, {
+      blacklisted: true,
+      blacklistedAt: new Date(),
+      blacklistReason: reason || null,
+    });
     return adminRepository.getShopDetail(id);
   },
 
@@ -481,7 +515,8 @@ export const adminService = {
       targetType: 'TENANT',
       targetId: id,
       metadata: { verified: true },
-      ipAddress, userAgent,
+      ipAddress,
+      userAgent,
     });
 
     return tenant;
@@ -500,7 +535,8 @@ export const adminService = {
       targetType: 'TENANT',
       targetId: id,
       metadata: { reason },
-      ipAddress, userAgent,
+      ipAddress,
+      userAgent,
     });
 
     return tenant;
@@ -519,7 +555,8 @@ export const adminService = {
       targetType: 'TENANT',
       targetId: id,
       metadata: { blacklisted: false },
-      ipAddress, userAgent,
+      ipAddress,
+      userAgent,
     });
 
     return tenant;
@@ -534,7 +571,8 @@ export const adminService = {
       targetType: 'TENANT',
       targetId: id,
       metadata: { status },
-      ipAddress, userAgent,
+      ipAddress,
+      userAgent,
     });
 
     return tenant;
@@ -634,7 +672,14 @@ export const adminService = {
     const in15Days = new Date(now.getTime() + 15 * 86400000);
     const in30Days = new Date(now.getTime() + 30 * 86400000);
 
-    const [expiring3Days, expiring7Days, expiring15Days, expiring30Days, alreadyExpired, activeTotal] = await Promise.all([
+    const [
+      expiring3Days,
+      expiring7Days,
+      expiring15Days,
+      expiring30Days,
+      alreadyExpired,
+      activeTotal,
+    ] = await Promise.all([
       adminRepository.getSubscriptionsExpiringBetween(now, in3Days),
       adminRepository.getSubscriptionsExpiringBetween(in3Days, in7Days),
       adminRepository.getSubscriptionsExpiringBetween(in7Days, in15Days),
@@ -660,11 +705,13 @@ export const adminService = {
     else if (period === '7days') targetDate = new Date(now.getTime() + 7 * 86400000);
     else if (period === '15days') targetDate = new Date(now.getTime() + 15 * 86400000);
     else if (period === '30days') targetDate = new Date(now.getTime() + 30 * 86400000);
-    else if (period === 'expired') return adminRepository.sendExpiryRemindersToExpired(channel, message);
+    else if (period === 'expired')
+      return adminRepository.sendExpiryRemindersToExpired(channel, message);
     else throw new Error('Invalid period. Use: 3days, 7days, 15days, 30days, or expired');
 
     const tenants = await adminRepository.getSubscriptionsExpiringBetween(now, targetDate);
-    let sent = 0, failed = 0;
+    let sent = 0,
+      failed = 0;
 
     for (const t of tenants) {
       try {
@@ -761,7 +808,8 @@ export const adminService = {
       targetType: 'PAYMENT',
       targetId: id,
       metadata: { amount: payment.amount, reason },
-      ipAddress, userAgent,
+      ipAddress,
+      userAgent,
     });
 
     return payment;
@@ -776,7 +824,8 @@ export const adminService = {
       targetType: 'PAYMENT',
       targetId: id,
       metadata: { fromStatus: payment.status, toStatus: status },
-      ipAddress, userAgent,
+      ipAddress,
+      userAgent,
     });
 
     return payment;

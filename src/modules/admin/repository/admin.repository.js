@@ -35,9 +35,15 @@ export const adminRepository = {
         take: limit,
         orderBy: { [sortBy]: sortOrder },
         select: {
-          id: true, email: true, name: true, role: true,
-          permissions: true, isActive: true, lastLoginAt: true,
-          createdAt: true, updatedAt: true,
+          id: true,
+          email: true,
+          name: true,
+          role: true,
+          permissions: true,
+          isActive: true,
+          lastLoginAt: true,
+          createdAt: true,
+          updatedAt: true,
         },
       }),
       prisma.adminUser.count({ where }),
@@ -54,7 +60,18 @@ export const adminRepository = {
     return prisma.adminAuditLog.create({ data });
   },
 
-  async listAuditLogs({ page, limit, adminUserId, action, targetType, targetId, from, to, sortBy, sortOrder }) {
+  async listAuditLogs({
+    page,
+    limit,
+    adminUserId,
+    action,
+    targetType,
+    targetId,
+    from,
+    to,
+    sortBy,
+    sortOrder,
+  }) {
     const where = {};
     if (adminUserId) where.adminUserId = adminUserId;
     if (action) where.action = action;
@@ -139,7 +156,7 @@ export const adminRepository = {
     return prisma.adminFeatureFlag.findUnique({ where: { key } });
   },
 
-  async toggleFeatureFlag(id, enabled, updatedBy) {
+  async toggleFeatureFlag(id, enabled) {
     return prisma.adminFeatureFlag.update({
       where: { id },
       data: { enabled, updatedAt: new Date() },
@@ -156,6 +173,8 @@ export const adminRepository = {
   },
 
   async listAllSubscriptions({ status, search, page = 1, limit = 20 }) {
+    const pageNum = parseInt(page) || 1;
+    const limitNum = parseInt(limit) || 20;
     const where = {};
     if (status) where.status = status;
     if (search) {
@@ -169,12 +188,18 @@ export const adminRepository = {
         where,
         include: { plan: true, tenant: { select: { name: true, email: true } } },
         orderBy: { createdAt: 'desc' },
-        skip: (page - 1) * limit,
-        take: limit,
+        skip: (pageNum - 1) * limitNum,
+        take: limitNum,
       }),
       prisma.subscription.count({ where }),
     ]);
-    return { subscriptions: subs, total, page, limit, totalPages: Math.ceil(total / limit) };
+    return {
+      subscriptions: subs,
+      total,
+      page: pageNum,
+      limit: limitNum,
+      totalPages: Math.ceil(total / limitNum),
+    };
   },
 
   async findSubscription(id) {
@@ -201,10 +226,15 @@ export const adminRepository = {
   },
 
   async resetUserDevices(userId) {
-    await prisma.adminDevice.updateMany({ where: { userId }, data: { isBlocked: true, blockedAt: new Date(), blockReason: 'Admin reset' } });
+    await prisma.adminDevice.updateMany({
+      where: { userId },
+      data: { isBlocked: true, blockedAt: new Date(), blockReason: 'Admin reset' },
+    });
   },
 
   async listShops({ search, status, verified, page = 1, limit = 20 }) {
+    const pageNum = parseInt(page) || 1;
+    const limitNum = parseInt(limit) || 20;
     const where = {};
     if (status) where.status = status;
     if (verified !== undefined) where.isVerified = verified === 'true';
@@ -226,12 +256,18 @@ export const adminRepository = {
           _count: { select: { users: true } },
         },
         orderBy: { createdAt: 'desc' },
-        skip: (page - 1) * limit,
-        take: limit,
+        skip: (pageNum - 1) * limitNum,
+        take: limitNum,
       }),
       prisma.tenant.count({ where }),
     ]);
-    return { shops, total, page, limit, totalPages: Math.ceil(total / limit) };
+    return {
+      shops,
+      total,
+      page: pageNum,
+      limit: limitNum,
+      totalPages: Math.ceil(total / limitNum),
+    };
   },
 
   async getShopDetail(id) {
@@ -246,7 +282,10 @@ export const adminRepository = {
   },
 
   async deleteTenant(id) {
-    await prisma.tenant.update({ where: { id }, data: { deletedAt: new Date(), status: 'INACTIVE' } });
+    await prisma.tenant.update({
+      where: { id },
+      data: { deletedAt: new Date(), status: 'INACTIVE' },
+    });
   },
 
   async listTenants({ page, limit, search, status, sortBy, sortOrder, verified, blacklisted }) {
@@ -299,7 +338,14 @@ export const adminRepository = {
         users: {
           take: 10,
           orderBy: { createdAt: 'desc' },
-          select: { id: true, fullName: true, email: true, role: true, phone: true, createdAt: true },
+          select: {
+            id: true,
+            fullName: true,
+            email: true,
+            role: true,
+            phone: true,
+            createdAt: true,
+          },
         },
       },
     });
@@ -345,6 +391,8 @@ export const adminRepository = {
   },
 
   async listSupportTickets({ status, priority, search, page = 1, limit = 20 }) {
+    const pageNum = parseInt(page) || 1;
+    const limitNum = parseInt(limit) || 20;
     const where = {};
     if (status) where.status = status;
     if (priority) where.priority = priority;
@@ -363,12 +411,12 @@ export const adminRepository = {
           replies: { orderBy: { createdAt: 'desc' }, take: 3 },
         },
         orderBy: { createdAt: 'desc' },
-        skip: (page - 1) * limit,
-        take: limit,
+        skip: (pageNum - 1) * limitNum,
+        take: limitNum,
       }),
       prisma.supportTicket.count({ where }),
     ]);
-    return { tickets, total, page, limit };
+    return { tickets, total, page: pageNum, limit: limitNum };
   },
 
   async getSupportTicket(id) {
@@ -495,7 +543,9 @@ export const adminRepository = {
       }),
       prisma.payment.count({ where: { status: 'SUCCESS' } }),
       prisma.tenant.count(),
-      prisma.tenant.count({ where: { subscription: { status: { in: ['ACTIVE', 'TRIAL', 'GRACE_PERIOD'] } } } }),
+      prisma.tenant.count({
+        where: { subscription: { status: { in: ['ACTIVE', 'TRIAL', 'GRACE_PERIOD'] } } },
+      }),
     ]);
 
     const mrr = Number(currentMonthRevenue._sum.amount || 0);
@@ -503,12 +553,15 @@ export const adminRepository = {
     const arr = mrr * 12;
     const churnedLastMonth = subscriptionsEndedLastMonth;
     const mrrChurn = lastMrr > 0 ? (churnedLastMonth / lastMrr) * 100 : 0;
-    const renewalRate = subscriptionsStartedLastMonth > 0
-      ? Math.max(0, ((subscriptionsStartedLastMonth - churnedLastMonth) / subscriptionsStartedLastMonth) * 100)
-      : 100;
-    const conversionRate = totalTenants > 0
-      ? (totalTenantsWithPaidSub / totalTenants) * 100
-      : 0;
+    const renewalRate =
+      subscriptionsStartedLastMonth > 0
+        ? Math.max(
+            0,
+            ((subscriptionsStartedLastMonth - churnedLastMonth) / subscriptionsStartedLastMonth) *
+              100,
+          )
+        : 100;
+    const conversionRate = totalTenants > 0 ? (totalTenantsWithPaidSub / totalTenants) * 100 : 0;
 
     return {
       mrr,
@@ -562,7 +615,13 @@ export const adminRepository = {
         prisma.subscription.count({ where: { createdAt: { lte: next } } }),
       ]);
 
-      daily.push({ date: day, registrations, activeUsers, totalShops: shopGrowth, totalSubscriptions: subGrowth });
+      daily.push({
+        date: day,
+        registrations,
+        activeUsers,
+        totalShops: shopGrowth,
+        totalSubscriptions: subGrowth,
+      });
     }
 
     const monthlyRevenue = [];
@@ -585,14 +644,24 @@ export const adminRepository = {
   async getDashboardStats() {
     const todayStart = new Date(new Date().setHours(0, 0, 0, 0));
     const [
-      totalTenants, activeTenants, suspendedTenants, verifiedTenants, blacklistedTenants,
-      totalUsers, activeUsersToday,
+      totalTenants,
+      activeTenants,
+      suspendedTenants,
+      verifiedTenants,
+      blacklistedTenants,
+      totalUsers,
+      activeUsersToday,
       totalAdmins,
-      totalSubscriptions, activeSubscriptions, expiredSubscriptions,
+      totalSubscriptions,
+      activeSubscriptions,
+      expiredSubscriptions,
       todaysRegistrations,
-      totalDevices, blockedDevices,
-      recentLogs, totalRevenue,
-      failedLogins24h, expiringSubs,
+      totalDevices,
+      blockedDevices,
+      recentLogs,
+      totalRevenue,
+      failedLogins24h,
+      expiringSubs,
     ] = await Promise.all([
       prisma.tenant.count(),
       prisma.tenant.count({ where: { status: 'ACTIVE' } }),
@@ -611,7 +680,11 @@ export const adminRepository = {
       prisma.adminAuditLog.findMany({ take: 10, orderBy: { createdAt: 'desc' } }),
       prisma.payment.aggregate({ _sum: { amount: true }, where: { status: 'SUCCESS' } }),
       prisma.adminAuditLog.count({
-        where: { action: 'ADMIN_LOGIN', createdAt: { gte: todayStart }, metadata: { path: ['success'], equals: false } },
+        where: {
+          action: 'ADMIN_LOGIN',
+          createdAt: { gte: todayStart },
+          metadata: { path: ['success'], equals: false },
+        },
       }),
       prisma.subscription.count({
         where: { status: 'ACTIVE', endDate: { lte: new Date(Date.now() + 7 * 86400000) } },
@@ -619,10 +692,20 @@ export const adminRepository = {
     ]);
 
     return {
-      tenants: { total: totalTenants, active: activeTenants, suspended: suspendedTenants, verified: verifiedTenants, blacklisted: blacklistedTenants },
+      tenants: {
+        total: totalTenants,
+        active: activeTenants,
+        suspended: suspendedTenants,
+        verified: verifiedTenants,
+        blacklisted: blacklistedTenants,
+      },
       users: { total: totalUsers, activeToday: activeUsersToday },
       admins: { total: totalAdmins },
-      subscriptions: { total: totalSubscriptions, active: activeSubscriptions, expired: expiredSubscriptions },
+      subscriptions: {
+        total: totalSubscriptions,
+        active: activeSubscriptions,
+        expired: expiredSubscriptions,
+      },
       todaysRegistrations,
       devices: { total: totalDevices, blocked: blockedDevices },
       revenue: totalRevenue._sum.amount || 0,
@@ -736,7 +819,11 @@ export const adminRepository = {
     ]);
 
     return {
-      loginAttempts: { total: totalLoginAttempts, failed24h: failedLogins24h, success24h: successfulLogins24h },
+      loginAttempts: {
+        total: totalLoginAttempts,
+        failed24h: failedLogins24h,
+        success24h: successfulLogins24h,
+      },
       uniqueIps24h: uniqueIps24h.length,
       bruteForceAlerts: multipleFailedLogins.length,
       recentRegistrations: recentRegistrationAttempts,
@@ -771,33 +858,34 @@ export const adminRepository = {
     const hourAgo = new Date(Date.now() - 60 * 60 * 1000);
     const dayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
 
-    const [bruteForceIps, rapidRegistrations, recentBlocks, multipleAccountDevices] = await Promise.all([
-      prisma.adminAuditLog.groupBy({
-        by: ['ipAddress'],
-        where: {
-          action: 'ADMIN_LOGIN',
-          createdAt: { gte: hourAgo },
-          metadata: { path: ['success'], equals: false },
-        },
-        having: { ipAddress: { _count: { gte: 10 } } },
-      }),
-      prisma.registrationAttempt.count({
-        where: { timestamp: { gte: hourAgo } },
-      }),
-      prisma.adminAuditLog.findMany({
-        where: {
-          action: { in: ['DEVICE_BLOCKED', 'SHOP_BLACKLISTED', 'USER_SUSPENDED'] },
-          createdAt: { gte: dayAgo },
-        },
-        orderBy: { createdAt: 'desc' },
-        take: 20,
-      }),
-      prisma.adminDevice.groupBy({
-        by: ['fingerprintHash'],
-        where: { firstSeen: { gte: dayAgo } },
-        having: { fingerprintHash: { _count: { gte: 2 } } },
-      }),
-    ]);
+    const [bruteForceIps, rapidRegistrations, recentBlocks, multipleAccountDevices] =
+      await Promise.all([
+        prisma.adminAuditLog.groupBy({
+          by: ['ipAddress'],
+          where: {
+            action: 'ADMIN_LOGIN',
+            createdAt: { gte: hourAgo },
+            metadata: { path: ['success'], equals: false },
+          },
+          having: { ipAddress: { _count: { gte: 10 } } },
+        }),
+        prisma.registrationAttempt.count({
+          where: { timestamp: { gte: hourAgo } },
+        }),
+        prisma.adminAuditLog.findMany({
+          where: {
+            action: { in: ['DEVICE_BLOCKED', 'SHOP_BLACKLISTED', 'USER_SUSPENDED'] },
+            createdAt: { gte: dayAgo },
+          },
+          orderBy: { createdAt: 'desc' },
+          take: 20,
+        }),
+        prisma.adminDevice.groupBy({
+          by: ['fingerprintHash'],
+          where: { firstSeen: { gte: dayAgo } },
+          having: { fingerprintHash: { _count: { gte: 2 } } },
+        }),
+      ]);
 
     return {
       bruteForceIps: bruteForceIps.map((b) => b.ipAddress).filter(Boolean),

@@ -41,11 +41,13 @@ class AdminController {
       reply.setCookie('adminRefreshToken', result.refreshToken, COOKIE_OPTIONS);
       reply.setCookie('adminAccessToken', result.accessToken, ACCESS_COOKIE_OPTIONS);
 
-      return reply.send(success({
-        admin: result.admin,
-        accessToken: result.accessToken,
-        refreshToken: result.refreshToken,
-      }));
+      return reply.send(
+        success({
+          admin: result.admin,
+          accessToken: result.accessToken,
+          refreshToken: result.refreshToken,
+        }),
+      );
     } catch (error) {
       request.log.error(error);
       if (error instanceof ZodError) {
@@ -63,11 +65,13 @@ class AdminController {
       reply.setCookie('adminRefreshToken', result.refreshToken, COOKIE_OPTIONS);
       reply.setCookie('adminAccessToken', result.accessToken, ACCESS_COOKIE_OPTIONS);
 
-      return reply.send(success({
-        admin: result.admin,
-        accessToken: result.accessToken,
-        refreshToken: result.refreshToken,
-      }));
+      return reply.send(
+        success({
+          admin: result.admin,
+          accessToken: result.accessToken,
+          refreshToken: result.refreshToken,
+        }),
+      );
     } catch (error) {
       if (error instanceof ZodError) {
         return reply.code(400).send(errorResponse('Validation failed', 'VALIDATION_ERROR'));
@@ -138,10 +142,16 @@ class AdminController {
     try {
       const parsed = adminListQuerySchema.parse(request.query);
       const result = await adminService.listAdmins(parsed);
-      return reply.send(success(result.admins, { pagination: {
-        total: result.total, page: result.page,
-        limit: result.limit, totalPages: result.totalPages,
-      }}));
+      return reply.send(
+        success(result.admins, {
+          pagination: {
+            total: result.total,
+            page: result.page,
+            limit: result.limit,
+            totalPages: result.totalPages,
+          },
+        }),
+      );
     } catch (error) {
       return reply.code(400).send(errorResponse(error.message, 'LIST_ADMINS_FAILED'));
     }
@@ -168,10 +178,16 @@ class AdminController {
     try {
       const parsed = auditLogQuerySchema.parse(request.query);
       const result = await adminService.getAuditLogs(parsed);
-      return reply.send(success(result.logs, { pagination: {
-        total: result.total, page: result.page,
-        limit: result.limit, totalPages: result.totalPages,
-      }}));
+      return reply.send(
+        success(result.logs, {
+          pagination: {
+            total: result.total,
+            page: result.page,
+            limit: result.limit,
+            totalPages: result.totalPages,
+          },
+        }),
+      );
     } catch (error) {
       return reply.code(400).send(errorResponse(error.message, 'AUDIT_LOGS_FAILED'));
     }
@@ -183,16 +199,27 @@ class AdminController {
         page: parseInt(request.query.page) || 1,
         limit: parseInt(request.query.limit) || 20,
         search: request.query.search,
-        isBlocked: request.query.isBlocked === 'true' ? true : request.query.isBlocked === 'false' ? false : undefined,
+        isBlocked:
+          request.query.isBlocked === 'true'
+            ? true
+            : request.query.isBlocked === 'false'
+              ? false
+              : undefined,
         minRiskScore: request.query.minRiskScore ? parseInt(request.query.minRiskScore) : undefined,
         sortBy: request.query.sortBy || 'lastSeen',
         sortOrder: request.query.sortOrder || 'desc',
       };
       const result = await adminService.getDevices(query);
-      return reply.send(success(result.devices, { pagination: {
-        total: result.total, page: result.page,
-        limit: result.limit, totalPages: result.totalPages,
-      }}));
+      return reply.send(
+        success(result.devices, {
+          pagination: {
+            total: result.total,
+            page: result.page,
+            limit: result.limit,
+            totalPages: result.totalPages,
+          },
+        }),
+      );
     } catch (error) {
       return reply.code(400).send(errorResponse(error.message, 'DEVICES_FAILED'));
     }
@@ -291,7 +318,13 @@ class AdminController {
 
   async listSubscriptions(request, reply) {
     try {
-      const subs = await adminService.listSubscriptions(request.query);
+      const query = {
+        page: parseInt(request.query.page) || 1,
+        limit: parseInt(request.query.limit) || 20,
+        status: request.query.status,
+        search: request.query.search,
+      };
+      const subs = await adminService.listSubscriptions(query);
       return reply.send(success(subs));
     } catch (error) {
       return reply.code(500).send(errorResponse(error.message, 'LIST_SUBS_FAILED'));
@@ -346,7 +379,10 @@ class AdminController {
 
   async resetUserPassword(request, reply) {
     try {
-      const result = await adminService.resetUserPassword(request.params.tenantId, request.params.userId);
+      const result = await adminService.resetUserPassword(
+        request.params.tenantId,
+        request.params.userId,
+      );
       return reply.send(success(result));
     } catch (error) {
       return reply.code(400).send(errorResponse(error.message, 'RESET_PASSWORD_FAILED'));
@@ -364,7 +400,14 @@ class AdminController {
 
   async listShops(request, reply) {
     try {
-      const shops = await adminService.listShops(request.query);
+      const query = {
+        page: parseInt(request.query.page) || 1,
+        limit: parseInt(request.query.limit) || 20,
+        search: request.query.search,
+        status: request.query.status,
+        verified: request.query.verified,
+      };
+      const shops = await adminService.listShops(query);
       return reply.send(success(shops));
     } catch (error) {
       return reply.code(500).send(errorResponse(error.message, 'LIST_SHOPS_FAILED'));
@@ -438,10 +481,16 @@ class AdminController {
         sortOrder: request.query.sortOrder || 'desc',
       };
       const result = await adminService.listTenants(query);
-      return reply.send(success(result.tenants, { pagination: {
-        total: result.total, page: result.page,
-        limit: result.limit, totalPages: result.totalPages,
-      }}));
+      return reply.send(
+        success(result.tenants, {
+          pagination: {
+            total: result.total,
+            page: result.page,
+            limit: result.limit,
+            totalPages: result.totalPages,
+          },
+        }),
+      );
     } catch (error) {
       return reply.code(400).send(errorResponse(error.message, 'LIST_TENANTS_FAILED'));
     }
@@ -556,7 +605,14 @@ class AdminController {
 
   async listSupportTickets(request, reply) {
     try {
-      const tickets = await adminService.listSupportTickets(request.query);
+      const query = {
+        page: parseInt(request.query.page) || 1,
+        limit: parseInt(request.query.limit) || 20,
+        status: request.query.status,
+        priority: request.query.priority,
+        search: request.query.search,
+      };
+      const tickets = await adminService.listSupportTickets(query);
       return reply.send(success(tickets));
     } catch (error) {
       return reply.code(500).send(errorResponse(error.message, 'LIST_TICKETS_FAILED'));
@@ -661,10 +717,16 @@ class AdminController {
         to: request.query.to,
       };
       const result = await adminService.listPayments(query);
-      return reply.send(success(result.payments, { pagination: {
-        total: result.total, page: result.page,
-        limit: result.limit, totalPages: result.totalPages,
-      }}));
+      return reply.send(
+        success(result.payments, {
+          pagination: {
+            total: result.total,
+            page: result.page,
+            limit: result.limit,
+            totalPages: result.totalPages,
+          },
+        }),
+      );
     } catch (error) {
       return reply.code(400).send(errorResponse(error.message, 'LIST_PAYMENTS_FAILED'));
     }
@@ -728,10 +790,16 @@ class AdminController {
         to: request.query.to,
       };
       const result = await adminService.getLoginAttempts(query);
-      return reply.send(success(result.attempts, { pagination: {
-        total: result.total, page: result.page,
-        limit: result.limit, totalPages: result.totalPages,
-      }}));
+      return reply.send(
+        success(result.attempts, {
+          pagination: {
+            total: result.total,
+            page: result.page,
+            limit: result.limit,
+            totalPages: result.totalPages,
+          },
+        }),
+      );
     } catch (error) {
       return reply.code(400).send(errorResponse(error.message, 'LOGIN_ATTEMPTS_FAILED'));
     }
