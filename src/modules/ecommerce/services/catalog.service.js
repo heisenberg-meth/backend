@@ -4,8 +4,10 @@ import { scanKeys } from '../../../shared/utils/scan-keys.js';
 
 class CatalogService {
   async getPublicCatalog(tenantId, filters = {}) {
-    const { categoryId, search, page = 1, limit = 20 } = filters;
-    const cacheKey = `catalog:${tenantId}:${JSON.stringify(filters)}`;
+    const page = parseInt(filters.page) || 1;
+    const limit = parseInt(filters.limit) || 20;
+    const { categoryId, search } = filters;
+    const cacheKey = `catalog:${tenantId}:${JSON.stringify({ ...filters, page, limit })}`;
 
     const cached = await redisClient.get(cacheKey);
     if (cached) return JSON.parse(cached);

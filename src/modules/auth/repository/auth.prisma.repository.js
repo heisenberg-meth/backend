@@ -3,7 +3,7 @@ import prisma from '../../../config/prisma.js';
 class AuthPrismaRepository {
   async findUserByEmail(email) {
     return prisma.user.findFirst({
-      where: { email: email.toLowerCase().trim() },
+      where: { email: email.toLowerCase().trim(), deletedAt: null },
       include: {
         tenant: {
           include: {
@@ -19,8 +19,8 @@ class AuthPrismaRepository {
   }
 
   async findUserById(id) {
-    return prisma.user.findUnique({
-      where: { id },
+    return prisma.user.findFirst({
+      where: { id, deletedAt: null },
       include: {
         tenant: {
           include: {

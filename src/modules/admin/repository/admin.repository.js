@@ -18,6 +18,8 @@ export const adminRepository = {
   },
 
   async listAdmins({ page, limit, search, role, isActive, sortBy, sortOrder }) {
+    const pageNum = parseInt(page) || 1;
+    const limitNum = parseInt(limit) || 20;
     const where = {};
     if (search) {
       where.OR = [
@@ -31,8 +33,8 @@ export const adminRepository = {
     const [admins, total] = await Promise.all([
       prisma.adminUser.findMany({
         where,
-        skip: (page - 1) * limit,
-        take: limit,
+        skip: (pageNum - 1) * limitNum,
+        take: limitNum,
         orderBy: { [sortBy]: sortOrder },
         select: {
           id: true,
@@ -49,7 +51,13 @@ export const adminRepository = {
       prisma.adminUser.count({ where }),
     ]);
 
-    return { admins, total, page, limit, totalPages: Math.ceil(total / limit) };
+    return {
+      admins,
+      total,
+      page: pageNum,
+      limit: limitNum,
+      totalPages: Math.ceil(total / limitNum),
+    };
   },
 
   async deleteAdmin(id) {
@@ -72,6 +80,8 @@ export const adminRepository = {
     sortBy,
     sortOrder,
   }) {
+    const pageNum = parseInt(page) || 1;
+    const limitNum = parseInt(limit) || 50;
     const where = {};
     if (adminUserId) where.adminUserId = adminUserId;
     if (action) where.action = action;
@@ -86,14 +96,14 @@ export const adminRepository = {
     const [logs, total] = await Promise.all([
       prisma.adminAuditLog.findMany({
         where,
-        skip: (page - 1) * limit,
-        take: limit,
+        skip: (pageNum - 1) * limitNum,
+        take: limitNum,
         orderBy: { [sortBy]: sortOrder },
       }),
       prisma.adminAuditLog.count({ where }),
     ]);
 
-    return { logs, total, page, limit, totalPages: Math.ceil(total / limit) };
+    return { logs, total, page: pageNum, limit: limitNum, totalPages: Math.ceil(total / limitNum) };
   },
 
   async getDeviceById(id) {
@@ -101,6 +111,8 @@ export const adminRepository = {
   },
 
   async listDevices({ page, limit, search, isBlocked, minRiskScore, sortBy, sortOrder }) {
+    const pageNum = parseInt(page) || 1;
+    const limitNum = parseInt(limit) || 20;
     const where = {};
     if (search) {
       where.OR = [
@@ -116,14 +128,20 @@ export const adminRepository = {
     const [devices, total] = await Promise.all([
       prisma.adminDevice.findMany({
         where,
-        skip: (page - 1) * limit,
-        take: limit,
+        skip: (pageNum - 1) * limitNum,
+        take: limitNum,
         orderBy: { [sortBy || 'lastSeen']: sortOrder || 'desc' },
       }),
       prisma.adminDevice.count({ where }),
     ]);
 
-    return { devices, total, page, limit, totalPages: Math.ceil(total / limit) };
+    return {
+      devices,
+      total,
+      page: pageNum,
+      limit: limitNum,
+      totalPages: Math.ceil(total / limitNum),
+    };
   },
 
   async blockDevice(id, blockedBy, blockReason) {
@@ -289,6 +307,8 @@ export const adminRepository = {
   },
 
   async listTenants({ page, limit, search, status, sortBy, sortOrder, verified, blacklisted }) {
+    const pageNum = parseInt(page) || 1;
+    const limitNum = parseInt(limit) || 20;
     const where = {};
     if (search) {
       where.OR = [
@@ -308,8 +328,8 @@ export const adminRepository = {
     const [tenants, total] = await Promise.all([
       prisma.tenant.findMany({
         where,
-        skip: (page - 1) * limit,
-        take: limit,
+        skip: (pageNum - 1) * limitNum,
+        take: limitNum,
         orderBy: { [sortBy || 'createdAt']: sortOrder || 'desc' },
         include: {
           _count: { select: { users: true, branches: true } },
@@ -323,7 +343,13 @@ export const adminRepository = {
       prisma.tenant.count({ where }),
     ]);
 
-    return { tenants, total, page, limit, totalPages: Math.ceil(total / limit) };
+    return {
+      tenants,
+      total,
+      page: pageNum,
+      limit: limitNum,
+      totalPages: Math.ceil(total / limitNum),
+    };
   },
 
   async getTenantDetail(id) {
@@ -334,8 +360,14 @@ export const adminRepository = {
           include: { documents: true },
         },
         subscription: { include: { plan: true } },
-        _count: { select: { users: true, branches: true } },
+        _count: {
+          select: {
+            users: { where: { deletedAt: null } },
+            branches: true,
+          },
+        },
         users: {
+          where: { deletedAt: null },
           take: 10,
           orderBy: { createdAt: 'desc' },
           select: {
@@ -353,11 +385,11 @@ export const adminRepository = {
     if (!tenant) return null;
 
     const deviceCount = await prisma.device.count({
-      where: { user: { tenantId: id } },
+      where: { user: { tenantId: id, deletedAt: null } },
     });
 
     const devices = await prisma.device.findMany({
-      where: { user: { tenantId: id } },
+      where: { user: { tenantId: id, deletedAt: null } },
       orderBy: { lastSeen: 'desc' },
       take: 20,
       include: { user: { select: { fullName: true } } },
@@ -716,6 +748,8 @@ export const adminRepository = {
   },
 
   async listPayments({ page, limit, search, status, from, to }) {
+    const pageNum = parseInt(page) || 1;
+    const limitNum = parseInt(limit) || 20;
     const where = {};
     if (search) {
       where.OR = [
@@ -735,8 +769,8 @@ export const adminRepository = {
     const [payments, total] = await Promise.all([
       prisma.payment.findMany({
         where,
-        skip: (page - 1) * limit,
-        take: limit,
+        skip: (pageNum - 1) * limitNum,
+        take: limitNum,
         orderBy: { createdAt: 'desc' },
         include: {
           tenant: { select: { name: true, email: true } },
@@ -745,7 +779,13 @@ export const adminRepository = {
       prisma.payment.count({ where }),
     ]);
 
-    return { payments, total, page, limit, totalPages: Math.ceil(total / limit) };
+    return {
+      payments,
+      total,
+      page: pageNum,
+      limit: limitNum,
+      totalPages: Math.ceil(total / limitNum),
+    };
   },
 
   async getPaymentDetail(id) {
@@ -832,6 +872,8 @@ export const adminRepository = {
   },
 
   async getLoginAttempts({ page, limit, outcome, from, to }) {
+    const pageNum = parseInt(page) || 1;
+    const limitNum = parseInt(limit) || 50;
     const where = { action: 'ADMIN_LOGIN' };
     if (outcome === 'success') where.metadata = { path: ['success'], equals: true };
     else if (outcome === 'failed') where.metadata = { path: ['success'], equals: false };
@@ -844,14 +886,20 @@ export const adminRepository = {
     const [attempts, total] = await Promise.all([
       prisma.adminAuditLog.findMany({
         where,
-        skip: (page - 1) * limit,
-        take: limit,
+        skip: (pageNum - 1) * limitNum,
+        take: limitNum,
         orderBy: { createdAt: 'desc' },
       }),
       prisma.adminAuditLog.count({ where }),
     ]);
 
-    return { attempts, total, page, limit, totalPages: Math.ceil(total / limit) };
+    return {
+      attempts,
+      total,
+      page: pageNum,
+      limit: limitNum,
+      totalPages: Math.ceil(total / limitNum),
+    };
   },
 
   async getSecurityAlerts() {
