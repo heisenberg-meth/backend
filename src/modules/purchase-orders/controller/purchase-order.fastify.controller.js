@@ -104,7 +104,11 @@ class PurchaseOrderFastifyController {
       });
     } catch (error) {
       logger.error({ error, id, tenantId }, 'Failed to receive purchase order');
-      return reply.code(400).send({ success: false, error: error.message });
+      return reply.code(400).send({
+        success: false,
+        error: error.message,
+        code: 'PURCHASE_RECEIPT_FAILED',
+      });
     }
   }
 

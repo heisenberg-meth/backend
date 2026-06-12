@@ -138,49 +138,52 @@ class DashboardAggregationRepository {
     };
     if (branchId) where.medicine.branchId = branchId;
 
-    const [totalBatches, stockValueAgg] = await Promise.all([
+    const results = await Promise.allSettled([
       prisma.inventoryBatch.count({ where }),
       prisma.inventoryBatch.aggregate({
         where,
         _sum: { quantity: true },
       }),
-    ]);
-
-    const expiredCount = await prisma.inventoryBatch.count({
-      where: {
-        ...where,
-        expiryDate: { lt: now },
-        quantity: { gt: 0 },
-      },
-    });
-
-    const expiringCount = await prisma.inventoryBatch.count({
-      where: {
-        ...where,
-        expiryDate: { gte: now, lte: thirtyDaysLater },
-        quantity: { gt: 0 },
-      },
-    });
-
-    const outOfStockCount = await prisma.medicine.count({
-      where: {
-        tenantId,
-        deletedAt: null,
-        isActive: true,
-        inventoryBatches: {
-          none: {
-            quantity: { gt: 0 },
-            deletedAt: null,
+      prisma.inventoryBatch.count({
+        where: {
+          ...where,
+          expiryDate: { lt: now },
+          quantity: { gt: 0 },
+        },
+      }),
+      prisma.inventoryBatch.count({
+        where: {
+          ...where,
+          expiryDate: { gte: now, lte: thirtyDaysLater },
+          quantity: { gt: 0 },
+        },
+      }),
+      prisma.medicine.count({
+        where: {
+          tenantId,
+          deletedAt: null,
+          isActive: true,
+          inventoryBatches: {
+            none: {
+              quantity: { gt: 0 },
+              deletedAt: null,
+            },
           },
         },
-      },
-    });
+      }),
+      this.getLowStockCount(tenantId, branchId),
+    ]);
 
-    const lowStockCount = await this.getLowStockCount(tenantId, branchId);
+    const totalBatches = results[0].status === 'fulfilled' ? results[0].value : 0;
+    const stockValueAgg = results[1].status === 'fulfilled' ? results[1].value : { _sum: { quantity: 0 } };
+    const expiredCount = results[2].status === 'fulfilled' ? results[2].value : 0;
+    const expiringCount = results[3].status === 'fulfilled' ? results[3].value : 0;
+    const outOfStockCount = results[4].status === 'fulfilled' ? results[4].value : 0;
+    const lowStockCount = results[5].status === 'fulfilled' ? results[5].value : 0;
 
     return {
       totalBatches,
-      totalStock: stockValueAgg._sum.quantity || 0,
+      totalStock: stockValueAgg?._sum?.quantity || 0,
       expiredCount,
       expiringCount,
       outOfStockCount,
@@ -195,34 +198,38 @@ class DashboardAggregationRepository {
     };
     if (branchId) where.branchId = branchId;
 
-    const alerts = await prisma.stockAlert.findMany({
-      where,
-      include: {
-        medicine: { select: { id: true, name: true } },
-      },
-      orderBy: [{ severity: 'desc' }, { createdAt: 'desc' }],
-      take: limit,
-    });
+    const results = await Promise.allSettled([
+      prisma.stockAlert.findMany({
+        where,
+        include: {
+          medicine: { select: { id: true, name: true } },
+        },
+        orderBy: [{ severity: 'desc' }, { createdAt: 'desc' }],
+        take: limit,
+      }),
+      prisma.inventoryBatch.findMany({
+        where: {
+          medicine: { tenantId, deletedAt: null },
+          expiryDate: { lt: new Date() },
+          quantity: { gt: 0 },
+          deletedAt: null,
+          ...(branchId && { medicine: { branchId } }),
+        },
+        select: {
+          id: true,
+          batchNumber: true,
+          quantity: true,
+          expiryDate: true,
+          purchasePrice: true,
+          medicine: { select: { id: true, name: true } },
+        },
+        take: limit,
+        orderBy: { expiryDate: 'asc' },
+      })
+    ]);
 
-    const expiredBatches = await prisma.inventoryBatch.findMany({
-      where: {
-        medicine: { tenantId, deletedAt: null },
-        expiryDate: { lt: new Date() },
-        quantity: { gt: 0 },
-        deletedAt: null,
-        ...(branchId && { medicine: { branchId } }),
-      },
-      select: {
-        id: true,
-        batchNumber: true,
-        quantity: true,
-        expiryDate: true,
-        purchasePrice: true,
-        medicine: { select: { id: true, name: true } },
-      },
-      take: limit,
-      orderBy: { expiryDate: 'asc' },
-    });
+    const alerts = results[0].status === 'fulfilled' ? results[0].value : [];
+    const expiredBatches = results[1].status === 'fulfilled' ? results[1].value : [];
 
     return { alerts, expiredBatches };
   }

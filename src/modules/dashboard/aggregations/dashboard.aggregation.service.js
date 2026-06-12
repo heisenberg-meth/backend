@@ -3,6 +3,15 @@ import dashboardAggregationRepository from '../repositories/dashboard.aggregatio
 import dashboardCacheManager from '../aggregations/dashboard.cache-manager.js';
 import logger from '../../../shared/utils/logger.js';
 
+const safeMetric = async (fn, fallback = 0) => {
+  try {
+    return await fn();
+  } catch (error) {
+    logger.error({ err: error }, 'Dashboard metric query failed');
+    return fallback;
+  }
+};
+
 const ROLE_DASHBOARD_CONFIG = {
   OWNER: ['overview', 'sales_summary', 'inventory_health', 'alerts'],
   ADMIN: ['overview', 'sales_summary', 'inventory_health', 'alerts'],
@@ -13,92 +22,111 @@ const ROLE_DASHBOARD_CONFIG = {
 
 class DashboardAggregationService {
   async getExecutiveSummary(tenantId, userRole = 'OWNER') {
-    if (!tenantId) {
-      throw new Error('Tenant missing');
-    }
+    try {
+      if (!tenantId) {
+        throw new Error('Tenant missing');
+      }
 
-    if (!this._hasAccess(userRole, 'overview')) {
-      const error = new Error('Insufficient permissions for overview');
-      error.statusCode = 403;
+      if (!this._hasAccess(userRole, 'overview')) {
+        const error = new Error('Insufficient permissions for overview');
+        error.statusCode = 403;
+        throw error;
+      }
+
+      const cached = await dashboardCacheManager.get(tenantId, 'executive_summary');
+      if (cached) return cached;
+
+      const results = await Promise.allSettled([
+        this.getFinancialSummary(tenantId, userRole),
+        this.getLowStockSummary(tenantId, userRole),
+        this.getPendingOrders(tenantId, userRole),
+        this.getTodaySummary(tenantId, userRole),
+        prisma.stockAlert.count({ where: { tenantId, isResolved: false } }),
+      ]);
+
+      const safeValue = (result, fallback) => {
+        if (result.status === 'fulfilled') return result.value;
+        logger.error(
+          { err: result.reason, endpoint: 'dashboard-overview' },
+          'Dashboard metric failed',
+        );
+        return fallback;
+      };
+
+      const financials = safeValue(results[0], {
+        totalSuppliers: 0,
+        todayRevenue: 0,
+        todayInvoices: 0,
+        monthRevenue: 0,
+        monthInvoices: 0,
+        pendingOrders: 0,
+      });
+      const inventory = safeValue(results[1], {
+        critical: 0,
+        low: 0,
+        outOfStock: 0,
+        totalSku: 0,
+        lowStock: 0,
+        expiring30d: 0,
+        inventoryValue: 0,
+        topRisks: [],
+      });
+      const pendingOrders = safeValue(results[2], {
+        pendingPOs: 0,
+        delayedDeliveries: 0,
+        awaitingApproval: 0,
+      });
+      const today = safeValue(results[3], { invoices: 0, patients: 0, prescriptions: 0, revenue: 0 });
+      const activeAlerts = safeValue(results[4], 0);
+
+      const metricNames = [
+        'financials',
+        'inventory',
+        'pending_orders',
+        'today_summary',
+        'active_alerts',
+      ];
+      const warnings = results
+        .map((r, i) => (r.status === 'rejected' ? `${metricNames[i]}_unavailable` : null))
+        .filter(Boolean);
+
+      const data = {
+        financials,
+        inventory,
+        pendingOrders,
+        today,
+        totalSuppliers: financials.totalSuppliers || 0,
+        totalCustomers: today.patients || 0,
+        activeAlerts: activeAlerts || 0,
+        suppliers: {
+          total: financials.totalSuppliers || 0,
+        },
+        patients: {
+          total: today.patients || 0,
+        },
+        alerts: {
+          active: activeAlerts || 0,
+        },
+        warnings,
+        generatedAt: new Date().toISOString(),
+      };
+
+      await dashboardCacheManager.set(tenantId, 'executive_summary', data);
+      return data;
+    } catch (error) {
+      logger.error({
+        endpoint: 'dashboard-overview',
+        message: error.message,
+        stack: error.stack,
+      });
       throw error;
     }
-
-    const cached = await dashboardCacheManager.get(tenantId, 'executive_summary');
-    if (cached) return cached;
-
-    const results = await Promise.allSettled([
-      this.getFinancialSummary(tenantId, userRole),
-      this.getLowStockSummary(tenantId, userRole),
-      this.getPendingOrders(tenantId, userRole),
-      this.getTodaySummary(tenantId, userRole),
-      prisma.stockAlert.count({ where: { tenantId, isResolved: false } }),
-    ]);
-
-    const safeValue = (result, fallback) => {
-      if (result.status === 'fulfilled') return result.value;
-      logger.error(
-        { err: result.reason, endpoint: 'dashboard-overview' },
-        'Dashboard metric failed',
-      );
-      return fallback;
-    };
-
-    const financials = safeValue(results[0], {
-      totalSuppliers: 0,
-      todayRevenue: 0,
-      todayInvoices: 0,
-      monthRevenue: 0,
-      monthInvoices: 0,
-      pendingOrders: 0,
-    });
-    const inventory = safeValue(results[1], {
-      critical: 0,
-      low: 0,
-      outOfStock: 0,
-      totalSku: 0,
-      lowStock: 0,
-      expiring30d: 0,
-      inventoryValue: 0,
-      topRisks: [],
-    });
-    const pendingOrders = safeValue(results[2], {
-      pendingPOs: 0,
-      delayedDeliveries: 0,
-      awaitingApproval: 0,
-    });
-    const today = safeValue(results[3], { invoices: 0, patients: 0, prescriptions: 0, revenue: 0 });
-    const activeAlerts = safeValue(results[4], 0);
-
-    const warnings = results
-      .map((r, i) => (r.status === 'rejected' ? `metric_${i}_failed` : null))
-      .filter(Boolean);
-
-    const data = {
-      financials,
-      inventory,
-      pendingOrders,
-      today,
-      totalSuppliers: financials.totalSuppliers || 0,
-      totalCustomers: today.patients || 0,
-      activeAlerts: activeAlerts || 0,
-      suppliers: {
-        total: financials.totalSuppliers || 0,
-      },
-      patients: {
-        total: today.patients || 0,
-      },
-      alerts: {
-        active: activeAlerts || 0,
-      },
-      warnings,
-      generatedAt: new Date().toISOString(),
-    };
-
-    await dashboardCacheManager.set(tenantId, 'executive_summary', data);
-    return data;
   }
 
   async getLowStockSummary(tenantId, userRole = 'OWNER') {
+    if (!tenantId) {
+      throw new Error('Tenant missing');
+    }
     if (!this._hasAccess(userRole, 'inventory_health')) {
       const error = new Error('Insufficient permissions');
       error.statusCode = 403;
@@ -107,33 +135,49 @@ class DashboardAggregationService {
     const cached = await dashboardCacheManager.get(tenantId, 'low_stock_summary');
     if (cached) return cached;
 
-    const metrics = await dashboardAggregationRepository.getStockHealthMetrics(tenantId);
-    const topRisks = await dashboardAggregationRepository.getTopLowStockMedicines(tenantId, 5);
+    const [metricsResult, topRisksResult, valueResult] = await Promise.allSettled([
+      dashboardAggregationRepository.getStockHealthMetrics(tenantId),
+      dashboardAggregationRepository.getTopLowStockMedicines(tenantId, 5),
+      prisma.$queryRaw`
+        SELECT SUM("quantity" * COALESCE("mrp", 0)) as "totalValue"
+        FROM "InventoryBatch" as "ib"
+        INNER JOIN "Medicine" as "m" ON "ib"."medicineId" = "m"."id"
+        WHERE "m"."tenantId" = ${tenantId}
+          AND "ib"."quantity" > 0
+          AND "ib"."deletedAt" IS NULL
+          AND "m"."deletedAt" IS NULL
+      `
+    ]);
 
-    const [valueResult] = await prisma.$queryRaw`
-      SELECT SUM("quantity" * COALESCE("mrp", 0)) as "totalValue"
-      FROM "InventoryBatch" as "ib"
-      INNER JOIN "Medicine" as "m" ON "ib"."medicineId" = "m"."id"
-      WHERE "m"."tenantId" = ${tenantId}
-        AND "ib"."quantity" > 0
-        AND "ib"."deletedAt" IS NULL
-        AND "m"."deletedAt" IS NULL
-    `;
-    const inventoryValue = Number(valueResult?.totalValue || 0);
+    const metrics = metricsResult.status === 'fulfilled' ? metricsResult.value : {
+      outOfStockCount: 0,
+      lowStockCount: 0,
+      expiringCount: 0,
+      totalBatches: 0,
+      totalStock: 0,
+    };
+    const topRisks = topRisksResult.status === 'fulfilled' ? topRisksResult.value : [];
+    const queryValue = valueResult.status === 'fulfilled' ? valueResult.value : null;
+    const inventoryValue = Number(queryValue?.[0]?.totalValue || 0);
+
+    const totalSku = await safeMetric(
+      () => prisma.medicine.count({
+        where: { tenantId, deletedAt: null, isActive: true },
+      }),
+      0
+    );
 
     const data = {
       critical: metrics.outOfStockCount,
       low: metrics.lowStockCount,
       outOfStock: metrics.outOfStockCount,
-      totalSku: await prisma.medicine.count({
-        where: { tenantId, deletedAt: null, isActive: true },
-      }),
+      totalSku,
       lowStock: metrics.lowStockCount,
       expiring30d: metrics.expiringCount,
       inventoryValue: inventoryValue,
       topRisks: topRisks.map((m) => ({
         medicine: m.name,
-        totalStock: m.inventoryBatches.reduce((sum, b) => sum + b.quantity, 0),
+        totalStock: m.inventoryBatches ? m.inventoryBatches.reduce((sum, b) => sum + b.quantity, 0) : 0,
       })),
       computedAt: new Date().toISOString(),
     };
@@ -143,23 +187,31 @@ class DashboardAggregationService {
   }
 
   async getFinancialSummary(tenantId, userRole = 'OWNER') {
+    if (!tenantId) {
+      throw new Error('Tenant missing');
+    }
     if (!this._hasAccess(userRole, 'overview')) {
       const error = new Error('Insufficient permissions');
       error.statusCode = 403;
       throw error;
     }
-    const [todaySales, monthSales, pendingPOs, totalSuppliers] = await Promise.all([
+    const results = await Promise.allSettled([
       dashboardAggregationRepository.getTodaySales(tenantId),
       dashboardAggregationRepository.getMonthSales(tenantId),
       dashboardAggregationRepository.getPendingPurchaseOrders(tenantId),
       prisma.supplier.count({ where: { tenantId, deletedAt: null } }),
     ]);
 
+    const todaySales = results[0].status === 'fulfilled' ? results[0].value : { _sum: { totalAmount: 0 }, _count: { id: 0 } };
+    const monthSales = results[1].status === 'fulfilled' ? results[1].value : { _sum: { totalAmount: 0 }, _count: { id: 0 } };
+    const pendingPOs = results[2].status === 'fulfilled' ? results[2].value : 0;
+    const totalSuppliers = results[3].status === 'fulfilled' ? results[3].value : 0;
+
     return {
-      todayRevenue: Number(todaySales._sum.totalAmount || 0),
-      todayInvoices: todaySales._count.id || 0,
-      monthRevenue: Number(monthSales._sum.totalAmount || 0),
-      monthInvoices: monthSales._count.id || 0,
+      todayRevenue: Number(todaySales?._sum?.totalAmount || 0),
+      todayInvoices: todaySales?._count?.id || 0,
+      monthRevenue: Number(monthSales?._sum?.totalAmount || 0),
+      monthInvoices: monthSales?._count?.id || 0,
       pendingOrders: pendingPOs,
       totalSuppliers: totalSuppliers,
       computedAt: new Date().toISOString(),
@@ -167,17 +219,26 @@ class DashboardAggregationService {
   }
 
   async getSalesPerformance(tenantId, branchId = 'today') {
-    const [paymentBreakdown, topSelling] = await Promise.all([
+    if (!tenantId) {
+      throw new Error('Tenant missing');
+    }
+    const [paymentBreakdownRes, topSellingRes] = await Promise.allSettled([
       dashboardAggregationRepository.getPaymentMethodBreakdown(tenantId, branchId),
       dashboardAggregationRepository.getTopSellingMedicines(tenantId, branchId, 10),
     ]);
 
+    const paymentBreakdown = paymentBreakdownRes.status === 'fulfilled' ? paymentBreakdownRes.value : [];
+    const topSelling = topSellingRes.status === 'fulfilled' ? topSellingRes.value : [];
+
     const medicineIds = topSelling.map((s) => s.medicineId);
     const medicines = medicineIds.length
-      ? await prisma.medicine.findMany({
-          where: { id: { in: medicineIds }, tenantId },
-          select: { id: true, name: true },
-        })
+      ? await safeMetric(
+          () => prisma.medicine.findMany({
+            where: { id: { in: medicineIds }, tenantId },
+            select: { id: true, name: true },
+          }),
+          []
+        )
       : [];
     const medicineMap = {};
     for (const m of medicines) medicineMap[m.id] = m.name;
@@ -199,6 +260,9 @@ class DashboardAggregationService {
   }
 
   async getInventoryInsights(tenantId = null) {
+    if (!tenantId) {
+      throw new Error('Tenant missing');
+    }
     const metrics = await dashboardAggregationRepository.getStockHealthMetrics(tenantId);
     return {
       lowStockCount: metrics.lowStockCount,
@@ -210,7 +274,10 @@ class DashboardAggregationService {
     };
   }
 
-  async getPatientAnalytics() {
+  async getPatientAnalytics(tenantId) {
+    if (!tenantId) {
+      throw new Error('Tenant missing');
+    }
     return {
       totalPatients: 0,
       newPatients: 0,
@@ -248,6 +315,9 @@ class DashboardAggregationService {
   }
 
   async getPendingOrders(tenantId, userRole = 'OWNER') {
+    if (!tenantId) {
+      throw new Error('Tenant missing');
+    }
     if (!this._hasAccess(userRole, 'overview')) {
       const error = new Error('Insufficient permissions');
       error.statusCode = 403;
@@ -256,7 +326,10 @@ class DashboardAggregationService {
     const cached = await dashboardCacheManager.get(tenantId, 'pending_orders');
     if (cached) return cached;
 
-    const pendingPOs = await dashboardAggregationRepository.getPendingPurchaseOrders(tenantId);
+    const pendingPOs = await safeMetric(
+      () => dashboardAggregationRepository.getPendingPurchaseOrders(tenantId),
+      0
+    );
 
     const data = {
       pendingPOs: pendingPOs,
@@ -270,6 +343,9 @@ class DashboardAggregationService {
   }
 
   async getTodaySummary(tenantId, userRole = 'OWNER') {
+    if (!tenantId) {
+      throw new Error('Tenant missing');
+    }
     if (!this._hasAccess(userRole, 'overview')) {
       const error = new Error('Insufficient permissions');
       error.statusCode = 403;
@@ -278,16 +354,19 @@ class DashboardAggregationService {
     const cached = await dashboardCacheManager.get(tenantId, 'today_summary');
     if (cached) return cached;
 
-    const [todaySales, totalPatients] = await Promise.all([
+    const results = await Promise.allSettled([
       dashboardAggregationRepository.getTodaySales(tenantId),
       prisma.patient.count({ where: { tenantId, deletedAt: null } }),
     ]);
 
+    const todaySales = results[0].status === 'fulfilled' ? results[0].value : { _sum: { totalAmount: 0 }, _count: { id: 0 } };
+    const totalPatients = results[1].status === 'fulfilled' ? results[1].value : 0;
+
     const data = {
-      invoices: todaySales._count.id || 0,
+      invoices: todaySales?._count?.id || 0,
       patients: totalPatients,
       prescriptions: 0,
-      revenue: Number(todaySales._sum.totalAmount || 0),
+      revenue: Number(todaySales?._sum?.totalAmount || 0),
       computedAt: new Date().toISOString(),
     };
 
@@ -515,7 +594,7 @@ class DashboardAggregationService {
   }
 
   async _computeOverview(tenantId, branchId) {
-    const [todaySales, monthSales, lowStockCount, expiringCount, pendingPOs] = await Promise.all([
+    const results = await Promise.allSettled([
       dashboardAggregationRepository.getTodaySales(tenantId, branchId),
       dashboardAggregationRepository.getMonthSales(tenantId, branchId),
       dashboardAggregationRepository.getLowStockCount(tenantId, branchId),
@@ -523,25 +602,33 @@ class DashboardAggregationService {
       dashboardAggregationRepository.getPendingPurchaseOrders(tenantId, branchId),
     ]);
 
-    const topSelling = await dashboardAggregationRepository.getTopSellingMedicines(
-      tenantId,
-      branchId,
-      1,
+    const todaySales = results[0].status === 'fulfilled' ? results[0].value : { _sum: { totalAmount: 0 }, _count: { id: 0 } };
+    const monthSales = results[1].status === 'fulfilled' ? results[1].value : { _sum: { totalAmount: 0 } };
+    const lowStockCount = results[2].status === 'fulfilled' ? results[2].value : 0;
+    const expiringCount = results[3].status === 'fulfilled' ? results[3].value : 0;
+    const pendingPOs = results[4].status === 'fulfilled' ? results[4].value : 0;
+
+    const topSelling = await safeMetric(
+      () => dashboardAggregationRepository.getTopSellingMedicines(tenantId, branchId, 1),
+      []
     );
 
     let topSellingMedicine = null;
-    if (topSelling.length > 0) {
-      const medicine = await prisma.medicine.findFirst({
-        where: { id: topSelling[0].medicineId, tenantId },
-        select: { name: true },
-      });
+    if (topSelling && topSelling.length > 0) {
+      const medicine = await safeMetric(
+        () => prisma.medicine.findFirst({
+          where: { id: topSelling[0].medicineId, tenantId },
+          select: { name: true },
+        }),
+        null
+      );
       topSellingMedicine = medicine?.name || 'Unknown';
     }
 
     return {
-      todayRevenue: Number(todaySales._sum.totalAmount || 0),
-      todayInvoices: todaySales._count.id || 0,
-      monthRevenue: Number(monthSales._sum.totalAmount || 0),
+      todayRevenue: Number(todaySales?._sum?.totalAmount || 0),
+      todayInvoices: todaySales?._count?.id || 0,
+      monthRevenue: Number(monthSales?._sum?.totalAmount || 0),
       lowStockCount,
       expiringMedicines: expiringCount,
       pendingPurchaseOrders: pendingPOs,
@@ -551,28 +638,29 @@ class DashboardAggregationService {
   }
 
   async _computeSalesSummary(tenantId, branchId) {
-    const dailySummary = await dashboardAggregationRepository.getDailySalesSummary(
-      tenantId,
-      branchId,
+    const dailySummary = await safeMetric(
+      () => dashboardAggregationRepository.getDailySalesSummary(tenantId, branchId),
+      null
     );
 
     if (dailySummary) {
-      const paymentBreakdown = await dashboardAggregationRepository.getPaymentMethodBreakdown(
-        tenantId,
-        branchId,
-      );
+      const [paymentBreakdownRes, topSellingRes] = await Promise.allSettled([
+        dashboardAggregationRepository.getPaymentMethodBreakdown(tenantId, branchId),
+        dashboardAggregationRepository.getTopSellingMedicines(tenantId, branchId),
+      ]);
 
-      const topSelling = await dashboardAggregationRepository.getTopSellingMedicines(
-        tenantId,
-        branchId,
-      );
+      const paymentBreakdown = paymentBreakdownRes.status === 'fulfilled' ? paymentBreakdownRes.value : [];
+      const topSelling = topSellingRes.status === 'fulfilled' ? topSellingRes.value : [];
 
       const medicineIds = topSelling.map((s) => s.medicineId);
       const medicines = medicineIds.length
-        ? await prisma.medicine.findMany({
-            where: { id: { in: medicineIds }, tenantId },
-            select: { id: true, name: true },
-          })
+        ? await safeMetric(
+            () => prisma.medicine.findMany({
+              where: { id: { in: medicineIds }, tenantId },
+              select: { id: true, name: true },
+            }),
+            []
+          )
         : [];
       const medicineMap = {};
       for (const m of medicines) medicineMap[m.id] = m.name;
@@ -603,39 +691,39 @@ class DashboardAggregationService {
       };
     }
 
-    const [todaySales, monthSales] = await Promise.all([
+    const [todaySalesRes, monthSalesRes, paymentBreakdownRes, topSellingRes] = await Promise.allSettled([
       dashboardAggregationRepository.getTodaySales(tenantId, branchId),
       dashboardAggregationRepository.getMonthSales(tenantId, branchId),
+      dashboardAggregationRepository.getPaymentMethodBreakdown(tenantId, branchId),
+      dashboardAggregationRepository.getTopSellingMedicines(tenantId, branchId),
     ]);
 
-    const paymentBreakdown = await dashboardAggregationRepository.getPaymentMethodBreakdown(
-      tenantId,
-      branchId,
-    );
-
-    const topSelling = await dashboardAggregationRepository.getTopSellingMedicines(
-      tenantId,
-      branchId,
-    );
+    const todaySales = todaySalesRes.status === 'fulfilled' ? todaySalesRes.value : { _sum: { totalAmount: 0 }, _count: { id: 0 } };
+    const monthSales = monthSalesRes.status === 'fulfilled' ? monthSalesRes.value : { _sum: { totalAmount: 0 }, _count: { id: 0 } };
+    const paymentBreakdown = paymentBreakdownRes.status === 'fulfilled' ? paymentBreakdownRes.value : [];
+    const topSelling = topSellingRes.status === 'fulfilled' ? topSellingRes.value : [];
 
     const medicineIds = topSelling.map((s) => s.medicineId);
     const medicines = medicineIds.length
-      ? await prisma.medicine.findMany({
-          where: { id: { in: medicineIds }, tenantId },
-          select: { id: true, name: true },
-        })
+      ? await safeMetric(
+          () => prisma.medicine.findMany({
+            where: { id: { in: medicineIds }, tenantId },
+            select: { id: true, name: true },
+          }),
+          []
+        )
       : [];
     const medicineMap = {};
     for (const m of medicines) medicineMap[m.id] = m.name;
 
     return {
       todaySales: {
-        total: Number(todaySales._sum.totalAmount || 0),
-        count: todaySales._count.id || 0,
+        total: Number(todaySales?._sum?.totalAmount || 0),
+        count: todaySales?._count?.id || 0,
       },
       monthSales: {
-        total: Number(monthSales._sum.totalAmount || 0),
-        count: monthSales._count.id || 0,
+        total: Number(monthSales?._sum?.totalAmount || 0),
+        count: monthSales?._count?.id || 0,
       },
       paymentMethodBreakdown: paymentBreakdown.map((p) => ({
         method: p.paymentMethod,

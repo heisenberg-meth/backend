@@ -316,6 +316,30 @@ const setupFastify = async () => {
     return reply.code(statusCode).send(health);
   });
 
+  fastify.get('/api/health', async (request, reply) => {
+    let dbStatus = 'healthy';
+    let redisStatus = 'healthy';
+
+    try {
+      await prisma.$queryRaw`SELECT 1`;
+    } catch (error) {
+      dbStatus = 'unhealthy';
+    }
+
+    try {
+      await fastify.redis.ping();
+    } catch (error) {
+      redisStatus = 'unhealthy';
+    }
+
+    const statusCode = (dbStatus === 'healthy' && redisStatus === 'healthy') ? 200 : 500;
+    return reply.code(statusCode).send({
+      database: dbStatus,
+      redis: redisStatus,
+      server: 'healthy',
+    });
+  });
+
   fastify.addHook('preHandler', subscriptionGuard);
 
   await fastify.register(authRoutes, { prefix: '/api/auth' });

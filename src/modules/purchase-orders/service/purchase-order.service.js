@@ -189,6 +189,13 @@ class PurchaseOrderService {
     try {
       const { receivedItems, notes } = payload;
 
+      logger.info(
+        {
+          receivedItems
+        },
+        'RECEIVED_ITEMS_PAYLOAD'
+      );
+
       if (!receivedItems?.length) {
         throw new Error('No items provided for receipt');
       }
@@ -289,6 +296,17 @@ class PurchaseOrderService {
             );
           }
 
+          if (!item.batchNumber) {
+            throw new Error(`Batch number is required for ${poItem.medicineName}`);
+          }
+          if (!item.expiryDate) {
+            throw new Error(`Expiry date is required for ${poItem.medicineName}`);
+          }
+          const parsedExpiryDate = new Date(item.expiryDate);
+          if (isNaN(parsedExpiryDate.getTime())) {
+            throw new Error(`Invalid expiry date format for ${poItem.medicineName}`);
+          }
+
           // 2. Create GRN Item
           await tx.goodsReceiptNoteItem.create({
             data: {
@@ -297,7 +315,7 @@ class PurchaseOrderService {
               medicineId: item.medicineId,
               receivedQuantity: item.receivedQuantity,
               batchNumber: item.batchNumber,
-              expiryDate: new Date(item.expiryDate),
+              expiryDate: parsedExpiryDate,
               purchasePrice: poItem.unitPrice,
               sellingPrice: item.sellingPrice
                 ? Number(item.sellingPrice)
@@ -319,13 +337,28 @@ class PurchaseOrderService {
           let batch;
           if (existingBatch) {
             logger.info({ medicineId: item.medicineId, batchNumber: item.batchNumber, existingBatchId: existingBatch.id }, 'UPDATING_EXISTING_BATCH');
+            
+            // Verify that the existing batch has the same expiry date
+            const existingExpiryStr = new Date(existingBatch.expiryDate).toISOString().split('T')[0];
+            const newExpiryStr = parsedExpiryDate.toISOString().split('T')[0];
+            if (existingExpiryStr !== newExpiryStr) {
+              throw new Error(`Batch '${item.batchNumber}' already exists at this branch with a different expiry date (${existingExpiryStr})`);
+            }
+
+            const updateData = {
+              quantity: { increment: item.receivedQuantity },
+              availableQuantity: { increment: item.receivedQuantity },
+              receivedQuantity: { increment: item.receivedQuantity },
+            };
+
+            if (existingBatch.deletedAt) {
+              updateData.deletedAt = null;
+              updateData.status = 'ACTIVE';
+            }
+
             batch = await tx.inventoryBatch.update({
               where: { id: existingBatch.id },
-              data: {
-                quantity: { increment: item.receivedQuantity },
-                availableQuantity: { increment: item.receivedQuantity },
-                receivedQuantity: { increment: item.receivedQuantity },
-              },
+              data: updateData,
             });
           } else {
             logger.info({ medicineId: item.medicineId, batchNumber: item.batchNumber }, 'CREATING_INVENTORY_BATCH');
@@ -338,7 +371,7 @@ class PurchaseOrderService {
                 quantity: item.receivedQuantity,
                 availableQuantity: item.receivedQuantity,
                 receivedQuantity: item.receivedQuantity,
-                expiryDate: new Date(item.expiryDate),
+                expiryDate: parsedExpiryDate,
                 purchasePrice: poItem.unitPrice,
                 sellingPrice: item.sellingPrice
                   ? Number(item.sellingPrice)

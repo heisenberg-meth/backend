@@ -59,6 +59,12 @@ export const connectRedis = async () => {
     const client = getActiveClient();
     await client.ping();
     logger.info('Redis startup verification successful (PONG)');
+    try {
+      await client.config('SET', 'maxmemory-policy', 'noeviction');
+      logger.info('Redis maxmemory-policy set to noeviction successfully');
+    } catch (configErr) {
+      logger.warn({ err: configErr }, 'Failed to set Redis maxmemory-policy to noeviction dynamically');
+    }
     return client;
   } catch (err) {
     logger.error({ err }, 'Redis startup verification failed');
