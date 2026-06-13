@@ -3,6 +3,7 @@ import dashboardAggregationRepository from '../repositories/dashboard.aggregatio
 import dashboardCacheManager from '../aggregations/dashboard.cache-manager.js';
 import logger from '../../../shared/utils/logger.js';
 import unifiedInventorySummaryService from '../../inventory/service/unified-inventory-summary.service.js';
+import analyticsService from '../../analytics/service/analytics.service.js';
 
 const safeMetric = async (fn, fallback = 0) => {
   try {
@@ -141,20 +142,23 @@ class DashboardAggregationService {
     const cached = await dashboardCacheManager.get(tenantId, 'low_stock_summary');
     if (cached) return cached;
 
-    const unifiedMetrics = await unifiedInventorySummaryService.getDashboardMetrics(tenantId);
-    const topRisks = await dashboardAggregationRepository.getTopLowStockMedicines(tenantId, 5);
+    const [kpis, unifiedMetrics, topRisks] = await Promise.all([
+      analyticsService.getTenantKPIs(tenantId),
+      unifiedInventorySummaryService.getDashboardMetrics(tenantId),
+      dashboardAggregationRepository.getTopLowStockMedicines(tenantId, 5),
+    ]);
 
     const data = {
       critical: unifiedMetrics.outOfStockCount,
-      low: unifiedMetrics.lowStockCount,
+      low: kpis.lowStock,
       outOfStock: unifiedMetrics.outOfStockCount,
-      totalSku: unifiedMetrics.totalSku,
-      lowStock: unifiedMetrics.lowStockCount,
-      expiring30d: unifiedMetrics.expiring30d,
-      inventoryValue: unifiedMetrics.inventoryValue,
+      totalSku: kpis.totalSku,
+      lowStock: kpis.lowStock,
+      expiring30d: kpis.expiring30Days,
+      inventoryValue: kpis.inventoryValue,
       totalStock: unifiedMetrics.totalStock,
       expiredCount: unifiedMetrics.expiredCount,
-      expiringCount: unifiedMetrics.expiringCount,
+      expiringCount: kpis.expiring30Days,
       inStockCount: unifiedMetrics.inStockCount,
       topRisks: topRisks.map((m) => ({
         medicine: m.name,
@@ -254,11 +258,14 @@ class DashboardAggregationService {
     if (!tenantId) {
       throw new Error('Tenant missing');
     }
-    const unifiedMetrics = await unifiedInventorySummaryService.getDashboardMetrics(tenantId);
+    const [kpis, unifiedMetrics] = await Promise.all([
+      analyticsService.getTenantKPIs(tenantId),
+      unifiedInventorySummaryService.getDashboardMetrics(tenantId),
+    ]);
     return {
-      lowStockCount: unifiedMetrics.lowStockCount,
+      lowStockCount: kpis.lowStock,
       outOfStockCount: unifiedMetrics.outOfStockCount,
-      expiringSoonCount: unifiedMetrics.expiringCount,
+      expiringSoonCount: kpis.expiring30Days,
       expiredCount: unifiedMetrics.expiredCount,
       totalStock: unifiedMetrics.totalStock,
       inStockCount: unifiedMetrics.inStockCount,
@@ -592,8 +599,7 @@ class DashboardAggregationService {
     const results = await Promise.allSettled([
       dashboardAggregationRepository.getTodaySales(tenantId, branchId),
       dashboardAggregationRepository.getMonthSales(tenantId, branchId),
-      dashboardAggregationRepository.getLowStockCount(tenantId, branchId),
-      dashboardAggregationRepository.getExpiringMedicinesCount(tenantId, branchId),
+      analyticsService.getTenantKPIs(tenantId),
       dashboardAggregationRepository.getPendingPurchaseOrders(tenantId, branchId),
     ]);
 
@@ -603,9 +609,10 @@ class DashboardAggregationService {
         : { _sum: { totalAmount: 0 }, _count: { id: 0 } };
     const monthSales =
       results[1].status === 'fulfilled' ? results[1].value : { _sum: { totalAmount: 0 } };
-    const lowStockCount = results[2].status === 'fulfilled' ? results[2].value : 0;
-    const expiringCount = results[3].status === 'fulfilled' ? results[3].value : 0;
-    const pendingPOs = results[4].status === 'fulfilled' ? results[4].value : 0;
+    const kpis = results[2].status === 'fulfilled' ? results[2].value : { lowStock: 0, expiring30Days: 0 };
+    const lowStockCount = kpis.lowStock;
+    const expiringCount = kpis.expiring30Days;
+    const pendingPOs = results[3].status === 'fulfilled' ? results[3].value : 0;
 
     const topSelling = await safeMetric(
       () => dashboardAggregationRepository.getTopSellingMedicines(tenantId, branchId, 1),
@@ -752,7 +759,10 @@ class DashboardAggregationService {
   }
 
   async _computeInventoryHealth(tenantId, branchId) {
-    const metrics = await dashboardAggregationRepository.getStockHealthMetrics(tenantId, branchId);
+    const [kpis, metrics] = await Promise.all([
+      analyticsService.getTenantKPIs(tenantId),
+      dashboardAggregationRepository.getStockHealthMetrics(tenantId, branchId),
+    ]);
 
     const totalItems = metrics.totalBatches;
     const healthyItems =
@@ -762,9 +772,9 @@ class DashboardAggregationService {
 
     return {
       healthyStockPercentage,
-      lowStockCount: metrics.lowStockCount,
+      lowStockCount: kpis.lowStock,
       outOfStockCount: metrics.outOfStockCount,
-      expiringSoonCount: metrics.expiringCount,
+      expiringSoonCount: kpis.expiring30Days,
       expiredCount: metrics.expiredCount,
       totalStock: metrics.totalStock,
       computedAt: new Date().toISOString(),

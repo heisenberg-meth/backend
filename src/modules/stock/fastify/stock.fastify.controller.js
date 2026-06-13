@@ -2,6 +2,7 @@ import prisma from '../../../config/prisma.js';
 import stockService from '../service/stock.service.js';
 import ledgerService from '../service/ledger.service.js';
 import alertService from '../service/alert.service.js';
+import analyticsService from '../../analytics/service/analytics.service.js';
 
 class StockFastifyController {
   async stockIn(request, reply) {
@@ -47,15 +48,16 @@ class StockFastifyController {
 
     const thirtyDaysFromNow = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
 
-    const [lowStockRaw, expiringSoon, outOfStock] = await Promise.all([
+    const [kpis, lowStockRaw, expiringSoon, outOfStock] = await Promise.all([
+      analyticsService.getTenantKPIs(tenantId),
       prisma.$queryRaw`
-        SELECT i."medicineId", i."currentStock", i."minimumStock", m."name", m."genericName"
+        SELECT i."medicineId", i."currentStock", i."reorderPoint", m."name", m."genericName"
         FROM "Inventory" i
         JOIN "Medicine" m ON m."id" = i."medicineId"
         WHERE i."tenantId" = ${tenantId}
           AND i."currentStock" > 0
-          AND i."currentStock" <= i."minimumStock"
-        ORDER BY (i."minimumStock" - i."currentStock") DESC
+          AND i."currentStock" <= i."reorderPoint"
+        ORDER BY (i."reorderPoint" - i."currentStock") DESC
       `,
       prisma.inventoryBatch.findMany({
         where: {
@@ -75,11 +77,13 @@ class StockFastifyController {
     return reply.send({
       success: true,
       data: {
+        lowStockCount: kpis.lowStock,
+        expiringSoonCount: kpis.expiring30Days,
         lowStock: lowStockRaw.map((inv) => ({
           medicineId: inv.medicineId,
           name: inv.name,
           currentStock: inv.currentStock,
-          minimumStock: inv.minimumStock,
+          reorderPoint: inv.reorderPoint,
         })),
         expiringSoon: expiringSoon.map((batch) => ({
           medicineId: batch.medicineId,

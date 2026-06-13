@@ -2,6 +2,7 @@ import prisma from '../../../config/prisma.js';
 import { initRedis } from '../../../config/redis.js';
 import { emitEvent } from '../../../shared/events/erp-event-bus.js';
 import { DOMAIN_EVENTS } from '../../../shared/constants/events.js';
+import kpiService from './analytics.service.js';
 
 const redisClient = initRedis();
 
@@ -14,43 +15,18 @@ class AnalyticsPrismaService {
       return JSON.parse(cachedStats);
     }
 
-    const now = new Date();
-    const thirtyDaysFromNow = new Date();
-    thirtyDaysFromNow.setDate(now.getDate() + 30);
-
-    const [totalMedicines, medicinesWithStock, transactions] = await Promise.all([
-      prisma.medicine.count({ where: { tenantId, deletedAt: null } }),
-      prisma.medicine.findMany({
-        where: { tenantId, deletedAt: null },
-        include: {
-          inventoryBatches: {
-            where: { deletedAt: null, status: 'ACTIVE' },
-            select: { quantity: true },
-          },
-        },
-      }),
+    const [kpis, transactions] = await Promise.all([
+      kpiService.getTenantKPIs(tenantId),
       prisma.transaction.aggregate({
         where: { tenantId, status: 'SUCCESS' },
         _sum: { amount: true },
       }),
     ]);
 
-    let lowStockCount = 0;
-    let outOfStockCount = 0;
-
-    for (const med of medicinesWithStock) {
-      const totalQuantity = med.inventoryBatches.reduce((sum, b) => sum + b.quantity, 0);
-      if (totalQuantity === 0) {
-        outOfStockCount++;
-      } else if (totalQuantity <= med.reorderLevel) {
-        lowStockCount++;
-      }
-    }
-
     const stats = {
-      totalMedicines,
-      lowStockCount,
-      outOfStockCount,
+      totalMedicines: kpis.totalSku,
+      lowStockCount: kpis.lowStock,
+      outOfStockCount: 0,
       totalRevenue: transactions._sum.amount || 0,
       timestamp: new Date(),
     };

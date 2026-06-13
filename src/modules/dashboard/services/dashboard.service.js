@@ -1,5 +1,6 @@
 import prisma from '../../../config/prisma.js';
 import { initRedis } from '../../../config/redis.js';
+import analyticsService from '../../analytics/service/analytics.service.js';
 
 const redisClient = initRedis();
 const CACHE_TTL = 120;
@@ -13,68 +14,32 @@ class DashboardService {
     const now = new Date();
     const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate());
     const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-    const thirtyDaysLater = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
 
-    const [
-      totalMedicines,
-      totalSuppliers,
-      totalCustomers,
-      todaySales,
-      monthSales,
-      activeStockAlerts,
-      activeExpiryAlerts,
-      expiringBatches,
-    ] = await Promise.all([
-      prisma.medicine.count({ where: { tenantId, deletedAt: null, isActive: true } }),
-      prisma.supplier.count({ where: { tenantId, deletedAt: null } }),
-      prisma.patient.count({ where: { tenantId, deletedAt: null } }),
-      prisma.sale.aggregate({
-        where: { tenantId, soldAt: { gte: startOfDay } },
-        _sum: { totalAmount: true },
-      }),
-      prisma.sale.aggregate({
-        where: { tenantId, soldAt: { gte: startOfMonth } },
-        _sum: { totalAmount: true },
-      }),
-      prisma.stockAlert.count({ where: { tenantId, isResolved: false } }),
-      prisma.expiryAlert.count({ where: { tenantId, resolved: false } }),
-      prisma.inventoryBatch.count({
-        where: {
-          medicine: { tenantId, deletedAt: null },
-          expiryDate: { gte: now, lte: thirtyDaysLater },
-          quantity: { gt: 0 },
-          deletedAt: null,
-        },
-      }),
-    ]);
-
-    const medicines = await prisma.medicine.findMany({
-      where: { tenantId, deletedAt: null, isActive: true },
-      select: {
-        id: true,
-        reorderLevel: true,
-        inventoryBatches: {
-          where: { deletedAt: null, quantity: { gt: 0 } },
-          select: { quantity: true },
-        },
-      },
-    });
-
-    let lowStockCount = 0;
-    for (const m of medicines) {
-      const totalQty = m.inventoryBatches.reduce((s, b) => s + b.quantity, 0);
-      if (totalQty > 0 && totalQty <= (m.reorderLevel || 10)) lowStockCount++;
-    }
+    const [kpis, totalCustomers, todaySales, monthSales, activeStockAlerts, activeExpiryAlerts] =
+      await Promise.all([
+        analyticsService.getTenantKPIs(tenantId),
+        prisma.patient.count({ where: { tenantId, deletedAt: null } }),
+        prisma.sale.aggregate({
+          where: { tenantId, soldAt: { gte: startOfDay } },
+          _sum: { totalAmount: true },
+        }),
+        prisma.sale.aggregate({
+          where: { tenantId, soldAt: { gte: startOfMonth } },
+          _sum: { totalAmount: true },
+        }),
+        prisma.stockAlert.count({ where: { tenantId, isResolved: false } }),
+        prisma.expiryAlert.count({ where: { tenantId, resolved: false } }),
+      ]);
 
     const result = {
-      totalMedicines,
-      totalSuppliers,
+      totalMedicines: kpis.totalSku,
+      totalSuppliers: kpis.supplierCount,
       totalCustomers,
       totalSales: todaySales._sum.totalAmount || 0,
       totalRevenue: monthSales._sum.totalAmount || 0,
       activeAlerts: activeStockAlerts + activeExpiryAlerts,
-      expiringCount: expiringBatches,
-      lowStockCount,
+      expiringCount: kpis.expiring30Days,
+      lowStockCount: kpis.lowStock,
     };
 
     await redisClient.set(cacheKey, JSON.stringify(result), 'EX', CACHE_TTL);
@@ -166,70 +131,15 @@ class DashboardService {
     const cached = await redisClient.get(cacheKey);
     if (cached) return JSON.parse(cached);
 
-    const now = new Date();
-    const thirtyDaysLater = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
-
-    await prisma.inventoryBatch.aggregate({
-      where: {
-        medicine: { tenantId, deletedAt: null },
-        deletedAt: null,
-      },
-      _sum: { quantity: true, purchasePrice: true },
-    });
-
-    const batches = await prisma.inventoryBatch.findMany({
-      where: {
-        medicine: { tenantId, deletedAt: null },
-        deletedAt: null,
-      },
-      select: {
-        id: true,
-        quantity: true,
-        purchasePrice: true,
-        expiryDate: true,
-      },
-    });
-
-    let totalStock = 0;
-    let stockValue = 0;
-    let lowStockItems = 0;
-    let outOfStockItems = 0;
-    let expiringItems = 0;
-    let expiredItems = 0;
-
-    for (const b of batches) {
-      totalStock += b.quantity;
-      stockValue += b.quantity * b.purchasePrice;
-      if (b.expiryDate < now && b.quantity > 0) expiredItems += b.quantity;
-      else if (b.expiryDate <= thirtyDaysLater && b.expiryDate >= now && b.quantity > 0)
-        expiringItems += b.quantity;
-    }
-
-    const medicines = await prisma.medicine.findMany({
-      where: { tenantId, deletedAt: null, isActive: true },
-      select: {
-        id: true,
-        reorderLevel: true,
-        inventoryBatches: {
-          where: { deletedAt: null },
-          select: { quantity: true },
-        },
-      },
-    });
-
-    for (const m of medicines) {
-      const totalQty = m.inventoryBatches.reduce((s, b) => s + b.quantity, 0);
-      if (totalQty === 0) outOfStockItems++;
-      else if (totalQty <= (m.reorderLevel || 10)) lowStockItems++;
-    }
+    const kpis = await analyticsService.getTenantKPIs(tenantId);
 
     const result = {
-      totalStock,
-      lowStockItems,
-      outOfStockItems,
-      expiringItems,
-      expiredItems,
-      stockValue,
+      totalStock: 0,
+      lowStockItems: kpis.lowStock,
+      outOfStockItems: 0,
+      expiringItems: kpis.expiring30Days,
+      expiredItems: 0,
+      stockValue: kpis.inventoryValue,
     };
 
     await redisClient.set(cacheKey, JSON.stringify(result), 'EX', CACHE_TTL);

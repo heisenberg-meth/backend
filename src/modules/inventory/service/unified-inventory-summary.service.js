@@ -54,8 +54,8 @@ class UnifiedInventorySummaryService {
           COUNT(*) FILTER (WHERE COALESCE(ba.total_quantity, 0) > 0) as medicines_with_stock,
           COUNT(*) FILTER (WHERE COALESCE(ba.total_quantity, 0) = 0) as out_of_stock_medicines,
           COUNT(*) FILTER (WHERE COALESCE(ba.total_quantity, 0) > 0 
-            AND COALESCE(ba.total_quantity, 0) <= COALESCE(ba.max_reorder_point, m."reorderLevel", 10)) as low_stock_medicines,
-          COUNT(*) FILTER (WHERE COALESCE(ba.total_quantity, 0) > COALESCE(ba.max_reorder_point, m."reorderLevel", 10)) as in_stock_medicines,
+            AND COALESCE(ba.total_quantity, 0) <= COALESCE(ba.max_reorder_point, m."reorderLevel", 0)) as low_stock_medicines,
+          COUNT(*) FILTER (WHERE COALESCE(ba.total_quantity, 0) > COALESCE(ba.max_reorder_point, m."reorderLevel", 0)) as in_stock_medicines,
           COALESCE(SUM(ba.total_quantity), 0) as total_stock_units,
           COALESCE(SUM(ba.total_value), 0) as inventory_value,
           COALESCE(SUM(ba.expired_batches), 0) as expired_batches_count,
