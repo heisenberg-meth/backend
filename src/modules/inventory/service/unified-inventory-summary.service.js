@@ -7,7 +7,7 @@ import { scanKeys } from '../../../shared/utils/scan-keys.js';
 class UnifiedInventorySummaryService {
   async getUnifiedSummary(tenantId, branchId = null, forceRefresh = false) {
     const cacheKey = `inventory:unified:${tenantId}:${branchId || 'all'}:summary`;
-    
+
     if (!forceRefresh) {
       try {
         const cached = await redisClient.get(cacheKey);
@@ -32,11 +32,18 @@ class UnifiedInventorySummaryService {
           SUM(ib."quantity" * COALESCE(ib."purchasePrice", 0)) as total_value,
           COUNT(*) FILTER (WHERE ib."quantity" > 0 AND (ib."expiryDate" < ${now} OR ib."status" = 'EXPIRED')) as expired_batches,
           COUNT(*) FILTER (WHERE ib."quantity" > 0 AND ib."expiryDate" >= ${now} AND ib."expiryDate" <= ${thirtyDaysLater} AND ib."status" != 'EXPIRED') as expiring_batches,
-          MAX(ib."reorderPoint") as max_reorder_point
+          MAX(i."reorderPoint") as max_reorder_point
         FROM "InventoryBatch" ib
-        INNER JOIN "Medicine" m ON ib."medicineId" = m."id"
+        INNER JOIN "Medicine" m
+          ON ib."medicineId" = m."id"
+
+        LEFT JOIN "Inventory" i
+          ON i."medicineId" = ib."medicineId"
+          AND i."branchId" = ib."branchId"
+          AND i."tenantId" = m."tenantId"
+
         WHERE m."tenantId" = ${tenantId}
-      AND m."deletedAt" IS NULL
+          AND m."deletedAt" IS NULL
           AND m."isActive" = true
           AND ${branchCondition}
         GROUP BY ib."medicineId"
@@ -118,7 +125,7 @@ class UnifiedInventorySummaryService {
 
   async getDashboardMetrics(tenantId, branchId = null) {
     const summary = await this.getUnifiedSummary(tenantId, branchId);
-    
+
     return {
       critical: summary.outOfStockCount,
       low: summary.lowStockCount,
@@ -137,7 +144,7 @@ class UnifiedInventorySummaryService {
 
   async getInventoryPageMetrics(tenantId, branchId = null) {
     const summary = await this.getUnifiedSummary(tenantId, branchId);
-    
+
     return {
       totalMedicines: summary.totalMedicines,
       totalStock: summary.totalStock,

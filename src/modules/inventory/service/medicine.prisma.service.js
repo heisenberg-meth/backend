@@ -1,4 +1,3 @@
-import { Prisma } from '@prisma/client';
 import prisma from '../../../config/prisma.js';
 import redisClient from '../../../config/redis.js';
 import logger from '../../../shared/utils/logger.js';

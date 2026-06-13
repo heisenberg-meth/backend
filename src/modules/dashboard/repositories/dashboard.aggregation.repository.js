@@ -80,13 +80,17 @@ class DashboardAggregationRepository {
         SELECT
             m.id,
             COALESCE(SUM(ib."quantity"), 0) as stock,
-            COALESCE(MAX(ib."reorderPoint"), m."reorderLevel", 10) as reorder_level
+            COALESCE(MAX(i."reorderPoint"), m."reorderLevel", 10) as reorder_level
         FROM "Medicine" m
         LEFT JOIN "InventoryBatch" ib
             ON ib."medicineId" = m.id
             AND ib."tenantId" = m."tenantId"
             AND ib."deletedAt" IS NULL
             ${branchCondition}
+        LEFT JOIN "Inventory" i
+            ON i."medicineId" = m.id
+            AND i."tenantId" = m."tenantId"
+            ${branchId ? Prisma.sql`AND i."branchId" = ${branchId}` : Prisma.sql``}
         WHERE m."tenantId" = ${tenantId}
           AND m."deletedAt" IS NULL
           AND m."isActive" = true
