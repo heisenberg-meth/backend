@@ -21,17 +21,14 @@ class UnifiedInventorySummaryService {
 
     const bId = branchId === 'null' || !branchId ? null : branchId;
     const branchCondition = bId ? Prisma.sql`ib."branchId" = ${bId}` : Prisma.sql`1=1`;
-    const now = new Date();
-    const thirtyDaysLater = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
-
     const [summary] = await prisma.$queryRaw`
       WITH batch_aggregates AS (
         SELECT 
           ib."medicineId",
           SUM(ib."quantity") as total_quantity,
           SUM(ib."quantity" * COALESCE(ib."purchasePrice", 0)) as total_value,
-          COUNT(*) FILTER (WHERE ib."quantity" > 0 AND (ib."expiryDate" < ${now} OR ib."status" = 'EXPIRED')) as expired_batches,
-          COUNT(*) FILTER (WHERE ib."quantity" > 0 AND ib."expiryDate" >= ${now} AND ib."expiryDate" <= ${thirtyDaysLater} AND ib."status" != 'EXPIRED') as expiring_batches,
+          COUNT(*) FILTER (WHERE ib."quantity" > 0 AND (ib."expiryDate" < NOW() OR ib."status" = 'EXPIRED')) as expired_batches,
+          COUNT(*) FILTER (WHERE ib."quantity" > 0 AND ib."expiryDate" BETWEEN NOW() AND NOW() + INTERVAL '30 days' AND ib.status = 'ACTIVE') as expiring_batches,
           MAX(i."reorderPoint") as max_reorder_point
         FROM "InventoryBatch" ib
         INNER JOIN "Medicine" m
@@ -43,6 +40,7 @@ class UnifiedInventorySummaryService {
           AND i."tenantId" = m."tenantId"
 
         WHERE m."tenantId" = ${tenantId}
+          AND ib."deletedAt" IS NULL
           AND m."deletedAt" IS NULL
           AND m."isActive" = true
           AND ${branchCondition}
@@ -53,8 +51,7 @@ class UnifiedInventorySummaryService {
           COUNT(*) as total_medicines,
           COUNT(*) FILTER (WHERE COALESCE(ba.total_quantity, 0) > 0) as medicines_with_stock,
           COUNT(*) FILTER (WHERE COALESCE(ba.total_quantity, 0) = 0) as out_of_stock_medicines,
-          COUNT(*) FILTER (WHERE COALESCE(ba.total_quantity, 0) > 0 
-            AND COALESCE(ba.total_quantity, 0) <= COALESCE(ba.max_reorder_point, m."reorderLevel", 0)) as low_stock_medicines,
+          COUNT(*) FILTER (WHERE COALESCE(ba.total_quantity, 0) <= COALESCE(ba.max_reorder_point, m."reorderLevel", 0)) as low_stock_medicines,
           COUNT(*) FILTER (WHERE COALESCE(ba.total_quantity, 0) > COALESCE(ba.max_reorder_point, m."reorderLevel", 0)) as in_stock_medicines,
           COALESCE(SUM(ba.total_quantity), 0) as total_stock_units,
           COALESCE(SUM(ba.total_value), 0) as inventory_value,

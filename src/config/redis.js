@@ -12,6 +12,14 @@ const getActiveClient = () => {
     activeClient = new Redis(redisUrl, {
       maxRetriesPerRequest: null,
       lazyConnect: true,
+      retryStrategy(times) {
+        if (times > 10) return null;
+        return Math.min(times * 200, 5000);
+      },
+      reconnectOnError(err) {
+        logger.warn({ err: err.message }, 'Redis reconnectOnError');
+        return true;
+      },
     });
 
     if (process.env.NODE_ENV !== 'test') {
@@ -21,7 +29,7 @@ const getActiveClient = () => {
 
       activeClient.on('error', (err) => {
         if (activeClient && activeClient.status !== 'end') {
-          logger.error({ err }, 'Redis error');
+          logger.warn({ err: err.message }, 'Redis error (non-fatal)');
         }
       });
     }
@@ -65,18 +73,9 @@ export const connectRedis = async () => {
     const client = getActiveClient();
     await client.ping();
     logger.info('Redis startup verification successful (PONG)');
-    try {
-      await client.config('SET', 'maxmemory-policy', 'noeviction');
-      logger.info('Redis maxmemory-policy set to noeviction successfully');
-    } catch (configErr) {
-      logger.warn(
-        { err: configErr },
-        'Failed to set Redis maxmemory-policy to noeviction dynamically',
-      );
-    }
     return client;
   } catch (err) {
-    logger.error({ err }, 'Redis startup verification failed');
+    logger.warn({ err: err.message }, 'Redis startup verification failed - running without cache');
   }
 };
 

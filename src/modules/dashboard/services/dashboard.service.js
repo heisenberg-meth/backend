@@ -1,6 +1,6 @@
 import prisma from '../../../config/prisma.js';
 import { initRedis } from '../../../config/redis.js';
-import analyticsService from '../../analytics/service/analytics.service.js';
+import unifiedInventorySummaryService from '../../inventory/service/unified-inventory-summary.service.js';
 
 const redisClient = initRedis();
 const CACHE_TTL = 120;
@@ -15,9 +15,10 @@ class DashboardService {
     const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate());
     const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
 
-    const [kpis, totalCustomers, todaySales, monthSales, activeStockAlerts, activeExpiryAlerts] =
+    const [unified, totalSuppliers, totalCustomers, todaySales, monthSales, activeStockAlerts, activeExpiryAlerts] =
       await Promise.all([
-        analyticsService.getTenantKPIs(tenantId),
+        unifiedInventorySummaryService.getUnifiedSummary(tenantId, null, true),
+        prisma.supplier.count({ where: { tenantId, deletedAt: null } }),
         prisma.patient.count({ where: { tenantId, deletedAt: null } }),
         prisma.sale.aggregate({
           where: { tenantId, soldAt: { gte: startOfDay } },
@@ -32,14 +33,14 @@ class DashboardService {
       ]);
 
     const result = {
-      totalMedicines: kpis.totalSku,
-      totalSuppliers: kpis.supplierCount,
+      totalMedicines: unified.totalMedicines,
+      totalSuppliers,
       totalCustomers,
       totalSales: todaySales._sum.totalAmount || 0,
       totalRevenue: monthSales._sum.totalAmount || 0,
       activeAlerts: activeStockAlerts + activeExpiryAlerts,
-      expiringCount: kpis.expiring30Days,
-      lowStockCount: kpis.lowStock,
+      expiringCount: unified.expiringBatches,
+      lowStockCount: unified.lowStockCount,
     };
 
     await redisClient.set(cacheKey, JSON.stringify(result), 'EX', CACHE_TTL);
@@ -131,15 +132,15 @@ class DashboardService {
     const cached = await redisClient.get(cacheKey);
     if (cached) return JSON.parse(cached);
 
-    const kpis = await analyticsService.getTenantKPIs(tenantId);
+    const unified = await unifiedInventorySummaryService.getUnifiedSummary(tenantId, null, true);
 
     const result = {
-      totalStock: 0,
-      lowStockItems: kpis.lowStock,
-      outOfStockItems: 0,
-      expiringItems: kpis.expiring30Days,
-      expiredItems: 0,
-      stockValue: kpis.inventoryValue,
+      totalStock: unified.totalStock,
+      lowStockItems: unified.lowStockCount,
+      outOfStockItems: unified.outOfStockCount,
+      expiringItems: unified.expiringBatches,
+      expiredItems: unified.expiredBatches,
+      stockValue: unified.inventoryValue,
     };
 
     await redisClient.set(cacheKey, JSON.stringify(result), 'EX', CACHE_TTL);

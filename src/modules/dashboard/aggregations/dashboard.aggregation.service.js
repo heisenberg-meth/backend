@@ -3,7 +3,6 @@ import dashboardAggregationRepository from '../repositories/dashboard.aggregatio
 import dashboardCacheManager from '../aggregations/dashboard.cache-manager.js';
 import logger from '../../../shared/utils/logger.js';
 import unifiedInventorySummaryService from '../../inventory/service/unified-inventory-summary.service.js';
-import analyticsService from '../../analytics/service/analytics.service.js';
 
 const safeMetric = async (fn, fallback = 0) => {
   try {
@@ -35,12 +34,9 @@ class DashboardAggregationService {
         throw error;
       }
 
-      const cached = await dashboardCacheManager.get(tenantId, 'executive_summary');
-      if (cached) return cached;
-
       const results = await Promise.allSettled([
-        this.getFinancialSummary(tenantId, userRole),
         this.getLowStockSummary(tenantId, userRole),
+        this.getFinancialSummary(tenantId, userRole),
         this.getPendingOrders(tenantId, userRole),
         this.getTodaySummary(tenantId, userRole),
         prisma.stockAlert.count({ where: { tenantId, isResolved: false } }),
@@ -55,15 +51,7 @@ class DashboardAggregationService {
         return fallback;
       };
 
-      const financials = safeValue(results[0], {
-        totalSuppliers: 0,
-        todayRevenue: 0,
-        todayInvoices: 0,
-        monthRevenue: 0,
-        monthInvoices: 0,
-        pendingOrders: 0,
-      });
-      const inventory = safeValue(results[1], {
+      const inventory = safeValue(results[0], {
         critical: 0,
         low: 0,
         outOfStock: 0,
@@ -72,6 +60,14 @@ class DashboardAggregationService {
         expiring30d: 0,
         inventoryValue: 0,
         topRisks: [],
+      });
+      const financials = safeValue(results[1], {
+        totalSuppliers: 0,
+        todayRevenue: 0,
+        todayInvoices: 0,
+        monthRevenue: 0,
+        monthInvoices: 0,
+        pendingOrders: 0,
       });
       const pendingOrders = safeValue(results[2], {
         pendingPOs: 0,
@@ -139,26 +135,23 @@ class DashboardAggregationService {
       error.statusCode = 403;
       throw error;
     }
-    const cached = await dashboardCacheManager.get(tenantId, 'low_stock_summary');
-    if (cached) return cached;
 
-    const [kpis, unifiedMetrics, topRisks] = await Promise.all([
-      analyticsService.getTenantKPIs(tenantId),
-      unifiedInventorySummaryService.getDashboardMetrics(tenantId),
+    const [unifiedMetrics, topRisks] = await Promise.all([
+      unifiedInventorySummaryService.getUnifiedSummary(tenantId, null, true),
       dashboardAggregationRepository.getTopLowStockMedicines(tenantId, 5),
     ]);
 
     const data = {
       critical: unifiedMetrics.outOfStockCount,
-      low: kpis.lowStock,
+      low: unifiedMetrics.lowStockCount,
       outOfStock: unifiedMetrics.outOfStockCount,
-      totalSku: kpis.totalSku,
-      lowStock: kpis.lowStock,
-      expiring30d: kpis.expiring30Days,
-      inventoryValue: kpis.inventoryValue,
+      totalSku: unifiedMetrics.totalMedicines,
+      lowStock: unifiedMetrics.lowStockCount,
+      expiring30d: unifiedMetrics.expiringBatches,
+      inventoryValue: unifiedMetrics.inventoryValue,
       totalStock: unifiedMetrics.totalStock,
-      expiredCount: unifiedMetrics.expiredCount,
-      expiringCount: kpis.expiring30Days,
+      expiredCount: unifiedMetrics.expiredBatches,
+      expiringCount: unifiedMetrics.expiringBatches,
       inStockCount: unifiedMetrics.inStockCount,
       topRisks: topRisks.map((m) => ({
         medicine: m.name,
@@ -258,15 +251,12 @@ class DashboardAggregationService {
     if (!tenantId) {
       throw new Error('Tenant missing');
     }
-    const [kpis, unifiedMetrics] = await Promise.all([
-      analyticsService.getTenantKPIs(tenantId),
-      unifiedInventorySummaryService.getDashboardMetrics(tenantId),
-    ]);
+    const unifiedMetrics = await unifiedInventorySummaryService.getUnifiedSummary(tenantId, null, true);
     return {
-      lowStockCount: kpis.lowStock,
+      lowStockCount: unifiedMetrics.lowStockCount,
       outOfStockCount: unifiedMetrics.outOfStockCount,
-      expiringSoonCount: kpis.expiring30Days,
-      expiredCount: unifiedMetrics.expiredCount,
+      expiringSoonCount: unifiedMetrics.expiringBatches,
+      expiredCount: unifiedMetrics.expiredBatches,
       totalStock: unifiedMetrics.totalStock,
       inStockCount: unifiedMetrics.inStockCount,
       computedAt: new Date().toISOString(),
@@ -381,32 +371,7 @@ class DashboardAggregationService {
       throw new Error('Insufficient permissions for overview');
     }
 
-    const cached = await dashboardCacheManager.get(tenantId, 'overview', branchId);
-    if (cached) return cached;
-
-    const snapshot = await dashboardAggregationRepository.getValidSnapshot(
-      tenantId,
-      'OVERVIEW',
-      branchId,
-    );
-    if (snapshot) {
-      await dashboardCacheManager.set(tenantId, 'overview', snapshot.snapshotData, branchId);
-      return snapshot.snapshotData;
-    }
-
     const data = await this._computeOverview(tenantId, branchId);
-
-    await Promise.all([
-      dashboardCacheManager.set(tenantId, 'overview', data, branchId),
-      dashboardAggregationRepository.saveSnapshot(
-        tenantId,
-        'OVERVIEW',
-        data,
-        branchId,
-        dashboardCacheManager.getTTL('overview'),
-      ),
-    ]);
-
     return data;
   }
 
@@ -415,32 +380,7 @@ class DashboardAggregationService {
       throw new Error('Insufficient permissions for sales summary');
     }
 
-    const cached = await dashboardCacheManager.get(tenantId, 'sales_summary', branchId);
-    if (cached) return cached;
-
-    const snapshot = await dashboardAggregationRepository.getValidSnapshot(
-      tenantId,
-      'SALES_SUMMARY',
-      branchId,
-    );
-    if (snapshot) {
-      await dashboardCacheManager.set(tenantId, 'sales_summary', snapshot.snapshotData, branchId);
-      return snapshot.snapshotData;
-    }
-
     const data = await this._computeSalesSummary(tenantId, branchId);
-
-    await Promise.all([
-      dashboardCacheManager.set(tenantId, 'sales_summary', data, branchId),
-      dashboardAggregationRepository.saveSnapshot(
-        tenantId,
-        'SALES_SUMMARY',
-        data,
-        branchId,
-        dashboardCacheManager.getTTL('sales_summary'),
-      ),
-    ]);
-
     return data;
   }
 
@@ -449,37 +389,7 @@ class DashboardAggregationService {
       throw new Error('Insufficient permissions for inventory health');
     }
 
-    const cached = await dashboardCacheManager.get(tenantId, 'inventory_health', branchId);
-    if (cached) return cached;
-
-    const snapshot = await dashboardAggregationRepository.getValidSnapshot(
-      tenantId,
-      'INVENTORY_HEALTH',
-      branchId,
-    );
-    if (snapshot) {
-      await dashboardCacheManager.set(
-        tenantId,
-        'inventory_health',
-        snapshot.snapshotData,
-        branchId,
-      );
-      return snapshot.snapshotData;
-    }
-
     const data = await this._computeInventoryHealth(tenantId, branchId);
-
-    await Promise.all([
-      dashboardCacheManager.set(tenantId, 'inventory_health', data, branchId),
-      dashboardAggregationRepository.saveSnapshot(
-        tenantId,
-        'INVENTORY_HEALTH',
-        data,
-        branchId,
-        dashboardCacheManager.getTTL('inventory_health'),
-      ),
-    ]);
-
     return data;
   }
 
@@ -488,32 +398,7 @@ class DashboardAggregationService {
       throw new Error('Insufficient permissions for alerts');
     }
 
-    const cached = await dashboardCacheManager.get(tenantId, 'alerts', branchId);
-    if (cached) return cached;
-
-    const snapshot = await dashboardAggregationRepository.getValidSnapshot(
-      tenantId,
-      'ALERTS',
-      branchId,
-    );
-    if (snapshot) {
-      await dashboardCacheManager.set(tenantId, 'alerts', snapshot.snapshotData, branchId);
-      return snapshot.snapshotData;
-    }
-
     const data = await this._computeAlerts(tenantId, branchId);
-
-    await Promise.all([
-      dashboardCacheManager.set(tenantId, 'alerts', data, branchId),
-      dashboardAggregationRepository.saveSnapshot(
-        tenantId,
-        'ALERTS',
-        data,
-        branchId,
-        dashboardCacheManager.getTTL('alerts'),
-      ),
-    ]);
-
     return data;
   }
 
@@ -599,7 +484,7 @@ class DashboardAggregationService {
     const results = await Promise.allSettled([
       dashboardAggregationRepository.getTodaySales(tenantId, branchId),
       dashboardAggregationRepository.getMonthSales(tenantId, branchId),
-      analyticsService.getTenantKPIs(tenantId),
+      unifiedInventorySummaryService.getUnifiedSummary(tenantId, branchId, true),
       dashboardAggregationRepository.getPendingPurchaseOrders(tenantId, branchId),
     ]);
 
@@ -609,9 +494,9 @@ class DashboardAggregationService {
         : { _sum: { totalAmount: 0 }, _count: { id: 0 } };
     const monthSales =
       results[1].status === 'fulfilled' ? results[1].value : { _sum: { totalAmount: 0 } };
-    const kpis = results[2].status === 'fulfilled' ? results[2].value : { lowStock: 0, expiring30Days: 0 };
-    const lowStockCount = kpis.lowStock;
-    const expiringCount = kpis.expiring30Days;
+    const unified = results[2].status === 'fulfilled' ? results[2].value : { lowStockCount: 0, expiringBatches: 0 };
+    const lowStockCount = unified.lowStockCount;
+    const expiringCount = unified.expiringBatches;
     const pendingPOs = results[3].status === 'fulfilled' ? results[3].value : 0;
 
     const topSelling = await safeMetric(
@@ -759,8 +644,8 @@ class DashboardAggregationService {
   }
 
   async _computeInventoryHealth(tenantId, branchId) {
-    const [kpis, metrics] = await Promise.all([
-      analyticsService.getTenantKPIs(tenantId),
+    const [unified, metrics] = await Promise.all([
+      unifiedInventorySummaryService.getUnifiedSummary(tenantId, branchId, true),
       dashboardAggregationRepository.getStockHealthMetrics(tenantId, branchId),
     ]);
 
@@ -772,11 +657,11 @@ class DashboardAggregationService {
 
     return {
       healthyStockPercentage,
-      lowStockCount: kpis.lowStock,
-      outOfStockCount: metrics.outOfStockCount,
-      expiringSoonCount: kpis.expiring30Days,
-      expiredCount: metrics.expiredCount,
-      totalStock: metrics.totalStock,
+      lowStockCount: unified.lowStockCount,
+      outOfStockCount: unified.outOfStockCount,
+      expiringSoonCount: unified.expiringBatches,
+      expiredCount: unified.expiredBatches,
+      totalStock: unified.totalStock,
       computedAt: new Date().toISOString(),
     };
   }
