@@ -60,16 +60,26 @@ class SalesRepository {
     });
   }
 
+  _safeDate(value) {
+    if (!value) return null;
+    const date = new Date(value);
+    return isNaN(date.getTime()) ? null : date;
+  }
+
   _dateFilter(dateFilter) {
     if (!dateFilter) return {};
     const where = {};
     if (dateFilter.from || dateFilter.to) {
       where.soldAt = {};
-      if (dateFilter.from) where.soldAt.gte = new Date(dateFilter.from);
-      if (dateFilter.to) {
-        const end = new Date(dateFilter.to);
-        end.setHours(23, 59, 59, 999);
-        where.soldAt.lte = end;
+      const fromDate = this._safeDate(dateFilter.from);
+      const toDate = this._safeDate(dateFilter.to);
+      if (fromDate) where.soldAt.gte = fromDate;
+      if (toDate) {
+        toDate.setHours(23, 59, 59, 999);
+        where.soldAt.lte = toDate;
+      }
+      if (Object.keys(where.soldAt).length === 0) {
+        delete where.soldAt;
       }
     }
     return where;

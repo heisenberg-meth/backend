@@ -167,7 +167,7 @@ class BatchRepository {
     return prisma.inventoryBatch.findMany({
       where: {
         medicine: { tenantId },
-        expiryDate: { lt: currentDate },
+        OR: [{ expiryDate: { lt: currentDate } }, { status: 'EXPIRED' }],
         quantity: { gt: 0 },
         deletedAt: null,
       },

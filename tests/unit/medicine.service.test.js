@@ -1,4 +1,4 @@
-import { jest , describe, afterEach, it, expect } from '@jest/globals';
+import { jest, describe, afterEach, it, expect } from '@jest/globals';
 
 // Define mocks first
 const mockMedicineRepository = {
@@ -68,20 +68,26 @@ jest.unstable_mockModule('../../src/config/prisma.js', () => ({
 }));
 
 // Use unstable_mockModule for ESM mocking
-jest.unstable_mockModule('../../src/modules/inventory/repository/medicine.prisma.repository.js', () => ({
-  default: mockMedicineRepository
-}));
+jest.unstable_mockModule(
+  '../../src/modules/inventory/repository/medicine.prisma.repository.js',
+  () => ({
+    default: mockMedicineRepository,
+  }),
+);
 
-jest.unstable_mockModule('../../src/modules/inventory/repository/inventory_batch.repository.js', () => ({
-  default: mockInventoryBatchRepository
-}));
+jest.unstable_mockModule(
+  '../../src/modules/inventory/repository/inventory_batch.repository.js',
+  () => ({
+    default: mockInventoryBatchRepository,
+  }),
+);
 
 jest.unstable_mockModule('../../src/modules/audit/service/audit.prisma.service.js', () => ({
-  default: mockAuditService
+  default: mockAuditService,
 }));
 
 jest.unstable_mockModule('../../src/shared/services/eventbus.service.js', () => ({
-  default: mockEventBus
+  default: mockEventBus,
 }));
 
 jest.unstable_mockModule('../../src/queue/index.js', () => ({
@@ -98,7 +104,8 @@ jest.unstable_mockModule('../../src/modules/stock/service/movement.service.js', 
 }));
 
 // Import after mocks are defined
-const { default: medicineService } = await import('../../src/modules/inventory/service/medicine.prisma.service.js');
+const { default: medicineService } =
+  await import('../../src/modules/inventory/service/medicine.prisma.service.js');
 
 describe('MedicinePrismaService Unit Tests (ESM)', () => {
   const tenantId = 'tenant-1';
@@ -118,8 +125,10 @@ describe('MedicinePrismaService Unit Tests (ESM)', () => {
           batchNumber: 'P001',
           quantity: 100,
           expiryDate: '2027-01-01',
-          purchasePrice: 10
-        }
+          purchasePrice: 10,
+          sellingPrice: 12,
+          mrp: 15,
+        },
       };
 
       mockMedicineRepository.create.mockResolvedValue({ id: 'med-1', name: 'Paracetamol' });
@@ -143,7 +152,7 @@ describe('MedicinePrismaService Unit Tests (ESM)', () => {
         gst: 12,
         status: 'active',
         schedule: 'OTC',
-        supplier: 'Legacy Supplier'
+        supplier: 'Legacy Supplier',
       };
 
       mockPrisma.medicineCategory.findFirst.mockResolvedValue(null);
@@ -155,15 +164,18 @@ describe('MedicinePrismaService Unit Tests (ESM)', () => {
 
       const result = await medicineService.createMedicine(legacyData, tenantId, userId);
 
-      expect(mockMedicineRepository.create).toHaveBeenCalledWith(expect.objectContaining({
-        name: 'Amoxil',
-        genericName: 'Amoxicillin',
-        categoryId: 'cat-123',
-        manufacturerId: 'mfg-456',
-        gstPercentage: 12,
-        status: 'ACTIVE',
-        scheduleType: 'OTC'
-      }), expect.anything());
+      expect(mockMedicineRepository.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          name: 'Amoxil',
+          genericName: 'Amoxicillin',
+          categoryId: 'cat-123',
+          manufacturerId: 'mfg-456',
+          gstPercentage: 12,
+          status: 'ACTIVE',
+          scheduleType: 'OTC',
+        }),
+        expect.anything(),
+      );
       expect(result.name).toBe('Amoxil');
     });
   });
@@ -171,8 +183,18 @@ describe('MedicinePrismaService Unit Tests (ESM)', () => {
   describe('updateMedicine', () => {
     it('should allow owner to update all fields', async () => {
       const updateData = { name: 'New Name', rackLocation: 'A1' };
-      mockMedicineRepository.findById.mockResolvedValue({ id: 'med-1', name: 'Old Name', totalQuantity: 10, reorderLevel: 5 });
-      mockMedicineRepository.update.mockResolvedValue({ id: 'med-1', name: 'New Name', totalQuantity: 10, reorderLevel: 5 });
+      mockMedicineRepository.findById.mockResolvedValue({
+        id: 'med-1',
+        name: 'Old Name',
+        totalQuantity: 10,
+        reorderLevel: 5,
+      });
+      mockMedicineRepository.update.mockResolvedValue({
+        id: 'med-1',
+        name: 'New Name',
+        totalQuantity: 10,
+        reorderLevel: 5,
+      });
 
       const result = await medicineService.updateMedicine('med-1', tenantId, mockUser, updateData);
 
@@ -183,14 +205,24 @@ describe('MedicinePrismaService Unit Tests (ESM)', () => {
     it('should only allow staff to update allowed fields', async () => {
       const staffUser = { id: 'staff-1', tenantId, role: 'STAFF' };
       const updateData = { name: 'Illegal Name', rackLocation: 'A1' };
-      
-      mockMedicineRepository.findById.mockResolvedValue({ id: 'med-1', name: 'Old Name', totalQuantity: 10, reorderLevel: 5 });
-      mockMedicineRepository.update.mockResolvedValue({ id: 'med-1', name: 'Illegal Name', rackLocation: 'A1', totalQuantity: 10, reorderLevel: 5 });
+
+      mockMedicineRepository.findById.mockResolvedValue({
+        id: 'med-1',
+        name: 'Old Name',
+        totalQuantity: 10,
+        reorderLevel: 5,
+      });
+      mockMedicineRepository.update.mockResolvedValue({
+        id: 'med-1',
+        name: 'Illegal Name',
+        rackLocation: 'A1',
+        totalQuantity: 10,
+        reorderLevel: 5,
+      });
 
       await medicineService.updateMedicine('med-1', tenantId, staffUser, updateData);
 
       expect(mockMedicineRepository.update).toHaveBeenCalledWith('med-1', tenantId, updateData);
     });
   });
-
 });

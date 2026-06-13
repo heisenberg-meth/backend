@@ -5,6 +5,7 @@ import { procurementStateMachine } from '../../../shared/constants/state-machine
 import { emitLocalEvent } from '../../../shared/events/local-event-bus.js';
 import { emitEvent } from '../../../shared/events/erp-event-bus.js';
 import logger from '../../../shared/utils/logger.js';
+import { BadRequestError, NotFoundError } from '../../../shared/utils/errors.js';
 
 class PurchaseOrderService {
   async getOrders(tenantId, filters = {}) {
@@ -103,7 +104,13 @@ class PurchaseOrderService {
       userId,
     );
 
-    emitLocalEvent(DOMAIN_EVENTS.PURCHASE_ORDER_CREATED, { orderId: order.id, tenantId, userId });
+    emitLocalEvent(DOMAIN_EVENTS.PURCHASE_ORDER_CREATED, {
+      orderId: order.id,
+      tenantId,
+      userId,
+      supplierId: order.supplierId,
+      totalAmount: order.totalAmount,
+    });
     await emitEvent(DOMAIN_EVENTS.PURCHASE_ORDER_CREATED, { orderId: order.id, tenantId });
 
     return order;
@@ -206,33 +213,37 @@ class PurchaseOrderService {
       );
 
       if (!receivedItems?.length) {
-        throw new Error('No items provided for receipt');
+        throw new BadRequestError('No items provided for receipt');
       }
 
       logger.info({ purchaseOrderId: id, payload }, 'RECEIVE_GOODS_STARTED');
 
       const order = await purchaseOrderRepository.findById(id, tenantId);
-      if (!order) throw new Error('Order not found');
+      if (!order) throw new NotFoundError('Order not found');
 
       logger.info({ purchaseOrderId: id, status: order.status }, 'PURCHASE_ORDER_LOADED');
 
       if (!order.supplierId) {
-        throw new Error('Purchase order missing supplierId');
+        throw new BadRequestError('Purchase order missing supplierId');
       }
       if (!order.tenantId || order.tenantId !== tenantId) {
-        throw new Error('Purchase order tenantId mismatch or missing');
+        throw new BadRequestError('Purchase order tenantId mismatch or missing');
       }
-      if (
-        order.status !== PROCUREMENT_STATUS.APPROVED &&
-        order.status !== PROCUREMENT_STATUS.ORDERED &&
-        order.status !== PROCUREMENT_STATUS.PARTIALLY_RECEIVED
-      ) {
-        throw new Error(
+      if (order.status === PROCUREMENT_STATUS.RECEIVED) {
+        throw new BadRequestError('Purchase Order already received');
+      }
+      const allowedReceiveStatuses = [
+        PROCUREMENT_STATUS.APPROVED,
+        PROCUREMENT_STATUS.ORDERED,
+        PROCUREMENT_STATUS.PARTIALLY_RECEIVED,
+      ];
+      if (!allowedReceiveStatuses.includes(order.status)) {
+        throw new BadRequestError(
           `Purchase order must be APPROVED, ORDERED, or PARTIALLY_RECEIVED to receive goods. Current status: ${order.status}`,
         );
       }
       if (!order.items?.length) {
-        throw new Error('Purchase order has no items to receive');
+        throw new BadRequestError('Purchase order has no items to receive');
       }
 
       logger.info({ receivedItemsCount: receivedItems.length }, 'VALIDATION_PASSED');
@@ -255,6 +266,23 @@ class PurchaseOrderService {
           resolvedBranchId = firstBranch?.id;
         }
 
+        // If still no branch, create a default branch for this tenant
+        if (!resolvedBranchId) {
+          const defaultBranch = await prisma.branch.create({
+            data: {
+              tenantId,
+              name: 'Main Branch',
+              code: 'MAIN',
+              isDefault: true,
+            },
+          });
+          resolvedBranchId = defaultBranch.id;
+          logger.info(
+            { purchaseOrderId: id, branchId: resolvedBranchId, tenantId },
+            'Created default branch for PO receipt',
+          );
+        }
+
         // If we found a branch, update the PO
         if (resolvedBranchId) {
           await prisma.purchaseOrder.update({
@@ -271,7 +299,7 @@ class PurchaseOrderService {
       const branchId = resolvedBranchId || order.branchId;
 
       if (!branchId) {
-        throw new Error(
+        throw new BadRequestError(
           `Cannot receive stock for PO ${order.orderNumber}: no branch found. ` +
             `Please assign a branch to this purchase order or create a branch for this tenant.`,
         );
@@ -301,28 +329,59 @@ class PurchaseOrderService {
 
         for (const item of receivedItems) {
           const poItem = order.items.find((i) => i.medicineId === item.medicineId);
-          if (!poItem) throw new Error(`Medicine ${item.medicineId} not found in PO`);
+          if (!poItem) throw new BadRequestError(`Medicine ${item.medicineId} not found in PO`);
 
           if (item.receivedQuantity < 0) {
-            throw new Error(`Received quantity cannot be negative for ${poItem.medicineName}`);
+            throw new BadRequestError(`Received quantity cannot be negative for ${poItem.medicineName}`);
           }
 
           const remainingQty = poItem.quantity - poItem.receivedQuantity;
           if (item.receivedQuantity > remainingQty) {
-            throw new Error(
+            throw new BadRequestError(
               `Received quantity (${item.receivedQuantity}) exceeds remaining ordered quantity (${remainingQty}) for ${poItem.medicineName}`,
             );
           }
 
           if (!item.batchNumber) {
-            throw new Error(`Batch number is required for ${poItem.medicineName}`);
+            throw new BadRequestError(`Batch number is required for ${poItem.medicineName}`);
           }
           if (!item.expiryDate) {
-            throw new Error(`Expiry date is required for ${poItem.medicineName}`);
+            throw new BadRequestError(`Expiry date is required for ${poItem.medicineName}`);
           }
-          const parsedExpiryDate = new Date(item.expiryDate);
+          const parsedExpiryDate = new Date(item.expiryDate + 'T00:00:00.000Z');
           if (isNaN(parsedExpiryDate.getTime())) {
-            throw new Error(`Invalid expiry date format for ${poItem.medicineName}`);
+            throw new BadRequestError(`Invalid expiry date format for ${poItem.medicineName}`);
+          }
+
+          // Validation: Expiry Date >= Today (date-only comparison)
+          const today = new Date();
+          const todayUTC = new Date(Date.UTC(today.getFullYear(), today.getMonth(), today.getDate()));
+          if (parsedExpiryDate < todayUTC) {
+            throw new BadRequestError(`Expiry date cannot be in the past for ${poItem.medicineName}`);
+          }
+
+          // Validation: Purchase Price and Selling Price
+          const purchasePrice =
+            item.purchasePrice !== undefined
+              ? Number(item.purchasePrice)
+              : Number(poItem.unitPrice);
+          if (purchasePrice <= 0) {
+            throw new BadRequestError(`Purchase price must be greater than 0 for ${poItem.medicineName}`);
+          }
+
+          const sellingPrice =
+            item.sellingPrice !== undefined
+              ? Number(item.sellingPrice)
+              : item.purchasePrice !== undefined
+                ? Number(item.purchasePrice) * 1.2
+                : Number(poItem.unitPrice) * 1.2;
+          if (sellingPrice <= 0) {
+            throw new BadRequestError(`Selling price must be greater than 0 for ${poItem.medicineName}`);
+          }
+
+          const mrp = item.mrp !== undefined ? Number(item.mrp) : sellingPrice;
+          if (mrp <= 0) {
+            throw new BadRequestError(`MRP must be greater than 0 for ${poItem.medicineName}`);
           }
 
           // 2. Create GRN Item
@@ -334,10 +393,8 @@ class PurchaseOrderService {
               receivedQuantity: item.receivedQuantity,
               batchNumber: item.batchNumber,
               expiryDate: parsedExpiryDate,
-              purchasePrice: Number(poItem.unitPrice),
-              sellingPrice: item.sellingPrice
-                ? Number(item.sellingPrice)
-                : Number(poItem.unitPrice) * 1.2,
+              purchasePrice,
+              sellingPrice,
             },
           });
 
@@ -369,7 +426,7 @@ class PurchaseOrderService {
               .split('T')[0];
             const newExpiryStr = parsedExpiryDate.toISOString().split('T')[0];
             if (existingExpiryStr !== newExpiryStr) {
-              throw new Error(
+              throw new BadRequestError(
                 `Batch '${item.batchNumber}' already exists at this branch with a different expiry date (${existingExpiryStr})`,
               );
             }
@@ -404,10 +461,9 @@ class PurchaseOrderService {
                 availableQuantity: item.receivedQuantity,
                 receivedQuantity: item.receivedQuantity,
                 expiryDate: parsedExpiryDate,
-                purchasePrice: Number(poItem.unitPrice),
-                sellingPrice: item.sellingPrice
-                  ? Number(item.sellingPrice)
-                  : Number(poItem.unitPrice) * 1.2,
+                purchasePrice,
+                sellingPrice,
+                mrp,
                 supplierId: order.supplierId,
                 status: 'ACTIVE',
                 purchaseOrderItemId: poItem.id,
@@ -558,8 +614,8 @@ class PurchaseOrderService {
             type: 'PURCHASE',
             referenceType: 'PURCHASE_INVOICE',
             referenceId: purchaseInvoice.id,
-            debitAmount: 0,
-            creditAmount: totalVal,
+            debitAmount: totalVal,
+            creditAmount: 0,
             balanceAfter,
             notes: `Goods received via GRN ${grnNumber} for PO ${order.orderNumber}. Invoice ${invoiceNumber} created.`,
           },

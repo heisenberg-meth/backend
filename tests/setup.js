@@ -1,4 +1,5 @@
 import { beforeAll, afterAll } from '@jest/globals';
+import logger from '../src/shared/utils/logger.js';
 
 if (process.env.NODE_ENV === 'test' && !process.env.FORCE_REAL_REDIS) {
   delete process.env.REDIS_URL;
@@ -11,8 +12,12 @@ beforeAll(async () => {
 
   // Test DB cleanup (schema drop) - Only if using a real Prisma client
   if (typeof prisma.$executeRawUnsafe === 'function') {
-    await prisma.$executeRawUnsafe(`DROP SCHEMA IF EXISTS "${schemaName}" CASCADE;`);
-    await prisma.$executeRawUnsafe(`CREATE SCHEMA "${schemaName}";`);
+    try {
+      await prisma.$executeRawUnsafe(`DROP SCHEMA IF EXISTS "${schemaName}" CASCADE;`);
+      await prisma.$executeRawUnsafe(`CREATE SCHEMA "${schemaName}";`);
+    } catch (err) {
+      logger.info(err);
+    }
   }
 
   // Update the prisma client to use this schema

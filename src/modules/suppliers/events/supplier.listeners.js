@@ -7,8 +7,14 @@ export const initSupplierListeners = () => {
   logger.info('[SUPPLIER-LISTENERS] Initializing Supplier Domain Listeners...');
 
   // Update metrics when a Purchase Order is received
-  localEventBus.on(DOMAIN_EVENTS.PURCHASE_ORDER_RECEIVED, async (orderId) => {
+  localEventBus.on(DOMAIN_EVENTS.PURCHASE_ORDER_RECEIVED, async (payload) => {
     try {
+      const orderId = typeof payload === 'string' ? payload : payload?.orderId;
+      if (!orderId) {
+        logger.error('[SUPPLIER-LISTENER] No orderId provided in PURCHASE_ORDER_RECEIVED event');
+        return;
+      }
+
       const order = await prisma.purchaseOrder.findUnique({
         where: { id: orderId },
         include: { supplier: true },
@@ -28,16 +34,22 @@ export const initSupplierListeners = () => {
         if (delayDays > 0) onTime = 0;
       }
 
+      // Fetch existing metrics to calculate the new moving average of delivery days
+      const existingMetrics = await prisma.supplierMetrics.findUnique({
+        where: { supplierId },
+      });
+
+      const totalOrders = existingMetrics ? existingMetrics.totalOrders : 0;
+      const currentAvg = existingMetrics ? existingMetrics.averageDeliveryDays : 0;
+      const newAverage = (currentAvg * totalOrders + delayDays) / (totalOrders + 1);
+
       // Update SupplierMetrics
       await prisma.supplierMetrics.upsert({
         where: { supplierId },
         update: {
           totalOrders: { increment: 1 },
           onTimeDeliveries: { increment: onTime },
-          averageDeliveryDays: {
-            // Simple moving average
-            set: await this._calculateNewAverageDelay(supplierId, delayDays),
-          },
+          averageDeliveryDays: newAverage,
         },
         create: {
           supplierId,

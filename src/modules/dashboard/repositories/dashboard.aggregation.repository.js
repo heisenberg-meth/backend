@@ -1,3 +1,4 @@
+import { Prisma } from '@prisma/client';
 import prisma from '../../../config/prisma.js';
 import { PURCHASE_ORDER_STATUS } from '../../../shared/constants/purchase-order-status.js';
 
@@ -71,19 +72,34 @@ class DashboardAggregationRepository {
   }
 
   async getLowStockCount(tenantId, branchId = null) {
-    const where = {
-      tenantId,
-      isResolved: false,
-      type: 'LOW_STOCK',
-    };
-    if (branchId) where.branchId = branchId;
+    const branchCondition = branchId ? Prisma.sql`AND ib."branchId" = ${branchId}` : Prisma.sql``;
 
-    return prisma.stockAlert.count({ where });
+    const results = await prisma.$queryRaw`
+      SELECT COUNT(*)::int as count
+      FROM (
+        SELECT
+            m.id,
+            COALESCE(SUM(ib."quantity"), 0) as stock,
+            COALESCE(MAX(ib."reorderPoint"), m."reorderLevel", 10) as reorder_level
+        FROM "Medicine" m
+        LEFT JOIN "InventoryBatch" ib
+            ON ib."medicineId" = m.id
+            AND ib."tenantId" = m."tenantId"
+            AND ib."deletedAt" IS NULL
+            ${branchCondition}
+        WHERE m."tenantId" = ${tenantId}
+          AND m."deletedAt" IS NULL
+          AND m."isActive" = true
+        GROUP BY m.id, m."reorderLevel"
+      ) x
+      WHERE stock <= reorder_level AND stock > 0;
+    `;
+    return Number(results?.[0]?.count || 0);
   }
 
   async getTopLowStockMedicines(tenantId, limit = 5) {
     return prisma.medicine.findMany({
-      where: { tenantId, deletedAt: null, isActive: true },
+      where: { tenantId, deletedAt: null },
       select: {
         id: true,
         name: true,
@@ -133,14 +149,13 @@ class DashboardAggregationRepository {
     const thirtyDaysLater = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
 
     const where = {
-      medicine: { tenantId, deletedAt: null, isActive: true },
+      medicine: { tenantId, deletedAt: null },
       deletedAt: null,
     };
     const batchWhere = { ...where };
     const medicineWhere = {
       tenantId,
       deletedAt: null,
-      isActive: true,
       inventoryBatches: {
         none: { quantity: { gt: 0 }, deletedAt: null },
       },
@@ -159,7 +174,7 @@ class DashboardAggregationRepository {
       prisma.inventoryBatch.count({
         where: {
           ...batchWhere,
-          expiryDate: { lt: now },
+          OR: [{ expiryDate: { lt: now } }, { status: 'EXPIRED' }],
           quantity: { gt: 0 },
         },
       }),
@@ -213,7 +228,7 @@ class DashboardAggregationRepository {
       prisma.inventoryBatch.findMany({
         where: {
           medicine: { tenantId, deletedAt: null },
-          expiryDate: { lt: new Date() },
+          OR: [{ expiryDate: { lt: new Date() } }, { status: 'EXPIRED' }],
           quantity: { gt: 0 },
           deletedAt: null,
           ...(branchId && { branchId }),

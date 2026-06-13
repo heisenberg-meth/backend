@@ -53,3 +53,9 @@ export class SubscriptionError extends AppError {
     super(message, 403, 'SUBSCRIPTION_ERROR');
   }
 }
+
+export class BadRequestError extends AppError {
+  constructor(message = 'Bad request') {
+    super(message, 400, 'BAD_REQUEST');
+  }
+}

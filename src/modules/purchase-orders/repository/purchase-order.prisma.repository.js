@@ -93,8 +93,9 @@ class PurchaseOrderPrismaRepository {
     });
   }
 
-  async updateStatus(id, tenantId, status) {
-    return prisma.purchaseOrder.update({
+  async updateStatus(id, tenantId, status, tx) {
+    const client = tx || prisma;
+    return client.purchaseOrder.update({
       where: { id, tenantId },
       data: { status },
       include: {

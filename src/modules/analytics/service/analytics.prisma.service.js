@@ -297,7 +297,7 @@ class AnalyticsPrismaService {
     const expiredBatches = await prisma.inventoryBatch.findMany({
       where: {
         medicine: { tenantId, deletedAt: null },
-        expiryDate: { lt: now },
+        OR: [{ expiryDate: { lt: now } }, { status: 'EXPIRED' }],
         quantity: { gt: 0 },
         deletedAt: null,
       },

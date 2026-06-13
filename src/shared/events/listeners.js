@@ -281,15 +281,29 @@ export const initListeners = () => {
     }
   });
 
-  localEventBus.on(DOMAIN_EVENTS.PURCHASE_ORDER_RECEIVED, async (orderId) => {
+  localEventBus.on(DOMAIN_EVENTS.PURCHASE_ORDER_RECEIVED, async (payload) => {
+    const orderId = typeof payload === 'string' ? payload : payload?.orderId;
     logger.info({ orderId }, '[PROCUREMENT] PO received');
+    if (!orderId) {
+      logger.error('[PROCUREMENT-LISTENER] No orderId provided in PURCHASE_ORDER_RECEIVED event');
+      return;
+    }
 
     try {
       // Update PO status
-      await prisma.purchaseOrder.update({
+      const po = await prisma.purchaseOrder.update({
         where: { id: orderId },
         data: { status: PURCHASE_ORDER_STATUS.RECEIVED },
+        select: { tenantId: true, branchId: true },
       });
+
+      // Queue dashboard cache invalidation and refreshes
+      const { queueCacheInvalidation, queueDashboardRefresh } =
+        await import('../../modules/dashboard/workers/dashboard.worker.js');
+      await queueCacheInvalidation(po.tenantId, po.branchId);
+      await queueDashboardRefresh(po.tenantId, po.branchId, 'INVENTORY_HEALTH');
+      await queueDashboardRefresh(po.tenantId, po.branchId, 'ALERTS');
+      await queueDashboardRefresh(po.tenantId, po.branchId, 'OVERVIEW');
     } catch (err) {
       logger.error({ err, orderId }, '[PROCUREMENT-LISTENER] Failed to update PO status');
     }

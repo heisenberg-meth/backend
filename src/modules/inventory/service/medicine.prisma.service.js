@@ -9,6 +9,7 @@ import eventBus from '../../../shared/services/eventbus.service.js';
 import movementService from '../../stock/service/movement.service.js';
 import { scanKeys } from '../../../shared/utils/scan-keys.js';
 import inventoryBatchRepository from '../repository/inventory_batch.repository.js';
+import unifiedInventorySummaryService from './unified-inventory-summary.service.js';
 import {
   mapDosageFormToPackaging,
   validatePricing,
@@ -65,84 +66,7 @@ class MedicinePrismaService {
   }
 
   async getInventorySummary(tenantId, branchId = null) {
-    const cacheKey = `inventory:${tenantId}:${branchId || 'all'}:summary`;
-    try {
-      const cached = await redisClient.get(cacheKey);
-      if (cached) {
-        return JSON.parse(cached);
-      }
-    } catch (err) {
-      logger.error({ err }, '[REDIS CACHE ERROR]');
-    }
-
-    const bId = branchId === 'null' || !branchId ? null : branchId;
-
-    const branchCondition = bId ? Prisma.sql`ib."branchId" = ${bId}` : Prisma.sql`1=1`;
-
-    const invBranchCondition = bId ? Prisma.sql`inv."branchId" = ${bId}` : Prisma.sql`1=1`;
-
-    const [summary] = await prisma.$queryRaw`
-      SELECT
-        COUNT(*) FILTER (WHERE m."isActive" = true AND m."deletedAt" IS NULL) as "totalProducts",
-        COUNT(*) FILTER (WHERE m."isActive" = true AND m."deletedAt" IS NULL) as "totalMedicines",
-        COALESCE(SUM(inv."currentStock"), 0) as "totalStock",
-        COUNT(*) FILTER (WHERE m."isActive" = true AND m."deletedAt" IS NULL AND COALESCE(inv."currentStock", 0) > COALESCE(inv."reorderPoint", m."reorderLevel", 10)) as "inStock",
-        COUNT(*) FILTER (WHERE m."isActive" = true AND m."deletedAt" IS NULL AND COALESCE(inv."currentStock", 0) <= COALESCE(inv."reorderPoint", m."reorderLevel", 10) AND COALESCE(inv."currentStock", 0) > 0) as "lowStock",
-        COUNT(*) FILTER (WHERE m."isActive" = true AND m."deletedAt" IS NULL AND COALESCE(inv."currentStock", 0) <= COALESCE(inv."reorderPoint", m."reorderLevel", 10) AND COALESCE(inv."currentStock", 0) > 0) as "lowStockCount",
-        COUNT(*) FILTER (WHERE m."isActive" = true AND m."deletedAt" IS NULL AND COALESCE(inv."currentStock", 0) = 0) as "outOfStock",
-        COUNT(*) FILTER (WHERE m."isActive" = true AND m."deletedAt" IS NULL AND COALESCE(inv."currentStock", 0) = 0) as "outOfStockCount",
-        (
-          SELECT COUNT(*)
-          FROM "InventoryBatch" ib
-          INNER JOIN "Medicine" m2 ON ib."medicineId" = m2."id"
-          WHERE m2."tenantId" = ${tenantId}
-            AND m2."deletedAt" IS NULL
-            AND ib."deletedAt" IS NULL
-            AND ib."expiryDate" < NOW()
-            AND ib."quantity" > 0
-            AND ${branchCondition}
-        ) as "expired",
-        COALESCE(
-          (
-            SELECT SUM(ib."quantity" * COALESCE(ib."mrp", 0))::float
-            FROM "InventoryBatch" ib
-            INNER JOIN "Medicine" m3 ON ib."medicineId" = m3."id"
-            WHERE m3."tenantId" = ${tenantId}
-              AND m3."deletedAt" IS NULL
-              AND ib."deletedAt" IS NULL
-              AND ib."quantity" > 0
-              AND ${branchCondition}
-          ),
-          0
-        ) as "inventoryValue"
-      FROM "Medicine" m
-      LEFT JOIN "Inventory" inv ON m."id" = inv."medicineId" AND ${invBranchCondition}
-      WHERE m."tenantId" = ${tenantId}
-        AND m."deletedAt" IS NULL;
-    `;
-
-    const result = {
-      totalMedicines: Number(summary?.totalMedicines || 0),
-      totalStock: Number(summary?.totalStock || 0),
-      inventoryValue: Number(summary?.inventoryValue || 0),
-      lowStockCount: Number(summary?.lowStockCount || 0),
-      outOfStockCount: Number(summary?.outOfStockCount || 0),
-      expired: Number(summary?.expired || 0),
-
-      // Legacy compatibility keys for frontend component
-      totalProducts: Number(summary?.totalProducts || 0),
-      inStock: Number(summary?.inStock || 0),
-      lowStock: Number(summary?.lowStock || 0),
-      outOfStock: Number(summary?.outOfStock || 0),
-    };
-
-    try {
-      await redisClient.set(cacheKey, JSON.stringify(result), 'EX', 300);
-    } catch (err) {
-      logger.error({ err }, '[REDIS CACHE ERROR]');
-    }
-
-    return result;
+    return unifiedInventorySummaryService.getInventoryPageMetrics(tenantId, branchId);
   }
 
   async invalidateCache(tenantId) {
@@ -151,6 +75,7 @@ class MedicinePrismaService {
       if (keys.length > 0) {
         await redisClient.del(...keys);
       }
+      await unifiedInventorySummaryService.invalidateCache(tenantId);
     } catch (err) {
       console.error('[REDIS CACHE ERROR]', err);
     }

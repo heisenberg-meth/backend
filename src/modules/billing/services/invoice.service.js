@@ -85,10 +85,16 @@ class InvoiceService {
 
       doc.moveTo(50, 100).lineTo(550, 100).stroke();
 
+      const formatSafeDate = (dateVal) => {
+        if (!dateVal) return 'N/A';
+        const date = new Date(dateVal);
+        return isNaN(date.getTime()) ? 'N/A' : date.toLocaleDateString('en-IN');
+      };
+
       doc
         .fontSize(12)
         .text(`Invoice #: ${invoice.invoiceNumber}`, 50, 120)
-        .text(`Date: ${new Date(invoice.createdAt).toLocaleDateString()}`, 50, 135)
+        .text(`Date: ${formatSafeDate(invoice.createdAt)}`, 50, 135)
         .text(`Status: ${invoice.status}`, 50, 150)
         .moveDown();
 

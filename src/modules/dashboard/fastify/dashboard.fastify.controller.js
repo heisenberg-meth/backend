@@ -23,7 +23,12 @@ class DashboardFastifyController {
             _sum: { totalAmount: true },
           }),
           prisma.inventoryBatch.aggregate({
-            where: { tenantId, status: 'ACTIVE', deletedAt: null },
+            where: {
+              tenantId,
+              status: 'ACTIVE',
+              deletedAt: null,
+              medicine: { deletedAt: null, isActive: true },
+            },
             _sum: { quantity: true },
           }),
           prisma.invoice.count({
@@ -32,16 +37,24 @@ class DashboardFastifyController {
           prisma.inventoryBatch.count({
             where: {
               tenantId,
-              expiryDate: { lt: today },
+              OR: [{ expiryDate: { lt: today } }, { status: 'EXPIRED' }],
               quantity: { gt: 0 },
               deletedAt: null,
+              medicine: { deletedAt: null, isActive: true },
             },
           }),
         ]);
 
-      const todaySalesAgg = todaySalesAggRes.status === 'fulfilled' ? todaySalesAggRes.value : { _sum: { totalAmount: 0 } };
-      const monthlySalesAgg = monthlySalesAggRes.status === 'fulfilled' ? monthlySalesAggRes.value : { _sum: { totalAmount: 0 } };
-      const stockAgg = stockAggRes.status === 'fulfilled' ? stockAggRes.value : { _sum: { quantity: 0 } };
+      const todaySalesAgg =
+        todaySalesAggRes.status === 'fulfilled'
+          ? todaySalesAggRes.value
+          : { _sum: { totalAmount: 0 } };
+      const monthlySalesAgg =
+        monthlySalesAggRes.status === 'fulfilled'
+          ? monthlySalesAggRes.value
+          : { _sum: { totalAmount: 0 } };
+      const stockAgg =
+        stockAggRes.status === 'fulfilled' ? stockAggRes.value : { _sum: { quantity: 0 } };
       const invoiceCount = invoiceCountRes.status === 'fulfilled' ? invoiceCountRes.value : 0;
       const expiredCount = expiredCountRes.status === 'fulfilled' ? expiredCountRes.value : 0;
 
@@ -76,10 +89,7 @@ class DashboardFastifyController {
       }
       const tenantId = request.user.tenantId;
       const userRole = request.user?.role || 'OWNER';
-      const data = await dashboardAggregationService.getExecutiveSummary(
-        tenantId,
-        userRole,
-      );
+      const data = await dashboardAggregationService.getExecutiveSummary(tenantId, userRole);
       return reply.send({ success: true, data });
     } catch (error) {
       request.log.error(
@@ -103,10 +113,7 @@ class DashboardFastifyController {
       }
       const tenantId = request.user.tenantId;
       const { branchId } = request.query;
-      const data = await dashboardAggregationService.getInventoryInsights(
-        tenantId,
-        branchId,
-      );
+      const data = await dashboardAggregationService.getInventoryInsights(tenantId, branchId);
       return reply.send({ success: true, data });
     } catch (error) {
       request.log.error(

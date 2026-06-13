@@ -23,11 +23,25 @@ export function normalizeInvoice(invoice) {
       }
     : null;
 
+  const safeTimestamp = (val) => {
+    if (!val) return new Date();
+    const date = new Date(val);
+    return isNaN(date.getTime()) ? new Date() : date;
+  };
+
+  const timestamp = safeTimestamp(invoice.createdAt || invoice.soldAt);
+
   return {
     id: invoice.id,
     invoiceId: invoice.invoiceId || invoice.id,
     invoiceNumber: invoice.invoiceNumber || invoice.billNumber || `INV-${invoice.id.slice(0, 8)}`,
-    date: invoice.createdAt || invoice.soldAt || new Date().toISOString(),
+    createdAt: timestamp.toISOString(),
+    date: timestamp.toISOString().split('T')[0],
+    time: timestamp.toLocaleTimeString('en-US', {
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: true,
+    }),
     status: invoice.status,
     paymentStatus: invoice.paymentStatus,
     paymentMethod:

@@ -5,6 +5,8 @@ const redisUrl = process.env.REDIS_URL || 'redis://127.0.0.1:6379';
 
 let activeClient = null;
 
+const bullRedisClients = [];
+
 const getActiveClient = () => {
   if (!activeClient || activeClient.status === 'end') {
     activeClient = new Redis(redisUrl, {
@@ -47,7 +49,11 @@ const redisClientProxy = new Proxy(
 );
 
 const getBullRedis = () => {
-  const client = getActiveClient();
+  const client = new Redis(redisUrl, {
+    maxRetriesPerRequest: null,
+    lazyConnect: true,
+  });
+  bullRedisClients.push(client);
   return client;
 };
 
@@ -63,7 +69,10 @@ export const connectRedis = async () => {
       await client.config('SET', 'maxmemory-policy', 'noeviction');
       logger.info('Redis maxmemory-policy set to noeviction successfully');
     } catch (configErr) {
-      logger.warn({ err: configErr }, 'Failed to set Redis maxmemory-policy to noeviction dynamically');
+      logger.warn(
+        { err: configErr },
+        'Failed to set Redis maxmemory-policy to noeviction dynamically',
+      );
     }
     return client;
   } catch (err) {
@@ -72,6 +81,18 @@ export const connectRedis = async () => {
 };
 
 export const quitRedis = async () => {
+  for (const client of bullRedisClients) {
+    if (client.status !== 'end') {
+      try {
+        client.removeAllListeners();
+        await client.quit();
+      } catch (err) {
+        logger.error({ err }, 'Redis client quit failed');
+      }
+    }
+  }
+  bullRedisClients.length = 0;
+
   if (activeClient && activeClient.status !== 'end') {
     try {
       activeClient.removeAllListeners();

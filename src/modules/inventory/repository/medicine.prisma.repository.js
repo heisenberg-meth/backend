@@ -57,18 +57,38 @@ class MedicinePrismaRepository {
       const thirtyDaysLater = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
 
       const filtered = allMedicines.filter((m) => {
-        const inv = m.inventory?.[0];
-        const currentStock = inv?.currentStock ? Number(inv.currentStock) : 0;
-        const reorderPt = inv?.reorderPoint
-          ? Number(inv.reorderPoint)
-          : m.reorderLevel
-            ? Number(m.reorderLevel)
-            : 10;
+        let currentStock = 0;
+        let reorderPt = m.reorderLevel ? Number(m.reorderLevel) : 10;
+
+        if (targetBranchId) {
+          const inv = m.inventory?.[0];
+          currentStock = inv?.currentStock ? Number(inv.currentStock) : 0;
+          reorderPt = inv?.reorderPoint
+            ? Number(inv.reorderPoint)
+            : m.reorderLevel
+              ? Number(m.reorderLevel)
+              : 10;
+        } else {
+          currentStock =
+            m.inventory?.reduce(
+              (sum, inv) => sum + (inv.currentStock ? Number(inv.currentStock) : 0),
+              0,
+            ) || 0;
+          reorderPt =
+            m.inventory && m.inventory.length > 0
+              ? Math.max(
+                  ...m.inventory.map((inv) => (inv.reorderPoint ? Number(inv.reorderPoint) : 0)),
+                  m.reorderLevel ? Number(m.reorderLevel) : 10,
+                )
+              : m.reorderLevel
+                ? Number(m.reorderLevel)
+                : 10;
+        }
 
         const latestBatch = m.inventoryBatches?.[0] || null;
         const expDate = latestBatch?.expiryDate ? new Date(latestBatch.expiryDate) : null;
 
-        if (lowStock && !(currentStock <= reorderPt)) {
+        if (lowStock && !(currentStock > 0 && currentStock <= reorderPt)) {
           return false;
         }
 
@@ -125,21 +145,48 @@ class MedicinePrismaRepository {
     }
 
     const formattedMedicines = medicines.map((m) => {
-      const inv = m.inventory?.[0] || null;
       const latestBatch = m.inventoryBatches?.[0] || null;
 
       // Helper to safely convert Decimal to Number
       const toNum = (val) => (val ? Number(val) : 0);
 
+      let stock = 0;
+      let reservedStock = 0;
+      let reorderLevel = m.reorderLevel ?? 10;
+      let rackLocation = null;
+      let status = 'HEALTHY';
+
+      if (targetBranchId) {
+        const inv = m.inventory?.[0] || null;
+        stock = inv?.currentStock ?? 0;
+        reservedStock = inv?.reservedStock ?? 0;
+        reorderLevel = inv?.reorderPoint ?? m.reorderLevel ?? 10;
+        rackLocation = inv?.rackLocation ?? null;
+        status = inv?.status ?? 'HEALTHY';
+      } else {
+        stock = m.inventory?.reduce((sum, inv) => sum + (inv.currentStock ?? 0), 0) ?? 0;
+        reservedStock = m.inventory?.reduce((sum, inv) => sum + (inv.reservedStock ?? 0), 0) ?? 0;
+        reorderLevel =
+          m.inventory && m.inventory.length > 0
+            ? Math.max(...m.inventory.map((inv) => inv.reorderPoint ?? 0), m.reorderLevel ?? 10)
+            : (m.reorderLevel ?? 10);
+        rackLocation =
+          m.inventory
+            ?.map((inv) => inv.rackLocation)
+            .filter(Boolean)
+            .join(', ') || null;
+        status = m.inventory?.some((inv) => inv.status === 'CRITICAL') ? 'CRITICAL' : 'HEALTHY';
+      }
+
       return {
         ...m,
         // Flat standard fields
-        stock: inv?.currentStock ?? 0,
-        availableStock: (inv?.currentStock ?? 0) - (inv?.reservedStock ?? 0),
-        reservedStock: inv?.reservedStock ?? 0,
-        reorderLevel: inv?.reorderPoint ?? m.reorderLevel ?? 10,
-        rackLocation: inv?.rackLocation ?? null,
-        status: inv?.status ?? 'HEALTHY',
+        stock,
+        availableStock: stock - reservedStock,
+        reservedStock,
+        reorderLevel,
+        rackLocation,
+        status,
 
         // Batch info - convert Decimal to Number for JSON serialization
         batchId: latestBatch?.id ?? null,
@@ -149,8 +196,8 @@ class MedicinePrismaRepository {
         purchasePrice: toNum(latestBatch?.purchasePrice),
 
         // Backward compatibility
-        currentStock: inv?.currentStock ?? 0,
-        reorderPoint: inv?.reorderPoint ?? 10,
+        currentStock: stock,
+        reorderPoint: reorderLevel,
       };
     });
 
@@ -177,17 +224,50 @@ class MedicinePrismaRepository {
 
     if (!medicine) return null;
 
-    const inv = medicine.inventory[0];
+    let stock = 0;
+    let reservedStock = 0;
+    let reorderLevel = medicine.reorderLevel ?? 10;
+    let rackLocation = null;
+    let status = 'HEALTHY';
+
+    if (targetBranchId) {
+      const inv = medicine.inventory?.[0] || null;
+      stock = inv?.currentStock ?? 0;
+      reservedStock = inv?.reservedStock ?? 0;
+      reorderLevel = inv?.reorderPoint ?? medicine.reorderLevel ?? 10;
+      rackLocation = inv?.rackLocation ?? null;
+      status = inv?.status ?? 'HEALTHY';
+    } else {
+      stock = medicine.inventory?.reduce((sum, inv) => sum + (inv.currentStock ?? 0), 0) ?? 0;
+      reservedStock =
+        medicine.inventory?.reduce((sum, inv) => sum + (inv.reservedStock ?? 0), 0) ?? 0;
+      reorderLevel =
+        medicine.inventory && medicine.inventory.length > 0
+          ? Math.max(
+              ...medicine.inventory.map((inv) => inv.reorderPoint ?? 0),
+              medicine.reorderLevel ?? 10,
+            )
+          : (medicine.reorderLevel ?? 10);
+      rackLocation =
+        medicine.inventory
+          ?.map((inv) => inv.rackLocation)
+          .filter(Boolean)
+          .join(', ') || null;
+      status = medicine.inventory?.some((inv) => inv.status === 'CRITICAL')
+        ? 'CRITICAL'
+        : 'HEALTHY';
+    }
+
     const latestBatch = medicine.inventoryBatches[0];
     return {
       ...medicine,
       // Flat standard fields for frontend
-      stock: inv?.currentStock || 0,
-      availableStock: (inv?.currentStock || 0) - (inv?.reservedStock || 0),
-      reservedStock: inv?.reservedStock || 0,
-      reorderLevel: inv?.reorderPoint || medicine.reorderLevel || 10,
-      rackLocation: inv?.rackLocation || null,
-      status: inv?.status || 'HEALTHY',
+      stock,
+      availableStock: stock - reservedStock,
+      reservedStock,
+      reorderLevel,
+      rackLocation,
+      status,
 
       // Latest batch info flattened
       batchId: latestBatch?.id || null,
@@ -197,8 +277,8 @@ class MedicinePrismaRepository {
       purchasePrice: latestBatch?.purchasePrice || 0,
 
       // Legacy compatibility
-      currentStock: inv?.currentStock || 0,
-      reorderPoint: inv?.reorderPoint || 10,
+      currentStock: stock,
+      reorderPoint: reorderLevel,
     };
   }
 
@@ -247,14 +327,16 @@ class MedicinePrismaRepository {
   }
 
   async findByBarcode(barcode, tenantId, branchId = null) {
+    const targetBranchId = branchId === 'null' || !branchId ? undefined : branchId;
+
     const medicine = await prisma.medicine.findFirst({
       where: { barcode, tenantId, deletedAt: null },
       include: {
         inventory: {
-          where: branchId ? { branchId } : {},
+          where: targetBranchId ? { branchId: targetBranchId } : {},
         },
         inventoryBatches: {
-          where: { ...(branchId ? { branchId } : {}), deletedAt: null },
+          where: { ...(targetBranchId ? { branchId: targetBranchId } : {}), deletedAt: null },
           orderBy: { expiryDate: 'asc' },
         },
       },
@@ -262,11 +344,23 @@ class MedicinePrismaRepository {
 
     if (!medicine) return null;
 
-    const inv = medicine.inventory[0];
+    let stock = 0;
+    let reservedStock = 0;
+
+    if (targetBranchId) {
+      const inv = medicine.inventory?.[0] || null;
+      stock = inv?.currentStock ?? 0;
+      reservedStock = inv?.reservedStock ?? 0;
+    } else {
+      stock = medicine.inventory?.reduce((sum, inv) => sum + (inv.currentStock ?? 0), 0) ?? 0;
+      reservedStock =
+        medicine.inventory?.reduce((sum, inv) => sum + (inv.reservedStock ?? 0), 0) ?? 0;
+    }
+
     return {
       ...medicine,
-      currentStock: inv?.currentStock || 0,
-      availableStock: (inv?.currentStock || 0) - (inv?.reservedStock || 0),
+      currentStock: stock,
+      availableStock: stock - reservedStock,
     };
   }
 

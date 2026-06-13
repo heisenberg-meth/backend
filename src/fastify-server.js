@@ -14,6 +14,7 @@ import {
 } from './modules/realtime-inventory/workers/inventory.worker.js';
 import { seal as sealQueueRegistry } from './config/queue-registry.js';
 import logger from './shared/utils/logger.js';
+import { initDashboardWorker } from './modules/dashboard/index.js';
 
 async function validateDatabaseHealth() {
   try {
@@ -180,13 +181,13 @@ const start = async () => {
     fastify.log.info(`Viyan MedAssist Fastify Backend running on port ${port}`);
 
     await validateDatabaseHealth();
-
     createInventoryQueue();
     createInventoryWorker();
     initAnalyticsWorker();
     initRiskWorker();
     startCommunicationWorker();
     initNotificationsModule();
+    initDashboardWorker();
     sealQueueRegistry();
     logger.info('[BOOT] Workers started — all systems operational');
   } catch (err) {

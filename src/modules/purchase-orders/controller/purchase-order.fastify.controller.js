@@ -103,7 +103,7 @@ class PurchaseOrderFastifyController {
         message: 'Inventory received and batches registered',
       });
     } catch (error) {
-      logger.error({ error, id, tenantId }, 'Failed to receive purchase order');
+      logger.error({ err: error, id, tenantId }, 'Failed to receive purchase order');
       return reply.code(400).send({
         success: false,
         error: error.message,
@@ -119,7 +119,9 @@ class PurchaseOrderFastifyController {
       return reply.send({ success: true, data: invoices });
     } catch (error) {
       logger.error({ error, tenantId }, 'Failed to get purchase invoices');
-      return reply.code(500).send({ success: false, error: 'Failed to retrieve purchase invoices' });
+      return reply
+        .code(500)
+        .send({ success: false, error: 'Failed to retrieve purchase invoices' });
     }
   }
 

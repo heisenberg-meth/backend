@@ -9,7 +9,16 @@ async function supplierReturnsRoutes(fastify) {
   fastify.get(
     '/expired/grouped',
     {
-      schema: { tags: ['Supplier Returns'], summary: 'Expired stock grouped by supplier' },
+      schema: {
+        tags: ['Supplier Returns'],
+        summary: 'Expired stock grouped by supplier',
+        querystring: {
+          type: 'object',
+          properties: {
+            branchId: { type: 'string', format: 'uuid' },
+          },
+        },
+      },
       preHandler: [requirePermission('inventory.read')],
     },
     supplierReturnController.getExpiredGroupedBySupplier,
@@ -18,7 +27,16 @@ async function supplierReturnsRoutes(fastify) {
   fastify.get(
     '/expired/summary',
     {
-      schema: { tags: ['Supplier Returns'], summary: 'Expired inventory summary' },
+      schema: {
+        tags: ['Supplier Returns'],
+        summary: 'Expired inventory summary',
+        querystring: {
+          type: 'object',
+          properties: {
+            branchId: { type: 'string', format: 'uuid' },
+          },
+        },
+      },
       preHandler: [requirePermission('inventory.read')],
     },
     supplierReturnController.getExpiredInventorySummary,
@@ -36,16 +54,69 @@ async function supplierReturnsRoutes(fastify) {
   fastify.get(
     '/',
     {
-      schema: { tags: ['Supplier Returns'], summary: 'List supplier returns' },
+      schema: {
+        tags: ['Supplier Returns'],
+        summary: 'List supplier returns',
+        querystring: {
+          type: 'object',
+          properties: {
+            page: { type: 'integer', default: 1 },
+            limit: { type: 'integer', default: 20 },
+            status: { type: 'string' },
+            supplierId: { type: 'string', format: 'uuid' },
+          },
+        },
+      },
       preHandler: [requirePermission('purchases.read')],
     },
     supplierReturnController.listReturns,
   );
 
+  const idParam = {
+    type: 'object',
+    properties: {
+      id: { type: 'string', format: 'uuid' },
+    },
+    required: ['id'],
+  };
+
+  const supplierIdParam = {
+    type: 'object',
+    properties: {
+      supplierId: { type: 'string', format: 'uuid' },
+    },
+    required: ['supplierId'],
+  };
+
+  fastify.get(
+    '/credit-notes',
+    {
+      schema: {
+        tags: ['Supplier Returns'],
+        summary: 'List credit notes',
+        querystring: {
+          type: 'object',
+          properties: {
+            page: { type: 'integer', default: 1 },
+            limit: { type: 'integer', default: 20 },
+            supplierId: { type: 'string', format: 'uuid' },
+            status: { type: 'string' },
+          },
+        },
+      },
+      preHandler: [requirePermission('purchases.read')],
+    },
+    supplierReturnController.listCreditNotes,
+  );
+
   fastify.get(
     '/:id',
     {
-      schema: { tags: ['Supplier Returns'], summary: 'Get supplier return detail' },
+      schema: {
+        tags: ['Supplier Returns'],
+        summary: 'Get supplier return detail',
+        params: idParam,
+      },
       preHandler: [requirePermission('purchases.read')],
     },
     supplierReturnController.getReturnDetail,
@@ -54,7 +125,11 @@ async function supplierReturnsRoutes(fastify) {
   fastify.patch(
     '/:id/status',
     {
-      schema: { tags: ['Supplier Returns'], summary: 'Update return status' },
+      schema: {
+        tags: ['Supplier Returns'],
+        summary: 'Update return status',
+        params: idParam,
+      },
       preHandler: [requirePermission('purchases.update')],
     },
     supplierReturnController.updateReturnStatus,
@@ -63,25 +138,24 @@ async function supplierReturnsRoutes(fastify) {
   fastify.post(
     '/:id/credit-notes',
     {
-      schema: { tags: ['Supplier Returns'], summary: 'Generate credit note for return' },
+      schema: {
+        tags: ['Supplier Returns'],
+        summary: 'Generate credit note for return',
+        params: idParam,
+      },
       preHandler: [requirePermission('purchases.create')],
     },
     supplierReturnController.generateCreditNote,
   );
 
   fastify.get(
-    '/credit-notes',
-    {
-      schema: { tags: ['Supplier Returns'], summary: 'List credit notes' },
-      preHandler: [requirePermission('purchases.read')],
-    },
-    supplierReturnController.listCreditNotes,
-  );
-
-  fastify.get(
     '/suppliers/:supplierId/inward',
     {
-      schema: { tags: ['Supplier Returns'], summary: 'Supplier inward transactions' },
+      schema: {
+        tags: ['Supplier Returns'],
+        summary: 'Supplier inward transactions',
+        params: supplierIdParam,
+      },
       preHandler: [requirePermission('purchases.read')],
     },
     supplierReturnController.getSupplierInwardTransactions,
@@ -90,7 +164,11 @@ async function supplierReturnsRoutes(fastify) {
   fastify.get(
     '/suppliers/:supplierId/returns',
     {
-      schema: { tags: ['Supplier Returns'], summary: 'Supplier return transactions' },
+      schema: {
+        tags: ['Supplier Returns'],
+        summary: 'Supplier return transactions',
+        params: supplierIdParam,
+      },
       preHandler: [requirePermission('purchases.read')],
     },
     supplierReturnController.getSupplierReturnTransactions,
@@ -99,7 +177,11 @@ async function supplierReturnsRoutes(fastify) {
   fastify.get(
     '/suppliers/:supplierId/ledger',
     {
-      schema: { tags: ['Supplier Returns'], summary: 'Supplier ledger' },
+      schema: {
+        tags: ['Supplier Returns'],
+        summary: 'Supplier ledger',
+        params: supplierIdParam,
+      },
       preHandler: [requirePermission('purchases.read')],
     },
     supplierReturnController.getSupplierLedger,

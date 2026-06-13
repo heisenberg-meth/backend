@@ -4,16 +4,22 @@ import stockRepository from '../repositories/stock.repository.js';
 import ledgerRepository from '../repositories/ledger.repository.js';
 
 class MovementService {
-  async stockOut(tenantId, { medicineId, quantity, type, branchId }, userId) {
+  async stockOut(tenantId, { medicineId, quantity, type, branchId, batchId }, userId) {
     return prisma.$transaction(async (tx) => {
+      const whereClause = {
+        medicineId,
+        quantity: { gt: 0 },
+        deletedAt: null,
+      };
+      if (batchId) {
+        whereClause.id = batchId;
+      } else {
+        whereClause.branchId = branchId;
+        whereClause.status = 'ACTIVE';
+      }
+
       const batches = await tx.inventoryBatch.findMany({
-        where: {
-          medicineId,
-          branchId,
-          status: 'ACTIVE',
-          quantity: { gt: 0 },
-          deletedAt: null,
-        },
+        where: whereClause,
         orderBy: { expiryDate: 'asc' },
       });
 
@@ -42,13 +48,14 @@ class MovementService {
       }
 
       const totalDeducted = quantity - remaining;
+      const targetBranchId = branchId || batches[0]?.branchId;
 
       await ledgerRepository.createTransaction(
         {
           tenantId,
           medicineId,
           batchId: deductions[0]?.batchId,
-          branchId,
+          branchId: targetBranchId,
           type: type || 'SALE',
           quantity: totalDeducted,
           previousStock: batches.reduce((s, b) => s + b.quantity, 0),
@@ -58,14 +65,23 @@ class MovementService {
         tx,
       );
 
-      await tx.inventory.update({
-        where: {
-          tenantId_branchId_medicineId: { tenantId, branchId, medicineId },
-        },
-        data: {
-          currentStock: { decrement: totalDeducted },
-        },
-      });
+      if (targetBranchId) {
+        const existingInventory = await tx.inventory.findFirst({
+          where: {
+            tenantId,
+            branchId: targetBranchId,
+            medicineId,
+          },
+        });
+        if (existingInventory) {
+          await tx.inventory.update({
+            where: { id: existingInventory.id },
+            data: {
+              currentStock: { decrement: totalDeducted },
+            },
+          });
+        }
+      }
 
       logger.info({ tenantId, medicineId, quantity: totalDeducted, type }, 'Stock out completed');
 
@@ -179,6 +195,8 @@ class MovementService {
         throw new Error('Insufficient stock');
       }
 
+      const resolvedBranchId = branchId || lockedBatches[0].branchId || null;
+
       const updatedBatch = await client.inventoryBatch.update({
         where: { id: batchId },
         data: {
@@ -192,7 +210,7 @@ class MovementService {
           tenantId,
           medicineId,
           batchId,
-          branchId,
+          branchId: resolvedBranchId,
           type: movementType,
           quantity: Math.abs(quantity),
           previousStock: updatedBatch.quantity - quantity,
@@ -205,14 +223,31 @@ class MovementService {
         client,
       );
 
-      await client.inventory.update({
+      const existingInventory = await client.inventory.findFirst({
         where: {
-          tenantId_branchId_medicineId: { tenantId, branchId, medicineId },
-        },
-        data: {
-          currentStock: { increment: quantity },
+          tenantId,
+          branchId: resolvedBranchId,
+          medicineId,
         },
       });
+
+      if (existingInventory) {
+        await client.inventory.update({
+          where: { id: existingInventory.id },
+          data: {
+            currentStock: { increment: quantity },
+          },
+        });
+      } else {
+        await client.inventory.create({
+          data: {
+            tenantId,
+            branchId: resolvedBranchId,
+            medicineId,
+            currentStock: quantity,
+          },
+        });
+      }
 
       logger.info(
         { tenantId, medicineId, batchId, movementType, quantity },

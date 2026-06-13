@@ -675,6 +675,8 @@ model Medicine {
   @@index([tenantId, dosageForm])
   @@index([tenantId, scheduleType])
   @@index([tenantId, deletedAt])
+  @@index([tenantId, deletedAt, isActive])
+  @@index([tenantId, isActive])
 }
 
 model MedicinePricing {
@@ -840,6 +842,7 @@ model InventoryBatch {
   @@index([tenantId, branchId, medicineId, status, expiryDate], map: "idx_batch_fefo")
   @@index([tenantId, deletedAt])
   @@index([tenantId, status, expiryDate])
+  @@index([tenantId, branchId, quantity, expiryDate])
   @@index([barcode])
 }
 
@@ -1085,6 +1088,7 @@ model Supplier {
   @@index([tenantId, supplierType])
   @@index([tenantId, status])
   @@index([tenantId, isPreferred])
+  @@index([tenantId, deletedAt])
   @@index([licenseExpiry])
 }
 
@@ -1214,6 +1218,7 @@ model SupplierReturn {
   items        SupplierReturnItem[]
 
   @@unique([tenantId, returnNumber])
+  @@index([tenantId, status])
   @@index([tenantId, supplierId, status])
   @@index([tenantId, createdAt])
 }
@@ -1255,6 +1260,7 @@ model SupplierCreditNote {
   tenant           Tenant           @relation(fields: [tenantId], references: [id])
 
   @@unique([tenantId, creditNoteNumber])
+  @@index([tenantId, status])
   @@index([tenantId, supplierId, status])
 }
 
@@ -1299,6 +1305,7 @@ model PurchaseOrder {
   @@unique([tenantId, orderNumber])
   @@index([tenantId, status])
   @@index([tenantId, supplierId])
+  @@index([tenantId, status, deletedAt])
 }
 
 model PurchaseOrderApproval {
@@ -1452,6 +1459,10 @@ model Patient {
 
   @@unique([tenantId, patientCode])
   @@index([tenantId, phone])
+  @@index([tenantId, fullName])
+  @@index([tenantId, deletedAt])
+  @@index([tenantId, status])
+  @@index([tenantId, createdAt])
 }
 
 model PatientAuditLog {

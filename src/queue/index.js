@@ -1,5 +1,5 @@
 import { Queue, Worker } from 'bullmq';
-import { getBullRedis } from '../config/redis.js';
+import redisClientProxy, { getBullRedis } from '../config/redis.js';
 import logger from '../shared/utils/logger.js';
 import * as emailService from '../shared/services/email.service.js';
 import prisma from '../config/prisma.js';
@@ -83,7 +83,7 @@ const handlers = {
 
   'update-analytics': async (data) => {
     const cacheKey = `stats:dashboard:${data.tenantId}`;
-    await getBullRedis().del(cacheKey);
+    await redisClientProxy.del(cacheKey);
   },
 
   'daily-stock-snapshot': async () => {

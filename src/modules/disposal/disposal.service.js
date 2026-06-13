@@ -8,7 +8,7 @@ class DisposalService {
     const now = new Date();
     const where = {
       tenantId,
-      expiryDate: { lt: now },
+      OR: [{ expiryDate: { lt: now } }, { status: 'EXPIRED' }],
       quantity: { gt: 0 },
       deletedAt: null,
       medicine: { deletedAt: null },
@@ -49,9 +49,10 @@ class DisposalService {
   }
 
   async getExpiredOverview(tenantId, branchId = null) {
+    const now = new Date();
     const where = {
       tenantId,
-      expiryDate: { lt: new Date() },
+      OR: [{ expiryDate: { lt: now } }, { status: 'EXPIRED' }],
       quantity: { gt: 0 },
       deletedAt: null,
       medicine: { deletedAt: null },

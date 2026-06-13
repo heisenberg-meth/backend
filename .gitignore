@@ -24,3 +24,4 @@ permission_routes.txt
 all_queries.txt
 docs/auth-api-specification.md
 check_user.js
+staged_diff.diff

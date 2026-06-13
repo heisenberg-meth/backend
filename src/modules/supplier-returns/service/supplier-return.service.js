@@ -70,65 +70,80 @@ class SupplierReturnService {
       throw new Error(`Cannot transition from ${returnRecord.status} to ${status}`);
     }
 
-    if (status === 'APPROVED') {
-      const items =
-        returnRecord.items?.length > 0
-          ? returnRecord.items
-          : [
-              {
-                batchId: returnRecord.batchId,
-                medicineId: returnRecord.medicineId,
-                quantity: returnRecord.quantity,
-              },
-            ];
+    return prisma.$transaction(async (tx) => {
+      if (status === 'APPROVED') {
+        const items =
+          returnRecord.items?.length > 0
+            ? returnRecord.items
+            : [
+                {
+                  batchId: returnRecord.batchId,
+                  medicineId: returnRecord.medicineId,
+                  quantity: returnRecord.quantity,
+                },
+              ];
 
-      const movements = [];
-      for (const item of items) {
-        if (item.batchId && item.quantity) {
-          try {
-            const movement = await movementService.stockOut(tenantId, {
-              medicineId: item.medicineId || returnRecord.medicineId,
-              batchId: item.batchId,
-              quantity: item.quantity,
-              branchId: null,
-              referenceType: 'SUPPLIER_RETURN',
-              reason: 'Supplier Return - Approved',
-            });
-            movements.push(movement);
+        for (const item of items) {
+          if (item.batchId && item.quantity) {
+            // Get branchId from the batch if not directly available
+            let branchId = returnRecord.branchId;
+            if (!branchId && item.batch) {
+              branchId = item.batch.branchId;
+            }
 
-            await supplierReturnRepository.recordLedgerEntry(
+            await movementService.recordMovement(
               tenantId,
-              returnRecord.supplierId,
-              'CREDIT',
-              Number(returnRecord.returnAmount || 0),
-              'SUPPLIER_RETURN',
-              id,
-              `Supplier return ${returnRecord.returnNumber}`,
-              null,
-            );
-          } catch (err) {
-            logger.error(
-              { err, batchId: item.batchId },
-              'Failed to process stock out for return item',
+              {
+                medicineId: item.medicineId || returnRecord.medicineId,
+                batchId: item.batchId,
+                branchId: branchId || null,
+                movementType: 'SUPPLIER_RETURN',
+                quantity: -item.quantity, // Negative for deduction
+                referenceType: 'SUPPLIER_RETURN',
+                referenceId: id,
+                notes: 'Supplier Return - Approved',
+              },
+              userId,
+              tx,
             );
           }
         }
+
+        const totalReturnAmount = Number(returnRecord.returnAmount || 0);
+        if (totalReturnAmount > 0) {
+          await supplierReturnRepository.recordLedgerEntry(
+            tenantId,
+            returnRecord.supplierId,
+            'CREDIT',
+            totalReturnAmount,
+            'SUPPLIER_RETURN',
+            id,
+            `Supplier return ${returnRecord.returnNumber}`,
+            tx,
+          );
+        }
       }
-    }
 
-    if (status === 'COMPLETED') {
-      const creditData = {
-        amount: returnRecord.returnAmount || 0,
-        notes: 'Auto-generated on completion',
-      };
-      await supplierReturnRepository.createCreditNote(id, creditData);
-    }
+      if (status === 'COMPLETED') {
+        const creditData = {
+          amount: returnRecord.returnAmount || 0,
+          notes: 'Auto-generated on completion',
+        };
+        await supplierReturnRepository.createCreditNote(id, creditData, tx);
+      }
 
-    const updated = await supplierReturnRepository.updateReturnStatus(id, tenantId, status, userId);
-    logger.info(
-      `[SupplierReturn] ${returnRecord.returnNumber} status: ${returnRecord.status} -> ${status}`,
-    );
-    return updated;
+      const updated = await supplierReturnRepository.updateReturnStatus(
+        id,
+        tenantId,
+        status,
+        userId,
+        tx,
+      );
+      logger.info(
+        `[SupplierReturn] ${returnRecord.returnNumber} status: ${returnRecord.status} -> ${status}`,
+      );
+      return updated;
+    });
   }
 
   async generateCreditNote(returnId, data) {
@@ -159,7 +174,7 @@ class SupplierReturnService {
     const expired = await prisma.inventoryBatch.findMany({
       where: {
         tenantId,
-        expiryDate: { lt: new Date() },
+        OR: [{ expiryDate: { lt: new Date() } }, { status: 'EXPIRED' }],
         deletedAt: null,
         quantity: { gt: 0 },
       },

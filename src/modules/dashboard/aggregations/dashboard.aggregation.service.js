@@ -2,6 +2,7 @@ import prisma from '../../../config/prisma.js';
 import dashboardAggregationRepository from '../repositories/dashboard.aggregation.repository.js';
 import dashboardCacheManager from '../aggregations/dashboard.cache-manager.js';
 import logger from '../../../shared/utils/logger.js';
+import unifiedInventorySummaryService from '../../inventory/service/unified-inventory-summary.service.js';
 
 const safeMetric = async (fn, fallback = 0) => {
   try {
@@ -140,50 +141,21 @@ class DashboardAggregationService {
     const cached = await dashboardCacheManager.get(tenantId, 'low_stock_summary');
     if (cached) return cached;
 
-    const [metricsResult, topRisksResult, valueResult] = await Promise.allSettled([
-      dashboardAggregationRepository.getStockHealthMetrics(tenantId),
-      dashboardAggregationRepository.getTopLowStockMedicines(tenantId, 5),
-      prisma.$queryRaw`
-        SELECT SUM("quantity" * COALESCE("mrp", 0)) as "totalValue"
-        FROM "InventoryBatch" as "ib"
-        INNER JOIN "Medicine" as "m" ON "ib"."medicineId" = "m"."id"
-        WHERE "m"."tenantId" = ${tenantId}
-          AND "ib"."quantity" > 0
-          AND "ib"."deletedAt" IS NULL
-          AND "m"."deletedAt" IS NULL
-      `,
-    ]);
-
-    const metrics =
-      metricsResult.status === 'fulfilled'
-        ? metricsResult.value
-        : {
-            outOfStockCount: 0,
-            lowStockCount: 0,
-            expiringCount: 0,
-            totalBatches: 0,
-            totalStock: 0,
-          };
-    const topRisks = topRisksResult.status === 'fulfilled' ? topRisksResult.value : [];
-    const queryValue = valueResult.status === 'fulfilled' ? valueResult.value : null;
-    const inventoryValue = Number(queryValue?.[0]?.totalValue || 0);
-
-    const totalSku = await safeMetric(
-      () =>
-        prisma.medicine.count({
-          where: { tenantId, deletedAt: null, isActive: true },
-        }),
-      0,
-    );
+    const unifiedMetrics = await unifiedInventorySummaryService.getDashboardMetrics(tenantId);
+    const topRisks = await dashboardAggregationRepository.getTopLowStockMedicines(tenantId, 5);
 
     const data = {
-      critical: metrics.outOfStockCount,
-      low: metrics.lowStockCount,
-      outOfStock: metrics.outOfStockCount,
-      totalSku,
-      lowStock: metrics.lowStockCount,
-      expiring30d: metrics.expiringCount,
-      inventoryValue: inventoryValue,
+      critical: unifiedMetrics.outOfStockCount,
+      low: unifiedMetrics.lowStockCount,
+      outOfStock: unifiedMetrics.outOfStockCount,
+      totalSku: unifiedMetrics.totalSku,
+      lowStock: unifiedMetrics.lowStockCount,
+      expiring30d: unifiedMetrics.expiring30d,
+      inventoryValue: unifiedMetrics.inventoryValue,
+      totalStock: unifiedMetrics.totalStock,
+      expiredCount: unifiedMetrics.expiredCount,
+      expiringCount: unifiedMetrics.expiringCount,
+      inStockCount: unifiedMetrics.inStockCount,
       topRisks: topRisks.map((m) => ({
         medicine: m.name,
         totalStock: m.inventoryBatches
@@ -282,13 +254,14 @@ class DashboardAggregationService {
     if (!tenantId) {
       throw new Error('Tenant missing');
     }
-    const metrics = await dashboardAggregationRepository.getStockHealthMetrics(tenantId);
+    const unifiedMetrics = await unifiedInventorySummaryService.getDashboardMetrics(tenantId);
     return {
-      lowStockCount: metrics.lowStockCount,
-      outOfStockCount: metrics.outOfStockCount,
-      expiringSoonCount: metrics.expiringCount,
-      expiredCount: metrics.expiredCount,
-      totalStock: metrics.totalStock,
+      lowStockCount: unifiedMetrics.lowStockCount,
+      outOfStockCount: unifiedMetrics.outOfStockCount,
+      expiringSoonCount: unifiedMetrics.expiringCount,
+      expiredCount: unifiedMetrics.expiredCount,
+      totalStock: unifiedMetrics.totalStock,
+      inStockCount: unifiedMetrics.inStockCount,
       computedAt: new Date().toISOString(),
     };
   }

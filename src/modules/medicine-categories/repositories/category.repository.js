@@ -69,7 +69,7 @@ class CategoryRepository {
           include: {
             inventoryBatches: {
               where: { deletedAt: null, status: 'ACTIVE' },
-              select: { quantity: true, sellingPrice: true },
+              select: { quantity: true, purchasePrice: true },
             },
           },
         },
@@ -82,7 +82,8 @@ class CategoryRepository {
         0,
       );
       const totalValue = c.medicines.reduce(
-        (sum, m) => sum + m.inventoryBatches.reduce((bv, b) => bv + b.quantity * b.sellingPrice, 0),
+        (sum, m) =>
+          sum + m.inventoryBatches.reduce((bv, b) => bv + b.quantity * b.purchasePrice, 0),
         0,
       );
 

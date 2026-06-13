@@ -25,17 +25,21 @@ class StockInService {
 
     if (data.items) {
       for (const item of data.items) {
-        await movementService.stockIn(tenantId, {
-          medicineId: item.medicineId,
-          batchNumber: item.batchNumber,
-          quantity: item.quantity,
-          expiryDate: item.expiryDate,
-          purchasePrice: item.purchasePrice,
-          sellingPrice: item.sellingPrice,
-          branchId: data.branchId,
-          referenceType: 'PURCHASE',
-          referenceId: invoice.id,
-        });
+        await movementService.stockIn(
+          tenantId,
+          {
+            medicineId: item.medicineId,
+            batchNumber: item.batchNumber,
+            quantity: item.quantity,
+            expiryDate: item.expiryDate,
+            purchasePrice: item.purchasePrice,
+            sellingPrice: item.sellingPrice,
+            branchId: data.branchId,
+            referenceType: 'PURCHASE',
+            referenceId: invoice.id,
+          },
+          userId,
+        );
       }
     }
 

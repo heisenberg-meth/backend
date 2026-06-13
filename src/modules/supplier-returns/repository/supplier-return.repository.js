@@ -5,10 +5,7 @@ class SupplierReturnRepository {
     const batches = await prisma.inventoryBatch.findMany({
       where: {
         tenantId,
-        OR: [
-          { expiryDate: { lt: new Date() } },
-          { status: 'DAMAGED' },
-        ],
+        OR: [{ expiryDate: { lt: new Date() } }, { status: 'EXPIRED' }, { status: 'DAMAGED' }],
         deletedAt: null,
         supplierId: { not: null },
         quantity: { gt: 0 },
@@ -40,8 +37,10 @@ class SupplierReturnRepository {
     return Object.values(grouped);
   }
 
-  async createReturn(data, items, userId) {
-    const returnRecord = await prisma.supplierReturn.create({
+  async createReturn(data, items, userId, tx) {
+    const client = tx || prisma;
+    const totalAmount = items.reduce((sum, item) => sum + Number(item.lossAmount || 0), 0);
+    const returnRecord = await client.supplierReturn.create({
       data: {
         tenantId: data.tenantId,
         supplierId: data.supplierId,
@@ -49,6 +48,7 @@ class SupplierReturnRepository {
         status: 'DRAFT',
         createdBy: userId,
         notes: data.notes,
+        returnAmount: totalAmount,
         items: {
           create: items.map((item) => ({
             medicineId: item.medicineId,
@@ -70,11 +70,18 @@ class SupplierReturnRepository {
   }
 
   async findReturns(tenantId, { page = 1, limit = 20, status, supplierId }) {
-    const where = { tenantId };
-    if (status) where.status = status;
-    if (supplierId) where.supplierId = supplierId;
+    const pageNum = Number(page) || 1;
+    const limitNum = Number(limit) || 20;
+    const isUuid = (val) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(val);
+    const validStatuses = ['DRAFT', 'PENDING', 'APPROVED', 'PICKED_UP', 'COMPLETED', 'REJECTED'];
+    const statusVal = status && validStatuses.includes(status.toUpperCase()) ? status.toUpperCase() : undefined;
+    const supplierIdVal = supplierId && isUuid(supplierId) ? String(supplierId) : undefined;
 
-    const skip = (page - 1) * limit;
+    const where = { tenantId };
+    if (statusVal) where.status = statusVal;
+    if (supplierIdVal) where.supplierId = supplierIdVal;
+
+    const skip = (pageNum - 1) * limitNum;
     const [returns, total] = await Promise.all([
       prisma.supplierReturn.findMany({
         where,
@@ -87,12 +94,18 @@ class SupplierReturnRepository {
         },
         orderBy: { createdAt: 'desc' },
         skip,
-        take: limit,
+        take: limitNum,
       }),
       prisma.supplierReturn.count({ where }),
     ]);
 
-    return { returns, total, page, limit, totalPages: Math.ceil(total / limit) };
+    return {
+      returns,
+      total,
+      page: pageNum,
+      limit: limitNum,
+      totalPages: Math.ceil(total / limitNum),
+    };
   }
 
   async findReturnById(id, tenantId) {
@@ -103,7 +116,7 @@ class SupplierReturnRepository {
         items: {
           include: {
             medicine: { select: { id: true, name: true, genericName: true } },
-            batch: { select: { id: true, batchNumber: true, expiryDate: true } },
+            batch: { select: { id: true, batchNumber: true, expiryDate: true, branchId: true } },
           },
         },
         creditNotes: true,
@@ -113,7 +126,8 @@ class SupplierReturnRepository {
     });
   }
 
-  async updateReturnStatus(id, tenantId, status, userId) {
+  async updateReturnStatus(id, tenantId, status, userId, tx) {
+    const client = tx || prisma;
     const updateData = { status };
     if (status === 'APPROVED') {
       updateData.approvedAt = new Date();
@@ -121,7 +135,7 @@ class SupplierReturnRepository {
     }
     if (status === 'PICKED_UP') updateData.pickedUpAt = new Date();
 
-    return prisma.supplierReturn.update({
+    return client.supplierReturn.update({
       where: { id },
       data: updateData,
       include: {
@@ -149,8 +163,9 @@ class SupplierReturnRepository {
     return `${prefix}${String(nextSeq).padStart(5, '0')}`;
   }
 
-  async createCreditNote(returnId, data) {
-    const returnRecord = await prisma.supplierReturn.findUnique({
+  async createCreditNote(returnId, data, tx) {
+    const client = tx || prisma;
+    const returnRecord = await client.supplierReturn.findUnique({
       where: { id: returnId },
       select: { tenantId: true, supplierId: true, returnAmount: true },
     });
@@ -158,7 +173,7 @@ class SupplierReturnRepository {
 
     const date = new Date();
     const prefix = `CN-${date.getFullYear()}-`;
-    const lastNote = await prisma.supplierCreditNote.findFirst({
+    const lastNote = await client.supplierCreditNote.findFirst({
       where: { tenantId: returnRecord.tenantId, creditNoteNumber: { startsWith: prefix } },
       orderBy: { creditNoteNumber: 'desc' },
       select: { creditNoteNumber: true },
@@ -170,7 +185,7 @@ class SupplierReturnRepository {
     }
     const creditNoteNumber = `${prefix}${String(nextSeq).padStart(5, '0')}`;
 
-    return prisma.supplierCreditNote.create({
+    return client.supplierCreditNote.create({
       data: {
         tenantId: returnRecord.tenantId,
         supplierId: returnRecord.supplierId,
@@ -187,11 +202,18 @@ class SupplierReturnRepository {
   }
 
   async findCreditNotes(tenantId, { page = 1, limit = 20, supplierId, status }) {
-    const where = { tenantId };
-    if (supplierId) where.supplierId = supplierId;
-    if (status) where.status = status;
+    const pageNum = Number(page) || 1;
+    const limitNum = Number(limit) || 20;
+    const isUuid = (val) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(val);
+    const validStatuses = ['DRAFT', 'PENDING', 'APPROVED', 'PICKED_UP', 'COMPLETED', 'REJECTED'];
+    const statusVal = status && validStatuses.includes(status.toUpperCase()) ? status.toUpperCase() : undefined;
+    const supplierIdVal = supplierId && isUuid(supplierId) ? String(supplierId) : undefined;
 
-    const skip = (page - 1) * limit;
+    const where = { tenantId };
+    if (supplierIdVal) where.supplierId = supplierIdVal;
+    if (statusVal) where.status = statusVal;
+
+    const skip = (pageNum - 1) * limitNum;
     const [notes, total] = await Promise.all([
       prisma.supplierCreditNote.findMany({
         where,
@@ -201,16 +223,24 @@ class SupplierReturnRepository {
         },
         orderBy: { issuedAt: 'desc' },
         skip,
-        take: limit,
+        take: limitNum,
       }),
       prisma.supplierCreditNote.count({ where }),
     ]);
 
-    return { notes, total, page, limit, totalPages: Math.ceil(total / limit) };
+    return {
+      notes,
+      total,
+      page: pageNum,
+      limit: limitNum,
+      totalPages: Math.ceil(total / limitNum),
+    };
   }
 
   async getSupplierInwardTransactions(supplierId, tenantId, { page = 1, limit = 20 }) {
-    const skip = (page - 1) * limit;
+    const pageNum = Number(page) || 1;
+    const limitNum = Number(limit) || 20;
+    const skip = (pageNum - 1) * limitNum;
     const where = { tenantId, supplierId, deletedAt: null };
 
     const [batches, total] = await Promise.all([
@@ -223,16 +253,24 @@ class SupplierReturnRepository {
         },
         orderBy: { createdAt: 'desc' },
         skip,
-        take: limit,
+        take: limitNum,
       }),
       prisma.inventoryBatch.count({ where }),
     ]);
 
-    return { transactions: batches, total, page, limit, totalPages: Math.ceil(total / limit) };
+    return {
+      transactions: batches,
+      total,
+      page: pageNum,
+      limit: limitNum,
+      totalPages: Math.ceil(total / limitNum),
+    };
   }
 
   async getSupplierReturnTransactions(supplierId, tenantId, { page = 1, limit = 20 }) {
-    const skip = (page - 1) * limit;
+    const pageNum = Number(page) || 1;
+    const limitNum = Number(limit) || 20;
+    const skip = (pageNum - 1) * limitNum;
     const where = { tenantId, supplierId };
 
     const [returns, total] = await Promise.all([
@@ -245,16 +283,24 @@ class SupplierReturnRepository {
         },
         orderBy: { createdAt: 'desc' },
         skip,
-        take: limit,
+        take: limitNum,
       }),
       prisma.supplierReturn.count({ where }),
     ]);
 
-    return { returns, total, page, limit, totalPages: Math.ceil(total / limit) };
+    return {
+      returns,
+      total,
+      page: pageNum,
+      limit: limitNum,
+      totalPages: Math.ceil(total / limitNum),
+    };
   }
 
   async getSupplierLedger(supplierId, tenantId, { page = 1, limit = 20 }) {
-    const skip = (page - 1) * limit;
+    const pageNum = Number(page) || 1;
+    const limitNum = Number(limit) || 20;
+    const skip = (pageNum - 1) * limitNum;
     const where = { tenantId, supplierId };
 
     const [entries, total] = await Promise.all([
@@ -262,7 +308,7 @@ class SupplierReturnRepository {
         where,
         orderBy: { createdAt: 'desc' },
         skip,
-        take: limit,
+        take: limitNum,
       }),
       prisma.supplierLedger.count({ where }),
     ]);
@@ -275,9 +321,9 @@ class SupplierReturnRepository {
     return {
       entries,
       total,
-      page,
-      limit,
-      totalPages: Math.ceil(total / limit),
+      page: pageNum,
+      limit: limitNum,
+      totalPages: Math.ceil(total / limitNum),
       summary: {
         totalDebit: summary._sum.debitAmount || 0,
         totalCredit: summary._sum.creditAmount || 0,

@@ -1,6 +1,7 @@
 import { ZodError } from 'zod';
 import { adminService } from '../service/admin.service.js';
 import { success, error as errorResponse } from '../../../shared/helpers/response.js';
+import env from '../../../config/env.js';
 import {
   adminLoginSchema,
   adminRefreshSchema,
@@ -10,21 +11,23 @@ import {
   auditLogQuerySchema,
 } from '../validators/admin.validator.js';
 
+const isProduction = env.nodeEnv === 'production';
+
 const COOKIE_OPTIONS = {
   path: '/',
   httpOnly: true,
-  sameSite: 'none',
-  secure: true,
-  partitioned: true,
+  sameSite: isProduction ? 'none' : 'lax',
+  secure: isProduction,
+  partitioned: isProduction,
   maxAge: 30 * 24 * 60 * 60,
 };
 
 const ACCESS_COOKIE_OPTIONS = {
   path: '/',
   httpOnly: true,
-  sameSite: 'none',
-  secure: true,
-  partitioned: true,
+  sameSite: isProduction ? 'none' : 'lax',
+  secure: isProduction,
+  partitioned: isProduction,
   maxAge: 15 * 60,
 };
 

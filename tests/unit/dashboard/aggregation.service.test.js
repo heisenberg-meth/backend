@@ -1,4 +1,4 @@
-import { jest , describe, afterEach, it, expect } from '@jest/globals';
+import { jest, describe, afterEach, it, expect } from '@jest/globals';
 
 const mockPrisma = {
   sale: {
@@ -35,6 +35,7 @@ const mockPrisma = {
     create: jest.fn(),
     updateMany: jest.fn(),
   },
+  $queryRaw: jest.fn().mockResolvedValue([{ count: 15, totalValue: 1000 }]),
 };
 
 const mockRedisClient = {
@@ -57,7 +58,8 @@ jest.unstable_mockModule('../../../src/config/redis.js', () => ({
 }));
 jest.unstable_mockModule('../../../src/shared/utils/logger.js', () => ({ default: mockLogger }));
 
-const { default: dashboardAggregationService } = await import('../../../src/modules/dashboard/aggregations/dashboard.aggregation.service.js');
+const { default: dashboardAggregationService } =
+  await import('../../../src/modules/dashboard/aggregations/dashboard.aggregation.service.js');
 
 describe('DashboardAggregationService', () => {
   const tenantId = 'tenant-1';
@@ -79,13 +81,16 @@ describe('DashboardAggregationService', () => {
     it('should compute overview if cache miss', async () => {
       mockRedisClient.get.mockResolvedValue(null);
       mockPrisma.dashboardSnapshot.findFirst.mockResolvedValue(null);
+      mockPrisma.$queryRaw.mockResolvedValueOnce([{ count: 10 }]);
       mockPrisma.sale.aggregate
         .mockResolvedValueOnce({ _sum: { totalAmount: 5000 }, _count: { id: 25 } })
         .mockResolvedValueOnce({ _sum: { totalAmount: 150000 }, _count: { id: 500 } });
       mockPrisma.stockAlert.count.mockResolvedValue(10);
       mockPrisma.inventoryBatch.count.mockResolvedValue(5);
       mockPrisma.purchaseOrder.count.mockResolvedValue(3);
-      mockPrisma.saleItem.groupBy.mockResolvedValue([{ medicineId: 'med-1', _sum: { quantity: 100 } }]);
+      mockPrisma.saleItem.groupBy.mockResolvedValue([
+        { medicineId: 'med-1', _sum: { quantity: 100 } },
+      ]);
       mockPrisma.medicine.findFirst.mockResolvedValue({ name: 'Paracetamol' });
 
       const result = await dashboardAggregationService.getOverview(tenantId);
@@ -100,7 +105,7 @@ describe('DashboardAggregationService', () => {
 
     it('should reject access for unauthorized roles', async () => {
       await expect(
-        dashboardAggregationService.getOverview(tenantId, null, 'VIEWER')
+        dashboardAggregationService.getOverview(tenantId, null, 'VIEWER'),
       ).rejects.toThrow('Insufficient permissions');
     });
   });
@@ -176,11 +181,32 @@ describe('DashboardAggregationService', () => {
       mockRedisClient.get.mockResolvedValue(null);
       mockPrisma.dashboardSnapshot.findFirst.mockResolvedValue(null);
       mockPrisma.stockAlert.findMany.mockResolvedValue([
-        { id: 'alert-1', severity: 'CRITICAL', message: 'Critical alert', medicine: { id: 'med-1', name: 'Medicine A' }, type: 'LOW_STOCK', createdAt: new Date() },
-        { id: 'alert-2', severity: 'LOW', message: 'Low alert', medicine: { id: 'med-2', name: 'Medicine B' }, type: 'LOW_STOCK', createdAt: new Date() },
+        {
+          id: 'alert-1',
+          severity: 'CRITICAL',
+          message: 'Critical alert',
+          medicine: { id: 'med-1', name: 'Medicine A' },
+          type: 'LOW_STOCK',
+          createdAt: new Date(),
+        },
+        {
+          id: 'alert-2',
+          severity: 'LOW',
+          message: 'Low alert',
+          medicine: { id: 'med-2', name: 'Medicine B' },
+          type: 'LOW_STOCK',
+          createdAt: new Date(),
+        },
       ]);
       mockPrisma.inventoryBatch.findMany.mockResolvedValue([
-        { id: 'batch-1', batchNumber: 'B001', quantity: 10, expiryDate: new Date('2024-01-01'), purchasePrice: 50, medicine: { id: 'med-3', name: 'Expired Med' } },
+        {
+          id: 'batch-1',
+          batchNumber: 'B001',
+          quantity: 10,
+          expiryDate: new Date('2024-01-01'),
+          purchasePrice: 50,
+          medicine: { id: 'med-3', name: 'Expired Med' },
+        },
       ]);
 
       const result = await dashboardAggregationService.getAlerts(tenantId);

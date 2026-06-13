@@ -4,6 +4,24 @@ const mockPrisma = {
   $transaction: jest.fn(async (callback) => {
     return callback(mockPrisma);
   }),
+  $queryRaw: jest.fn(async (query) => {
+    const queryString = Array.isArray(query) ? query.join('') : String(query);
+    if (queryString.includes('SequenceCounter') || queryString.includes('Sequence')) {
+      return [{ currentValue: 1 }];
+    }
+    if (queryString.includes('InventoryBatch')) {
+      return [
+        {
+          id: 'batch-1',
+          batchNumber: 'B1',
+          availableQuantity: 100,
+          status: 'ACTIVE',
+          expiryDate: new Date('2030-01-01'),
+        },
+      ];
+    }
+    return [];
+  }),
   branch: {
     findUnique: jest.fn().mockResolvedValue({ id: 'branch-1', gstNumber: '27AAAAA0000A1Z5' }),
   },
@@ -91,6 +109,9 @@ const mockPrisma = {
   },
   invoiceAuditLog: {
     create: jest.fn().mockResolvedValue({ id: 'log-1' }),
+  },
+  saleItem: {
+    create: jest.fn().mockResolvedValue({ id: 'sale-item-1' }),
   },
   sale: {
     create: jest.fn().mockResolvedValue({
@@ -271,8 +292,16 @@ describe('BillingService Integration Tests (Checkout)', () => {
       ],
     });
 
-    await expect(billingService.checkout(tenantId, data, userId)).rejects.toThrow(
-      'Insufficient stock',
-    );
+    mockPrisma.$queryRaw.mockResolvedValueOnce([{ currentValue: 1 }]).mockResolvedValueOnce([
+      {
+        id: 'batch-1',
+        batchNumber: 'B1',
+        availableQuantity: 10,
+        status: 'ACTIVE',
+        expiryDate: new Date('2030-01-01'),
+      },
+    ]);
+
+    await expect(billingService.checkout(tenantId, data, userId)).rejects.toThrow(/stock/i);
   });
 });
