@@ -3,6 +3,7 @@ import dashboardAggregationRepository from '../repositories/dashboard.aggregatio
 import dashboardCacheManager from '../aggregations/dashboard.cache-manager.js';
 import logger from '../../../shared/utils/logger.js';
 import unifiedInventorySummaryService from '../../inventory/service/unified-inventory-summary.service.js';
+import analyticsRepository from '../../analytics/repository/analytics.repository.js';
 
 const safeMetric = async (fn, fallback = 0) => {
   try {
@@ -179,7 +180,7 @@ class DashboardAggregationService {
       dashboardAggregationRepository.getTodaySales(tenantId),
       dashboardAggregationRepository.getMonthSales(tenantId),
       dashboardAggregationRepository.getPendingPurchaseOrders(tenantId),
-      prisma.supplier.count({ where: { tenantId, deletedAt: null } }),
+      analyticsRepository.getSupplierCount(tenantId),
     ]);
 
     const todaySales =

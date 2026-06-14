@@ -158,7 +158,7 @@ class DashboardService {
     const expiredBatches = await prisma.inventoryBatch.findMany({
       where: {
         medicine: { tenantId, deletedAt: null },
-        expiryDate: { lt: now },
+        OR: [{ expiryDate: { lt: now } }, { status: 'EXPIRED' }],
         quantity: { gt: 0 },
         deletedAt: null,
       },
@@ -174,9 +174,10 @@ class DashboardService {
 
     const expiringBatches = await prisma.inventoryBatch.findMany({
       where: {
-        medicine: { tenantId, deletedAt: null },
-        expiryDate: { gte: now, lte: thirtyDaysLater },
+        tenantId,
+        expiryDate: { gte: now, lt: thirtyDaysLater },
         quantity: { gt: 0 },
+        status: 'ACTIVE',
         deletedAt: null,
       },
       select: {

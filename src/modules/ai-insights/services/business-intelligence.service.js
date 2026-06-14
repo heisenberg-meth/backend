@@ -65,7 +65,9 @@ class BusinessIntelligenceService {
         where: {
           tenantId,
           status: 'ACTIVE',
-          expiryDate: { lte: new Date(Date.now() + 90 * 86400000) },
+          expiryDate: { gte: new Date(), lte: new Date(Date.now() + 90 * 86400000) },
+          quantity: { gt: 0 },
+          deletedAt: null,
         },
       }),
       prisma.inventoryBatch.aggregate({

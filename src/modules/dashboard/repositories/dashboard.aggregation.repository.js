@@ -1,5 +1,6 @@
 import { Prisma } from '@prisma/client';
 import prisma from '../../../config/prisma.js';
+import analyticsRepository from '../../analytics/repository/analytics.repository.js';
 import { PURCHASE_ORDER_STATUS } from '../../../shared/constants/purchase-order-status.js';
 
 class DashboardAggregationRepository {
@@ -116,21 +117,6 @@ class DashboardAggregationRepository {
     });
   }
 
-  async getExpiringMedicinesCount(tenantId, branchId = null) {
-    const now = new Date();
-    const thirtyDaysLater = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
-
-    const where = {
-      medicine: { tenantId, deletedAt: null },
-      expiryDate: { gte: now, lte: thirtyDaysLater },
-      quantity: { gt: 0 },
-      deletedAt: null,
-    };
-    if (branchId) where.branchId = branchId;
-
-    return prisma.inventoryBatch.count({ where });
-  }
-
   async getPendingPurchaseOrders(tenantId, branchId = null) {
     const where = {
       tenantId,
@@ -150,7 +136,6 @@ class DashboardAggregationRepository {
 
   async getStockHealthMetrics(tenantId, branchId = null) {
     const now = new Date();
-    const thirtyDaysLater = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
 
     const where = {
       medicine: { tenantId, deletedAt: null },
@@ -182,13 +167,7 @@ class DashboardAggregationRepository {
           quantity: { gt: 0 },
         },
       }),
-      prisma.inventoryBatch.count({
-        where: {
-          ...batchWhere,
-          expiryDate: { gte: now, lte: thirtyDaysLater },
-          quantity: { gt: 0 },
-        },
-      }),
+      analyticsRepository.getExpiring30Count(tenantId, branchId),
       prisma.medicine.count({
         where: medicineWhere,
       }),
@@ -291,7 +270,6 @@ class DashboardAggregationRepository {
       expiresAt: { gt: new Date() },
     };
     if (branchId) where.branchId = branchId;
-    else where.branchId = null;
 
     return prisma.dashboardSnapshot.findFirst({
       where,

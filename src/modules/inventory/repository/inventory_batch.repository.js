@@ -39,16 +39,27 @@ class InventoryBatchRepository {
   }
 
   async getNearExpiry(tenantId, days, branchId = null) {
+    const now = new Date();
     const thresholdDate = new Date();
     thresholdDate.setDate(thresholdDate.getDate() + days);
 
+    const where = {
+      tenantId,
+      branchId,
+      quantity: { gt: 0 },
+      deletedAt: null,
+    };
+
+    if (days === 0) {
+      where.expiryDate = { lte: thresholdDate };
+    } else {
+      where.expiryDate = { gte: now, lte: thresholdDate };
+      where.status = 'ACTIVE';
+    }
+
     return prisma.inventoryBatch.findMany({
       where: {
-        tenantId,
-        branchId,
-        expiryDate: { lte: thresholdDate },
-        quantity: { gt: 0 },
-        deletedAt: null,
+        ...where,
         medicine: {
           deletedAt: null,
         },

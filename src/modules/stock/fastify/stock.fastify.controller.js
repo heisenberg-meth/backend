@@ -64,6 +64,8 @@ class StockFastifyController {
           tenantId,
           expiryDate: { lte: thirtyDaysFromNow, gt: new Date() },
           quantity: { gt: 0 },
+          status: 'ACTIVE',
+          deletedAt: null,
         },
         include: { medicine: { select: { id: true, name: true, genericName: true } } },
         orderBy: { expiryDate: 'asc' },

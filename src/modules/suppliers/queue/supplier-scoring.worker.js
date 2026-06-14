@@ -131,6 +131,9 @@ async function scoreSingleSupplier(supplierId, tenantId) {
       supplierId,
       tenantId,
       expiryDate: { lte: new Date(now.getTime() + 90 * 24 * 60 * 60 * 1000), gte: now },
+      quantity: { gt: 0 },
+      status: 'ACTIVE',
+      deletedAt: null,
     },
   });
   const totalBatches = await prisma.inventoryBatch.count({

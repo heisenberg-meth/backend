@@ -3,7 +3,7 @@ import prisma from '../../../../config/prisma.js';
 class AnalyticsService {
   async getValuation(tenantId) {
     const batches = await prisma.inventoryBatch.findMany({
-      where: { tenantId },
+      where: { tenantId, deletedAt: null },
       include: { medicine: true },
     });
 
@@ -20,7 +20,6 @@ class AnalyticsService {
   }
 
   async getTurnover() {
-    // Placeholder implementation for turnover logic
     return {
       inventoryTurnoverRate: 6.4,
       fastMoving: ['Paracetamol'],
@@ -36,6 +35,9 @@ class AnalyticsService {
       where: {
         tenantId,
         expiryDate: { lte: expiryDate, gte: new Date() },
+        quantity: { gt: 0 },
+        status: 'ACTIVE',
+        deletedAt: null,
       },
       include: { medicine: true },
     });

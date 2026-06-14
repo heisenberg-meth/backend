@@ -2,97 +2,147 @@ import batchService from '../services/batch.service.js';
 
 class BatchFastifyController {
   async createBatch(request, reply) {
-    const data = {
-      ...request.body,
-      branchId: request.body.branchId || request.branchId,
-    };
-    const batch = await batchService.createBatch(data, request.tenantId, request.user.id);
-    return reply.code(201).send({ success: true, data: batch });
+    try {
+      const data = {
+        ...request.body,
+        branchId: request.body.branchId || request.branchId,
+      };
+      const batch = await batchService.createBatch(data, request.tenantId, request.user.id);
+      return reply.code(201).send({ success: true, data: batch });
+    } catch (error) {
+      request.log.error({ err: error, endpoint: 'batch-create' }, 'Batch error');
+      return reply.code(500).send({ success: false, message: error.message });
+    }
   }
 
   async getBatches(request, reply) {
-    const {
-      page = 1,
-      limit = 20,
-      status,
-      branchId,
-      supplierId,
-      medicineId,
-      medicine_id,
-      sortBy,
-      order,
-    } = request.query;
-    const result = await batchService.getBatches({
-      tenantId: request.tenantId,
-      status,
-      branchId,
-      supplierId,
-      medicineId: medicineId || medicine_id,
-      sortBy: sortBy || 'expiryDate',
-      order: order || 'asc',
-      skip: (parseInt(page) - 1) * parseInt(limit),
-      take: parseInt(limit),
-    });
-    return reply.send({ success: true, data: result });
+    try {
+      const {
+        page = 1,
+        limit = 20,
+        status,
+        branchId,
+        supplierId,
+        medicineId,
+        medicine_id,
+        sortBy,
+        order,
+      } = request.query;
+      const result = await batchService.getBatches({
+        tenantId: request.tenantId,
+        status,
+        branchId,
+        supplierId,
+        medicineId: medicineId || medicine_id,
+        sortBy: sortBy || 'expiryDate',
+        order: order || 'asc',
+        skip: (parseInt(page) - 1) * parseInt(limit),
+        take: parseInt(limit),
+      });
+      return reply.send({ success: true, data: result });
+    } catch (error) {
+      request.log.error({ err: error, endpoint: 'batch-list' }, 'Batch error');
+      return reply.code(500).send({ success: false, message: error.message });
+    }
   }
 
   async getBatchById(request, reply) {
-    const batch = await batchService.getBatch(request.params.id);
-    return reply.send({ success: true, data: batch });
+    try {
+      const batch = await batchService.getBatch(request.params.id);
+      return reply.send({ success: true, data: batch });
+    } catch (error) {
+      request.log.error({ err: error, endpoint: 'batch-by-id' }, 'Batch error');
+      return reply.code(500).send({ success: false, message: error.message });
+    }
   }
 
   async updateBatch(request, reply) {
-    const batch = await batchService.updateBatch(request.params.id, request.body, request.user.id);
-    return reply.send({ success: true, data: batch });
+    try {
+      const batch = await batchService.updateBatch(request.params.id, request.body, request.user.id);
+      return reply.send({ success: true, data: batch });
+    } catch (error) {
+      request.log.error({ err: error, endpoint: 'batch-update' }, 'Batch error');
+      return reply.code(500).send({ success: false, message: error.message });
+    }
   }
 
   async deleteBatch(request, reply) {
-    await batchService.deleteBatch(request.params.id, request.tenantId, request.user.id);
-    return reply.send({ success: true, message: 'Batch deleted successfully' });
+    try {
+      await batchService.deleteBatch(request.params.id, request.tenantId, request.user.id);
+      return reply.send({ success: true, message: 'Batch deleted successfully' });
+    } catch (error) {
+      request.log.error({ err: error, endpoint: 'batch-delete' }, 'Batch error');
+      return reply.code(500).send({ success: false, message: error.message });
+    }
   }
 
   async quarantineBatch(request, reply) {
-    const batch = await batchService.quarantineBatch(
-      request.params.id,
-      request.body.reason,
-      request.tenantId,
-      request.user.id,
-    );
-    return reply.send({ success: true, data: batch, message: 'Batch quarantined successfully' });
+    try {
+      const batch = await batchService.quarantineBatch(
+        request.params.id,
+        request.body.reason,
+        request.tenantId,
+        request.user.id,
+      );
+      return reply.send({ success: true, data: batch, message: 'Batch quarantined successfully' });
+    } catch (error) {
+      request.log.error({ err: error, endpoint: 'batch-quarantine' }, 'Batch error');
+      return reply.code(500).send({ success: false, message: error.message });
+    }
   }
 
   async recallBatch(request, reply) {
-    const batch = await batchService.recallBatch(
-      request.params.id,
-      request.body.reason,
-      request.tenantId,
-      request.user.id,
-    );
-    return reply.send({ success: true, data: batch, message: 'Batch recalled successfully' });
+    try {
+      const batch = await batchService.recallBatch(
+        request.params.id,
+        request.body.reason,
+        request.tenantId,
+        request.user.id,
+      );
+      return reply.send({ success: true, data: batch, message: 'Batch recalled successfully' });
+    } catch (error) {
+      request.log.error({ err: error, endpoint: 'batch-recall' }, 'Batch error');
+      return reply.code(500).send({ success: false, message: error.message });
+    }
   }
 
   async releaseQuarantine(request, reply) {
-    const batch = await batchService.releaseQuarantine(
-      request.params.id,
-      request.tenantId,
-      request.user.id,
-    );
-    return reply.send({ success: true, data: batch, message: 'Batch released from quarantine' });
+    try {
+      const batch = await batchService.releaseQuarantine(
+        request.params.id,
+        request.tenantId,
+        request.user.id,
+      );
+      return reply.send({ success: true, data: batch, message: 'Batch released from quarantine' });
+    } catch (error) {
+      request.log.error({ err: error, endpoint: 'batch-release-quarantine' }, 'Batch error');
+      return reply.code(500).send({ success: false, message: error.message });
+    }
   }
 
   async getFefoBatches(request, reply) {
-    const { quantity } = request.query;
-    const result = await batchService.getFefoBatches(
-      request.params.medicineId,
-      request.tenantId,
-      quantity,
-    );
-    return reply.send({ success: true, data: result });
+    try {
+      const { quantity } = request.query;
+      const result = await batchService.getFefoBatches(
+        request.params.medicineId,
+        request.tenantId,
+        quantity,
+      );
+      return reply.send({ success: true, data: result });
+    } catch (error) {
+      request.log.error({ err: error, endpoint: 'batch-fefo' }, 'Batch error');
+      return reply.code(500).send({ success: false, message: error.message });
+    }
   }
 
   async getQuarantined(request, reply) {
-    const batches = await batchService.getQuarantined(request.tenantId);
-    return reply.send({ success: true, data: batches });
+    try {
+      const batches = await batchService.getQuarantined(request.tenantId);
+      return reply.send({ success: true, data: batches });
+    } catch (error) {
+      request.log.error({ err: error, endpoint: 'batch-quarantined-list' }, 'Batch error');
+      return reply.code(500).send({ success: false, message: error.message });
+    }
   }
 }
 

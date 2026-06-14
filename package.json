@@ -7,7 +7,7 @@
   "scripts": {
     "start": "node src/fastify-server.js",
     "start:fastify": "node src/fastify-server.js",
-    "dev": "node src/fastify-server.js",
+    "dev": "node --watch src/fastify-server.js",
     "dev:fastify": "node --watch src/fastify-server.js",
     "test": "NODE_OPTIONS=--experimental-vm-modules jest --config jest.config.unit.js",
     "test:unit": "NODE_OPTIONS=--experimental-vm-modules jest --config jest.config.unit.js",

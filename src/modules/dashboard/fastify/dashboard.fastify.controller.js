@@ -1,5 +1,6 @@
 import prisma from '../../../config/prisma.js';
 import dashboardAggregationService from '../aggregations/dashboard.aggregation.service.js';
+import analyticsRepository from '../../analytics/repository/analytics.repository.js';
 
 class DashboardFastifyController {
   async getDashboardSummary(request, reply) {
@@ -34,15 +35,7 @@ class DashboardFastifyController {
           prisma.invoice.count({
             where: { tenantId, createdAt: { gte: today } },
           }),
-          prisma.inventoryBatch.count({
-            where: {
-              tenantId,
-              OR: [{ expiryDate: { lt: today } }, { status: 'EXPIRED' }],
-              quantity: { gt: 0 },
-              deletedAt: null,
-              medicine: { deletedAt: null, isActive: true },
-            },
-          }),
+          analyticsRepository.getExpiredProductCount(tenantId),
         ]);
 
       const todaySalesAgg =

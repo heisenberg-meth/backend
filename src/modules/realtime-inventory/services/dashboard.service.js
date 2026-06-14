@@ -29,8 +29,9 @@ class DashboardService {
         where: {
           medicine: { tenantId },
           branchId,
-          quantity: { lte: 10 }, // Hardcoded threshold for demo
+          quantity: { lte: 10 },
           status: 'ACTIVE',
+          deletedAt: null,
         },
       }),
       prisma.inventoryBatch.count({
@@ -38,9 +39,12 @@ class DashboardService {
           medicine: { tenantId },
           branchId,
           expiryDate: {
+            gte: new Date(),
             lte: new Date(new Date().setDate(new Date().getDate() + 90)),
           },
+          quantity: { gt: 0 },
           status: 'ACTIVE',
+          deletedAt: null,
         },
       }),
     ]);

@@ -2,121 +2,176 @@ import supplierReturnService from '../service/supplier-return.service.js';
 
 class SupplierReturnController {
   async getExpiredGroupedBySupplier(request, reply) {
-    const data = await supplierReturnService.getExpiredGroupedBySupplier(request.tenantId);
-    return reply.send({ success: true, data });
+    try {
+      const data = await supplierReturnService.getExpiredGroupedBySupplier(request.tenantId);
+      return reply.send({ success: true, data });
+    } catch (error) {
+      request.log.error({ err: error, endpoint: 'supplier-return-expired-grouped' }, 'Supplier return error');
+      return reply.code(500).send({ success: false, message: error.message });
+    }
   }
 
   async createReturn(request, reply) {
-    const returnRecord = await supplierReturnService.createReturn(
-      request.tenantId,
-      request.body,
-      request.user.id,
-    );
-    return reply.code(201).send({ success: true, data: returnRecord });
+    try {
+      const returnRecord = await supplierReturnService.createReturn(
+        request.tenantId,
+        request.body,
+        request.user.id,
+      );
+      return reply.code(201).send({ success: true, data: returnRecord });
+    } catch (error) {
+      request.log.error({ err: error, endpoint: 'supplier-return-create' }, 'Supplier return error');
+      return reply.code(500).send({ success: false, message: error.message });
+    }
   }
 
   async listReturns(request, reply) {
-    const result = await supplierReturnService.listReturns(request.tenantId, request.query);
-    return reply.send({
-      success: true,
-      data: result.returns,
-      pagination: {
-        page: result.page,
-        limit: result.limit,
-        total: result.total,
-        totalPages: result.totalPages,
-      },
-    });
+    try {
+      const result = await supplierReturnService.listReturns(request.tenantId, request.query);
+      return reply.send({
+        success: true,
+        data: result.returns,
+        pagination: {
+          page: result.page,
+          limit: result.limit,
+          total: result.total,
+          totalPages: result.totalPages,
+        },
+      });
+    } catch (error) {
+      request.log.error({ err: error, endpoint: 'supplier-return-list' }, 'Supplier return error');
+      return reply.code(500).send({ success: false, message: error.message });
+    }
   }
 
   async getReturnDetail(request, reply) {
-    const returnRecord = await supplierReturnService.getReturnDetail(
-      request.params.id,
-      request.tenantId,
-    );
-    return reply.send({ success: true, data: returnRecord });
+    try {
+      const returnRecord = await supplierReturnService.getReturnDetail(
+        request.params.id,
+        request.tenantId,
+      );
+      return reply.send({ success: true, data: returnRecord });
+    } catch (error) {
+      request.log.error({ err: error, endpoint: 'supplier-return-detail' }, 'Supplier return error');
+      return reply.code(500).send({ success: false, message: error.message });
+    }
   }
 
   async updateReturnStatus(request, reply) {
-    const updated = await supplierReturnService.updateStatus(
-      request.params.id,
-      request.tenantId,
-      request.body.status,
-      request.user.id,
-    );
-    return reply.send({ success: true, data: updated });
+    try {
+      const updated = await supplierReturnService.updateStatus(
+        request.params.id,
+        request.tenantId,
+        request.body.status,
+        request.user.id,
+      );
+      return reply.send({ success: true, data: updated });
+    } catch (error) {
+      request.log.error({ err: error, endpoint: 'supplier-return-update-status' }, 'Supplier return error');
+      return reply.code(500).send({ success: false, message: error.message });
+    }
   }
 
   async generateCreditNote(request, reply) {
-    const creditNote = await supplierReturnService.generateCreditNote(
-      request.params.id,
-      request.body,
-    );
-    return reply.code(201).send({ success: true, data: creditNote });
+    try {
+      const creditNote = await supplierReturnService.generateCreditNote(
+        request.params.id,
+        request.body,
+      );
+      return reply.code(201).send({ success: true, data: creditNote });
+    } catch (error) {
+      request.log.error({ err: error, endpoint: 'supplier-return-credit-note' }, 'Supplier return error');
+      return reply.code(500).send({ success: false, message: error.message });
+    }
   }
 
   async listCreditNotes(request, reply) {
-    const result = await supplierReturnService.listCreditNotes(request.tenantId, request.query);
-    return reply.send({
-      success: true,
-      data: result.notes,
-      pagination: {
-        page: result.page,
-        limit: result.limit,
-        total: result.total,
-        totalPages: result.totalPages,
-      },
-    });
+    try {
+      const result = await supplierReturnService.listCreditNotes(request.tenantId, request.query);
+      return reply.send({
+        success: true,
+        data: result.notes,
+        pagination: {
+          page: result.page,
+          limit: result.limit,
+          total: result.total,
+          totalPages: result.totalPages,
+        },
+      });
+    } catch (error) {
+      request.log.error({ err: error, endpoint: 'supplier-return-list-credit-notes' }, 'Supplier return error');
+      return reply.code(500).send({ success: false, message: error.message });
+    }
   }
 
   async getSupplierInwardTransactions(request, reply) {
-    const result = await supplierReturnService.getInwardTransactions(
-      request.params.supplierId,
-      request.tenantId,
-      request.query,
-    );
-    return reply.send({
-      success: true,
-      data: result.transactions,
-      pagination: {
-        page: result.page,
-        limit: result.limit,
-        total: result.total,
-        totalPages: result.totalPages,
-      },
-    });
+    try {
+      const result = await supplierReturnService.getInwardTransactions(
+        request.params.supplierId,
+        request.tenantId,
+        request.query,
+      );
+      return reply.send({
+        success: true,
+        data: result.transactions,
+        pagination: {
+          page: result.page,
+          limit: result.limit,
+          total: result.total,
+          totalPages: result.totalPages,
+        },
+      });
+    } catch (error) {
+      request.log.error({ err: error, endpoint: 'supplier-return-inward' }, 'Supplier return error');
+      return reply.code(500).send({ success: false, message: error.message });
+    }
   }
 
   async getSupplierReturnTransactions(request, reply) {
-    const result = await supplierReturnService.getReturnTransactions(
-      request.params.supplierId,
-      request.tenantId,
-      request.query,
-    );
-    return reply.send({
-      success: true,
-      data: result.returns,
-      pagination: {
-        page: result.page,
-        limit: result.limit,
-        total: result.total,
-        totalPages: result.totalPages,
-      },
-    });
+    try {
+      const result = await supplierReturnService.getReturnTransactions(
+        request.params.supplierId,
+        request.tenantId,
+        request.query,
+      );
+      return reply.send({
+        success: true,
+        data: result.returns,
+        pagination: {
+          page: result.page,
+          limit: result.limit,
+          total: result.total,
+          totalPages: result.totalPages,
+        },
+      });
+    } catch (error) {
+      request.log.error({ err: error, endpoint: 'supplier-return-transactions' }, 'Supplier return error');
+      return reply.code(500).send({ success: false, message: error.message });
+    }
   }
 
   async getSupplierLedger(request, reply) {
-    const result = await supplierReturnService.getSupplierLedger(
-      request.params.supplierId,
-      request.tenantId,
-      request.query,
-    );
-    return reply.send({ success: true, ...result });
+    try {
+      const result = await supplierReturnService.getSupplierLedger(
+        request.params.supplierId,
+        request.tenantId,
+        request.query,
+      );
+      return reply.send({ success: true, ...result });
+    } catch (error) {
+      request.log.error({ err: error, endpoint: 'supplier-return-ledger' }, 'Supplier return error');
+      return reply.code(500).send({ success: false, message: error.message });
+    }
   }
 
   async getExpiredInventorySummary(request, reply) {
-    const summary = await supplierReturnService.getExpiredInventorySummary(request.tenantId);
-    return reply.send({ success: true, data: summary });
+    try {
+      const summary = await supplierReturnService.getExpiredInventorySummary(request.tenantId);
+      return reply.send({ success: true, data: summary });
+    } catch (error) {
+      request.log.error({ err: error, endpoint: 'supplier-return-expired-summary' }, 'Supplier return error');
+      return reply.code(500).send({ success: false, message: error.message });
+    }
   }
 }
 
