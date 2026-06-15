@@ -1,64 +1,175 @@
-import movementService from '../../stock/service/movement.service.js';
 import ledgerService from '../../vendors/services/ledger.service.js';
 import prisma from '../../../config/prisma.js';
 import logger from '../../../shared/utils/logger.js';
 
 class SupplierReturnService {
   async processReturn(tenantId, data, userId) {
-    if (!data.batchId) {
-      throw new Error('Batch ID is required');
-    }
+    const { items, supplierId, purchaseInvoiceId, reason } = data;
 
-    const batch = await prisma.inventoryBatch.findUnique({
-      where: { id: data.batchId },
-      include: { medicine: true },
-    });
+    if (!purchaseInvoiceId) throw new Error('Purchase Invoice ID is required');
+    if (!supplierId) throw new Error('Supplier ID is required');
+    if (!items || !items.length) throw new Error('Return items are required');
 
-    if (!batch) throw new Error(`Batch ${data.batchId} not found`);
+    return await prisma.$transaction(async (tx) => {
+      // Validate Purchase Invoice Status
+      const invoice = await tx.purchaseInvoice.findUnique({
+        where: { id: purchaseInvoiceId },
+        include: { items: true },
+      });
 
-    if (data.quantity > batch.quantity) {
-      throw new Error(`Return quantity (${data.quantity}) exceeds available stock (${batch.quantity})`);
-    }
+      if (!invoice || invoice.tenantId !== tenantId) {
+        throw new Error('Purchase invoice not found');
+      }
 
-    await movementService.stockOut(tenantId, {
-      medicineId: batch.medicineId,
-      batchId: data.batchId,
-      quantity: data.quantity,
-      branchId: batch.branchId,
-      referenceType: 'SUPPLIER_RETURN',
-      reason: data.reason,
-    });
+      if (invoice.status !== 'RECEIVED' && invoice.status !== 'PARTIALLY_RECEIVED') {
+        throw new Error('Invoice cannot be returned');
+      }
 
-    const returnAmount = data.quantity * (batch.purchasePrice || 0);
+      // Validate Supplier Existence
+      const supplier = await tx.supplier.findUnique({
+        where: { id: supplierId },
+      });
 
-    await ledgerService.recordEntry(
-      tenantId,
-      {
-        supplierId: data.supplierId,
-        type: 'RETURN',
-        creditAmount: returnAmount,
-        referenceType: 'SUPPLIER_RETURN',
-        referenceId: data.batchId,
-      },
-      prisma,
-    );
+      if (!supplier || supplier.tenantId !== tenantId) {
+        throw new Error('Supplier not found');
+      }
 
-    const returnRecord = await prisma.supplierReturn.create({
-      data: {
+      let totalReturnAmount = 0;
+      let totalGstAmount = 0;
+      const returnItemsData = [];
+
+      for (const item of items) {
+        // Validate Batch Mapping
+        const batch = await tx.inventoryBatch.findUnique({
+          where: { id: item.batchId },
+        });
+
+        if (!batch) throw new Error(`Batch ${item.batchId} not found`);
+        if (batch.quantity <= 0) throw new Error(`Batch ${item.batchId} is empty`);
+
+        // Get original invoice item to check received qty
+        const invItem = invoice.items.find((i) => i.medicineId === batch.medicineId);
+        if (!invItem) throw new Error(`Medicine ${batch.medicineId} not found in invoice`);
+
+        // Validate Previously Returned Quantity
+        const previousReturns = await tx.supplierReturnItem.aggregate({
+          where: {
+            return: { purchaseInvoiceId },
+            medicineId: batch.medicineId,
+          },
+          _sum: { quantity: true },
+        });
+
+        const alreadyReturnedQty = previousReturns._sum.quantity || 0;
+        const availableQty = invItem.receivedQuantity - alreadyReturnedQty;
+
+        // Validate Return Quantities
+        if (item.quantity > availableQty) {
+          throw new Error(
+            `Return quantity (${item.quantity}) exceeds available quantity (${availableQty}) for medicine ${batch.medicineId}`,
+          );
+        }
+
+        // Amount Calculations
+        const itemAmount = item.quantity * Number(invItem.purchasePrice || 0);
+        // GST Reversal
+        const itemGst = (itemAmount * Number(invItem.gstPercentage || 0)) / 100;
+
+        totalReturnAmount += itemAmount;
+        totalGstAmount += itemGst;
+
+        returnItemsData.push({
+          medicineId: batch.medicineId,
+          batchId: item.batchId,
+          quantity: item.quantity,
+          purchasePrice: invItem.purchasePrice,
+          lossAmount: 0,
+          reason,
+        });
+
+        // Inventory Rollback
+        await tx.inventoryBatch.update({
+          where: { id: item.batchId },
+          data: { quantity: { decrement: item.quantity } },
+        });
+
+        await tx.inventory.update({
+          where: {
+            tenantId_medicineId_branchId: {
+              tenantId,
+              medicineId: batch.medicineId,
+              branchId: batch.branchId,
+            },
+          },
+          data: { quantity: { decrement: item.quantity } },
+        });
+
+        await tx.stockMovement.create({
+          data: {
+            tenantId,
+            medicineId: batch.medicineId,
+            batchId: item.batchId,
+            branchId: batch.branchId,
+            type: 'RETURN_OUT',
+            quantity: item.quantity,
+            reason: reason || 'SUPPLIER_RETURN',
+            referenceId: purchaseInvoiceId,
+            createdBy: userId,
+          },
+        });
+      }
+
+      const returnNumber = `RET-${Date.now()}`;
+
+      const returnRecord = await tx.supplierReturn.create({
+        data: {
+          tenantId,
+          supplierId,
+          purchaseInvoiceId,
+          returnNumber,
+          totalAmount: totalReturnAmount,
+          gstAmount: totalGstAmount,
+          status: 'COMPLETED',
+          reason,
+          createdBy: userId,
+          items: {
+            create: returnItemsData,
+          },
+        },
+      });
+
+      // Supplier Ledger Adjustment
+      await ledgerService.recordEntry(
         tenantId,
-        supplierId: data.supplierId,
-        batchId: data.batchId,
-        medicineId: batch.medicineId,
-        quantity: data.quantity,
-        reason: data.reason,
-        returnAmount,
-        status: 'COMPLETED',
-        createdBy: userId,
-      },
-    });
+        {
+          supplierId,
+          type: 'RETURN',
+          creditAmount: totalReturnAmount + totalGstAmount,
+          debitAmount: 0,
+          referenceType: 'SUPPLIER_RETURN',
+          referenceId: returnRecord.id,
+          notes: `Return for invoice ${invoice.invoiceNumber}`,
+          createdBy: userId,
+        },
+        tx,
+      );
 
-    logger.info(`[SupplierReturn] Processed return for batch ${data.batchId} (${data.quantity})`);
-    return returnRecord;
+      // Audit Trail
+      await tx.auditLog.create({
+        data: {
+          tenantId,
+          userId,
+          action: 'PURCHASE_RETURN_CREATED',
+          target: 'SupplierReturn',
+          type: 'INVENTORY',
+        },
+      });
+
+      logger.info(
+        `[SupplierReturn] Processed return ${returnRecord.id} for invoice ${purchaseInvoiceId}`,
+      );
+      return returnRecord;
+    });
   }
 
   async getReturns(tenantId, page = 1, limit = 20) {

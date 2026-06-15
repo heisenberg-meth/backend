@@ -4,6 +4,9 @@ import logger from '../../../shared/utils/logger.js';
 
 class SupplierLedgerService {
   async recordEntry(tenantId, data, tx = prisma) {
+    if (typeof ledgerRepository.getLastEntry !== 'function') {
+      throw new Error('Ledger repository misconfigured');
+    }
     const lastEntry = await ledgerRepository.getLastEntry(data.supplierId, tenantId, tx);
     const previousBalance = Number(lastEntry?.balanceAfter || 0);
 

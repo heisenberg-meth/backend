@@ -26,29 +26,33 @@ class PurchaseFastifyController {
 
       for (const item of items) {
         if (!item.batchId) {
-          return reply.code(400).send({ success: false, message: 'Batch ID is required for each return item' });
+          return reply
+            .code(400)
+            .send({ success: false, message: 'Batch ID is required for each return item' });
         }
         if (!item.quantity || Number(item.quantity) <= 0) {
-          return reply.code(400).send({ success: false, message: 'Valid quantity required for each return item' });
+          return reply
+            .code(400)
+            .send({ success: false, message: 'Valid quantity required for each return item' });
         }
       }
 
-      const results = [];
-      for (const item of items) {
-        const result = await supplierReturnService.processReturn(
-          request.tenantId,
-          {
-            batchId: item.batchId,
-            quantity: Number(item.quantity),
-            supplierId,
-            reason: reason || 'Return',
-          },
-          request.user.id,
-        );
-        results.push(result);
-      }
+      const result = await supplierReturnService.processReturn(
+        request.tenantId,
+        {
+          items,
+          supplierId,
+          purchaseInvoiceId: request.body.purchaseInvoiceId,
+          reason: reason || 'Return',
+        },
+        request.user.id,
+      );
 
-      return reply.code(201).send({ success: true, data: results });
+      return reply.code(201).send({
+        success: true,
+        returnId: result.id,
+        message: 'Return processed successfully',
+      });
     } catch (error) {
       request.log.error({ err: error, tenantId: request.tenantId }, 'Purchase return failed');
       return reply.code(400).send({ success: false, message: error.message });
