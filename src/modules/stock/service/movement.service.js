@@ -107,6 +107,8 @@ class MovementService {
           sellingPrice: data.sellingPrice || 0,
           mrp: data.mrp || data.sellingPrice || 0,
           status: 'ACTIVE',
+          ...(data.referenceType === 'PURCHASE' &&
+            data.referenceId && { purchaseInvoiceId: data.referenceId }),
         },
       });
 
