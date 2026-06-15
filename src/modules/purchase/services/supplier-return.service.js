@@ -131,7 +131,7 @@ class SupplierReturnService {
               branchId: batch.branchId,
             },
           },
-          data: { quantity: { decrement: item.quantity } },
+          data: { currentStock: { decrement: item.quantity } },
         });
 
         await tx.stockMovement.create({
