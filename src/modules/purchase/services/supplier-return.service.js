@@ -125,7 +125,7 @@ class SupplierReturnService {
 
         await tx.inventory.update({
           where: {
-            tenantId_medicineId_branchId: {
+            tenantId_branchId_medicineId: {
               tenantId,
               medicineId: batch.medicineId,
               branchId: batch.branchId,
