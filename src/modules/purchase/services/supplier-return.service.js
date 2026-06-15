@@ -14,7 +14,7 @@ class SupplierReturnService {
       // Validate Purchase Invoice Status
       const invoice = await tx.purchaseInvoice.findUnique({
         where: { id: purchaseInvoiceId },
-        include: { items: true },
+        include: { inventoryBatches: true },
       });
 
       if (!invoice || invoice.tenantId !== tenantId) {
@@ -48,7 +48,7 @@ class SupplierReturnService {
         if (batch.quantity <= 0) throw new Error(`Batch ${item.batchId} is empty`);
 
         // Get original invoice item to check received qty
-        const invItem = invoice.items.find((i) => i.medicineId === batch.medicineId);
+        const invItem = invoice.inventoryBatches.find((i) => i.medicineId === batch.medicineId);
         if (!invItem) throw new Error(`Medicine ${batch.medicineId} not found in invoice`);
 
         // Validate Previously Returned Quantity

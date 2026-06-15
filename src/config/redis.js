@@ -12,9 +12,9 @@ const getActiveClient = () => {
     activeClient = new Redis(redisUrl, {
       maxRetriesPerRequest: null,
       lazyConnect: true,
+      enableReadyCheck: true,
       retryStrategy(times) {
-        if (times > 10) return null;
-        return Math.min(times * 200, 5000);
+        return Math.min(times * 100, 3000);
       },
       reconnectOnError(err) {
         logger.warn({ err: err.message }, 'Redis reconnectOnError');
@@ -27,9 +27,13 @@ const getActiveClient = () => {
         logger.info('Redis client connected');
       });
 
+      activeClient.on('reconnecting', () => {
+        logger.warn('Redis reconnecting');
+      });
+
       activeClient.on('error', (err) => {
         if (activeClient && activeClient.status !== 'end') {
-          logger.warn({ err: err.message }, 'Redis error (non-fatal)');
+          logger.error({ err: err.message }, 'Redis error');
         }
       });
     }
@@ -60,7 +64,28 @@ const getBullRedis = () => {
   const client = new Redis(redisUrl, {
     maxRetriesPerRequest: null,
     lazyConnect: true,
+    enableReadyCheck: true,
+    retryStrategy(times) {
+      return Math.min(times * 100, 3000);
+    },
+    reconnectOnError(err) {
+      logger.warn({ err: err.message }, 'Bull Redis reconnectOnError');
+      return true;
+    },
   });
+
+  if (process.env.NODE_ENV !== 'test') {
+    client.on('connect', () => {
+      logger.info('Bull Redis connected');
+    });
+    client.on('reconnecting', () => {
+      logger.warn('Bull Redis reconnecting');
+    });
+    client.on('error', (err) => {
+      logger.error({ err: err.message }, 'Bull Redis error');
+    });
+  }
+
   bullRedisClients.push(client);
   return client;
 };
@@ -73,6 +98,14 @@ export const connectRedis = async () => {
     const client = getActiveClient();
     await client.ping();
     logger.info('Redis startup verification successful (PONG)');
+
+    try {
+      await client.config('SET', 'maxmemory-policy', 'noeviction');
+      logger.info('Redis eviction policy set to noeviction');
+    } catch (configErr) {
+      logger.warn({ err: configErr.message }, 'Failed to set Redis maxmemory-policy');
+    }
+
     return client;
   } catch (err) {
     logger.warn({ err: err.message }, 'Redis startup verification failed - running without cache');
