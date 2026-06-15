@@ -73,6 +73,40 @@ class BillingFastifyController {
     }
   }
 
+  async updateDraft(request, reply) {
+    try {
+      if (!request.branchId) {
+        throw new Error('User branchId missing');
+      }
+
+      const payload = {
+        ...request.body,
+        branchId: request.branchId,
+      };
+
+      const invoice = await billingService.updateDraft(
+        request.params.id,
+        request.tenantId,
+        payload,
+        request.user.id,
+      );
+      return reply.code(200).send({ success: true, data: invoice });
+    } catch (error) {
+      console.error('===== BILLING UPDATE DRAFT ERROR =====');
+      console.error('Message:', error.message);
+      console.error('Stack:', error.stack);
+      console.error('Request Body:', request.body);
+
+      return reply.code(400).send({
+        success: false,
+        message: error.message,
+        error: error.message,
+        errorType: error.name ?? 'BillingError',
+        details: process.env.NODE_ENV !== 'production' ? error.stack : undefined,
+      });
+    }
+  }
+
   async getInvoiceById(request, reply) {
     try {
       const invoice = await billingService.getInvoiceById(request.params.id, request.tenantId);

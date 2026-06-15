@@ -148,6 +148,7 @@ class AuthPrismaService {
     ipAddress,
     deviceToken,
     otp,
+    twoFactorToken,
   }) {
     const normalizedEmail = email.toLowerCase().trim();
     const user = await authRepository.findUserByEmail(normalizedEmail);
@@ -200,6 +201,21 @@ class AuthPrismaService {
     if (!isMatch) {
       logger.warn({ email: normalizedEmail }, 'Login failed: Password mismatch');
       throw new Error('Invalid credentials');
+    }
+
+    // --- 2FA VALIDATION ---
+    if (user.twoFactorEnabled) {
+      if (!twoFactorToken) {
+        return {
+          twoFactorVerificationRequired: true,
+          message: 'Please enter your 2FA code',
+        };
+      }
+      const { verifyTOTP } = await import('../../../shared/utils/totp.js');
+      const isValid2FA = verifyTOTP(twoFactorToken, user.twoFactorSecret);
+      if (!isValid2FA) {
+        throw new Error('Invalid 2FA code');
+      }
     }
 
     // --- DEVICE BINDING & BROWSER LOCKS VALIDATION ---

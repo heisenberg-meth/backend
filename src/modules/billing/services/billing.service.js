@@ -15,6 +15,10 @@ class BillingService {
     return await invoiceService.createDraft(tenantId, userId, data);
   }
 
+  async updateDraft(invoiceId, tenantId, data, userId) {
+    return await invoiceService.updateDraft(invoiceId, tenantId, userId, data);
+  }
+
   /**
    * Finalize an invoice and deduct inventory
    */

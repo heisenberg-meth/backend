@@ -59,6 +59,62 @@ async function medicineRoutes(fastify) {
     medicineController.getInventorySummaryData,
   );
 
+  fastify.get(
+    '/value-summary',
+    {
+      schema: {
+        tags: ['Inventory', 'Analytics'],
+        summary: 'Get total inventory value summary',
+        querystring: { type: 'object', properties: { branchId: { type: 'string' } } },
+      },
+      preHandler: [requirePermission('VIEW_INVENTORY')],
+      config: { rateLimit: { max: 300, timeWindow: '1 minute' } },
+    },
+    medicineController.getValueSummary,
+  );
+
+  fastify.get(
+    '/category-breakdown',
+    {
+      schema: {
+        tags: ['Inventory', 'Analytics'],
+        summary: 'Get inventory value breakdown by category',
+        querystring: { type: 'object', properties: { branchId: { type: 'string' } } },
+      },
+      preHandler: [requirePermission('VIEW_INVENTORY')],
+      config: { rateLimit: { max: 300, timeWindow: '1 minute' } },
+    },
+    medicineController.getCategoryBreakdown,
+  );
+
+  fastify.get(
+    '/high-value-stock',
+    {
+      schema: {
+        tags: ['Inventory', 'Analytics'],
+        summary: 'Get top 10 highest value stock items',
+        querystring: { type: 'object', properties: { branchId: { type: 'string' } } },
+      },
+      preHandler: [requirePermission('VIEW_INVENTORY')],
+      config: { rateLimit: { max: 300, timeWindow: '1 minute' } },
+    },
+    medicineController.getHighValueStock,
+  );
+
+  fastify.get(
+    '/expiry-risk',
+    {
+      schema: {
+        tags: ['Inventory', 'Analytics'],
+        summary: 'Get expiry risk breakdown',
+        querystring: { type: 'object', properties: { branchId: { type: 'string' } } },
+      },
+      preHandler: [requirePermission('VIEW_INVENTORY')],
+      config: { rateLimit: { max: 300, timeWindow: '1 minute' } },
+    },
+    medicineController.getExpiryRisk,
+  );
+
   fastify.get('/medicines/search', {
     schema: {
       tags: ['Inventory'],

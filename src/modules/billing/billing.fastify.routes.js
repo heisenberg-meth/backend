@@ -27,6 +27,12 @@ async function billingFastifyRoutes(fastify) {
     handler: billingController.createDraft,
   });
 
+  fastify.put('/invoices/:id', {
+    schema: { tags: ['Billing'], summary: 'Update draft invoice' },
+    preHandler: [requirePermission('CREATE_BILL')],
+    handler: billingController.updateDraft,
+  });
+
   fastify.get('/invoices/:id', {
     schema: { tags: ['Billing'], summary: 'Get invoice details' },
     preHandler: [requirePermission('VIEW_BILL')],

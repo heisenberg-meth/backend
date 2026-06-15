@@ -9,6 +9,11 @@ class InvoiceService {
     return normalizeInvoice(invoice);
   }
 
+  async updateDraft(invoiceId, tenantId, userId, data, tx = null) {
+    const invoice = await invoiceEngine.updateDraft(invoiceId, tenantId, userId, data, tx);
+    return normalizeInvoice(invoice);
+  }
+
   async finalize(id, tenantId, userId, tx = null) {
     const invoice = await invoiceEngine.finalize(id, tenantId, userId, tx);
     return normalizeInvoice(invoice);

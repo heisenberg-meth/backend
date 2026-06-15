@@ -158,6 +158,154 @@ class InvoiceEngine {
     return tx ? execute(tx) : prisma.$transaction(execute);
   }
 
+  async updateDraft(invoiceId, tenantId, userId, data, tx = null) {
+    const {
+      items,
+      patientId,
+      branchId,
+      notes,
+      discountAmount = 0,
+      discountPercentage = 0,
+      patientName,
+      patientPhone,
+    } = data;
+
+    if (!branchId) {
+      throw new Error('branchId is required for invoice update');
+    }
+
+    const normalizedItems = (items || []).map((item) => ({
+      medicineId: item.medicineId,
+      batchId: item.batchId,
+      quantity: this._safeNumber(item.quantity ?? item.qty),
+      unitPrice: this._safeNumber(item.unitPrice ?? item.price),
+      gstPercentage: this._safeNumber(item.gstPercentage ?? item.gst),
+    }));
+
+    const execute = async (t) => {
+      const existing = await t.invoice.findFirst({
+        where: { id: invoiceId, tenantId },
+      });
+      if (!existing) throw new Error('Invoice not found');
+      if (existing.status !== 'DRAFT') throw new Error('Only DRAFT invoices can be updated');
+
+      const branchProfile = await t.storeProfile.findFirst({
+        where: { tenantId, branchId },
+        select: { gstin: true },
+      });
+      const sourceGst = branchProfile?.gstin || '';
+
+      let targetGst = '';
+      let defaultPatientName = null;
+      let defaultPatientPhone = null;
+      if (patientId) {
+        const patient = await t.patient.findUnique({
+          where: { id: patientId },
+          select: { gstNumber: true, fullName: true, phone: true },
+        });
+        targetGst = patient?.gstNumber || '';
+        defaultPatientName = patient?.fullName || null;
+        defaultPatientPhone = patient?.phone || null;
+      }
+
+      const totals = await this._calculateTotals(
+        tenantId,
+        branchId,
+        patientId,
+        normalizedItems,
+        discountAmount,
+        t,
+        discountPercentage,
+      );
+
+      // delete existing items
+      await t.invoiceItem.deleteMany({ where: { invoiceId } });
+
+      const updatedInvoice = await t.invoice.update({
+        where: { id: invoiceId },
+        data: {
+          patientId,
+          patientName: patientName || defaultPatientName || 'Walk-in Customer',
+          patientPhone: patientPhone || defaultPatientPhone || null,
+          subtotal: this._safeNumber(totals.subtotal),
+          discountAmount: this._safeNumber(discountAmount || totals.discountAmount),
+          discountPercentage: this._safeNumber(discountPercentage),
+          gstAmount: this._safeNumber(totals.totalGst),
+          cgst: this._safeNumber(totals.totalCgst),
+          sgst: this._safeNumber(totals.totalSgst),
+          igst: this._safeNumber(totals.totalIgst),
+          totalAmount: this._safeNumber(totals.totalAmount),
+          notes,
+          updatedAt: new Date(),
+        },
+      });
+
+      for (const item of normalizedItems) {
+        const unitPrice = this._safeNumber(item.unitPrice);
+        const quantity = this._safeNumber(item.quantity);
+        const gstPercentage = this._safeNumber(item.gstPercentage);
+        const itemSubtotal = unitPrice * quantity;
+
+        let resolvedBatchId = item.batchId;
+
+        if (!resolvedBatchId) {
+          const availableBatch = await t.inventoryBatch.findFirst({
+            where: {
+              tenantId,
+              branchId: branchId,
+              medicineId: item.medicineId,
+              availableQuantity: { gt: 0 },
+              deletedAt: null,
+              expiryDate: { gt: new Date() },
+              status: 'ACTIVE',
+            },
+            orderBy: { expiryDate: 'asc' },
+          });
+
+          if (!availableBatch) {
+            throw new Error(
+              `Cannot update draft: No available active batches found for medicine ${item.medicineId}`,
+            );
+          }
+          resolvedBatchId = availableBatch.id;
+        } else {
+          const batchCount = await t.inventoryBatch.count({ where: { id: resolvedBatchId } });
+          if (batchCount === 0) {
+            throw new Error(`Cannot update draft: Batch ${resolvedBatchId} does not exist`);
+          }
+        }
+
+        const gstResult = gstService.calculateGst(
+          itemSubtotal,
+          gstPercentage,
+          sourceGst,
+          targetGst,
+        );
+
+        await t.invoiceItem.create({
+          data: {
+            invoiceId: updatedInvoice.id,
+            medicineId: item.medicineId,
+            batchId: resolvedBatchId,
+            quantity,
+            unitPrice,
+            gstPercentage,
+            cgst: this._safeNumber(gstResult.cgst),
+            sgst: this._safeNumber(gstResult.sgst),
+            igst: this._safeNumber(gstResult.igst),
+            totalPrice: this._safeNumber(itemSubtotal + gstResult.amount),
+          },
+        });
+      }
+
+      await this._audit(invoiceId, 'UPDATED', userId, t);
+
+      return updatedInvoice;
+    };
+
+    return tx ? execute(tx) : prisma.$transaction(execute);
+  }
+
   async finalize(invoiceId, tenantId, userId, tx = null) {
     const execute = async (t) => {
       const invoice = await t.invoice.findFirst({

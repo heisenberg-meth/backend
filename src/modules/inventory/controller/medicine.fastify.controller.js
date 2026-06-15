@@ -1,6 +1,7 @@
 import medicineService from '../service/medicine.prisma.service.js';
 import barcodeService from '../service/barcode.service.js';
 import expiryService from '../service/expiry.service.js';
+import unifiedInventorySummaryService from '../service/unified-inventory-summary.service.js';
 import { success, error as errorResponse } from '../../../shared/helpers/response.js';
 
 class MedicineFastifyController {
@@ -50,6 +51,42 @@ class MedicineFastifyController {
       branchId || request.branchId,
     );
     return success(summary);
+  }
+
+  async getValueSummary(request) {
+    const { branchId } = request.query;
+    const summary = await unifiedInventorySummaryService.getValueSummary(
+      request.tenantId,
+      branchId || request.branchId,
+    );
+    return success(summary);
+  }
+
+  async getCategoryBreakdown(request) {
+    const { branchId } = request.query;
+    const data = await unifiedInventorySummaryService.getCategoryBreakdown(
+      request.tenantId,
+      branchId || request.branchId,
+    );
+    return success(data);
+  }
+
+  async getHighValueStock(request) {
+    const { branchId } = request.query;
+    const data = await unifiedInventorySummaryService.getHighValueStock(
+      request.tenantId,
+      branchId || request.branchId,
+    );
+    return success(data);
+  }
+
+  async getExpiryRisk(request) {
+    const { branchId } = request.query;
+    const data = await unifiedInventorySummaryService.getExpiryRisk(
+      request.tenantId,
+      branchId || request.branchId,
+    );
+    return success(data);
   }
 
   async getMedicine(request, reply) {

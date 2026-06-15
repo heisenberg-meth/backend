@@ -89,7 +89,7 @@ class AuthFastifyController {
         ipAddress: request.ip,
       });
 
-      if (result.deviceVerificationRequired) {
+      if (result.deviceVerificationRequired || result.twoFactorVerificationRequired) {
         return reply.send(success(result));
       }
 
@@ -107,6 +107,9 @@ class AuthFastifyController {
       }
       if (error?.message === 'Invalid credentials') {
         return reply.code(401).send(errorResponse(error.message, 'INVALID_CREDENTIALS'));
+      }
+      if (error?.message === 'Invalid 2FA code') {
+        return reply.code(401).send(errorResponse(error.message, 'INVALID_2FA_CODE'));
       }
       if (error?.message === 'This browser is already linked to another account') {
         return reply.code(403).send(errorResponse(error.message, 'BROWSER_LOCKED'));

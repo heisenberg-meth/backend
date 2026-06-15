@@ -48,13 +48,6 @@ class SupplierReturnService {
         );
       }
 
-      const existingReturn = await tx.supplierReturn.findFirst({
-        where: { purchaseInvoiceId },
-      });
-      if (existingReturn) {
-        throw new Error('Invoice has already been returned');
-      }
-
       // Validate Supplier Existence
       const supplier = await tx.supplier.findUnique({
         where: { id: supplierId },
@@ -77,21 +70,21 @@ class SupplierReturnService {
         if (!batch) throw new Error(`Batch ${item.batchId} not found`);
         if (batch.quantity <= 0) throw new Error(`Batch ${item.batchId} is empty`);
 
-        // Get original invoice item to check received qty
-        const invItem = invoice.inventoryBatches.find((i) => i.medicineId === batch.medicineId);
-        if (!invItem) throw new Error(`Medicine ${batch.medicineId} not found in invoice`);
+        // Get original invoice batch to check received qty
+        const invBatch = invoice.inventoryBatches.find((i) => i.id === batch.id);
+        if (!invBatch) throw new Error(`Batch ${batch.id} not found in invoice`);
 
-        // Validate Previously Returned Quantity
+        // Validate Previously Returned Quantity for THIS batch
         const previousReturns = await tx.supplierReturnItem.aggregate({
           where: {
             return: { purchaseInvoiceId },
-            medicineId: batch.medicineId,
+            batchId: batch.id,
           },
           _sum: { quantity: true },
         });
 
         const alreadyReturnedQty = previousReturns._sum.quantity || 0;
-        const availableQty = invItem.receivedQuantity - alreadyReturnedQty;
+        const availableQty = invBatch.receivedQuantity - alreadyReturnedQty;
 
         // Validate Return Quantities
         if (item.quantity > availableQty) {
@@ -101,9 +94,9 @@ class SupplierReturnService {
         }
 
         // Amount Calculations
-        const itemAmount = item.quantity * Number(invItem.purchasePrice || 0);
-        // GST Reversal
-        const itemGst = (itemAmount * Number(invItem.gstPercentage || 0)) / 100;
+        const itemAmount = item.quantity * Number(invBatch.purchasePrice || 0);
+        // GST Reversal (Defaulting to 0 since InventoryBatch has no gstPercentage)
+        const itemGst = (itemAmount * Number(invBatch.gstPercentage || 0)) / 100;
 
         totalReturnAmount += itemAmount;
         totalGstAmount += itemGst;
@@ -112,7 +105,7 @@ class SupplierReturnService {
           medicineId: batch.medicineId,
           batchId: item.batchId,
           quantity: item.quantity,
-          purchasePrice: invItem.purchasePrice,
+          purchasePrice: invBatch.purchasePrice,
           lossAmount: 0,
           reason,
         });
@@ -157,8 +150,7 @@ class SupplierReturnService {
           supplierId,
           purchaseInvoiceId,
           returnNumber,
-          totalAmount: totalReturnAmount,
-          gstAmount: totalGstAmount,
+          returnAmount: totalReturnAmount + totalGstAmount,
           status: 'COMPLETED',
           reason,
           createdBy: userId,

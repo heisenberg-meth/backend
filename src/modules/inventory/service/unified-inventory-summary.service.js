@@ -78,7 +78,8 @@ class UnifiedInventorySummaryService {
         medicines_with_expired as "medicinesWithExpired",
         total_medicines as "totalProducts"
       FROM medicine_stats;
-    `]);
+    `,
+    ]);
 
     const result = {
       totalMedicines: Number(summary?.totalMedicines || 0),
@@ -153,6 +154,134 @@ class UnifiedInventorySummaryService {
       lowStock: summary.lowStockCount,
       outOfStock: summary.outOfStockCount,
     };
+  }
+
+  async getValueSummary(tenantId, branchId = null) {
+    const bId = branchId === 'null' || !branchId ? null : branchId;
+    const branchCondition = bId ? Prisma.sql`ib."branchId" = ${bId}` : Prisma.sql`1=1`;
+
+    const data = await prisma.$queryRaw`
+      SELECT 
+        SUM(ib."quantity" * COALESCE(ib."purchasePrice", 0)) as "totalValue",
+        SUM(ib."quantity" * COALESCE(ib."sellingPrice", ib."mrp", 0)) as "retailValue",
+        SUM(ib."quantity" * COALESCE(ib."sellingPrice", ib."mrp", 0)) - SUM(ib."quantity" * COALESCE(ib."purchasePrice", 0)) as "potentialProfit"
+      FROM "InventoryBatch" ib
+      INNER JOIN "Medicine" m ON ib."medicineId" = m."id"
+      WHERE m."tenantId" = ${tenantId}
+        AND ib."deletedAt" IS NULL
+        AND m."deletedAt" IS NULL
+        AND m."isActive" = true
+        AND ib."quantity" > 0
+        AND ${branchCondition}
+    `;
+
+    return {
+      totalValue: Number(data[0]?.totalValue || 0),
+      retailValue: Number(data[0]?.retailValue || 0),
+      potentialProfit: Number(data[0]?.potentialProfit || 0),
+    };
+  }
+
+  async getCategoryBreakdown(tenantId, branchId = null) {
+    const bId = branchId === 'null' || !branchId ? null : branchId;
+    const branchCondition = bId ? Prisma.sql`ib."branchId" = ${bId}` : Prisma.sql`1=1`;
+
+    const data = await prisma.$queryRaw`
+      SELECT 
+        c."name" as category,
+        SUM(ib."quantity" * COALESCE(ib."purchasePrice", 0)) as value,
+        SUM(ib."quantity") as quantity
+      FROM "InventoryBatch" ib
+      INNER JOIN "Medicine" m ON ib."medicineId" = m."id"
+      LEFT JOIN "MedicineCategory" c ON m."categoryId" = c."id"
+      WHERE m."tenantId" = ${tenantId}
+        AND ib."deletedAt" IS NULL
+        AND m."deletedAt" IS NULL
+        AND m."isActive" = true
+        AND ib."quantity" > 0
+        AND ${branchCondition}
+      GROUP BY c."name"
+      ORDER BY value DESC
+    `;
+
+    return data.map((d) => ({
+      category: d.category || 'Uncategorized',
+      value: Number(d.value || 0),
+      quantity: Number(d.quantity || 0),
+    }));
+  }
+
+  async getHighValueStock(tenantId, branchId = null) {
+    const bId = branchId === 'null' || !branchId ? null : branchId;
+    const branchCondition = bId ? Prisma.sql`ib."branchId" = ${bId}` : Prisma.sql`1=1`;
+
+    const data = await prisma.$queryRaw`
+      SELECT 
+        m."name",
+        m."genericName",
+        SUM(ib."quantity") as quantity,
+        SUM(ib."quantity" * COALESCE(ib."purchasePrice", 0)) as "totalValue"
+      FROM "InventoryBatch" ib
+      INNER JOIN "Medicine" m ON ib."medicineId" = m."id"
+      WHERE m."tenantId" = ${tenantId}
+        AND ib."deletedAt" IS NULL
+        AND m."deletedAt" IS NULL
+        AND m."isActive" = true
+        AND ib."quantity" > 0
+        AND ${branchCondition}
+      GROUP BY m."id", m."name", m."genericName"
+      ORDER BY "totalValue" DESC
+      LIMIT 10
+    `;
+
+    return data.map((d) => ({
+      name: d.name,
+      genericName: d.genericName,
+      quantity: Number(d.quantity || 0),
+      totalValue: Number(d.totalValue || 0),
+    }));
+  }
+
+  async getExpiryRisk(tenantId, branchId = null) {
+    const bId = branchId === 'null' || !branchId ? null : branchId;
+    const branchCondition = bId ? Prisma.sql`ib."branchId" = ${bId}` : Prisma.sql`1=1`;
+
+    const data = await prisma.$queryRaw`
+      SELECT 
+        CASE 
+          WHEN ib."expiryDate" < NOW() THEN 'expired'
+          WHEN ib."expiryDate" < NOW() + INTERVAL '30 days' THEN 'risk30'
+          WHEN ib."expiryDate" < NOW() + INTERVAL '90 days' THEN 'risk90'
+          ELSE 'safe'
+        END as risk_category,
+        SUM(ib."quantity" * COALESCE(ib."purchasePrice", 0)) as value,
+        COUNT(ib."id") as count
+      FROM "InventoryBatch" ib
+      INNER JOIN "Medicine" m ON ib."medicineId" = m."id"
+      WHERE m."tenantId" = ${tenantId}
+        AND ib."deletedAt" IS NULL
+        AND m."deletedAt" IS NULL
+        AND m."isActive" = true
+        AND ib."quantity" > 0
+        AND ${branchCondition}
+      GROUP BY risk_category
+    `;
+
+    const result = {
+      expired: { value: 0, count: 0 },
+      risk30: { value: 0, count: 0 },
+      risk90: { value: 0, count: 0 },
+      safe: { value: 0, count: 0 },
+    };
+
+    data.forEach((d) => {
+      if (result[d.risk_category]) {
+        result[d.risk_category].value = Number(d.value || 0);
+        result[d.risk_category].count = Number(d.count || 0);
+      }
+    });
+
+    return result;
   }
 }
 

@@ -234,6 +234,8 @@ model User {
   resetOtpVerified             Boolean                    @default(false)
   resetToken                   String?
   resetTokenExpiry             DateTime?
+  twoFactorSecret              String?
+  twoFactorEnabled             Boolean                    @default(false)
   roleId                       String?
   avatarData                   Bytes?
   avatarMimeType               String?

@@ -45,6 +45,7 @@ export const loginSchema = z.object({
   fingerprint: z.string().optional().nullable(),
   deviceToken: z.string().optional().nullable(),
   otp: z.string().optional().nullable(),
+  twoFactorToken: z.string().optional().nullable(),
 });
 
 export const forgotPasswordSchema = z.object({
