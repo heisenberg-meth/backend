@@ -312,8 +312,6 @@ class AuthPrismaService {
       }
     }
 
-    // If device binding verification passed, or if this is user's first login:
-    // Generate/register the device token if not already stored
     let finalDeviceToken = deviceToken;
     if (!finalDeviceToken) {
       finalDeviceToken = crypto.randomUUID();
@@ -335,8 +333,10 @@ class AuthPrismaService {
       });
 
       await prisma.browserLock.upsert({
-        where: { fingerprintId },
-        update: {},
+        where: { userId: user.id },
+        update: {
+          fingerprintId,
+        },
         create: {
           fingerprintId,
           userId: user.id,

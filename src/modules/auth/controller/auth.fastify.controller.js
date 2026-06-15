@@ -6,7 +6,6 @@ import authService from '../service/auth.prisma.service.js';
 import authRepository from '../repository/auth.prisma.repository.js';
 import sessionService from '../service/session.service.js';
 import secretManager from '../../../config/secrets.js';
-import env from '../../../config/env.js';
 import {
   registerSchema,
   loginSchema,
@@ -26,21 +25,19 @@ import {
   RESET_TOKEN_EXPIRY_MS,
 } from '../auth.constants.js';
 
-const isProduction = env.nodeEnv === 'production';
-
 const COOKIE_OPTIONS = {
   path: '/',
   httpOnly: true,
-  sameSite: isProduction ? 'none' : 'lax',
-  secure: isProduction,
+  sameSite: 'none',
+  secure: true,
   maxAge: 30 * 24 * 60 * 60,
 };
 
 const ACCESS_COOKIE_OPTIONS = {
   path: '/',
   httpOnly: true,
-  sameSite: isProduction ? 'none' : 'lax',
-  secure: isProduction,
+  sameSite: 'none',
+  secure: true,
   maxAge: 15 * 60,
 };
 
