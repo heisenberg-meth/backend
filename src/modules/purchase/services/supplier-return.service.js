@@ -15,7 +15,6 @@ class SupplierReturnService {
       const invoice = await tx.purchaseInvoice.findUnique({
         where: { id: purchaseInvoiceId },
         include: {
-          inventoryBatches: true,
           purchaseOrder: true,
         },
       });
@@ -23,6 +22,13 @@ class SupplierReturnService {
       if (!invoice || invoice.tenantId !== tenantId) {
         throw new Error('Purchase invoice not found');
       }
+
+      const batches = await tx.inventoryBatch.findMany({
+        where: {
+          OR: [{ purchaseInvoiceId }, { id: { in: items.map((x) => x.batchId) } }],
+        },
+      });
+      invoice.inventoryBatches = batches;
 
       const invoiceStatus = invoice.purchaseOrder?.status || 'RECEIVED';
       if (invoiceStatus !== 'RECEIVED' && invoiceStatus !== 'PARTIALLY_RECEIVED') {
@@ -32,7 +38,14 @@ class SupplierReturnService {
       }
 
       if (!invoice.inventoryBatches || invoice.inventoryBatches.length === 0) {
-        throw new Error('No inventory batches found for this invoice');
+        console.error({
+          invoiceId: purchaseInvoiceId,
+          batchCount: batches ? batches.length : 0,
+          purchaseInvoiceId,
+        });
+        throw new Error(
+          'This invoice has no linked inventory batches.\nPlease contact administrator.',
+        );
       }
 
       const existingReturn = await tx.supplierReturn.findFirst({
