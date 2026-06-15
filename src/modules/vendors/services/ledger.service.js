@@ -5,15 +5,18 @@ import logger from '../../../shared/utils/logger.js';
 class SupplierLedgerService {
   async recordEntry(tenantId, data, tx = prisma) {
     const lastEntry = await ledgerRepository.getLastEntry(data.supplierId, tenantId, tx);
-    const previousBalance = lastEntry?.balanceAfter || 0;
+    const previousBalance = Number(lastEntry?.balanceAfter || 0);
 
     let balanceAfter = previousBalance;
     if (data.debitAmount) {
-      balanceAfter += data.debitAmount;
+      balanceAfter += Number(data.debitAmount);
     }
     if (data.creditAmount) {
-      balanceAfter -= data.creditAmount;
+      balanceAfter -= Number(data.creditAmount);
     }
+
+    // Convert to fixed-point string for Prisma Decimal field
+    balanceAfter = Number(balanceAfter.toFixed(2));
 
     const entry = await ledgerRepository.createEntry(
       {

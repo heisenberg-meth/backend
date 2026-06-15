@@ -1333,6 +1333,8 @@ model PurchaseOrderItem {
   gstPercentage    Float            @default(0)
   totalAmount      Decimal          @db.Decimal(12, 2)
   receivedQuantity Int              @default(0)
+  batchNumber      String?
+  expiryDate       DateTime?        @db.Date
   inventoryBatches InventoryBatch[]
   medicine         Medicine         @relation(fields: [medicineId], references: [id])
   purchaseOrder    PurchaseOrder    @relation(fields: [purchaseOrderId], references: [id])

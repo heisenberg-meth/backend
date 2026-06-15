@@ -35,6 +35,7 @@ async function medicineRoutes(fastify) {
           },
         },
       },
+      config: { rateLimit: { max: 300, timeWindow: '1 minute' } },
     },
     medicineController.getMedicines,
   );
@@ -53,6 +54,7 @@ async function medicineRoutes(fastify) {
         },
       },
       preHandler: [requirePermission('VIEW_INVENTORY')],
+      config: { rateLimit: { max: 300, timeWindow: '1 minute' } },
     },
     medicineController.getInventorySummaryData,
   );

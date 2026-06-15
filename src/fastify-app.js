@@ -210,9 +210,9 @@ const setupFastify = async () => {
     url: env.redis.url,
   });
 
-  // Global rate limit — 100 requests per minute per IP
+  // Global rate limit — 300 requests per minute per IP
   await fastify.register(rateLimit, {
-    max: 100,
+    max: 300,
     timeWindow: '1 minute',
     redis: fastify.redis,
     keyGenerator: (request) => {
@@ -220,6 +220,12 @@ const setupFastify = async () => {
       const userId = request.user?.id;
       return userId ? `rl:${userId}:${clientIp}` : `rl:ip:${clientIp}`;
     },
+    errorResponseBuilder: (request, context) => ({
+      statusCode: 429,
+      code: 'RATE_LIMIT_EXCEEDED',
+      message: `Rate limit exceeded, retry in ${context.after}`,
+      retryAfter: context.after,
+    }),
   });
 
   fastify.setErrorHandler((error, request, reply) => {

@@ -91,6 +91,8 @@ class PurchaseOrderService {
         unitPrice,
         gstPercentage,
         totalAmount: qty * unitPrice,
+        batchNumber: item.batchNumber || null,
+        expiryDate: item.expiryDate ? new Date(item.expiryDate) : null,
       };
     });
 
@@ -605,7 +607,8 @@ class PurchaseOrderService {
         });
 
         const currentBalance = Number(lastBalance?.balanceAfter || 0);
-        const balanceAfter = currentBalance + Number(totalVal);
+        // Ensure balanceAfter is a proper number (not string-concatenated) for Prisma Decimal
+        const balanceAfter = Number((currentBalance + Number(totalVal)).toFixed(2));
 
         await tx.supplierLedger.create({
           data: {
@@ -614,7 +617,7 @@ class PurchaseOrderService {
             type: 'PURCHASE',
             referenceType: 'PURCHASE_INVOICE',
             referenceId: purchaseInvoice.id,
-            debitAmount: totalVal,
+            debitAmount: Number(totalVal),
             creditAmount: 0,
             balanceAfter,
             notes: `Goods received via GRN ${grnNumber} for PO ${order.orderNumber}. Invoice ${invoiceNumber} created.`,
