@@ -130,14 +130,20 @@ class SupplierReturnService {
         await tx.stockMovement.create({
           data: {
             tenantId,
+            branchId: batch.branchId,
             medicineId: batch.medicineId,
             batchId: item.batchId,
-            branchId: batch.branchId,
-            type: 'RETURN_OUT',
+
+            movementType: 'SUPPLIER_RETURN',
+
             quantity: item.quantity,
-            reason: reason || 'SUPPLIER_RETURN',
+
+            referenceType: 'SUPPLIER_RETURN',
             referenceId: purchaseInvoiceId,
-            createdBy: userId,
+
+            performedBy: userId,
+
+            notes: reason || 'SUPPLIER_RETURN',
           },
         });
       }
