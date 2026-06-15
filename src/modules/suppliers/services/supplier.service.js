@@ -291,7 +291,7 @@ class SupplierService {
       });
 
       const lastBalance = await this._getLastLedgerBalance(id, tenantId, tx);
-      const balanceAfter = lastBalance - data.amount;
+      const balanceAfter = Number(lastBalance) - Number(data.amount);
 
       await tx.supplierLedger.create({
         data: {
@@ -339,7 +339,7 @@ class SupplierService {
       orderBy: { createdAt: 'desc' },
       select: { balanceAfter: true },
     });
-    return lastEntry?.balanceAfter || 0;
+    return Number(lastEntry?.balanceAfter || 0);
   }
 
   async getPurchaseOrders(id, tenantId, query) {

@@ -26,7 +26,7 @@ class LedgerService {
       select: { balanceAfter: true },
     });
 
-    const previousBalance = lastEntry?.balanceAfter || 0;
+    const previousBalance = Number(lastEntry?.balanceAfter || 0);
 
     // In Accounts Payable Ledger (Money you owe):
     // Debit increases what you owe (e.g. Purchase Invoice)
@@ -37,7 +37,7 @@ class LedgerService {
     // Balance = Prev + Debit - Credit.
     // This means Debit is "Amount Owed" and Credit is "Amount Paid".
 
-    const balanceAfter = previousBalance + debitAmount - creditAmount;
+    const balanceAfter = previousBalance + Number(debitAmount) - Number(creditAmount);
 
     const entry = await tx.supplierLedger.create({
       data: {

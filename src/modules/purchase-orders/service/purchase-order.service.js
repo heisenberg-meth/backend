@@ -604,8 +604,8 @@ class PurchaseOrderService {
           select: { balanceAfter: true },
         });
 
-        const currentBalance = lastBalance?.balanceAfter || 0;
-        const balanceAfter = currentBalance + totalVal;
+        const currentBalance = Number(lastBalance?.balanceAfter || 0);
+        const balanceAfter = currentBalance + Number(totalVal);
 
         await tx.supplierLedger.create({
           data: {

@@ -62,6 +62,13 @@ class PurchaseOrderPrismaRepository {
             },
           },
         },
+        goodsReceiptNotes: {
+          orderBy: { createdAt: 'desc' },
+          take: 1,
+          include: {
+            items: true,
+          },
+        },
       },
     });
   }
