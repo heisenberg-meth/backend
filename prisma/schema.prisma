@@ -234,14 +234,14 @@ model User {
   resetOtpVerified             Boolean                    @default(false)
   resetToken                   String?
   resetTokenExpiry             DateTime?
-  twoFactorSecret              String?
-  twoFactorEnabled             Boolean                    @default(false)
   roleId                       String?
   avatarData                   Bytes?
   avatarMimeType               String?
   status                       UserStatus                 @default(ACTIVE)
   blockedAt                    DateTime?
   blockedReason                String?
+  twoFactorSecret              String?
+  twoFactorEnabled             Boolean                    @default(false)
   alertSettings                AlertSettings[]
   auditLogs                    AuditLog[]
   batchAuditLogs               BatchAuditLog[]
@@ -677,8 +677,7 @@ model Medicine {
   @@index([tenantId, dosageForm])
   @@index([tenantId, scheduleType])
   @@index([tenantId, deletedAt])
-  @@index([tenantId, deletedAt, isActive])
-  @@index([tenantId, isActive])
+  @@index([tenantId, deletedAt, isActive], map: "idx_medicine_tenant_deleted_active")
 }
 
 model MedicinePricing {
@@ -785,6 +784,7 @@ model Inventory {
   @@index([medicineId])
   @@index([tenantId, branchId, status])
   @@index([tenantId, branchId, currentStock])
+  @@index([tenantId, branchId, medicineId, currentStock, reorderPoint], map: "idx_inventory_tenant_branch_medicine_stock_reorder")
 }
 
 model InventoryBatch {
@@ -844,7 +844,6 @@ model InventoryBatch {
   @@index([tenantId, branchId, medicineId, status, expiryDate], map: "idx_batch_fefo")
   @@index([tenantId, deletedAt])
   @@index([tenantId, status, expiryDate])
-  @@index([tenantId, branchId, quantity, expiryDate])
   @@index([barcode])
 }
 
@@ -867,6 +866,7 @@ model BatchAuditLog {
 
   @@index([batchId])
   @@index([tenantId])
+  @@index([batchId, actionType, performedAt(sort: Desc)], map: "idx_batch_audit_log_batch_action_created")
 }
 
 model StockMovement {
@@ -894,6 +894,7 @@ model StockMovement {
   @@index([tenantId, createdAt])
   @@index([medicineId, createdAt])
   @@index([batchId])
+  @@index([tenantId, medicineId, batchId, movementType], map: "idx_stock_movement_tenant_medicine_batch_type")
 }
 
 model StockSnapshot {
@@ -1071,9 +1072,9 @@ model Supplier {
   isPreferred        Boolean              @default(false)
   licenseExpiry      DateTime?
   outstandingBalance Decimal              @default(0) @db.Decimal(12, 2)
-  drugCategories     String[]
   supplierType       SupplierType         @default(WHOLESALER)
   status             SupplierStatus       @default(ACTIVE)
+  drugCategories     String[]             @default([])
   inventoryBatches   InventoryBatch[]
   medicineSuppliers  MedicineSupplier[]
   purchaseInvoices   PurchaseInvoice[]
@@ -1091,7 +1092,6 @@ model Supplier {
   @@index([tenantId, supplierType])
   @@index([tenantId, status])
   @@index([tenantId, isPreferred])
-  @@index([tenantId, deletedAt])
   @@index([licenseExpiry])
 }
 
@@ -1136,6 +1136,7 @@ model SupplierLedger {
   tenant        Tenant   @relation(fields: [tenantId], references: [id])
 
   @@index([supplierId, createdAt])
+  @@index([tenantId, supplierId, createdAt(sort: Desc)], map: "idx_supplier_ledger_tenant_supplier_created")
 }
 
 model SupplierPayment {
@@ -1194,38 +1195,39 @@ model SupplierMetrics {
 }
 
 model SupplierReturn {
-  id           String               @id @default(uuid())
+  id                String               @id @default(uuid())
   tenantId          String
   supplierId        String
-  purchaseInvoiceId String?
   batchId           String?
-  quantity     Int?
-  reason       String?
-  createdAt    DateTime             @default(now())
-  updatedAt    DateTime             @updatedAt
-  status       SupplierReturnStatus @default(PENDING)
-  returnAmount Decimal?             @default(0) @db.Decimal(12, 2)
-  createdBy    String?
-  medicineId   String?
-  returnNumber String
-  approvedAt   DateTime?
-  approvedBy   String?
-  pickedUpAt   DateTime?
-  notes        String?
-  creditNotes  SupplierCreditNote[]
-  approver     User?                @relation("SupplierReturnApprover", fields: [approvedBy], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  batch        InventoryBatch?      @relation(fields: [batchId], references: [id])
-  creator      User?                @relation("SupplierReturnCreator", fields: [createdBy], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  medicine        Medicine?            @relation(fields: [medicineId], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  purchaseInvoice PurchaseInvoice?     @relation(fields: [purchaseInvoiceId], references: [id])
-  supplier        Supplier             @relation(fields: [supplierId], references: [id])
-  tenant          Tenant               @relation(fields: [tenantId], references: [id])
-  items        SupplierReturnItem[]
+  quantity          Int?
+  reason            String?
+  createdAt         DateTime             @default(now())
+  updatedAt         DateTime             @updatedAt
+  status            SupplierReturnStatus @default(PENDING)
+  returnAmount      Decimal?             @default(0) @db.Decimal(12, 2)
+  createdBy         String?
+  medicineId        String?
+  returnNumber      String
+  approvedAt        DateTime?
+  approvedBy        String?
+  pickedUpAt        DateTime?
+  notes             String?
+  purchaseInvoiceId String?
+  creditNotes       SupplierCreditNote[]
+  approver          User?                @relation("SupplierReturnApprover", fields: [approvedBy], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  batch             InventoryBatch?      @relation(fields: [batchId], references: [id])
+  creator           User?                @relation("SupplierReturnCreator", fields: [createdBy], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  medicine          Medicine?            @relation(fields: [medicineId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  purchaseInvoice   PurchaseInvoice?     @relation(fields: [purchaseInvoiceId], references: [id])
+  supplier          Supplier             @relation(fields: [supplierId], references: [id])
+  tenant            Tenant               @relation(fields: [tenantId], references: [id])
+  items             SupplierReturnItem[]
 
   @@unique([tenantId, returnNumber])
-  @@index([tenantId, status])
   @@index([tenantId, supplierId, status])
   @@index([tenantId, createdAt])
+  @@index([purchaseInvoiceId], map: "idx_supplier_return_purchase_invoice")
+  @@index([tenantId, supplierId, status], map: "idx_supplier_return_tenant_supplier_status")
 }
 
 model SupplierReturnItem {
@@ -1265,7 +1267,6 @@ model SupplierCreditNote {
   tenant           Tenant           @relation(fields: [tenantId], references: [id])
 
   @@unique([tenantId, creditNoteNumber])
-  @@index([tenantId, status])
   @@index([tenantId, supplierId, status])
 }
 
@@ -1310,7 +1311,6 @@ model PurchaseOrder {
   @@unique([tenantId, orderNumber])
   @@index([tenantId, status])
   @@index([tenantId, supplierId])
-  @@index([tenantId, status, deletedAt])
 }
 
 model PurchaseOrderApproval {
@@ -1361,6 +1361,7 @@ model GoodsReceiptNote {
 
   @@unique([tenantId, grnNumber])
   @@index([tenantId, purchaseOrderId])
+  @@index([tenantId, purchaseOrderId, receivedDate], map: "idx_grn_tenant_po_date")
 }
 
 model GoodsReceiptNoteItem {
@@ -1408,6 +1409,7 @@ model PurchaseInvoice {
   @@index([tenantId, purchaseOrderId])
   @@index([tenantId, createdAt])
   @@index([tenantId, dueDate])
+  @@index([tenantId, supplierId, invoiceDate], map: "idx_purchase_invoice_tenant_supplier_date")
 }
 
 model Patient {
@@ -1467,10 +1469,6 @@ model Patient {
 
   @@unique([tenantId, patientCode])
   @@index([tenantId, phone])
-  @@index([tenantId, fullName])
-  @@index([tenantId, deletedAt])
-  @@index([tenantId, status])
-  @@index([tenantId, createdAt])
 }
 
 model PatientAuditLog {
@@ -1904,6 +1902,7 @@ model Sale {
   @@index([tenantId, soldAt])
   @@index([tenantId, branchId, soldAt])
   @@index([tenantId, status, soldAt])
+  @@index([tenantId, branchId, soldAt], map: "idx_sale_tenant_branch_soldat")
 }
 
 model SaleItem {
@@ -2292,6 +2291,7 @@ model AuditLog {
 
   @@index([tenantId, type])
   @@index([tenantId, date])
+  @@index([tenantId, action, date(sort: Desc)], map: "idx_audit_log_tenant_action_date")
 }
 
 model BatchRecall {
