@@ -120,6 +120,29 @@ const handlers = {
     }
   },
 
+  'disposal-integrity-check': async () => {
+    logger.info('[Integrity] Checking disposal data consistency...');
+    const orphans = await prisma.inventoryBatch.findMany({
+      where: {
+        status: 'EXPIRED',
+        inventoryDisposals: { some: {} },
+      },
+      select: { id: true, batchNumber: true, quantity: true, status: true },
+    });
+
+    if (orphans.length > 0) {
+      logger.warn({ count: orphans.length, batches: orphans.map((o) => o.id) },
+        `[Integrity] ${orphans.length} disposed batches still marked EXPIRED - auto-repairing`);
+      await prisma.inventoryBatch.updateMany({
+        where: { id: { in: orphans.map((o) => o.id) } },
+        data: { status: 'ARCHIVED' },
+      });
+      logger.info(`[Integrity] Auto-repaired ${orphans.length} disposed batches`);
+    } else {
+      logger.info('[Integrity] Disposal data consistent - no orphaned batches found');
+    }
+  },
+
   'supplier-overdue-scan': async () => {
     logger.info('Starting supplier overdue scan...');
     const now = new Date();

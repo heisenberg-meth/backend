@@ -13,6 +13,9 @@ class SupplierReturnService {
 
     const items = [];
     for (const item of data.items) {
+      if (!item.batchId) {
+        throw new Error('Batch ID is required for each return item');
+      }
       const batch = await prisma.inventoryBatch.findUnique({
         where: { id: item.batchId },
         select: { purchasePrice: true, expiryDate: true, quantity: true },

@@ -105,6 +105,16 @@ class DisposalService {
         continue;
       }
 
+      if (batch.status !== 'EXPIRED') {
+        results.push({
+          medicineId,
+          batchId,
+          status: 'SKIPPED',
+          reason: `Only expired batches can be disposed. Current status: ${batch.status}`,
+        });
+        continue;
+      }
+
       if (batch.quantity < quantity) {
         results.push({
           medicineId,
@@ -171,6 +181,16 @@ class DisposalService {
             disposedBy: userId,
           },
         });
+
+        if (newStatus === 'ARCHIVED') {
+          const updatedBatch = await tx.inventoryBatch.findUnique({
+            where: { id: batchId },
+            select: { status: true },
+          });
+          if (updatedBatch.status !== 'ARCHIVED') {
+            throw new Error(`Disposal verification failed for batch ${batchId}`);
+          }
+        }
       });
 
       results.push({ medicineId, batchId, quantity, status: 'DISPOSED' });

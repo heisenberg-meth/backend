@@ -74,6 +74,14 @@ const cronManager = {
     await mainQueue.add('patient-adherence-scoring', {}, { repeat: { pattern: '0 2 * * *' } });
 
     await mainQueue.add('patient-prescription-expiry', {}, { repeat: { pattern: '0 3 * * *' } });
+
+    await mainQueue.add(
+      'disposal-integrity-check',
+      {},
+      {
+        repeat: { pattern: '0 4 * * *' },
+      },
+    );
   },
 };
 

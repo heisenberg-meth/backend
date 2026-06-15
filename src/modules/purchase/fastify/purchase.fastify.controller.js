@@ -24,13 +24,22 @@ class PurchaseFastifyController {
         return reply.code(400).send({ success: false, message: 'Return items required' });
       }
 
+      for (const item of items) {
+        if (!item.batchId) {
+          return reply.code(400).send({ success: false, message: 'Batch ID is required for each return item' });
+        }
+        if (!item.quantity || Number(item.quantity) <= 0) {
+          return reply.code(400).send({ success: false, message: 'Valid quantity required for each return item' });
+        }
+      }
+
       const results = [];
       for (const item of items) {
         const result = await supplierReturnService.processReturn(
           request.tenantId,
           {
             batchId: item.batchId,
-            quantity: Number(item.quantity) || 1,
+            quantity: Number(item.quantity),
             supplierId,
             reason: reason || 'Return',
           },

@@ -13,6 +13,15 @@ class SupplierReturnController {
 
   async createReturn(request, reply) {
     try {
+      const { items } = request.body;
+      if (!Array.isArray(items) || items.length === 0) {
+        return reply.code(400).send({ success: false, message: 'Return items required' });
+      }
+      for (const item of items) {
+        if (!item.batchId) {
+          return reply.code(400).send({ success: false, message: 'Batch ID is required for each return item' });
+        }
+      }
       const returnRecord = await supplierReturnService.createReturn(
         request.tenantId,
         request.body,

@@ -1069,6 +1069,7 @@ model Supplier {
   isPreferred        Boolean              @default(false)
   licenseExpiry      DateTime?
   outstandingBalance Decimal              @default(0) @db.Decimal(12, 2)
+  drugCategories     String[]
   supplierType       SupplierType         @default(WHOLESALER)
   status             SupplierStatus       @default(ACTIVE)
   inventoryBatches   InventoryBatch[]

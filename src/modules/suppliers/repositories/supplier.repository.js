@@ -26,6 +26,7 @@ class SupplierRepository {
           id: true,
           supplierCode: true,
           name: true,
+          drugCategories: true,
           supplierType: true,
           contactPerson: true,
           phone: true,

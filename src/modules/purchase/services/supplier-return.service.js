@@ -5,12 +5,20 @@ import logger from '../../../shared/utils/logger.js';
 
 class SupplierReturnService {
   async processReturn(tenantId, data, userId) {
+    if (!data.batchId) {
+      throw new Error('Batch ID is required');
+    }
+
     const batch = await prisma.inventoryBatch.findUnique({
       where: { id: data.batchId },
       include: { medicine: true },
     });
 
     if (!batch) throw new Error(`Batch ${data.batchId} not found`);
+
+    if (data.quantity > batch.quantity) {
+      throw new Error(`Return quantity (${data.quantity}) exceeds available stock (${batch.quantity})`);
+    }
 
     await movementService.stockOut(tenantId, {
       medicineId: batch.medicineId,
