@@ -14,15 +14,32 @@ class SupplierReturnService {
       // Validate Purchase Invoice Status
       const invoice = await tx.purchaseInvoice.findUnique({
         where: { id: purchaseInvoiceId },
-        include: { inventoryBatches: true },
+        include: {
+          inventoryBatches: true,
+          purchaseOrder: true,
+        },
       });
 
       if (!invoice || invoice.tenantId !== tenantId) {
         throw new Error('Purchase invoice not found');
       }
 
-      if (invoice.status !== 'RECEIVED' && invoice.status !== 'PARTIALLY_RECEIVED') {
-        throw new Error('Invoice cannot be returned');
+      const invoiceStatus = invoice.purchaseOrder?.status || 'RECEIVED';
+      if (invoiceStatus !== 'RECEIVED' && invoiceStatus !== 'PARTIALLY_RECEIVED') {
+        throw new Error(
+          `Invoice status is ${invoiceStatus}. Only RECEIVED invoices can be returned`,
+        );
+      }
+
+      if (!invoice.inventoryBatches || invoice.inventoryBatches.length === 0) {
+        throw new Error('No inventory batches found for this invoice');
+      }
+
+      const existingReturn = await tx.supplierReturn.findFirst({
+        where: { purchaseInvoiceId },
+      });
+      if (existingReturn) {
+        throw new Error('Invoice has already been returned');
       }
 
       // Validate Supplier Existence
