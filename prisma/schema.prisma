@@ -1193,9 +1193,10 @@ model SupplierMetrics {
 
 model SupplierReturn {
   id           String               @id @default(uuid())
-  tenantId     String
-  supplierId   String
-  batchId      String?
+  tenantId          String
+  supplierId        String
+  purchaseInvoiceId String?
+  batchId           String?
   quantity     Int?
   reason       String?
   createdAt    DateTime             @default(now())
@@ -1213,9 +1214,10 @@ model SupplierReturn {
   approver     User?                @relation("SupplierReturnApprover", fields: [approvedBy], references: [id], onDelete: NoAction, onUpdate: NoAction)
   batch        InventoryBatch?      @relation(fields: [batchId], references: [id])
   creator      User?                @relation("SupplierReturnCreator", fields: [createdBy], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  medicine     Medicine?            @relation(fields: [medicineId], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  supplier     Supplier             @relation(fields: [supplierId], references: [id])
-  tenant       Tenant               @relation(fields: [tenantId], references: [id])
+  medicine        Medicine?            @relation(fields: [medicineId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  purchaseInvoice PurchaseInvoice?     @relation(fields: [purchaseInvoiceId], references: [id])
+  supplier        Supplier             @relation(fields: [supplierId], references: [id])
+  tenant          Tenant               @relation(fields: [tenantId], references: [id])
   items        SupplierReturnItem[]
 
   @@unique([tenantId, returnNumber])
@@ -1395,6 +1397,7 @@ model PurchaseInvoice {
   supplier         Supplier                    @relation(fields: [supplierId], references: [id])
   tenant           Tenant                      @relation(fields: [tenantId], references: [id])
   allocations      SupplierPaymentAllocation[]
+  supplierReturns  SupplierReturn[]
 
   @@unique([tenantId, invoiceNumber])
   @@index([tenantId, invoiceDate])
