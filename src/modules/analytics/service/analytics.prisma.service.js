@@ -873,22 +873,18 @@ class AnalyticsPrismaService {
       }
     }
 
-    const branchCogs = await prisma.$queryRawUnsafe(
-      `
+    const branchCogs = await prisma.$queryRaw`
       SELECT
         s."branchId",
         COALESCE(SUM(si.quantity * COALESCE(ib."purchasePrice", 0)), 0) as cogs
       FROM "SaleItem" si
       JOIN "Sale" s ON s.id = si."saleId"
       LEFT JOIN "InventoryBatch" ib ON ib.id = si."batchId"
-      WHERE s."tenantId" = $1
-        AND s."branchId" = ANY($2::uuid[])
+      WHERE s."tenantId" = ${tenantId}
+        AND s."branchId" = ANY(${branchIds}::uuid[])
         AND s.status = 'COMPLETED'
       GROUP BY s."branchId"
-    `,
-      tenantId,
-      branchIds,
-    );
+    `;
 
     const branchCogsMap = {};
     for (const bc of branchCogs) {

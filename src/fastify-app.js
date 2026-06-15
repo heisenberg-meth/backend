@@ -193,7 +193,6 @@ const setupFastify = async () => {
       '/api/auth/resend-reset-otp',
       '/api/payments/webhook',
       '/health',
-      '/api/billing',
       '/api/admin/login',
       '/api/admin/refresh',
     ];

@@ -28,7 +28,10 @@ async function purchaseOrderRoutes(fastify) {
   fastify.get(
     '/invoices',
     {
-      schema: { tags: ['Purchase Orders', 'Invoices'], summary: 'Get all generated purchase invoices' },
+      schema: {
+        tags: ['Purchase Orders', 'Invoices'],
+        summary: 'Get all generated purchase invoices',
+      },
       preHandler: [requirePermission('purchase-orders.read')],
     },
     purchaseOrderController.getInvoices,
@@ -82,7 +85,24 @@ async function purchaseOrderRoutes(fastify) {
           properties: {
             supplierId: { type: 'string', format: 'uuid' },
             branchId: { type: 'string', format: 'uuid' },
-            items: { type: 'array', minItems: 1 },
+            supplierInvoiceNumber: { type: 'string' },
+            invoiceDate: { type: 'string', format: 'date-time' },
+            items: {
+              type: 'array',
+              minItems: 1,
+              items: {
+                type: 'object',
+                required: ['medicineId', 'quantity', 'purchasePrice'],
+                properties: {
+                  medicineId: { type: 'string', format: 'uuid' },
+                  quantity: { type: 'integer', minimum: 1 },
+                  purchasePrice: { type: 'number', minimum: 0 },
+                  sellingPrice: { type: 'number', minimum: 0 },
+                  batchNumber: { type: 'string' },
+                  expiryDate: { type: 'string' },
+                },
+              },
+            },
             subtotal: { type: 'number' },
             gstAmount: { type: 'number' },
             totalAmount: { type: 'number' },
