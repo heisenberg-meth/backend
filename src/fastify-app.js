@@ -95,6 +95,11 @@ const fastify = Fastify({
         : undefined,
   },
   trustProxy: true,
+  ajv: {
+    customOptions: {
+      strict: false,
+    },
+  },
 });
 
 const setupFastify = async () => {
@@ -437,10 +442,14 @@ const setupFastify = async () => {
       try {
         return await reply.sendFile('index.html');
       } catch (err) {
-        return reply.code(404).send('Frontend not built. index.html not found.');
+        return reply.code(404).send('Frontend not built. index.html not found.', err);
       }
     } else {
-      return reply.code(404).send({ success: false, error: 'Frontend not served on this instance', code: 'FRONTEND_MISSING' });
+      return reply.code(404).send({
+        success: false,
+        error: 'Frontend not served on this instance',
+        code: 'FRONTEND_MISSING',
+      });
     }
   });
 
