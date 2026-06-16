@@ -2,10 +2,11 @@ import prisma from '../../../config/prisma.js';
 import logger from '../../../shared/utils/logger.js';
 import stockRepository from '../repositories/stock.repository.js';
 import ledgerRepository from '../repositories/ledger.repository.js';
+import cacheInvalidatorService from '../../inventory/service/cache-invalidator.service.js';
 
 class MovementService {
   async stockOut(tenantId, { medicineId, quantity, type, branchId, batchId }, userId) {
-    return prisma.$transaction(async (tx) => {
+    const result = await prisma.$transaction(async (tx) => {
       const whereClause = {
         medicineId,
         quantity: { gt: 0 },
@@ -87,6 +88,9 @@ class MovementService {
 
       return { totalDeducted, batches: deductions };
     });
+
+    await cacheInvalidatorService.invalidateInventoryCaches(tenantId, medicineId);
+    return result;
   }
 
   async stockIn(tenantId, data, userId, tx) {
@@ -157,8 +161,11 @@ class MovementService {
       return newBatch;
     };
 
-    if (tx) return run(tx);
-    return prisma.$transaction(run);
+    const result = tx ? await run(tx) : await prisma.$transaction(run);
+    if (!tx) {
+      await cacheInvalidatorService.invalidateInventoryCaches(tenantId, data.medicineId);
+    }
+    return result;
   }
 
   async recordMovement(tenantId, data, userId, tx) {
@@ -257,8 +264,11 @@ class MovementService {
       );
     };
 
-    if (tx) return execute(tx);
-    return prisma.$transaction(execute);
+    const result = tx ? await execute(tx) : await prisma.$transaction(execute);
+    if (!tx) {
+      await cacheInvalidatorService.invalidateInventoryCaches(tenantId, medicineId);
+    }
+    return result;
   }
 }
 

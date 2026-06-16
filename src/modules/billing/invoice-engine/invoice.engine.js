@@ -8,6 +8,7 @@ import { emitLocalEvent } from '../../../shared/events/local-event-bus.js';
 import { emitEvent } from '../../../shared/events/erp-event-bus.js';
 import pointsService from '../../loyalty/points/points.service.js';
 import creditService from '../../loyalty/credits/credit.service.js';
+import cacheInvalidatorService from '../../inventory/service/cache-invalidator.service.js';
 
 class InvoiceEngine {
   _safeNumber(value) {
@@ -421,6 +422,11 @@ class InvoiceEngine {
       branchId: result.branchId,
     });
 
+    const medicineIds = result.storedSnapshot?.items?.map((i) => i.medicineId) || [];
+    if (medicineIds.length > 0) {
+      await cacheInvalidatorService.invalidateInventoryCaches(tenantId, medicineIds);
+    }
+
     return result;
   }
 
@@ -476,7 +482,8 @@ class InvoiceEngine {
   }
 
   async cancel(invoiceId, tenantId, userId, reason) {
-    return prisma.$transaction(async (tx) => {
+    let medicineIds = [];
+    const result = await prisma.$transaction(async (tx) => {
       const invoice = await tx.invoice.findFirst({
         where: { id: invoiceId, tenantId },
         include: { items: true, payments: true },
@@ -485,6 +492,10 @@ class InvoiceEngine {
       if (!invoice) throw new Error('Invoice not found');
       if (invoice.status === 'CANCELLED') throw new Error('Invoice already cancelled');
       if (invoice.status === 'REFUNDED') throw new Error('Cannot cancel refunded invoice');
+
+      if (invoice.items && invoice.items.length > 0) {
+        medicineIds = invoice.items.map((i) => i.medicineId);
+      }
 
       if (['FINALIZED', 'PAID', 'PARTIALLY_REFUNDED'].includes(invoice.status)) {
         for (const item of invoice.items) {
@@ -525,6 +536,11 @@ class InvoiceEngine {
 
       return updated;
     });
+
+    if (medicineIds.length > 0) {
+      await cacheInvalidatorService.invalidateInventoryCaches(tenantId, medicineIds);
+    }
+    return result;
   }
 
   async _calculateTotals(

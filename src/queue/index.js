@@ -131,8 +131,10 @@ const handlers = {
     });
 
     if (orphans.length > 0) {
-      logger.warn({ count: orphans.length, batches: orphans.map((o) => o.id) },
-        `[Integrity] ${orphans.length} disposed batches still marked EXPIRED - auto-repairing`);
+      logger.warn(
+        { count: orphans.length, batches: orphans.map((o) => o.id) },
+        `[Integrity] ${orphans.length} disposed batches still marked EXPIRED - auto-repairing`,
+      );
       await prisma.inventoryBatch.updateMany({
         where: { id: { in: orphans.map((o) => o.id) } },
         data: { status: 'ARCHIVED' },
@@ -248,6 +250,33 @@ const handlers = {
   'inventory-reconciliation': async () => {
     logger.info('Starting inventory & supplier reconciliation...');
     try {
+      // 1. Monitor and alert on discrepancies between Inventory table and InventoryBatch aggregates
+      const discrepancies = await prisma.$queryRaw`
+        SELECT 
+          i."id", i."tenantId", i."branchId", i."medicineId", 
+          i."currentStock", 
+          COALESCE(SUM(b."quantity"), 0) as "batchStock"
+        FROM "Inventory" i
+        LEFT JOIN "InventoryBatch" b 
+          ON b."medicineId" = i."medicineId" 
+          AND (b."branchId" = i."branchId" OR (b."branchId" IS NULL AND i."branchId" IS NULL))
+          AND b."tenantId" = i."tenantId"
+          AND b."deletedAt" IS NULL
+        GROUP BY i."id", i."tenantId", i."branchId", i."medicineId", i."currentStock"
+        HAVING i."currentStock" != COALESCE(SUM(b."quantity"), 0)
+      `;
+
+      if (discrepancies.length > 0) {
+        logger.warn(
+          { count: discrepancies.length, discrepancies },
+          '[INTEGRITY_ALERT] Discrepancies found between Inventory.currentStock and InventoryBatch totals before reconciliation.',
+        );
+      } else {
+        logger.info(
+          '[INTEGRITY_ALERT] No discrepancies found between Inventory.currentStock and InventoryBatch totals.',
+        );
+      }
+
       // Reconcile Inventory currentStock with sum of InventoryBatch quantities
       const inventoryReconciled = await prisma.$executeRaw`
         UPDATE "Inventory" i
