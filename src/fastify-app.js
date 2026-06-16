@@ -11,6 +11,7 @@ import fastifyJwt from '@fastify/jwt';
 import multipart from '@fastify/multipart';
 import rateLimit from '@fastify/rate-limit';
 import fastifyStatic from '@fastify/static';
+import fs from 'fs';
 import client from 'prom-client';
 import { Prisma } from '@prisma/client';
 import prisma from './config/prisma.js';
@@ -406,11 +407,21 @@ const setupFastify = async () => {
 
   // ── Serve frontend static files (SPA) ──
   const frontendDist = new URL('../../frontend/dist', import.meta.url).pathname;
-  await fastify.register(fastifyStatic, {
-    root: frontendDist,
-    prefix: '/',
-    wildcard: false,
-  });
+  const isFrontendBuilt = fs.existsSync(frontendDist);
+
+  if (isFrontendBuilt) {
+    await fastify.register(fastifyStatic, {
+      root: frontendDist,
+      prefix: '/',
+      wildcard: false,
+    });
+  } else {
+    // Add a basic root endpoint for health checks when frontend isn't served
+    fastify.get('/', async () => ({
+      status: 'ok',
+      message: 'Viyan MedAssist API Backend is running',
+    }));
+  }
 
   // SPA fallback: all non-API, non-file routes → index.html
   fastify.setNotFoundHandler(async (request, reply) => {
@@ -422,10 +433,14 @@ const setupFastify = async () => {
       return reply.code(404).send({ success: false, error: 'Route not found', code: 'NOT_FOUND' });
     }
 
-    try {
-      return await reply.sendFile('index.html');
-    } catch (err) {
-      return reply.code(404).send('Frontend not built. index.html not found.', err);
+    if (isFrontendBuilt) {
+      try {
+        return await reply.sendFile('index.html');
+      } catch (err) {
+        return reply.code(404).send('Frontend not built. index.html not found.');
+      }
+    } else {
+      return reply.code(404).send({ success: false, error: 'Frontend not served on this instance', code: 'FRONTEND_MISSING' });
     }
   });
 

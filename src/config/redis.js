@@ -4,6 +4,7 @@ import logger from '../shared/utils/logger.js';
 const redisUrl = process.env.REDIS_URL || 'redis://127.0.0.1:6379';
 
 let activeClient = null;
+let sharedBullQueueClient = null;
 
 const bullRedisClients = [];
 
@@ -61,6 +62,12 @@ const redisClientProxy = new Proxy(
 );
 
 const getBullRedis = () => {
+  const isWorker = new Error().stack.includes('Worker');
+  
+  if (!isWorker && sharedBullQueueClient && sharedBullQueueClient.status !== 'end') {
+    return sharedBullQueueClient;
+  }
+
   const client = new Redis(redisUrl, {
     maxRetriesPerRequest: null,
     lazyConnect: true,
@@ -76,10 +83,10 @@ const getBullRedis = () => {
 
   if (process.env.NODE_ENV !== 'test') {
     client.on('connect', () => {
-      logger.info('Bull Redis connected');
+      logger.info(isWorker ? 'Bull Redis connected (Worker)' : 'Bull Redis connected (Shared Queue)');
     });
     client.on('reconnecting', () => {
-      logger.warn('Bull Redis reconnecting');
+      logger.warn(isWorker ? 'Bull Redis reconnecting (Worker)' : 'Bull Redis reconnecting (Shared Queue)');
     });
     client.on('error', (err) => {
       logger.error({ err: err.message }, 'Bull Redis error');
@@ -87,6 +94,11 @@ const getBullRedis = () => {
   }
 
   bullRedisClients.push(client);
+  
+  if (!isWorker && !sharedBullQueueClient) {
+    sharedBullQueueClient = client;
+  }
+  
   return client;
 };
 
@@ -98,13 +110,6 @@ export const connectRedis = async () => {
     const client = getActiveClient();
     await client.ping();
     logger.info('Redis startup verification successful (PONG)');
-
-    try {
-      await client.config('SET', 'maxmemory-policy', 'noeviction');
-      logger.info('Redis eviction policy set to noeviction');
-    } catch (configErr) {
-      logger.warn({ err: configErr.message }, 'Failed to set Redis maxmemory-policy');
-    }
 
     return client;
   } catch (err) {
