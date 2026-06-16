@@ -122,8 +122,8 @@ const setupFastify = async () => {
     secret: env.cookieSecret,
     parseOptions: {
       httpOnly: true,
-      sameSite: 'none',
-      secure: true,
+      sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
+      secure: process.env.NODE_ENV === 'production',
       path: '/',
     },
   });

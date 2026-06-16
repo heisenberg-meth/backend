@@ -9,6 +9,7 @@ class DisposalService {
     const where = {
       tenantId,
       OR: [{ expiryDate: { lt: now } }, { status: 'EXPIRED' }],
+      status: { not: 'ARCHIVED' },
       quantity: { gt: 0 },
       deletedAt: null,
       medicine: { deletedAt: null },
@@ -53,6 +54,7 @@ class DisposalService {
     const where = {
       tenantId,
       OR: [{ expiryDate: { lt: now } }, { status: 'EXPIRED' }],
+      status: { not: 'ARCHIVED' },
       quantity: { gt: 0 },
       deletedAt: null,
       medicine: { deletedAt: null },
@@ -105,7 +107,8 @@ class DisposalService {
         continue;
       }
 
-      if (batch.status !== 'EXPIRED') {
+      const isExpired = batch.status === 'EXPIRED' || new Date(batch.expiryDate) < new Date();
+      if (!isExpired) {
         results.push({
           medicineId,
           batchId,

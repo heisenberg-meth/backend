@@ -28,7 +28,7 @@ import {
 const COOKIE_OPTIONS = {
   path: '/',
   httpOnly: true,
-  sameSite: 'none',
+  sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
   secure: process.env.NODE_ENV === 'production',
   maxAge: 30 * 24 * 60 * 60,
 };
@@ -36,7 +36,7 @@ const COOKIE_OPTIONS = {
 const ACCESS_COOKIE_OPTIONS = {
   path: '/',
   httpOnly: true,
-  sameSite: 'none',
+  sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
   secure: process.env.NODE_ENV === 'production',
   maxAge: 15 * 60,
 };
@@ -139,8 +139,8 @@ class AuthFastifyController {
     try {
       request.log.info(
         {
-          cookieToken: request.cookies?.refreshToken,
-          bodyToken: request.body?.refreshToken,
+          hasCookie: !!request.cookies?.refresh_token,
+          cookieNames: Object.keys(request.cookies || {}),
         },
         'Refresh request received',
       );

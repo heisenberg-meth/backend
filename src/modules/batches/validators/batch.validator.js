@@ -6,13 +6,16 @@ export const createBatchSchema = z.object({
   quantity: z.number().int().min(0, 'Quantity must be non-negative'),
   purchasePrice: z.number().min(0, 'Purchase price must be non-negative').default(0),
   sellingPrice: z.number().min(0, 'Selling price must be non-negative').default(0),
-  expiryDate: z.string().refine(
-    (val) => {
-      const d = new Date(val);
-      return !isNaN(d.getTime());
-    },
-    { message: 'Invalid expiry date' },
-  ),
+  expiryDate: z
+    .string()
+    .refine(
+      (val) => {
+        const d = new Date(val);
+        return !isNaN(d.getTime());
+      },
+      { message: 'Invalid expiry date' },
+    )
+    .transform((val) => new Date(val).toISOString()),
   manufacturingDate: z.string().optional().nullable(),
   barcode: z.string().optional().default(''),
   rackLocation: z.string().optional().default(''),
@@ -30,6 +33,7 @@ export const updateBatchSchema = z.object({
     .refine((val) => !isNaN(new Date(val).getTime()), {
       message: 'Invalid expiry date',
     })
+    .transform((val) => new Date(val).toISOString())
     .optional(),
   manufacturingDate: z.string().optional().nullable(),
   barcode: z.string().optional(),

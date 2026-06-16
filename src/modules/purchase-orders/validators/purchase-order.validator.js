@@ -3,7 +3,11 @@ import { z } from 'zod';
 export const createPurchaseOrderSchema = z.object({
   supplierId: z.string().uuid(),
   branchId: z.string().uuid().optional(),
-  expectedDeliveryDate: z.string().datetime().optional(),
+  expectedDeliveryDate: z
+    .string()
+    .refine((val) => !isNaN(Date.parse(val)), 'Invalid date')
+    .transform((val) => new Date(val).toISOString())
+    .optional(),
   notes: z.string().optional(),
   items: z
     .array(
@@ -31,7 +35,10 @@ export const receivePurchaseOrderSchema = z.object({
         medicineId: z.string().uuid(),
         receivedQuantity: z.number().int().positive(),
         batchNumber: z.string().min(1),
-        expiryDate: z.string().datetime(),
+        expiryDate: z
+          .string()
+          .refine((val) => !isNaN(Date.parse(val)), 'Invalid date')
+          .transform((val) => new Date(val).toISOString()),
       }),
     )
     .min(1),

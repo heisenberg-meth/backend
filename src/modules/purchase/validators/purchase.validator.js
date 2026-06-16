@@ -12,7 +12,11 @@ export const supplierSchema = z.object({
 
 export const poSchema = z.object({
   supplierId: z.string().uuid(),
-  expectedDeliveryDate: z.string().optional(),
+  expectedDeliveryDate: z
+    .string()
+    .refine((val) => !isNaN(Date.parse(val)), 'Invalid date')
+    .transform((val) => new Date(val).toISOString())
+    .optional(),
   notes: z.string().optional(),
   items: z
     .array(
@@ -30,7 +34,10 @@ export const receiveGoodsSchema = z.object({
   supplierId: z.string().uuid(),
   purchaseOrderId: z.string().uuid().optional(),
   supplierInvoiceNumber: z.string().min(1),
-  invoiceDate: z.string(),
+  invoiceDate: z
+    .string()
+    .refine((val) => !isNaN(Date.parse(val)), 'Invalid date')
+    .transform((val) => new Date(val).toISOString()),
   subtotal: z.number().min(0),
   gstAmount: z.number().min(0),
   totalAmount: z.number().min(0),
@@ -41,7 +48,10 @@ export const receiveGoodsSchema = z.object({
         medicineId: z.string().uuid(),
         batchNumber: z.string().min(1),
         quantity: z.number().int().positive(),
-        expiryDate: z.string(),
+        expiryDate: z
+          .string()
+          .refine((val) => !isNaN(Date.parse(val)), 'Invalid date')
+          .transform((val) => new Date(val).toISOString()),
         purchasePrice: z.number().min(0),
         sellingPrice: z.number().min(0),
       }),

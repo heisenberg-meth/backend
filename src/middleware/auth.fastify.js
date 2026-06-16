@@ -50,10 +50,25 @@ export const authenticate = async (request, reply) => {
     request.headers.authorization = `Bearer ${cookieToken}`;
   }
 
+  if (!request.headers.authorization) {
+    logger.warn(
+      {
+        url: request.url,
+        hasCookies: !!request.cookies,
+        cookieNames: Object.keys(request.cookies || {}),
+      },
+      '[AUTH] No Authorization header or accessToken cookie found',
+    );
+    return reply.code(401).send({
+      success: false,
+      error: { message: 'No authorization provided', code: 'NO_AUTH' },
+    });
+  }
+
   try {
     await request.jwtVerify();
   } catch (err) {
-    logger.error({ err }, '[AUTH] Invalid or expired token');
+    logger.error({ err, url: request.url }, '[AUTH] Invalid or expired token');
     return reply.code(401).send({
       success: false,
       error: { message: 'Invalid or expired token', code: 'TOKEN_INVALID' },
