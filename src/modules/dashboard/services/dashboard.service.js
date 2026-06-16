@@ -1,6 +1,7 @@
 import prisma from '../../../config/prisma.js';
 import { initRedis } from '../../../config/redis.js';
 import unifiedInventorySummaryService from '../../inventory/service/unified-inventory-summary.service.js';
+import medicinePrismaService from '../../inventory/service/medicine.prisma.service.js';
 
 const redisClient = initRedis();
 const CACHE_TTL = 120;
@@ -15,22 +16,31 @@ class DashboardService {
     const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate());
     const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
 
-    const [unified, totalSuppliers, totalCustomers, todaySales, monthSales, activeStockAlerts, activeExpiryAlerts] =
-      await Promise.all([
-        unifiedInventorySummaryService.getUnifiedSummary(tenantId, null, true),
-        prisma.supplier.count({ where: { tenantId, deletedAt: null } }),
-        prisma.patient.count({ where: { tenantId, deletedAt: null } }),
-        prisma.sale.aggregate({
-          where: { tenantId, soldAt: { gte: startOfDay } },
-          _sum: { totalAmount: true },
-        }),
-        prisma.sale.aggregate({
-          where: { tenantId, soldAt: { gte: startOfMonth } },
-          _sum: { totalAmount: true },
-        }),
-        prisma.stockAlert.count({ where: { tenantId, isResolved: false } }),
-        prisma.expiryAlert.count({ where: { tenantId, resolved: false } }),
-      ]);
+    const [
+      unified,
+      lowStockAlertsData,
+      totalSuppliers,
+      totalCustomers,
+      todaySales,
+      monthSales,
+      activeStockAlerts,
+      activeExpiryAlerts,
+    ] = await Promise.all([
+      unifiedInventorySummaryService.getUnifiedSummary(tenantId, null, true),
+      medicinePrismaService.getLowStockAlerts(tenantId, null),
+      prisma.supplier.count({ where: { tenantId, deletedAt: null } }),
+      prisma.patient.count({ where: { tenantId, deletedAt: null } }),
+      prisma.sale.aggregate({
+        where: { tenantId, soldAt: { gte: startOfDay } },
+        _sum: { totalAmount: true },
+      }),
+      prisma.sale.aggregate({
+        where: { tenantId, soldAt: { gte: startOfMonth } },
+        _sum: { totalAmount: true },
+      }),
+      prisma.stockAlert.count({ where: { tenantId, isResolved: false } }),
+      prisma.expiryAlert.count({ where: { tenantId, resolved: false } }),
+    ]);
 
     const result = {
       totalMedicines: unified.totalMedicines,
@@ -40,7 +50,7 @@ class DashboardService {
       totalRevenue: monthSales._sum.totalAmount || 0,
       activeAlerts: activeStockAlerts + activeExpiryAlerts,
       expiringCount: unified.expiringBatches,
-      lowStockCount: unified.lowStockCount,
+      lowStockCount: lowStockAlertsData.length,
     };
 
     await redisClient.set(cacheKey, JSON.stringify(result), 'EX', CACHE_TTL);
@@ -132,11 +142,14 @@ class DashboardService {
     const cached = await redisClient.get(cacheKey);
     if (cached) return JSON.parse(cached);
 
-    const unified = await unifiedInventorySummaryService.getUnifiedSummary(tenantId, null, true);
+    const [unified, lowStockAlertsData] = await Promise.all([
+      unifiedInventorySummaryService.getUnifiedSummary(tenantId, null, true),
+      medicinePrismaService.getLowStockAlerts(tenantId, null),
+    ]);
 
     const result = {
       totalStock: unified.totalStock,
-      lowStockItems: unified.lowStockCount,
+      lowStockItems: lowStockAlertsData.length,
       outOfStockItems: unified.outOfStockCount,
       expiringItems: unified.expiringBatches,
       expiredItems: unified.expiredBatches,

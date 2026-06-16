@@ -1,4 +1,5 @@
 import prisma from '../../../config/prisma.js';
+import { Prisma } from '@prisma/client';
 
 class MedicinePrismaRepository {
   async findAll({
@@ -37,88 +38,75 @@ class MedicinePrismaRepository {
     let total = 0;
 
     if (lowStock || status) {
-      const allMedicines = await prisma.medicine.findMany({
-        where: baseWhere,
-        include: {
-          category: true,
-          manufacturer: true,
-          inventory: {
-            where: targetBranchId ? { branchId: targetBranchId } : {},
+      const upperStatus = status ? status.toUpperCase().replace(' ', '_') : null;
+      const bCond = targetBranchId
+        ? Prisma.sql`AND ib."branchId" = ${targetBranchId}`
+        : Prisma.sql``;
+
+      const idsResult = await prisma.$queryRaw`
+        WITH batch_aggregates AS (
+          SELECT 
+            ib."medicineId",
+            SUM(ib."quantity") as current_stock,
+            MIN(ib."expiryDate") as next_expiry
+          FROM "InventoryBatch" ib
+          WHERE ib."tenantId" = ${tenantId}
+            AND ib."deletedAt" IS NULL
+          ${bCond}
+          GROUP BY ib."medicineId"
+        ),
+        inventory_aggregates AS (
+          SELECT
+            i."medicineId",
+            MAX(i."reorderPoint") as max_reorder_point
+          FROM "Inventory" i
+          WHERE i."tenantId" = ${tenantId}
+          ${targetBranchId ? Prisma.sql`AND i."branchId" = ${targetBranchId}` : Prisma.sql``}
+          GROUP BY i."medicineId"
+        )
+        SELECT m."id"
+        FROM "Medicine" m
+        LEFT JOIN batch_aggregates ba ON m."id" = ba."medicineId"
+        LEFT JOIN inventory_aggregates ia ON m."id" = ia."medicineId"
+        WHERE m."tenantId" = ${tenantId}
+          AND m."deletedAt" IS NULL
+          ${isActive !== undefined ? Prisma.sql`AND m."isActive" = ${isActive}` : Prisma.sql``}
+          ${categoryId ? Prisma.sql`AND m."categoryId" = ${categoryId}` : Prisma.sql``}
+          ${manufacturerId ? Prisma.sql`AND m."manufacturerId" = ${manufacturerId}` : Prisma.sql``}
+          ${search ? Prisma.sql`AND (m."name" ILIKE ${'%' + search + '%'} OR m."genericName" ILIKE ${'%' + search + '%'} OR m."barcode" ILIKE ${'%' + search + '%'} OR m."sku" ILIKE ${'%' + search + '%'})` : Prisma.sql``}
+          ${upperStatus === 'IN_STOCK' ? Prisma.sql`AND COALESCE(ba.current_stock, 0) > COALESCE(ia.max_reorder_point, m."reorderLevel", 10)` : Prisma.sql``}
+          ${upperStatus === 'LOW_STOCK' || lowStock ? Prisma.sql`AND COALESCE(ba.current_stock, 0) > 0 AND COALESCE(ba.current_stock, 0) <= COALESCE(ia.max_reorder_point, m."reorderLevel", 10)` : Prisma.sql``}
+          ${upperStatus === 'OUT_OF_STOCK' ? Prisma.sql`AND COALESCE(ba.current_stock, 0) <= 0` : Prisma.sql``}
+          ${upperStatus === 'EXPIRING_SOON' ? Prisma.sql`AND ba.next_expiry > NOW() AND ba.next_expiry <= (NOW() + INTERVAL '30 days')` : Prisma.sql``}
+          ${upperStatus === 'EXPIRED' ? Prisma.sql`AND ba.next_expiry <= NOW()` : Prisma.sql``}
+        ORDER BY m.${Prisma.raw(`"${sortBy || 'name'}"`)} ${order === 'desc' ? Prisma.sql`DESC` : Prisma.sql`ASC`}
+      `;
+
+      total = idsResult.length;
+      const paginatedIds = idsResult.slice(skip || 0, (skip || 0) + (take || 20)).map((r) => r.id);
+
+      if (paginatedIds.length === 0) {
+        medicines = [];
+      } else {
+        medicines = await prisma.medicine.findMany({
+          where: { id: { in: paginatedIds } },
+          include: {
+            category: true,
+            manufacturer: true,
+            inventory: {
+              where: targetBranchId ? { branchId: targetBranchId } : {},
+            },
+            inventoryBatches: {
+              where: { ...(targetBranchId ? { branchId: targetBranchId } : {}), deletedAt: null },
+              orderBy: { expiryDate: 'asc' },
+            },
           },
-          inventoryBatches: {
-            where: { ...(targetBranchId ? { branchId: targetBranchId } : {}), deletedAt: null },
-            orderBy: { expiryDate: 'asc' },
-          },
-        },
-        orderBy: { [sortBy || 'name']: order || 'asc' },
-      });
+        });
 
-      const now = new Date();
-      const thirtyDaysLater = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
-
-      const filtered = allMedicines.filter((m) => {
-        let currentStock = 0;
-        let reorderPt = m.reorderLevel ? Number(m.reorderLevel) : 10;
-
-        if (targetBranchId) {
-          const inv = m.inventory?.[0];
-          currentStock = inv?.currentStock ? Number(inv.currentStock) : 0;
-          reorderPt = inv?.reorderPoint
-            ? Number(inv.reorderPoint)
-            : m.reorderLevel
-              ? Number(m.reorderLevel)
-              : 10;
-        } else {
-          currentStock =
-            m.inventory?.reduce(
-              (sum, inv) => sum + (inv.currentStock ? Number(inv.currentStock) : 0),
-              0,
-            ) || 0;
-          reorderPt =
-            m.inventory && m.inventory.length > 0
-              ? Math.max(
-                  ...m.inventory.map((inv) => (inv.reorderPoint ? Number(inv.reorderPoint) : 0)),
-                  m.reorderLevel ? Number(m.reorderLevel) : 10,
-                )
-              : m.reorderLevel
-                ? Number(m.reorderLevel)
-                : 10;
-        }
-
-        const latestBatch = m.inventoryBatches?.[0] || null;
-        const expDate = latestBatch?.expiryDate ? new Date(latestBatch.expiryDate) : null;
-
-        if (lowStock && !(currentStock > 0 && currentStock <= reorderPt)) {
-          return false;
-        }
-
-        if (status) {
-          const upperStatus = status.toUpperCase().replace(' ', '_');
-          if (upperStatus === 'IN_STOCK' && !(currentStock > reorderPt)) {
-            return false;
-          }
-          if (upperStatus === 'LOW_STOCK' && !(currentStock > 0 && currentStock <= reorderPt)) {
-            return false;
-          }
-          if (upperStatus === 'OUT_OF_STOCK' && !(currentStock === 0)) {
-            return false;
-          }
-          if (
-            upperStatus === 'EXPIRING_SOON' &&
-            !(expDate && expDate > now && expDate <= thirtyDaysLater)
-          ) {
-            return false;
-          }
-          if (upperStatus === 'EXPIRED' && !(expDate && expDate <= now)) {
-            return false;
-          }
-        }
-
-        return true;
-      });
-
-      total = filtered.length;
-      medicines = filtered.slice(skip || 0, (skip || 0) + (take || 20));
+        // Re-sort correctly based on raw SQL IDs to preserve ordering
+        const sortMap = new Map(paginatedIds.map((id, index) => [id, index]));
+        medicines.sort((a, b) => sortMap.get(a.id) - sortMap.get(b.id));
+      }
     } else {
       const results = await Promise.all([
         prisma.medicine.findMany({

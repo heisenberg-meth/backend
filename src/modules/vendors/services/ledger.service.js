@@ -31,8 +31,7 @@ class SupplierLedgerService {
         balanceAfter,
         referenceType: data.referenceType,
         referenceId: data.referenceId,
-        description: data.description,
-        createdBy: data.createdBy,
+        notes: data.notes || data.description,
       },
       tx,
     );

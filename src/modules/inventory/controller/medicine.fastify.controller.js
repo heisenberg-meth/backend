@@ -44,6 +44,19 @@ class MedicineFastifyController {
     });
   }
 
+  async getLowStockAlerts(request, reply) {
+    try {
+      const { branchId } = request.query;
+      const result = await medicineService.getLowStockAlerts(
+        request.tenantId,
+        branchId || request.branchId,
+      );
+      return success(result);
+    } catch (err) {
+      return reply.code(500).send(errorResponse(err.message, 'ALERTS_FETCH_FAILED'));
+    }
+  }
+
   async getInventorySummaryData(request) {
     const { branchId } = request.query;
     const summary = await medicineService.getInventorySummary(

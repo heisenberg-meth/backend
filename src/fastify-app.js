@@ -122,8 +122,8 @@ const setupFastify = async () => {
     secret: env.cookieSecret,
     parseOptions: {
       httpOnly: true,
-      sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
-      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'none',
+      secure: true,
       path: '/',
     },
   });
@@ -413,17 +413,20 @@ const setupFastify = async () => {
   });
 
   // SPA fallback: all non-API, non-file routes → index.html
-  fastify.setNotFoundHandler((request, reply) => {
+  fastify.setNotFoundHandler(async (request, reply) => {
     if (
       request.url.startsWith('/api/') ||
       request.url.startsWith('/avatars/') ||
       request.url.startsWith('/uploads/')
     ) {
-      return reply
-        .code(404)
-        .send({ error: 'Not Found', message: `Route ${request.method}:${request.url} not found` });
+      return reply.code(404).send({ success: false, error: 'Route not found', code: 'NOT_FOUND' });
     }
-    return reply.sendFile('index.html');
+
+    try {
+      return await reply.sendFile('index.html');
+    } catch (err) {
+      return reply.code(404).send('Frontend not built. index.html not found.', err);
+    }
   });
 
   return fastify;

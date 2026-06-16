@@ -284,6 +284,11 @@ async function medicineRoutes(fastify) {
     handler: medicineController.getMedicines,
   });
 
+  fastify.get('/alerts/low-stock', {
+    schema: { tags: ['Inventory', 'Alerts'], summary: 'Get unified low stock alerts' },
+    handler: medicineController.getLowStockAlerts,
+  });
+
   fastify.get('/expiry/near', {
     schema: { tags: ['Inventory'], summary: 'Get near expiry batches' },
     handler: medicineController.getNearExpiry,
