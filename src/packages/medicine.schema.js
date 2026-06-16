@@ -37,6 +37,7 @@ export const CreateMedicineSchema = z.object({
     expiryDate: z.string(),
     mrp: z.number(),
     purchasePrice: z.number(),
+    sellingPrice: z.number(),
   }),
 });
 
