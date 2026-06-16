@@ -29,7 +29,7 @@ const COOKIE_OPTIONS = {
   path: '/',
   httpOnly: true,
   sameSite: 'none',
-  secure: true,
+  secure: process.env.NODE_ENV === 'production',
   maxAge: 30 * 24 * 60 * 60,
 };
 
@@ -37,7 +37,7 @@ const ACCESS_COOKIE_OPTIONS = {
   path: '/',
   httpOnly: true,
   sameSite: 'none',
-  secure: true,
+  secure: process.env.NODE_ENV === 'production',
   maxAge: 15 * 60,
 };
 
@@ -48,10 +48,13 @@ class AuthFastifyController {
       const result = await authService.register(parsed);
 
       if (result.refreshToken) {
-        reply.setCookie('refreshToken', result.refreshToken, COOKIE_OPTIONS);
+        reply.setCookie('refresh_token', result.refreshToken, COOKIE_OPTIONS);
       }
 
-      return reply.code(201).send(success(result));
+      const responsePayload = { ...result };
+      delete responsePayload.refreshToken;
+
+      return reply.code(201).send(success(responsePayload));
     } catch (error) {
       request.log.error(error);
       if (error instanceof ZodError) {
@@ -93,10 +96,13 @@ class AuthFastifyController {
         return reply.send(success(result));
       }
 
-      reply.setCookie('refreshToken', result.refreshToken, COOKIE_OPTIONS);
+      reply.setCookie('refresh_token', result.refreshToken, COOKIE_OPTIONS);
       reply.setCookie('accessToken', result.token, ACCESS_COOKIE_OPTIONS);
 
-      return reply.send(success(result));
+      const responsePayload = { ...result };
+      delete responsePayload.refreshToken;
+
+      return reply.send(success(responsePayload));
     } catch (error) {
       request.log.error(error);
       if (error instanceof ZodError) {
@@ -139,7 +145,7 @@ class AuthFastifyController {
         'Refresh request received',
       );
 
-      const refreshToken = request.body?.refreshToken ?? request.cookies?.refreshToken;
+      const refreshToken = request.cookies?.refresh_token;
 
       if (!refreshToken) {
         return reply
@@ -149,10 +155,13 @@ class AuthFastifyController {
 
       const result = await authService.refreshSession(refreshToken);
 
-      reply.setCookie('refreshToken', result.refreshToken, COOKIE_OPTIONS);
+      reply.setCookie('refresh_token', result.refreshToken, COOKIE_OPTIONS);
       reply.setCookie('accessToken', result.token, ACCESS_COOKIE_OPTIONS);
 
-      return reply.send(success(result));
+      const responsePayload = { ...result };
+      delete responsePayload.refreshToken;
+
+      return reply.send(success(responsePayload));
     } catch (error) {
       request.log.error(error);
       if (
@@ -160,7 +169,7 @@ class AuthFastifyController {
         error?.message === 'Invalid or reused refresh token' ||
         error?.message === 'Refresh token expired'
       ) {
-        reply.clearCookie('refreshToken', { path: '/' });
+        reply.clearCookie('refresh_token', { path: '/' });
         const code =
           error.message === 'Invalid or reused refresh token'
             ? 'REFRESH_TOKEN_REUSED'
@@ -177,7 +186,7 @@ class AuthFastifyController {
     try {
       await authService.logout(request.sessionId);
 
-      reply.clearCookie('refreshToken', { path: '/' });
+      reply.clearCookie('refresh_token', { path: '/' });
       reply.clearCookie('accessToken', { path: '/' });
       return reply.send(success({ message: 'Logged out successfully' }));
     } catch (error) {
@@ -190,7 +199,7 @@ class AuthFastifyController {
     try {
       await authService.logoutAll(request.user.id);
 
-      reply.clearCookie('refreshToken', { path: '/' });
+      reply.clearCookie('refresh_token', { path: '/' });
       reply.clearCookie('accessToken', { path: '/' });
       return reply.send(success({ message: 'All sessions revoked' }));
     } catch (error) {
