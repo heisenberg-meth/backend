@@ -105,13 +105,24 @@ class MedicinePrismaService {
         throw new Error('Branch ID is required to create medicine inventory');
       }
 
+      console.log('CREATE MEDICINE PAYLOAD');
+      console.log(JSON.stringify(data, null, 2));
+      console.log('INITIAL BATCH');
+      console.log(JSON.stringify(initialBatch, null, 2));
+
       if (
         initialBatch &&
-        (initialBatch.purchasePrice || initialBatch.sellingPrice || initialBatch.mrp)
+        (initialBatch.purchasePrice !== undefined ||
+          initialBatch.sellingPrice !== undefined ||
+          initialBatch.mrp !== undefined)
       ) {
+        if (!initialBatch.sellingPrice) {
+          initialBatch.sellingPrice = initialBatch.mrp;
+        }
+
         const pricingError = validatePricing({
           purchasePrice: initialBatch.purchasePrice || 0,
-          sellingPrice: initialBatch.sellingPrice || 0,
+          sellingPrice: initialBatch.sellingPrice ?? initialBatch.mrp ?? 0,
           mrp: initialBatch.mrp || 0,
         });
         if (pricingError) {

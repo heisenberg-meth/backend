@@ -133,16 +133,11 @@ class SupplierReturnService {
             branchId: batch.branchId,
             medicineId: batch.medicineId,
             batchId: item.batchId,
-
             movementType: 'SUPPLIER_RETURN',
-
             quantity: item.quantity,
-
-            referenceType: 'SUPPLIER_RETURN',
+            referenceType: 'PURCHASE_INVOICE',
             referenceId: purchaseInvoiceId,
-
             performedBy: userId,
-
             notes: reason || 'SUPPLIER_RETURN',
           },
         });
