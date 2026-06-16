@@ -1,9 +1,10 @@
 // Run with: node prisma/seed-user-status.js
 // This script updates all existing users to have ACTIVE status
 import prisma from '../src/config/prisma.js';
+import logger from '../src/shared/utils/logger.js';
 
 async function main() {
-  console.log('Seeding User status...');
+  logger.info('Seeding User status...');
 
   // Count users by status
   const totalUsers = await prisma.user.count();
@@ -14,17 +15,17 @@ async function main() {
     _count: true,
   });
 
-  console.log(`Total users: ${totalUsers}`);
-  console.log('User status distribution:');
+  logger.info(`Total users: ${totalUsers}`);
+  logger.info('User status distribution:');
   for (const s of statuses) {
-    console.log(`  ${s.status}: ${s._count}`);
+    logger.info(`  ${s.status}: ${s._count}`);
   }
-  console.log('\nSeed complete!');
+  logger.info('\nSeed complete!');
 }
 
 main()
   .catch((e) => {
-    console.error('Seed failed:', e);
+    logger.error('Seed failed:', e);
     process.exit(1);
   })
   .finally(async () => {

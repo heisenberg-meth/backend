@@ -1,4 +1,5 @@
 import prisma from '../../config/prisma.js';
+import process from 'process';
 
 class SequenceService {
   async getNextValue(tenantId, sequenceType, tx) {

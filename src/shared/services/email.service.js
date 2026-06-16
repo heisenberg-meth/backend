@@ -6,6 +6,9 @@ import {
   EXPIRY_ALERT_TEMPLATE,
   RESET_OTP_TEMPLATE,
 } from '../../modules/notifications/templates/email.templates.js';
+import process from 'process';
+import { Buffer } from 'buffer';
+import logger from '../utils/logger.js';
 
 const RESEND_API_KEY = process.env.RESEND_API || '';
 const EMAIL_FROM = process.env.EMAIL_FROM || 'noreply@medassist.viyaninfo.com';
@@ -43,7 +46,7 @@ const sendViaResend = async (to, subject, html) => {
           if (res.statusCode === 200) {
             resolve(body);
           } else {
-            console.error(`[RESEND_ERROR] ${res.statusCode}: ${body}`);
+            logger.error(`[RESEND_ERROR] ${res.statusCode}: ${body}`);
             resolve(null);
           }
         });
@@ -51,7 +54,7 @@ const sendViaResend = async (to, subject, html) => {
     );
 
     req.on('error', (err) => {
-      console.error('[RESEND_ERROR]', err.message);
+      logger.error('[RESEND_ERROR]', err.message);
       resolve(null);
     });
 
@@ -83,7 +86,7 @@ const sendViaNodemailer = async (to, subject, html) => {
     });
     return true;
   } catch (err) {
-    console.error('[EMAIL_ERROR]', err.message);
+    logger.error('[EMAIL_ERROR]', err.message);
     return null;
   }
 };

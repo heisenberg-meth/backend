@@ -1,5 +1,6 @@
 import { beforeAll, afterAll } from '@jest/globals';
 import logger from '../src/shared/utils/logger.js';
+import process from 'node:process';
 
 if (process.env.NODE_ENV === 'test' && !process.env.FORCE_REAL_REDIS) {
   delete process.env.REDIS_URL;

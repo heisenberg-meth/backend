@@ -2,6 +2,7 @@ import logger from './logger.js';
 import { closeAllQueuesAndWorkers } from '../../config/queue-registry.js';
 import prisma from '../../config/prisma.js';
 import { quitRedis } from '../../config/redis.js';
+import process from 'process';
 
 const isTest = process.env.NODE_ENV === 'test';
 const log = isTest ? { info: () => {}, warn: () => {}, error: () => {} } : logger;

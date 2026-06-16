@@ -1,6 +1,7 @@
 // Run with: node prisma/seed-subscriptions.js
 // Seeds subscription plans and ensures all tenants have subscriptions
 import prisma from '../src/config/prisma.js';
+import logger from '../src/shared/utils/logger.js';
 
 const PLANS = [
   {
@@ -32,7 +33,7 @@ const PLANS = [
 ];
 
 async function main() {
-  console.log('Seeding subscription plans...');
+  logger.info('Seeding subscription plans...');
 
   // Upsert plans
   for (const plan of PLANS) {
@@ -46,7 +47,7 @@ async function main() {
       },
       create: plan,
     });
-    console.log(`  Plan "${plan.name}" (${plan.id}) ready`);
+    logger.info(`  Plan "${plan.name}" (${plan.id}) ready`);
   }
 
   // Ensure all tenants have a subscription
@@ -75,8 +76,8 @@ async function main() {
     }
   }
 
-  console.log(`\nSubscriptions created: ${created}`);
-  console.log(`Subscriptions verified: ${tenants.length}`);
+  logger.info(`\nSubscriptions created: ${created}`);
+  logger.info(`Subscriptions verified: ${tenants.length}`);
 
   // Show subscription distribution
   const dist = await prisma.subscription.groupBy({
@@ -84,22 +85,22 @@ async function main() {
     _count: true,
   });
 
-  console.log('\nSubscription distribution:');
+  logger.info('\nSubscription distribution:');
   for (const d of dist) {
-    console.log(`  ${d.status}: ${d._count}`);
+    logger.info(`  ${d.status}: ${d._count}`);
   }
 
   // Show active subscriptions count
   const activeSubs = await prisma.subscription.count({ where: { status: 'ACTIVE' } });
   const totalSubs = await prisma.subscription.count();
-  console.log(`\nTotal subscriptions: ${totalSubs}`);
-  console.log(`Active subscriptions: ${activeSubs}`);
-  console.log('\nSeed complete!');
+  logger.info(`\nTotal subscriptions: ${totalSubs}`);
+  logger.info(`Active subscriptions: ${activeSubs}`);
+  logger.info('\nSeed complete!');
 }
 
 main()
   .catch((e) => {
-    console.error('Seed failed:', e);
+    logger.error('Seed failed:', e);
     process.exit(1);
   })
   .finally(async () => {

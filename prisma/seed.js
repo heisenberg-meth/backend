@@ -1,4 +1,5 @@
 import prisma from '../src/config/prisma.js';
+import logger from '../src/shared/utils/logger.js';
 
 const SYSTEM_PLANS = [
   {
@@ -31,7 +32,7 @@ async function seedPlans() {
       update: plan,
       create: plan,
     });
-    console.log(`Plan seeded: ${plan.id}`);
+    logger.log(`Plan seeded: ${plan.id}`);
   }
 }
 
@@ -51,22 +52,22 @@ async function fixExistingSubscriptions() {
       where: { id: sub.id },
       data: { planId: 'free-trial' },
     });
-    console.log(`Fixed subscription ${sub.id} → planId: free-trial`);
+    logger.log(`Fixed subscription ${sub.id} → planId: free-trial`);
   }
 
-  console.log(`Fixed ${subscriptions.length} subscriptions`);
+  logger.log(`Fixed ${subscriptions.length} subscriptions`);
 }
 
 async function main() {
-  console.log('Seeding plans...');
+  logger.log('Seeding plans...');
   await seedPlans();
-  console.log('Fixing existing subscriptions...');
+  logger.log('Fixing existing subscriptions...');
   await fixExistingSubscriptions();
-  console.log('Seed complete.');
+  logger.log('Seed complete.');
   await prisma.$disconnect();
 }
 
 main().catch((e) => {
-  console.error('Seed failed:', e);
+  logger.error('Seed failed:', e);
   process.exit(1);
 });

@@ -1,5 +1,5 @@
 import crypto from 'crypto';
-
+import { Buffer } from 'buffer';
 /**
  * Convert base32 string to hex string
  */
