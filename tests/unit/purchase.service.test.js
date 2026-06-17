@@ -1,4 +1,4 @@
-import { jest , describe, afterEach, it, expect } from '@jest/globals';
+import { jest, describe, afterEach, it, expect } from '@jest/globals';
 
 const mockPurchaseOrderRepository = {
   getNextPONumber: jest.fn(),
@@ -17,6 +17,7 @@ const mockPrisma = {
   }),
   purchaseInvoice: {
     create: jest.fn(),
+    findUnique: jest.fn(),
   },
   inventoryBatch: {
     findUnique: jest.fn(),
@@ -24,6 +25,24 @@ const mockPrisma = {
     update: jest.fn(),
   },
   supplierReturn: {
+    create: jest.fn(),
+  },
+  supplierReturnItem: {
+    aggregate: jest.fn(),
+  },
+  inventory: {
+    update: jest.fn(),
+  },
+  stockMovement: {
+    create: jest.fn(),
+  },
+  subscription: {
+    findUnique: jest.fn(),
+  },
+  supplierCreditNote: {
+    create: jest.fn(),
+  },
+  auditLog: {
     create: jest.fn(),
   },
   supplier: {
@@ -45,27 +64,32 @@ const mockLedgerService = {
 };
 
 jest.unstable_mockModule('../../src/config/prisma.js', () => ({
-  default: mockPrisma
+  default: mockPrisma,
 }));
 
-jest.unstable_mockModule('../../src/modules/purchase/repositories/purchase_order.repository.js', () => ({
-  default: mockPurchaseOrderRepository
-}));
+jest.unstable_mockModule(
+  '../../src/modules/purchase/repositories/purchase_order.repository.js',
+  () => ({
+    default: mockPurchaseOrderRepository,
+  }),
+);
 
 jest.unstable_mockModule('../../src/modules/stock/service/movement.service.js', () => ({
-  default: mockMovementService
+  default: mockMovementService,
 }));
 
 jest.unstable_mockModule('../../src/modules/audit/service/audit.prisma.service.js', () => ({
-  default: mockAuditService
+  default: mockAuditService,
 }));
 
 jest.unstable_mockModule('../../src/modules/vendors/services/ledger.service.js', () => ({
-  default: mockLedgerService
+  default: mockLedgerService,
 }));
 
-const { default: purchaseService } = await import('../../src/modules/purchase/services/purchase.service.js');
-const { default: stockInService } = await import('../../src/modules/purchase/services/stock-in.service.js');
+const { default: purchaseService } =
+  await import('../../src/modules/purchase/services/purchase.service.js');
+const { default: stockInService } =
+  await import('../../src/modules/purchase/services/stock-in.service.js');
 const { default: supplierReturnService } =
   await import('../../src/modules/purchase/services/supplier-return.service.js');
 
@@ -81,9 +105,7 @@ describe('Purchase Module Unit Tests', () => {
     it('should create a PO with correct totals', async () => {
       const data = {
         supplierId: 'supp-1',
-        items: [
-          { medicineId: 'med-1', quantity: 10, purchasePrice: 100, gstPercentage: 12 }
-        ]
+        items: [{ medicineId: 'med-1', quantity: 10, purchasePrice: 100, gstPercentage: 12 }],
       };
 
       mockPurchaseOrderRepository.getNextPONumber.mockResolvedValue('PO-2026-000001');
@@ -91,18 +113,19 @@ describe('Purchase Module Unit Tests', () => {
 
       const result = await purchaseService.createPO(tenantId, data, userId);
 
-      expect(mockPurchaseOrderRepository.createPO).toHaveBeenCalledWith(expect.objectContaining({
-        subtotal: 1000,
-        gstAmount: 120,
-        totalAmount: 1120
-      }));
+      expect(mockPurchaseOrderRepository.createPO).toHaveBeenCalledWith(
+        expect.objectContaining({
+          subtotal: 1000,
+          gstAmount: 120,
+          totalAmount: 1120,
+        }),
+      );
       expect(result.id).toBe('po-1');
     });
   });
 
   describe('StockInService.receiveGoods', () => {
     it('should receive goods and create batches and ledger entry', async () => {
-
       mockPrisma.supplier.findFirst.mockResolvedValue({ id: 'supp-1', paymentTermsDays: 30 });
       mockPrisma.purchaseInvoice.create.mockResolvedValue({ id: 'pi-1' });
       mockLedgerService.recordEntry.mockResolvedValue({});
@@ -116,7 +139,16 @@ describe('Purchase Module Unit Tests', () => {
         totalAmount: 1100,
         subtotal: 1000,
         gstAmount: 100,
-        items: [{ medicineId: 'med-1', batchNumber: 'B1', quantity: 10, expiryDate: new Date(), purchasePrice: 100, sellingPrice: 150 }],
+        items: [
+          {
+            medicineId: 'med-1',
+            batchNumber: 'B1',
+            quantity: 10,
+            expiryDate: new Date(),
+            purchasePrice: 100,
+            sellingPrice: 150,
+          },
+        ],
         purchaseOrderId: 'po-1',
       };
 
@@ -126,10 +158,15 @@ describe('Purchase Module Unit Tests', () => {
       expect(mockLedgerService.recordEntry).toHaveBeenCalledWith(
         tenantId,
         expect.objectContaining({ type: 'PURCHASE', debitAmount: 1100 }),
-        mockPrisma
+        mockPrisma,
       );
       expect(mockMovementService.stockIn).toHaveBeenCalled();
-      expect(mockPurchaseOrderRepository.updateStatus).toHaveBeenCalledWith('po-1', tenantId, 'RECEIVED', mockPrisma);
+      expect(mockPurchaseOrderRepository.updateStatus).toHaveBeenCalledWith(
+        'po-1',
+        tenantId,
+        'RECEIVED',
+        mockPrisma,
+      );
       expect(result.id).toBe('pi-1');
     });
   });
@@ -138,31 +175,72 @@ describe('Purchase Module Unit Tests', () => {
     it('should process return and update ledger correctly', async () => {
       const data = {
         supplierId: 'supp-1',
-        batchId: 'batch-1',
-        quantity: 5,
-        reason: 'Damaged'
+        purchaseInvoiceId: 'pi-1',
+        reason: 'Damaged',
+        items: [{ batchId: 'batch-1', quantity: 5 }],
       };
+
+      mockPrisma.purchaseInvoice.findUnique.mockResolvedValue({
+        id: 'pi-1',
+        invoiceNumber: 'INV-1',
+        tenantId,
+        purchaseOrder: { status: 'RECEIVED' },
+        inventoryBatches: [],
+      });
+
+      mockPrisma.inventoryBatch.findMany.mockResolvedValue([
+        {
+          id: 'batch-1',
+          medicineId: 'med-1',
+          quantity: 10,
+          receivedQuantity: 10,
+          batchNumber: 'B1',
+          purchasePrice: 10,
+          gstPercentage: 0,
+          branchId: 'branch-1',
+        },
+      ]);
+
+      mockPrisma.supplier.findUnique.mockResolvedValue({
+        id: 'supp-1',
+        tenantId,
+      });
 
       mockPrisma.inventoryBatch.findUnique.mockResolvedValue({
         id: 'batch-1',
         medicineId: 'med-1',
         quantity: 10,
+        receivedQuantity: 10,
         batchNumber: 'B1',
         purchasePrice: 10,
-        medicine: { name: 'Dolo', tenantId }
+        gstPercentage: 0,
+        branchId: 'branch-1',
       });
 
-      mockMovementService.stockOut.mockResolvedValue({});
+      mockPrisma.supplierReturnItem.aggregate.mockResolvedValue({
+        _sum: { quantity: 0 },
+      });
+
+      mockPrisma.inventory.update.mockResolvedValue({});
+      mockPrisma.stockMovement.create.mockResolvedValue({});
+      mockPrisma.subscription.findUnique.mockResolvedValue({
+        planId: 'pro',
+      });
+      mockPrisma.supplierCreditNote.create.mockResolvedValue({
+        id: 'cn-1',
+        creditNoteNumber: 'CN-123',
+      });
+      mockPrisma.auditLog.create.mockResolvedValue({});
+
       mockPrisma.supplierReturn.create.mockResolvedValue({ id: 'ret-1' });
       mockLedgerService.recordEntry.mockResolvedValue({});
 
       const result = await supplierReturnService.processReturn(tenantId, data, userId);
 
-      expect(mockMovementService.stockOut).toHaveBeenCalled();
       expect(mockLedgerService.recordEntry).toHaveBeenCalledWith(
         tenantId,
-        expect.objectContaining({ type: 'RETURN', creditAmount: 50 }), // 5 * 10
-        mockPrisma
+        expect.objectContaining({ type: 'RETURN', creditAmount: 50 }),
+        mockPrisma,
       );
       expect(mockPrisma.supplierReturn.create).toHaveBeenCalled();
       expect(result.id).toBe('ret-1');

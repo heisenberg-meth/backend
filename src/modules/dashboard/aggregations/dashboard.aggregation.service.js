@@ -252,7 +252,11 @@ class DashboardAggregationService {
     if (!tenantId) {
       throw new Error('Tenant missing');
     }
-    const unifiedMetrics = await unifiedInventorySummaryService.getUnifiedSummary(tenantId, null, true);
+    const unifiedMetrics = await unifiedInventorySummaryService.getUnifiedSummary(
+      tenantId,
+      null,
+      true,
+    );
     return {
       lowStockCount: unifiedMetrics.lowStockCount,
       outOfStockCount: unifiedMetrics.outOfStockCount,
@@ -372,7 +376,11 @@ class DashboardAggregationService {
       throw new Error('Insufficient permissions for overview');
     }
 
+    const cached = await dashboardCacheManager.get(tenantId, 'overview', branchId);
+    if (cached) return cached;
+
     const data = await this._computeOverview(tenantId, branchId);
+    await dashboardCacheManager.set(tenantId, 'overview', data, branchId);
     return data;
   }
 
@@ -381,7 +389,11 @@ class DashboardAggregationService {
       throw new Error('Insufficient permissions for sales summary');
     }
 
+    const cached = await dashboardCacheManager.get(tenantId, 'sales_summary', branchId);
+    if (cached) return cached;
+
     const data = await this._computeSalesSummary(tenantId, branchId);
+    await dashboardCacheManager.set(tenantId, 'sales_summary', data, branchId);
     return data;
   }
 
@@ -390,7 +402,11 @@ class DashboardAggregationService {
       throw new Error('Insufficient permissions for inventory health');
     }
 
+    const cached = await dashboardCacheManager.get(tenantId, 'inventory_health', branchId);
+    if (cached) return cached;
+
     const data = await this._computeInventoryHealth(tenantId, branchId);
+    await dashboardCacheManager.set(tenantId, 'inventory_health', data, branchId);
     return data;
   }
 
@@ -399,7 +415,11 @@ class DashboardAggregationService {
       throw new Error('Insufficient permissions for alerts');
     }
 
+    const cached = await dashboardCacheManager.get(tenantId, 'alerts', branchId);
+    if (cached) return cached;
+
     const data = await this._computeAlerts(tenantId, branchId);
+    await dashboardCacheManager.set(tenantId, 'alerts', data, branchId);
     return data;
   }
 
@@ -495,7 +515,10 @@ class DashboardAggregationService {
         : { _sum: { totalAmount: 0 }, _count: { id: 0 } };
     const monthSales =
       results[1].status === 'fulfilled' ? results[1].value : { _sum: { totalAmount: 0 } };
-    const unified = results[2].status === 'fulfilled' ? results[2].value : { lowStockCount: 0, expiringBatches: 0 };
+    const unified =
+      results[2].status === 'fulfilled'
+        ? results[2].value
+        : { lowStockCount: 0, expiringBatches: 0 };
     const lowStockCount = unified.lowStockCount;
     const expiringCount = unified.expiringBatches;
     const pendingPOs = results[3].status === 'fulfilled' ? results[3].value : 0;

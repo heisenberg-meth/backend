@@ -51,12 +51,33 @@ const mockLogger = {
   info: jest.fn(),
 };
 
+const mockUnifiedInventorySummaryService = {
+  getUnifiedSummary: jest.fn().mockResolvedValue({
+    totalMedicines: 100,
+    totalStock: 5000,
+    inventoryValue: 1000,
+    lowStockCount: 10,
+    outOfStockCount: 8,
+    expiredBatches: 5,
+    expiringBatches: 5,
+    inStockCount: 80,
+    medicinesWithExpired: 5,
+    totalProducts: 100,
+  }),
+};
+
 jest.unstable_mockModule('../../../src/config/prisma.js', () => ({ default: mockPrisma }));
 jest.unstable_mockModule('../../../src/config/redis.js', () => ({
   default: mockRedisClient,
   quitRedis: jest.fn().mockResolvedValue(),
 }));
 jest.unstable_mockModule('../../../src/shared/utils/logger.js', () => ({ default: mockLogger }));
+jest.unstable_mockModule(
+  '../../../src/modules/inventory/service/unified-inventory-summary.service.js',
+  () => ({
+    default: mockUnifiedInventorySummaryService,
+  }),
+);
 
 const { default: dashboardAggregationService } =
   await import('../../../src/modules/dashboard/aggregations/dashboard.aggregation.service.js');
@@ -158,6 +179,13 @@ describe('DashboardAggregationService', () => {
     it('should calculate healthy stock percentage', async () => {
       mockRedisClient.get.mockResolvedValue(null);
       mockPrisma.dashboardSnapshot.findFirst.mockResolvedValue(null);
+      mockUnifiedInventorySummaryService.getUnifiedSummary.mockResolvedValue({
+        totalStock: 5000,
+        lowStockCount: 15,
+        outOfStockCount: 8,
+        expiringBatches: 10,
+        expiredBatches: 5,
+      });
       mockPrisma.inventoryBatch.count
         .mockResolvedValueOnce(100)
         .mockResolvedValueOnce(5)
