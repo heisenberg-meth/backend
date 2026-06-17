@@ -1,62 +1,84 @@
 import { Worker } from 'bullmq';
-import { getBullRedis } from '../../../config/redis.js';
+import { connection } from './notification.queues.js';
 import prisma from '../../../config/prisma.js';
-import providerRegistry from '../providers/provider-registry.js';
-import recoveryService from '../recovery/recovery.service.js';
+import { getProvider } from '../channels/channel.provider.js';
 import logger from '../../../shared/utils/logger.js';
 
-export let workers = null;
+// Auto-register providers on import
+import '../channels/in-app.provider.js';
+import '../channels/email.provider.js';
+import '../channels/sms.provider.js';
 
-const createWorker = (queueName, handler) => {
-  return new Worker(queueName, handler, {
-    connection: getBullRedis(),
-    concurrency: 5,
-  });
-};
+export let workers = {};
 
 const processNotification = async (job) => {
   const { notificationId } = job.data;
+
   const notification = await prisma.notification.findUnique({
     where: { id: notificationId },
   });
 
   if (!notification) {
-    logger.error({ notificationId }, 'Notification not found in worker');
+    logger.error({ notificationId }, '[Worker] Notification not found in database');
+    return;
+  }
+
+  // If already delivered, don't re-process
+  if (notification.deliveryStatus === 'DELIVERED') {
     return;
   }
 
   try {
+    // 1. Update status to SENDING
     await prisma.notification.update({
       where: { id: notificationId },
-      data: { deliveryStatus: 'PROCESSING' },
+      data: { deliveryStatus: 'SENDING' },
     });
 
     await prisma.notificationDeliveryEvent.create({
       data: {
         notificationId,
-        eventType: 'PROCESSING',
+        eventType: 'SENDING',
       },
     });
 
-    const deliveryResult = await providerRegistry.sendWithFailover(
-      notification.tenantId,
-      notification.channel,
-      async (provider) => {
-        logger.info(
-          { notificationId, provider: provider.providerName },
-          'Attempting delivery via provider',
-        );
-        return { messageId: `provider-${Date.now()}` };
-      },
-    );
+    // 2. Resolve Provider & Configuration
+    let providerName = 'internal';
+    let providerConfig = {};
 
-    if (deliveryResult.success) {
+    if (notification.channel !== 'IN_APP') {
+      const channelConfig = await prisma.notificationChannelConfig.findFirst({
+        where: {
+          tenantId: notification.tenantId,
+          channelType: notification.channel,
+          isActive: true,
+        },
+        orderBy: { priority: 'desc' },
+      });
+
+      if (!channelConfig) {
+        throw new Error(
+          `No active provider config for channel ${notification.channel} and tenant ${notification.tenantId}`,
+        );
+      }
+
+      providerName = channelConfig.providerName;
+      providerConfig = channelConfig.providerConfig || {};
+    }
+
+    // 3. Retrieve Provider implementation & Dispatch Send
+    const provider = getProvider(notification.channel, providerName);
+    const result = await provider.send(notification, providerConfig);
+
+    if (result.success) {
+      // 4. Update status to DELIVERED
       await prisma.notification.update({
         where: { id: notificationId },
         data: {
-          deliveryStatus: 'SENT',
+          deliveryStatus: 'DELIVERED',
           sentAt: new Date(),
-          providerMessageId: deliveryResult.result.messageId,
+          deliveredAt: new Date(),
+          providerMessageId: result.providerMessageId,
           failureReason: null,
         },
       });
@@ -64,32 +86,65 @@ const processNotification = async (job) => {
       await prisma.notificationDeliveryEvent.create({
         data: {
           notificationId,
-          eventType: 'SENT',
-          providerName: deliveryResult.providerName,
-          providerMessageId: deliveryResult.result.messageId,
+          eventType: 'DELIVERED',
+          providerName,
+          providerMessageId: result.providerMessageId,
         },
       });
 
-      logger.info({ notificationId }, 'Notification sent successfully');
+      logger.info(
+        { notificationId, channel: notification.channel },
+        '[Worker] Notification delivered successfully',
+      );
     } else {
-      throw new Error(JSON.stringify(deliveryResult.errors));
+      throw new Error(result.errorMessage || 'Unknown delivery failure');
     }
   } catch (error) {
     const errorMessage = error.message;
-    const retryCount = (notification.retryCount || 0) + 1;
+    const currentRetryCount = notification.retryCount || 0;
+
+    // Fetch tenant notification settings for retry limits
+    const settings = await prisma.notificationSettings.findFirst({
+      where: { tenantId: notification.tenantId },
+    });
+
+    const maxRetries = settings?.maxRetries ?? notification.maxRetries ?? 3;
+    const newRetryCount = currentRetryCount + 1;
 
     logger.warn(
-      { notificationId, retryCount, error: errorMessage },
-      'Notification processing failed',
+      { notificationId, newRetryCount, maxRetries, error: errorMessage },
+      '[Worker] Notification delivery attempt failed',
     );
 
-    if (retryCount < notification.maxRetries) {
+    if (newRetryCount <= maxRetries) {
+      // Mark as RETRYING and update retry count
+      await prisma.notification.update({
+        where: { id: notificationId },
+        data: {
+          deliveryStatus: 'RETRYING',
+          retryCount: newRetryCount,
+          failureReason: errorMessage,
+          lastRetryAt: new Date(),
+        },
+      });
+
+      await prisma.notificationDeliveryEvent.create({
+        data: {
+          notificationId,
+          eventType: 'RETRYING',
+          errorMessage,
+        },
+      });
+
+      // Propagate error to BullMQ to schedule retry backoff
+      throw error;
+    } else {
+      // Exceeded max retries: mark as FAILED and move to DLQ record
       await prisma.notification.update({
         where: { id: notificationId },
         data: {
           deliveryStatus: 'FAILED',
           failureReason: errorMessage,
-          retryCount,
         },
       });
 
@@ -101,19 +156,41 @@ const processNotification = async (job) => {
         },
       });
 
-      throw error;
-    } else {
-      await recoveryService.moveToDLQ(notificationId, errorMessage, job.data);
+      // Move to NotificationDeadLetter table
+      await prisma.notificationDeadLetter.upsert({
+        where: { notificationId },
+        update: {
+          failureReason: errorMessage,
+          retryCount: newRetryCount,
+          movedAt: new Date(),
+        },
+        create: {
+          notificationId,
+          tenantId: notification.tenantId,
+          failureReason: errorMessage,
+          payload: { jobData: job.data },
+          retryCount: newRetryCount,
+        },
+      });
+
+      logger.error(
+        { notificationId },
+        '[Worker] Notification moved to DLQ table after max retries',
+      );
     }
   }
 };
 
 export const createNotificationWorkers = () => {
-  workers = {
-    sms: createWorker('notification_sms', processNotification),
-    email: createWorker('notification_email', processNotification),
-    whatsapp: createWorker('notification_whatsapp', processNotification),
-    retry: createWorker('notification_retry', processNotification),
-  };
-  logger.info('Notification workers initialized');
+  const channels = ['IN_APP', 'SMS', 'EMAIL', 'WHATSAPP', 'PUSH'];
+
+  channels.forEach((channel) => {
+    const queueName = `notifications_${channel.toLowerCase()}`;
+    workers[channel] = new Worker(queueName, processNotification, {
+      connection,
+      concurrency: 5,
+    });
+  });
+
+  logger.info('[Worker] Notification workers initialized');
 };

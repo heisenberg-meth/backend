@@ -109,6 +109,7 @@ const createServiceApp = async (options = {}) => {
 
   await fastify.register(redis, {
     url: env.redis.url,
+    maxRetriesPerRequest: null,
   });
 
   await fastify.register(rateLimit, {

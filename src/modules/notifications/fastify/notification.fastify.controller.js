@@ -17,6 +17,15 @@ import logger from '../../../shared/utils/logger.js';
 import { emitLocalEvent } from '../../../shared/events/local-event-bus.js';
 import { DOMAIN_EVENTS } from '../../../shared/constants/events.js';
 
+const mapNotification = (n) => {
+  if (!n) return n;
+  return {
+    ...n,
+    title: n.subject,
+    type: n.notificationType,
+  };
+};
+
 class NotificationFastifyController {
   async unifiedSend(request, reply) {
     try {
@@ -315,6 +324,9 @@ class NotificationFastifyController {
           recipient: notification.recipient,
           status: notification.deliveryStatus,
           notificationType: notification.notificationType,
+          type: notification.notificationType,
+          subject: notification.subject,
+          title: notification.subject,
           retryCount: notification.retryCount,
           createdAt: notification.createdAt,
           sentAt: notification.sentAt,
@@ -399,10 +411,12 @@ class NotificationFastifyController {
         prisma.notification.count({ where }),
       ]);
 
+      const mapped = notifications.map(mapNotification);
       return reply.send({
         success: true,
+        notifications: mapped,
         data: {
-          notifications,
+          notifications: mapped,
           pagination: {
             total,
             skip: parseInt(skip),
@@ -735,9 +749,11 @@ class NotificationFastifyController {
         },
       });
 
+      const mapped = history.map(mapNotification);
       return reply.send({
         success: true,
-        data: { notifications: history },
+        notifications: mapped,
+        data: { notifications: mapped },
       });
     } catch (error) {
       logger.error(
@@ -783,7 +799,7 @@ class NotificationFastifyController {
 
       return reply.send({
         success: true,
-        data: notifications,
+        data: notifications.map(mapNotification),
         pagination: {
           total,
           page: parseInt(page),
