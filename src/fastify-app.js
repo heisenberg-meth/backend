@@ -268,9 +268,9 @@ const setupFastify = async () => {
     maxRetriesPerRequest: null,
   });
 
-  // Global rate limit — 300 requests per minute per IP
+  // Global rate limit — 500 requests per minute per IP
   await fastify.register(rateLimit, {
-    max: 300,
+    max: 500,
     timeWindow: '1 minute',
     redis: fastify.redis,
     keyGenerator: (request) => {
