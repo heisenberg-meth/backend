@@ -2,8 +2,7 @@
  * Uptime Monitoring Service
  * Monitors health of all services and sends alerts
  */
-
-import prisma from '../config/prisma.js';
+import prisma from '../../config/prisma.js';
 import cache from './cache.service.js';
 import logger from '../../shared/utils/logger.js';
 
@@ -49,7 +48,7 @@ class UptimeMonitor {
       await Promise.race([
         service.healthCheck(),
         new Promise((_, reject) =>
-          setTimeout(() => reject(new Error('Health check timeout')), service.timeout)
+          setTimeout(() => reject(new Error('Health check timeout')), service.timeout),
         ),
       ]);
     } catch (err) {
@@ -100,7 +99,7 @@ class UptimeMonitor {
    */
   async checkAll() {
     const results = await Promise.allSettled(
-      Array.from(this.services.keys()).map((name) => this.checkService(name))
+      Array.from(this.services.keys()).map((name) => this.checkService(name)),
     );
 
     const summary = results.map((r) => r.value || { status: 'error', error: r.reason?.message });
@@ -123,12 +122,15 @@ class UptimeMonitor {
 
     this.alertCooldowns.set(cooldownKey, Date.now());
 
-    logger.error({
-      service: serviceName,
-      status: healthResult.status,
-      error: healthResult.error,
-      consecutiveFailures: healthResult.consecutiveFailures,
-    }, `ALERT: Service ${serviceName} is unhealthy!`);
+    logger.error(
+      {
+        service: serviceName,
+        status: healthResult.status,
+        error: healthResult.error,
+        consecutiveFailures: healthResult.consecutiveFailures,
+      },
+      `ALERT: Service ${serviceName} is unhealthy!`,
+    );
 
     // Store alert in database
     try {
@@ -202,16 +204,24 @@ class UptimeMonitor {
 const uptimeMonitor = new UptimeMonitor();
 
 // Register built-in services
-uptimeMonitor.registerService('database', async () => {
-  await prisma.$queryRaw`SELECT 1`;
-}, { critical: true });
+uptimeMonitor.registerService(
+  'database',
+  async () => {
+    await prisma.$queryRaw`SELECT 1`;
+  },
+  { critical: true },
+);
 
-uptimeMonitor.registerService('redis', async () => {
-  const redis = await import('../../config/redis.js');
-  const client = redis.default;
-  if (client && typeof client.ping === 'function') {
-    await client.ping();
-  }
-}, { critical: true });
+uptimeMonitor.registerService(
+  'redis',
+  async () => {
+    const redis = await import('../../config/redis.js');
+    const client = redis.default;
+    if (client && typeof client.ping === 'function') {
+      await client.ping();
+    }
+  },
+  { critical: true },
+);
 
 export default uptimeMonitor;
