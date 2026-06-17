@@ -23,9 +23,19 @@ class UnifiedInventorySummaryService {
     const bId = branchId === 'null' || !branchId ? null : branchId;
     const branchCondition = bId ? Prisma.sql`ib."branchId" = ${bId}` : Prisma.sql`1=1`;
 
-    const [expiringCount, inventoryValue, [summary]] = await Promise.all([
+    const [expiringCount, inventoryValue, trueExpiredCount, [summary]] = await Promise.all([
       analyticsRepository.getExpiring30Count(tenantId, bId),
       analyticsRepository.getInventoryValue(tenantId, bId),
+      prisma.inventoryBatch.count({
+        where: {
+          tenantId,
+          deletedAt: null,
+          quantity: { gt: 0 },
+          OR: [{ expiryDate: { lt: new Date() } }, { status: 'EXPIRED' }],
+          status: { not: 'ARCHIVED' },
+          ...(bId && { branchId: bId }),
+        },
+      }),
       prisma.$queryRaw`
       WITH batch_aggregates AS (
         SELECT 
@@ -87,7 +97,7 @@ class UnifiedInventorySummaryService {
       inventoryValue: Number(inventoryValue || 0),
       lowStockCount: Number(summary?.lowStockCount || 0),
       outOfStockCount: Number(summary?.outOfStockCount || 0),
-      expiredBatches: Number(summary?.expiredBatches || 0),
+      expiredBatches: Number(trueExpiredCount || 0),
       expiringBatches: Number(expiringCount || 0),
       inStockCount: Number(summary?.inStockCount || 0),
       medicinesWithExpired: Number(summary?.medicinesWithExpired || 0),
@@ -95,7 +105,7 @@ class UnifiedInventorySummaryService {
       // Legacy compatibility
       lowStock: Number(summary?.lowStockCount || 0),
       outOfStock: Number(summary?.outOfStockCount || 0),
-      expired: Number(summary?.expiredBatches || 0),
+      expired: Number(trueExpiredCount || 0),
       expiring30d: Number(expiringCount || 0),
       inStock: Number(summary?.inStockCount || 0),
     };
@@ -118,6 +128,63 @@ class UnifiedInventorySummaryService {
     } catch (err) {
       logger.error({ err }, '[UNIFIED_INVENTORY] Cache invalidation error');
     }
+  }
+
+  async getExpiryMetrics(tenantId, branchId = null) {
+    const bId = branchId === 'null' || !branchId ? null : branchId;
+    const branchCondition = bId ? Prisma.sql`AND "branchId" = ${bId}` : Prisma.sql``;
+
+    const [expiredCount, expiring7Count, expiring30Count, expiring90Count] = await Promise.all([
+      prisma.$queryRaw`
+        SELECT COUNT(*)::int as count
+        FROM "InventoryBatch"
+        WHERE "tenantId" = ${tenantId}
+          AND "deletedAt" IS NULL
+          AND quantity > 0
+          AND ("expiryDate" < NOW() OR status = 'EXPIRED')
+          ${branchCondition}
+      `,
+      prisma.$queryRaw`
+        SELECT COUNT(*)::int as count
+        FROM "InventoryBatch"
+        WHERE "tenantId" = ${tenantId}
+          AND "deletedAt" IS NULL
+          AND quantity > 0
+          AND status != 'EXPIRED'
+          AND "expiryDate" >= NOW()
+          AND "expiryDate" < NOW() + INTERVAL '7 days'
+          ${branchCondition}
+      `,
+      prisma.$queryRaw`
+        SELECT COUNT(*)::int as count
+        FROM "InventoryBatch"
+        WHERE "tenantId" = ${tenantId}
+          AND "deletedAt" IS NULL
+          AND quantity > 0
+          AND status != 'EXPIRED'
+          AND "expiryDate" >= NOW()
+          AND "expiryDate" < NOW() + INTERVAL '30 days'
+          ${branchCondition}
+      `,
+      prisma.$queryRaw`
+        SELECT COUNT(*)::int as count
+        FROM "InventoryBatch"
+        WHERE "tenantId" = ${tenantId}
+          AND "deletedAt" IS NULL
+          AND quantity > 0
+          AND status != 'EXPIRED'
+          AND "expiryDate" >= NOW()
+          AND "expiryDate" < NOW() + INTERVAL '90 days'
+          ${branchCondition}
+      `,
+    ]);
+
+    return {
+      expired: Number(expiredCount[0]?.count || 0),
+      expiring7: Number(expiring7Count[0]?.count || 0),
+      expiring30: Number(expiring30Count[0]?.count || 0),
+      expiring90: Number(expiring90Count[0]?.count || 0),
+    };
   }
 
   async getDashboardMetrics(tenantId, branchId = null) {

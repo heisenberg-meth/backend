@@ -308,6 +308,11 @@ async function medicineRoutes(fastify) {
     handler: medicineController.getExpirySummary,
   });
 
+  fastify.get('/expiry-metrics', {
+    schema: { tags: ['Inventory'], summary: 'Get unified inventory expiry metrics' },
+    handler: medicineController.getExpiryMetrics,
+  });
+
   fastify.post(
     '/batch-recall',
     {

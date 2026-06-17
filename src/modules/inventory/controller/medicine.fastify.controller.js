@@ -1,8 +1,8 @@
 import medicineService from '../service/medicine.prisma.service.js';
 import barcodeService from '../service/barcode.service.js';
-import expiryService from '../service/expiry.service.js';
 import unifiedInventorySummaryService from '../service/unified-inventory-summary.service.js';
 import { success, error as errorResponse } from '../../../shared/helpers/response.js';
+import expiryService from '../service/expiry.service.js';
 
 class MedicineFastifyController {
   async getMedicines(request) {
@@ -251,17 +251,35 @@ class MedicineFastifyController {
   }
 
   async getNearExpiry(request) {
-    const { days } = request.query;
+    const { days, branchId } = request.query;
     const batches = await expiryService.getNearExpiryBatches(
       request.tenantId,
       parseInt(days) || 30,
+      branchId || request.branchId,
     );
     return success(batches);
   }
 
   async getExpirySummary(request) {
-    const summary = await expiryService.getExpirySummary(request.tenantId);
+    const { branchId } = request.query;
+    const summary = await expiryService.getExpirySummary(
+      request.tenantId,
+      branchId || request.branchId,
+    );
     return success(summary);
+  }
+
+  async getExpiryMetrics(request, reply) {
+    try {
+      const { branchId } = request.query;
+      const metrics = await unifiedInventorySummaryService.getExpiryMetrics(
+        request.tenantId,
+        branchId || request.branchId,
+      );
+      return success(metrics);
+    } catch (err) {
+      return reply.code(500).send(errorResponse(err.message, 'METRICS_FETCH_FAILED'));
+    }
   }
 }
 

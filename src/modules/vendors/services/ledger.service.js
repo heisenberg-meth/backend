@@ -8,17 +8,16 @@ class SupplierLedgerService {
       throw new Error('Ledger repository misconfigured');
     }
     const lastEntry = await ledgerRepository.getLastEntry(data.supplierId, tenantId, tx);
-    const previousBalance = Number(lastEntry?.balanceAfter || 0);
+    const previousBalance = parseFloat(String(lastEntry?.balanceAfter || 0));
 
     let balanceAfter = previousBalance;
     if (data.debitAmount) {
-      balanceAfter += Number(data.debitAmount);
+      balanceAfter += parseFloat(String(data.debitAmount));
     }
     if (data.creditAmount) {
-      balanceAfter -= Number(data.creditAmount);
+      balanceAfter -= parseFloat(String(data.creditAmount));
     }
 
-    // Convert to fixed-point string for Prisma Decimal field
     balanceAfter = Number(balanceAfter.toFixed(2));
 
     const entry = await ledgerRepository.createEntry(

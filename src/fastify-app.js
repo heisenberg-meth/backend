@@ -163,14 +163,12 @@ const setupFastify = async () => {
     contentSecurityPolicy: {
       directives: {
         defaultSrc: ["'self'"],
-        styleSrc: ["'self'", "'unsafe-inline'"],
-        imgSrc: [
-          "'self'",
-          'data:',
-          'validator.swagger.io',
-          'https://medassist-backend-hryu.onrender.com',
-        ],
-        scriptSrc: ["'self'"],
+        styleSrc: ["'self'", "'unsafe-inline'", 'https://fonts.googleapis.com'],
+        fontSrc: ["'self'", 'https://fonts.gstatic.com', 'data:'],
+        imgSrc: ["'self'", 'data:', 'https:'],
+        scriptSrc: ["'self'", "'unsafe-inline'", "'unsafe-eval'", 'https://checkout.razorpay.com'],
+        frameSrc: ["'self'", 'https://checkout.razorpay.com'],
+        connectSrc: ["'self'", 'https://api.razorpay.com'],
       },
     },
     crossOriginResourcePolicy: {
