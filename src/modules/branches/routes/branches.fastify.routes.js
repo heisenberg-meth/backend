@@ -3,6 +3,8 @@ import transferController from '../fastify/transfer.fastify.controller.js';
 import centralInventoryController from '../fastify/central-inventory.fastify.controller.js';
 import { authenticate, requireTenant } from '../../../middleware/auth.fastify.js';
 import { requirePermission } from '../../../middleware/permission.fastify.js';
+import { requireLimit } from '../../../middleware/feature.guard.fastify.js';
+import prisma from '../../../config/prisma.js';
 
 async function branchesFastifyRoutes(fastify) {
   fastify.addHook('preHandler', authenticate);
@@ -19,7 +21,12 @@ async function branchesFastifyRoutes(fastify) {
     '/',
     {
       schema: { tags: ['Branches'], summary: 'Create branch' },
-      preHandler: [requirePermission('settings.manage')],
+      preHandler: [
+        requirePermission('settings.manage'),
+        requireLimit('branches', async (req) => {
+          return await prisma.branch.count({ where: { tenantId: req.tenantId, deletedAt: null } });
+        }),
+      ],
     },
     branchController.createBranch,
   );

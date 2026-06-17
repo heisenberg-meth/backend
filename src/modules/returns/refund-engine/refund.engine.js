@@ -4,6 +4,7 @@ import { emitLocalEvent } from '../../../shared/events/local-event-bus.js';
 import { emitEvent } from '../../../shared/events/erp-event-bus.js';
 import { DOMAIN_EVENTS } from '../../../shared/constants/events.js';
 import logger from '../../../shared/utils/logger.js';
+import unifiedRefundOrchestrator from '../../refunds/services/unified-refund.orchestrator.js';
 
 class RefundEngine {
   async processRefund(returnId, tenantId, userId, refundDetails) {
@@ -27,55 +28,16 @@ class RefundEngine {
       throw new Error('Refund already completed');
     }
 
-    const { refundMethod, transactionId } = refundDetails;
+    const { refundMethod } = refundDetails || {};
 
-    const result = await prisma.$transaction(async (tx) => {
-      const updatedReturn = await tx.return.update({
-        where: { id: returnId },
-        data: {
-          refundMethod,
-          refundStatus: 'COMPLETED',
-          refundTransactionId: transactionId || `REFUND-${Date.now()}`,
-          status: 'REFUNDED',
-        },
-        include: {
-          items: true,
-          invoice: true,
-        },
-      });
-
-      const invoice = await tx.invoice.findUnique({
-        where: { id: returnRecord.invoiceId },
-        include: {
-          payments: true,
-        },
-      });
-
-      const totalRefunded = await tx.return.aggregate({
-        where: {
-          invoiceId: returnRecord.invoiceId,
-          refundStatus: 'COMPLETED',
-        },
-        _sum: {
-          totalReturnAmount: true,
-        },
-      });
-
-      const totalRefundedAmount = totalRefunded._sum.totalReturnAmount || 0;
-
-      if (totalRefundedAmount >= invoice.totalAmount) {
-        await tx.invoice.update({
-          where: { id: returnRecord.invoiceId },
-          data: { status: 'REFUNDED' },
-        });
-      } else if (totalRefundedAmount > 0) {
-        await tx.invoice.update({
-          where: { id: returnRecord.invoiceId },
-          data: { status: 'PARTIALLY_REFUNDED' },
-        });
-      }
-
-      return updatedReturn;
+    const result = await unifiedRefundOrchestrator.processRefund({
+      tenantId,
+      userId,
+      invoiceId: returnRecord.invoiceId,
+      returnId: returnId,
+      refundAmount: returnRecord.totalReturnAmount,
+      refundMethod: refundMethod || 'CASH',
+      reason: returnRecord.returnReason,
     });
 
     emitLocalEvent(DOMAIN_EVENTS.REFUND_COMPLETED, {
@@ -83,7 +45,7 @@ class RefundEngine {
       invoiceId: returnRecord.invoiceId,
       tenantId,
       refundAmount: returnRecord.totalReturnAmount,
-      refundMethod,
+      refundMethod: refundMethod || 'CASH',
       timestamp: new Date().toISOString(),
     });
 
@@ -97,7 +59,7 @@ class RefundEngine {
       `[Refund] Processed refund for ${returnRecord.returnNumber}: ₹${returnRecord.totalReturnAmount}`,
     );
 
-    return result;
+    return result.returnRecord;
   }
 
   async initiateRefund(returnId, tenantId) {

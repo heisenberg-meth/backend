@@ -29,10 +29,15 @@ class BillingFastifyController {
       const invoice = await billingService.checkout(request.tenantId, payload, request.user.id);
       return reply.code(201).send({ success: true, data: invoice });
     } catch (error) {
-      console.error('===== BILLING CHECKOUT ERROR =====');
-      console.error('Message:', error.message);
-      console.error('Stack:', error.stack);
-      console.error('Request Body:', request.body);
+      request.log.error(
+        {
+          event: 'BILLING_CHECKOUT_FAILURE',
+          error: error.message,
+          stack: error.stack,
+          payload: request.body,
+        },
+        'Checkout failed',
+      );
 
       return reply.code(400).send({
         success: false,
@@ -58,10 +63,15 @@ class BillingFastifyController {
       const invoice = await billingService.createDraft(request.tenantId, payload, request.user.id);
       return reply.code(201).send({ success: true, data: invoice });
     } catch (error) {
-      console.error('===== BILLING CREATE DRAFT ERROR =====');
-      console.error('Message:', error.message);
-      console.error('Stack:', error.stack);
-      console.error('Request Body:', request.body);
+      request.log.error(
+        {
+          event: 'BILLING_CREATE_DRAFT_FAILURE',
+          error: error.message,
+          stack: error.stack,
+          payload: request.body,
+        },
+        'Create draft failed',
+      );
 
       return reply.code(400).send({
         success: false,
@@ -92,10 +102,16 @@ class BillingFastifyController {
       );
       return reply.code(200).send({ success: true, data: invoice });
     } catch (error) {
-      console.error('===== BILLING UPDATE DRAFT ERROR =====');
-      console.error('Message:', error.message);
-      console.error('Stack:', error.stack);
-      console.error('Request Body:', request.body);
+      request.log.error(
+        {
+          event: 'BILLING_UPDATE_DRAFT_FAILURE',
+          error: error.message,
+          stack: error.stack,
+          payload: request.body,
+          invoiceId: request.params.id,
+        },
+        'Update draft failed',
+      );
 
       return reply.code(400).send({
         success: false,
@@ -127,6 +143,15 @@ class BillingFastifyController {
       );
       return { success: true, data: result };
     } catch (error) {
+      request.log.error(
+        {
+          event: 'BILLING_CANCEL_FAILURE',
+          error: error.message,
+          stack: error.stack,
+          invoiceId: request.params.id,
+        },
+        'Cancel invoice failed',
+      );
       return reply.code(400).send({ success: false, message: error.message, error: error.message });
     }
   }
@@ -157,8 +182,16 @@ class BillingFastifyController {
 
       return reply.send({ success: true, data: result });
     } catch (error) {
-      console.error(error.message);
-      console.error(error.stack);
+      request.log.error(
+        {
+          event: 'BILLING_REFUND_FAILURE',
+          error: error.message,
+          stack: error.stack,
+          invoiceId: request.params.id,
+          payload: request.body,
+        },
+        'Refund failed',
+      );
 
       return reply.code(400).send({
         success: false,

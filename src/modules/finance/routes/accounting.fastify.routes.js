@@ -3,6 +3,7 @@ import taxController from '../fastify/tax.fastify.controller.js';
 import tallyController from '../fastify/tally.fastify.controller.js';
 import { authenticate, requireTenant } from '../../../middleware/auth.fastify.js';
 import { requirePermission } from '../../../middleware/permission.fastify.js';
+import { requireFeature } from '../../../middleware/feature.guard.fastify.js';
 
 async function accountingFastifyRoutes(fastify) {
   fastify.addHook('preHandler', authenticate);
@@ -102,7 +103,7 @@ async function accountingFastifyRoutes(fastify) {
     '/tally/export/sales',
     {
       schema: { tags: ['Finance'], summary: 'Export sales to Tally XML' },
-      preHandler: [requirePermission('finance.read')],
+      preHandler: [requirePermission('finance.read'), requireFeature('ADVANCED_REPORTS')],
     },
     tallyController.exportSales,
   );

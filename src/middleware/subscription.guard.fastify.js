@@ -42,20 +42,13 @@ export const subscriptionGuard = async (request, reply) => {
           where: { tenantId },
           data: { status: 'EXPIRED' },
         });
-        return reply.code(403).send({
-          success: false,
-          error: {
-            message: 'Your subscription has expired. Please renew to continue.',
-            code: 'SUBSCRIPTION_EXPIRED',
-            redirectTo: '/subscription',
-          },
-        });
-      }
-      if (subscription.graceEndDate >= now) {
+        subscription.status = 'EXPIRED';
+      } else if (subscription.graceEndDate >= now) {
         await prisma.subscription.update({
           where: { tenantId },
           data: { status: 'GRACE_PERIOD' },
         });
+        subscription.status = 'GRACE_PERIOD';
         needsUpdate = true;
       }
     }
@@ -66,14 +59,7 @@ export const subscriptionGuard = async (request, reply) => {
           where: { tenantId },
           data: { status: 'EXPIRED' },
         });
-        return reply.code(403).send({
-          success: false,
-          error: {
-            message: 'Your grace period has ended. Please renew to continue.',
-            code: 'SUBSCRIPTION_EXPIRED',
-            redirectTo: '/subscription',
-          },
-        });
+        subscription.status = 'EXPIRED';
       }
     }
 
@@ -82,14 +68,16 @@ export const subscriptionGuard = async (request, reply) => {
       subscription.status === 'SUSPENDED' ||
       subscription.status === 'CANCELLED'
     ) {
-      return reply.code(403).send({
-        success: false,
-        error: {
-          message: `Your subscription is ${subscription.status.toLowerCase()}. Please renew to continue.`,
-          code: 'SUBSCRIPTION_EXPIRED',
-          redirectTo: '/subscription',
-        },
-      });
+      if (request.method !== 'GET') {
+        return reply.code(403).send({
+          success: false,
+          error: {
+            message: `Your subscription is ${subscription.status.toLowerCase()}. Your account is in read-only mode. Please renew to continue.`,
+            code: 'SUBSCRIPTION_EXPIRED',
+            redirectTo: '/subscription',
+          },
+        });
+      }
     }
 
     if (needsUpdate) {

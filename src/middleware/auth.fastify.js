@@ -68,7 +68,16 @@ export const authenticate = async (request, reply) => {
   try {
     await request.jwtVerify();
   } catch (err) {
-    logger.error({ err, url: request.url }, '[AUTH] Invalid or expired token');
+    const isExpired = err.message?.toLowerCase().includes('expired');
+    request.log.warn(
+      {
+        event: isExpired ? 'AUTH_EXPIRED_TOKEN' : 'AUTH_INVALID_TOKEN',
+        error: err.message,
+        url: request.url,
+        ip: request.ip,
+      },
+      'Token validation failed',
+    );
     return reply.code(401).send({
       success: false,
       error: { message: 'Invalid or expired token', code: 'TOKEN_INVALID' },

@@ -1,6 +1,7 @@
 import reportController from '../fastify/report.fastify.controller.js';
 import { authenticate, requireTenant } from '../../../middleware/auth.fastify.js';
 import { requirePermission } from '../../../middleware/permission.fastify.js';
+import { requireFeature } from '../../../middleware/feature.guard.fastify.js';
 
 async function reportFastifyRoutes(fastify) {
   fastify.addHook('preHandler', authenticate);
@@ -46,7 +47,7 @@ async function reportFastifyRoutes(fastify) {
     '/export/sales',
     {
       schema: { tags: ['Reports'], summary: 'Export sales report (excel/pdf)' },
-      preHandler: [requirePermission('reports.read')],
+      preHandler: [requirePermission('reports.read'), requireFeature('REPORTS_EXCEL')],
     },
     reportController.exportSalesReport,
   );
@@ -55,7 +56,7 @@ async function reportFastifyRoutes(fastify) {
     '/aggregate/manual',
     {
       schema: { tags: ['Reports'], summary: 'Trigger manual aggregation for a single date' },
-      preHandler: [requirePermission('reports.admin')],
+      preHandler: [requirePermission('reports.admin'), requireFeature('ADVANCED_REPORTS')],
     },
     reportController.triggerManualAggregation,
   );
@@ -64,7 +65,7 @@ async function reportFastifyRoutes(fastify) {
     '/reaggregate',
     {
       schema: { tags: ['Reports'], summary: 'Rebuild all daily summaries for a date range' },
-      preHandler: [requirePermission('reports.admin')],
+      preHandler: [requirePermission('reports.admin'), requireFeature('ADVANCED_REPORTS')],
     },
     reportController.reaggregateRange,
   );

@@ -18,11 +18,11 @@ class SupplierReturnService {
       }
       const batch = await prisma.inventoryBatch.findUnique({
         where: { id: item.batchId },
-        select: { purchasePrice: true, expiryDate: true, quantity: true },
+        select: { purchasePrice: true, expiryDate: true, availableQuantity: true },
       });
       if (!batch) throw new Error(`Batch ${item.batchId} not found`);
 
-      const qty = Math.min(item.quantity, batch.quantity);
+      const qty = Math.min(item.quantity, batch.availableQuantity);
       const loss = Number(batch.purchasePrice) * qty;
 
       items.push({
@@ -179,7 +179,7 @@ class SupplierReturnService {
         tenantId,
         OR: [{ expiryDate: { lt: new Date() } }, { status: 'EXPIRED' }],
         deletedAt: null,
-        quantity: { gt: 0 },
+        availableQuantity: { gt: 0 },
       },
       include: {
         supplier: { select: { id: true, name: true } },
@@ -191,8 +191,8 @@ class SupplierReturnService {
     let totalValue = 0;
     let totalUnits = 0;
     for (const b of expired) {
-      totalValue += Number(b.purchasePrice) * b.quantity;
-      totalUnits += b.quantity;
+      totalValue += Number(b.purchasePrice) * b.availableQuantity;
+      totalUnits += b.availableQuantity;
       if (b.supplierId) supplierIds.add(b.supplierId);
     }
 

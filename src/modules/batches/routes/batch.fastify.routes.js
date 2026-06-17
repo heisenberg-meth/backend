@@ -1,6 +1,8 @@
 import batchController from '../fastify/batch.fastify.controller.js';
 import { authenticate, requireTenant } from '../../../middleware/auth.fastify.js';
 import { requirePermission } from '../../../middleware/permission.fastify.js';
+import { requireLimit } from '../../../middleware/feature.guard.fastify.js';
+import prisma from '../../../config/prisma.js';
 
 async function batchFastifyRoutes(fastify) {
   fastify.addHook('preHandler', authenticate);
@@ -69,7 +71,14 @@ async function batchFastifyRoutes(fastify) {
     '/',
     {
       schema: { tags: ['Batches'], summary: 'Create a new batch' },
-      preHandler: [requirePermission('VIEW_INVENTORY')],
+      preHandler: [
+        requirePermission('VIEW_INVENTORY'),
+        requireLimit('batches', async (req) => {
+          return await prisma.inventoryBatch.count({
+            where: { tenantId: req.tenantId, deletedAt: null },
+          });
+        }),
+      ],
     },
     batchController.createBatch,
   );

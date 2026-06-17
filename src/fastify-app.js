@@ -1,4 +1,5 @@
 import Fastify from 'fastify';
+import crypto from 'crypto';
 import cors from '@fastify/cors';
 import helmet from '@fastify/helmet';
 import swagger from '@fastify/swagger';
@@ -17,6 +18,7 @@ import { Prisma } from '@prisma/client';
 import prisma from './config/prisma.js';
 import { connectRedis } from './config/redis.js';
 import env from './config/env.js';
+import { initSentry, Sentry } from './config/sentry.js';
 import authRoutes from './modules/auth/routes/auth.fastify.routes.js';
 import usersRoutes from './modules/users/users.fastify.routes.js';
 import twoFactorRoutes from './modules/users/2fa.fastify.routes.js';
@@ -82,7 +84,55 @@ const redisHealthGauge = new client.Gauge({
 
 const fastify = Fastify({
   bodyLimit: 1 * 1024 * 1024,
+  genReqId: () => {
+    return 'REQ-' + crypto.randomUUID();
+  },
   logger: {
+    formatters: {
+      log(object) {
+        // Flatten PRD required fields into the root log object
+        if (object.req) {
+          object.tenantId = object.req.tenantId;
+          object.userId = object.req.userId;
+          object.requestId = object.req.requestId;
+          object.endpoint = object.req.endpoint;
+          delete object.req;
+        }
+        if (object.err) {
+          object.error = object.err.message;
+          object.stack = object.err.stack;
+          delete object.err;
+        }
+        return object;
+      },
+    },
+    serializers: {
+      req(request) {
+        return {
+          method: request.method,
+          url: request.url,
+          requestId: request.id,
+          tenantId: request.tenantId || 'unauthenticated',
+          userId: request.user?.id || 'unauthenticated',
+          endpoint: request.routerPath,
+          clientIp: request.ip,
+        };
+      },
+      res(reply) {
+        return {
+          statusCode: reply.statusCode,
+          responseTime: reply.getResponseTime ? reply.getResponseTime() : undefined,
+        };
+      },
+      err(error) {
+        return {
+          type: error.name,
+          message: error.message,
+          stack: error.stack,
+          code: error.code,
+        };
+      },
+    },
     transport:
       process.env.NODE_ENV === 'development'
         ? {
@@ -104,6 +154,9 @@ const fastify = Fastify({
 
 const setupFastify = async () => {
   await connectRedis();
+
+  // Initialize Sentry before other plugins
+  initSentry(fastify);
 
   await fastify.register(helmet, {
     contentSecurityPolicy: {
@@ -267,6 +320,7 @@ const setupFastify = async () => {
     reply.code(statusCode).send({
       success: false,
       error: { message, code },
+      requestId: request.id,
       stack: env.nodeEnv === 'production' ? undefined : error.stack,
     });
   });
@@ -352,6 +406,28 @@ const setupFastify = async () => {
       redis: redisStatus,
       server: 'healthy',
     });
+  });
+
+  fastify.get('/health/database', async (request, reply) => {
+    try {
+      await prisma.$queryRaw`SELECT 1`;
+      return { status: 'healthy' };
+    } catch (e) {
+      return reply.code(500).send({ status: 'unhealthy', error: e.message });
+    }
+  });
+
+  fastify.get('/health/redis', async (request, reply) => {
+    try {
+      await fastify.redis.ping();
+      return { status: 'healthy' };
+    } catch (e) {
+      return reply.code(500).send({ status: 'unhealthy', error: e.message });
+    }
+  });
+
+  fastify.get('/health/storage', async () => {
+    return { status: 'healthy' };
   });
 
   fastify.addHook('preHandler', subscriptionGuard);

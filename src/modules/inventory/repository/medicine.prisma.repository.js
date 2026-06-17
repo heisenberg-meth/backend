@@ -43,11 +43,11 @@ class MedicinePrismaRepository {
         ? Prisma.sql`AND ib."branchId" = ${targetBranchId}`
         : Prisma.sql``;
 
-      const idsResult = await prisma.$queryRaw`
+      const baseFilterQuery = Prisma.sql`
         WITH batch_aggregates AS (
           SELECT 
             ib."medicineId",
-            SUM(ib."quantity") as current_stock,
+            SUM(ib."availableQuantity") as current_stock,
             MIN(ib."expiryDate") as next_expiry
           FROM "InventoryBatch" ib
           WHERE ib."tenantId" = ${tenantId}
@@ -82,8 +82,54 @@ class MedicinePrismaRepository {
         ORDER BY m.${Prisma.raw(`"${sortBy || 'name'}"`)} ${order === 'desc' ? Prisma.sql`DESC` : Prisma.sql`ASC`}
       `;
 
-      total = idsResult.length;
-      const paginatedIds = idsResult.slice(skip || 0, (skip || 0) + (take || 20)).map((r) => r.id);
+      const countQuery = Prisma.sql`
+        WITH batch_aggregates AS (
+          SELECT 
+            ib."medicineId",
+            SUM(ib."availableQuantity") as current_stock,
+            MIN(ib."expiryDate") as next_expiry
+          FROM "InventoryBatch" ib
+          WHERE ib."tenantId" = ${tenantId}
+            AND ib."deletedAt" IS NULL
+          ${bCond}
+          GROUP BY ib."medicineId"
+        ),
+        inventory_aggregates AS (
+          SELECT
+            i."medicineId",
+            MAX(i."reorderPoint") as max_reorder_point
+          FROM "Inventory" i
+          WHERE i."tenantId" = ${tenantId}
+          ${targetBranchId ? Prisma.sql`AND i."branchId" = ${targetBranchId}` : Prisma.sql``}
+          GROUP BY i."medicineId"
+        )
+        SELECT COUNT(m."id") as count
+        FROM "Medicine" m
+        LEFT JOIN batch_aggregates ba ON m."id" = ba."medicineId"
+        LEFT JOIN inventory_aggregates ia ON m."id" = ia."medicineId"
+        WHERE m."tenantId" = ${tenantId}
+          AND m."deletedAt" IS NULL
+          ${isActive !== undefined ? Prisma.sql`AND m."isActive" = ${isActive}` : Prisma.sql``}
+          ${categoryId ? Prisma.sql`AND m."categoryId" = ${categoryId}` : Prisma.sql``}
+          ${manufacturerId ? Prisma.sql`AND m."manufacturerId" = ${manufacturerId}` : Prisma.sql``}
+          ${search ? Prisma.sql`AND (m."name" ILIKE ${'%' + search + '%'} OR m."genericName" ILIKE ${'%' + search + '%'} OR m."barcode" ILIKE ${'%' + search + '%'} OR m."sku" ILIKE ${'%' + search + '%'})` : Prisma.sql``}
+          ${upperStatus === 'IN_STOCK' ? Prisma.sql`AND COALESCE(ba.current_stock, 0) > COALESCE(ia.max_reorder_point, m."reorderLevel", 10)` : Prisma.sql``}
+          ${upperStatus === 'LOW_STOCK' || lowStock ? Prisma.sql`AND COALESCE(ba.current_stock, 0) > 0 AND COALESCE(ba.current_stock, 0) <= COALESCE(ia.max_reorder_point, m."reorderLevel", 10)` : Prisma.sql``}
+          ${upperStatus === 'OUT_OF_STOCK' ? Prisma.sql`AND COALESCE(ba.current_stock, 0) <= 0` : Prisma.sql``}
+          ${upperStatus === 'EXPIRING_SOON' ? Prisma.sql`AND ba.next_expiry > NOW() AND ba.next_expiry <= (NOW() + INTERVAL '30 days')` : Prisma.sql``}
+          ${upperStatus === 'EXPIRED' ? Prisma.sql`AND ba.next_expiry <= NOW()` : Prisma.sql``}
+      `;
+
+      const countResult = await prisma.$queryRaw(countQuery);
+      total = Number(countResult[0]?.count || 0);
+
+      const paginatedIdsQuery = Prisma.sql`
+        ${baseFilterQuery}
+        LIMIT ${take || 20} OFFSET ${skip || 0}
+      `;
+
+      const paginatedResult = await prisma.$queryRaw(paginatedIdsQuery);
+      const paginatedIds = paginatedResult.map((r) => r.id);
 
       if (paginatedIds.length === 0) {
         medicines = [];

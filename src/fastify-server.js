@@ -170,7 +170,13 @@ const start = async () => {
   process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
 
   process.on('unhandledRejection', (reason) => {
-    console.error('[UNHANDLED REJECTION]', reason);
+    logger.fatal({ err: reason }, '[UNHANDLED REJECTION] Shutting down to maintain consistency');
+    gracefulShutdown('UNHANDLED_REJECTION');
+  });
+
+  process.on('uncaughtException', (err) => {
+    logger.fatal({ err }, '[UNCAUGHT EXCEPTION] Shutting down to maintain consistency');
+    gracefulShutdown('UNCAUGHT_EXCEPTION');
   });
 
   try {

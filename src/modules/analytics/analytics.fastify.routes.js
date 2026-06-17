@@ -2,6 +2,7 @@ import analyticsController from './controller/analytics.fastify.controller.js';
 import { authenticate, requireTenant } from '../../middleware/auth.fastify.js';
 import { requirePermission } from '../../middleware/permission.fastify.js';
 import auditService from '../audit/service/audit.prisma.service.js';
+import { requireFeature } from '../../middleware/feature.guard.fastify.js';
 
 /**
  * Simple audit logging hook for analytics endpoints
@@ -59,7 +60,10 @@ async function analyticsRoutes(fastify) {
     '/revenue-vs-cost',
     {
       schema: { tags: ['Analytics'], summary: 'Revenue vs cost of goods sold by month' },
-      preHandler: [requirePermission('analytics.financial.read')],
+      preHandler: [
+        requirePermission('analytics.financial.read'),
+        requireFeature('PREMIUM_ANALYTICS'),
+      ],
     },
     analyticsController.getRevenueVsCost,
   );
@@ -71,7 +75,10 @@ async function analyticsRoutes(fastify) {
         tags: ['Analytics'],
         summary: 'Total spend per supplier last 12 months with concentration risk detection',
       },
-      preHandler: [requirePermission('analytics.financial.read')],
+      preHandler: [
+        requirePermission('analytics.financial.read'),
+        requireFeature('PREMIUM_ANALYTICS'),
+      ],
     },
     analyticsController.getSupplierSpend,
   );
@@ -113,7 +120,10 @@ async function analyticsRoutes(fastify) {
         tags: ['Analytics'],
         summary: 'Average profit margin with negative margin detection and distribution analysis',
       },
-      preHandler: [requirePermission('analytics.financial.read')],
+      preHandler: [
+        requirePermission('analytics.financial.read'),
+        requireFeature('PREMIUM_ANALYTICS'),
+      ],
     },
     analyticsController.getProfitMargin,
   );
@@ -156,7 +166,10 @@ async function analyticsRoutes(fastify) {
         summary:
           'Fraud detection signals: anomalous refunds, cash spikes, excessive discounts, price anomalies',
       },
-      preHandler: [requirePermission('analytics.financial.read')],
+      preHandler: [
+        requirePermission('analytics.financial.read'),
+        requireFeature('PREMIUM_ANALYTICS'),
+      ],
     },
     analyticsController.getFraudSignals,
   );
@@ -169,7 +182,7 @@ async function analyticsRoutes(fastify) {
         summary:
           'Forecast dashboard with demand predictions, reorder recommendations, seasonal trends, and expiry risk',
       },
-      preHandler: [requirePermission('analytics.read')],
+      preHandler: [requirePermission('analytics.read'), requireFeature('PREMIUM_ANALYTICS')],
     },
     analyticsController.getForecastDashboard,
   );
@@ -193,7 +206,7 @@ async function analyticsRoutes(fastify) {
         tags: ['Analytics BI'],
         summary: 'Get fast-moving medicines by sales velocity (supports ?branchId=)',
       },
-      preHandler: [requirePermission('analytics.read')],
+      preHandler: [requirePermission('analytics.read'), requireFeature('PREMIUM_ANALYTICS')],
     },
     analyticsController.getFastMoving,
   );
@@ -205,7 +218,7 @@ async function analyticsRoutes(fastify) {
         tags: ['Analytics BI'],
         summary: 'Get slow-moving stock (>60 days no sale) (supports ?branchId=)',
       },
-      preHandler: [requirePermission('analytics.read')],
+      preHandler: [requirePermission('analytics.read'), requireFeature('PREMIUM_ANALYTICS')],
     },
     analyticsController.getSlowMovingBI,
   );
@@ -217,7 +230,7 @@ async function analyticsRoutes(fastify) {
         tags: ['Analytics BI'],
         summary: 'Get dead stock analysis (>120 days no sale) (supports ?branchId=)',
       },
-      preHandler: [requirePermission('analytics.read')],
+      preHandler: [requirePermission('analytics.read'), requireFeature('PREMIUM_ANALYTICS')],
     },
     analyticsController.getDeadStock,
   );
@@ -229,7 +242,7 @@ async function analyticsRoutes(fastify) {
         tags: ['Analytics BI'],
         summary: 'Get revenue aggregation by hour and weekday (supports ?branchId=)',
       },
-      preHandler: [requirePermission('analytics.read')],
+      preHandler: [requirePermission('analytics.read'), requireFeature('PREMIUM_ANALYTICS')],
     },
     analyticsController.getRevenueHeatmap,
   );

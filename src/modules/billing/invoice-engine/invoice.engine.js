@@ -9,6 +9,7 @@ import { emitEvent } from '../../../shared/events/erp-event-bus.js';
 import pointsService from '../../loyalty/points/points.service.js';
 import creditService from '../../loyalty/credits/credit.service.js';
 import cacheInvalidatorService from '../../inventory/service/cache-invalidator.service.js';
+import logger from '../../../shared/utils/logger.js';
 
 class InvoiceEngine {
   _safeNumber(value) {
@@ -43,21 +44,13 @@ class InvoiceEngine {
     const execute = async (t) => {
       const invoiceNumber = await this._generateInvoiceNumber(tenantId, t);
 
-      const branchProfile = await t.storeProfile.findFirst({
-        where: { tenantId, branchId },
-        select: { gstin: true },
-      });
-      const sourceGst = branchProfile?.gstin || '';
-
-      let targetGst = '';
       let defaultPatientName = null;
       let defaultPatientPhone = null;
       if (patientId) {
         const patient = await t.patient.findUnique({
           where: { id: patientId },
-          select: { gstNumber: true, fullName: true, phone: true },
+          select: { fullName: true, phone: true },
         });
-        targetGst = patient?.gstNumber || '';
         defaultPatientName = patient?.fullName || null;
         defaultPatientPhone = patient?.phone || null;
       }
@@ -95,28 +88,51 @@ class InvoiceEngine {
         },
       });
 
-      for (const item of normalizedItems) {
-        const unitPrice = this._safeNumber(item.unitPrice);
-        const quantity = this._safeNumber(item.quantity);
-        const gstPercentage = this._safeNumber(item.gstPercentage);
-        const itemSubtotal = unitPrice * quantity;
+      // N+1 Optimization: Resolve all unknown batches in bulk
+      const missingBatchItemIds = totals.processedItems
+        .filter((i) => !i.batchId)
+        .map((i) => i.medicineId);
+      const availableBatchesByMedicine = {};
 
+      if (missingBatchItemIds.length > 0) {
+        const availableBatches = await t.inventoryBatch.findMany({
+          where: {
+            tenantId,
+            branchId,
+            medicineId: { in: missingBatchItemIds },
+            availableQuantity: { gt: 0 },
+            deletedAt: null,
+            expiryDate: { gt: new Date() },
+            status: 'ACTIVE',
+          },
+          orderBy: { expiryDate: 'asc' },
+        });
+
+        for (const b of availableBatches) {
+          if (!availableBatchesByMedicine[b.medicineId]) {
+            availableBatchesByMedicine[b.medicineId] = b;
+          }
+        }
+      }
+
+      // N+1 Optimization: Validate all known batches in bulk
+      const knownBatchIds = totals.processedItems.filter((i) => i.batchId).map((i) => i.batchId);
+      const validatedBatches = new Set();
+      if (knownBatchIds.length > 0) {
+        const found = await t.inventoryBatch.findMany({
+          where: { id: { in: knownBatchIds } },
+          select: { id: true },
+        });
+        found.forEach((f) => validatedBatches.add(f.id));
+      }
+
+      const invoiceItemsData = [];
+
+      for (const item of totals.processedItems) {
         let resolvedBatchId = item.batchId;
 
         if (!resolvedBatchId) {
-          const availableBatch = await t.inventoryBatch.findFirst({
-            where: {
-              tenantId,
-              branchId: branchId,
-              medicineId: item.medicineId,
-              availableQuantity: { gt: 0 },
-              deletedAt: null,
-              expiryDate: { gt: new Date() },
-              status: 'ACTIVE',
-            },
-            orderBy: { expiryDate: 'asc' },
-          });
-
+          const availableBatch = availableBatchesByMedicine[item.medicineId];
           if (!availableBatch) {
             throw new Error(
               `Cannot create draft: No available active batches found for medicine ${item.medicineId}`,
@@ -124,34 +140,27 @@ class InvoiceEngine {
           }
           resolvedBatchId = availableBatch.id;
         } else {
-          const batchCount = await t.inventoryBatch.count({ where: { id: resolvedBatchId } });
-          if (batchCount === 0) {
+          if (!validatedBatches.has(resolvedBatchId)) {
             throw new Error(`Cannot create draft: Batch ${resolvedBatchId} does not exist`);
           }
         }
 
-        const gstResult = gstService.calculateGst(
-          itemSubtotal,
-          gstPercentage,
-          sourceGst,
-          targetGst,
-        );
-
-        await t.invoiceItem.create({
-          data: {
-            invoiceId: invoice.id,
-            medicineId: item.medicineId,
-            batchId: resolvedBatchId,
-            quantity,
-            unitPrice,
-            gstPercentage,
-            cgst: this._safeNumber(gstResult.cgst),
-            sgst: this._safeNumber(gstResult.sgst),
-            igst: this._safeNumber(gstResult.igst),
-            totalPrice: this._safeNumber(itemSubtotal + gstResult.amount),
-          },
+        invoiceItemsData.push({
+          invoiceId: invoice.id,
+          medicineId: item.medicineId,
+          batchId: resolvedBatchId,
+          quantity: item.quantity,
+          unitPrice: item.unitPrice,
+          gstPercentage: item.gstPercentage,
+          discountAmount: item.itemDiscountAmount,
+          cgst: item.cgst,
+          sgst: item.sgst,
+          igst: item.igst,
+          totalPrice: item.totalPrice,
         });
       }
+
+      await t.invoiceItem.createMany({ data: invoiceItemsData });
 
       return invoice;
     };
@@ -190,21 +199,13 @@ class InvoiceEngine {
       if (!existing) throw new Error('Invoice not found');
       if (existing.status !== 'DRAFT') throw new Error('Only DRAFT invoices can be updated');
 
-      const branchProfile = await t.storeProfile.findFirst({
-        where: { tenantId, branchId },
-        select: { gstin: true },
-      });
-      const sourceGst = branchProfile?.gstin || '';
-
-      let targetGst = '';
       let defaultPatientName = null;
       let defaultPatientPhone = null;
       if (patientId) {
         const patient = await t.patient.findUnique({
           where: { id: patientId },
-          select: { gstNumber: true, fullName: true, phone: true },
+          select: { fullName: true, phone: true },
         });
-        targetGst = patient?.gstNumber || '';
         defaultPatientName = patient?.fullName || null;
         defaultPatientPhone = patient?.phone || null;
       }
@@ -241,28 +242,51 @@ class InvoiceEngine {
         },
       });
 
-      for (const item of normalizedItems) {
-        const unitPrice = this._safeNumber(item.unitPrice);
-        const quantity = this._safeNumber(item.quantity);
-        const gstPercentage = this._safeNumber(item.gstPercentage);
-        const itemSubtotal = unitPrice * quantity;
+      // N+1 Optimization: Resolve all unknown batches in bulk
+      const missingBatchItemIds = totals.processedItems
+        .filter((i) => !i.batchId)
+        .map((i) => i.medicineId);
+      const availableBatchesByMedicine = {};
 
+      if (missingBatchItemIds.length > 0) {
+        const availableBatches = await t.inventoryBatch.findMany({
+          where: {
+            tenantId,
+            branchId,
+            medicineId: { in: missingBatchItemIds },
+            availableQuantity: { gt: 0 },
+            deletedAt: null,
+            expiryDate: { gt: new Date() },
+            status: 'ACTIVE',
+          },
+          orderBy: { expiryDate: 'asc' },
+        });
+
+        for (const b of availableBatches) {
+          if (!availableBatchesByMedicine[b.medicineId]) {
+            availableBatchesByMedicine[b.medicineId] = b;
+          }
+        }
+      }
+
+      // N+1 Optimization: Validate all known batches in bulk
+      const knownBatchIds = totals.processedItems.filter((i) => i.batchId).map((i) => i.batchId);
+      const validatedBatches = new Set();
+      if (knownBatchIds.length > 0) {
+        const found = await t.inventoryBatch.findMany({
+          where: { id: { in: knownBatchIds } },
+          select: { id: true },
+        });
+        found.forEach((f) => validatedBatches.add(f.id));
+      }
+
+      const invoiceItemsData = [];
+
+      for (const item of totals.processedItems) {
         let resolvedBatchId = item.batchId;
 
         if (!resolvedBatchId) {
-          const availableBatch = await t.inventoryBatch.findFirst({
-            where: {
-              tenantId,
-              branchId: branchId,
-              medicineId: item.medicineId,
-              availableQuantity: { gt: 0 },
-              deletedAt: null,
-              expiryDate: { gt: new Date() },
-              status: 'ACTIVE',
-            },
-            orderBy: { expiryDate: 'asc' },
-          });
-
+          const availableBatch = availableBatchesByMedicine[item.medicineId];
           if (!availableBatch) {
             throw new Error(
               `Cannot update draft: No available active batches found for medicine ${item.medicineId}`,
@@ -270,34 +294,27 @@ class InvoiceEngine {
           }
           resolvedBatchId = availableBatch.id;
         } else {
-          const batchCount = await t.inventoryBatch.count({ where: { id: resolvedBatchId } });
-          if (batchCount === 0) {
+          if (!validatedBatches.has(resolvedBatchId)) {
             throw new Error(`Cannot update draft: Batch ${resolvedBatchId} does not exist`);
           }
         }
 
-        const gstResult = gstService.calculateGst(
-          itemSubtotal,
-          gstPercentage,
-          sourceGst,
-          targetGst,
-        );
-
-        await t.invoiceItem.create({
-          data: {
-            invoiceId: updatedInvoice.id,
-            medicineId: item.medicineId,
-            batchId: resolvedBatchId,
-            quantity,
-            unitPrice,
-            gstPercentage,
-            cgst: this._safeNumber(gstResult.cgst),
-            sgst: this._safeNumber(gstResult.sgst),
-            igst: this._safeNumber(gstResult.igst),
-            totalPrice: this._safeNumber(itemSubtotal + gstResult.amount),
-          },
+        invoiceItemsData.push({
+          invoiceId: updatedInvoice.id,
+          medicineId: item.medicineId,
+          batchId: resolvedBatchId,
+          quantity: item.quantity,
+          unitPrice: item.unitPrice,
+          gstPercentage: item.gstPercentage,
+          discountAmount: item.itemDiscountAmount,
+          cgst: item.cgst,
+          sgst: item.sgst,
+          igst: item.igst,
+          totalPrice: item.totalPrice,
         });
       }
+
+      await t.invoiceItem.createMany({ data: invoiceItemsData });
 
       await this._audit(invoiceId, 'UPDATED', userId, t);
 
@@ -570,36 +587,65 @@ class InvoiceEngine {
     }
 
     let subtotal = 0;
-    let totalGst = 0;
-    let totalCgst = 0;
-    let totalSgst = 0;
-    let totalIgst = 0;
-
     for (const item of items) {
-      const price = this._safeNumber(item.unitPrice);
-      const qty = this._safeNumber(item.quantity);
-      const itemSubtotal = price * qty;
-
-      subtotal += itemSubtotal;
-
-      const gstResult = gstService.calculateGst(
-        itemSubtotal,
-        this._safeNumber(item.gstPercentage),
-        sourceGst,
-        targetGst,
-      );
-
-      totalGst += this._safeNumber(gstResult.amount);
-      totalCgst += this._safeNumber(gstResult.cgst);
-      totalSgst += this._safeNumber(gstResult.sgst);
-      totalIgst += this._safeNumber(gstResult.igst);
+      subtotal += this._safeNumber(item.unitPrice) * this._safeNumber(item.quantity);
     }
 
     let finalDiscountAmount = this._safeNumber(discountAmount);
     if (this._safeNumber(discountPercentage) > 0 && finalDiscountAmount === 0) {
       finalDiscountAmount = subtotal * (this._safeNumber(discountPercentage) / 100);
     }
-    const grandTotal = subtotal + totalGst - finalDiscountAmount;
+
+    if (finalDiscountAmount > subtotal) {
+      finalDiscountAmount = subtotal;
+    }
+
+    const discountRatio = subtotal > 0 ? finalDiscountAmount / subtotal : 0;
+
+    let totalGst = 0;
+    let totalCgst = 0;
+    let totalSgst = 0;
+    let totalIgst = 0;
+    const processedItems = [];
+
+    for (const item of items) {
+      const price = this._safeNumber(item.unitPrice);
+      const qty = this._safeNumber(item.quantity);
+      const rawItemSubtotal = price * qty;
+
+      const itemDiscountAmount = rawItemSubtotal * discountRatio;
+      const itemTaxableAmount = rawItemSubtotal - itemDiscountAmount;
+
+      const gstResult = gstService.calculateGst(
+        itemTaxableAmount,
+        this._safeNumber(item.gstPercentage),
+        sourceGst,
+        targetGst,
+      );
+
+      const cgst = this._safeNumber(gstResult.cgst);
+      const sgst = this._safeNumber(gstResult.sgst);
+      const igst = this._safeNumber(gstResult.igst);
+      const amount = this._safeNumber(gstResult.amount);
+
+      totalGst += amount;
+      totalCgst += cgst;
+      totalSgst += sgst;
+      totalIgst += igst;
+
+      processedItems.push({
+        ...item,
+        itemDiscountAmount,
+        itemTaxableAmount,
+        cgst,
+        sgst,
+        igst,
+        gstAmount: amount,
+        totalPrice: itemTaxableAmount + amount,
+      });
+    }
+
+    const grandTotal = subtotal - finalDiscountAmount + totalGst;
 
     return {
       subtotal,
@@ -609,6 +655,7 @@ class InvoiceEngine {
       totalIgst,
       discountAmount: finalDiscountAmount,
       totalAmount: grandTotal,
+      processedItems,
     };
   }
 
@@ -623,6 +670,17 @@ class InvoiceEngine {
       `;
       const batch = lockedBatches[0];
       if (!batch || batch.availableQuantity < item.quantity) {
+        logger.error(
+          {
+            event: 'NEGATIVE_STOCK_ATTEMPT',
+            tenantId,
+            medicineId: item.medicineId,
+            batchId: item.batchId,
+            requested: item.quantity,
+            available: batch?.availableQuantity,
+          },
+          'Attempted to deduct more stock than available',
+        );
         throw new Error(
           `Medicine "${item.medicine?.name || 'Unknown'}" only has ${batch?.availableQuantity || 0} stock available in batch ${batch?.batchNumber || 'unknown'}`,
         );
@@ -661,6 +719,16 @@ class InvoiceEngine {
       }
 
       if (remaining > 0) {
+        logger.error(
+          {
+            event: 'STOCK_DEDUCTION_FAILURE',
+            tenantId,
+            medicineId: item.medicineId,
+            requested: item.quantity,
+            missing: remaining,
+          },
+          'Insufficient stock across all batches',
+        );
         throw new Error(
           `Medicine "${item.medicine?.name || 'Unknown'}" has insufficient stock available (missing ${remaining})`,
         );

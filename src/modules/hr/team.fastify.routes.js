@@ -2,6 +2,7 @@ import bcrypt from 'bcryptjs';
 import { authenticate, requireTenant } from '../../middleware/auth.fastify.js';
 import { requirePermission } from '../../middleware/permission.fastify.js';
 import prisma from '../../config/prisma.js';
+import { requireLimit } from '../../middleware/feature.guard.fastify.js';
 
 async function teamRoutes(fastify) {
   fastify.addHook('preHandler', authenticate);
@@ -22,7 +23,12 @@ async function teamRoutes(fastify) {
   });
 
   fastify.post('/', {
-    preHandler: [requirePermission('MANAGE_USERS')],
+    preHandler: [
+      requirePermission('MANAGE_USERS'),
+      requireLimit('users', async (req) => {
+        return await prisma.user.count({ where: { tenantId: req.tenantId, deletedAt: null } });
+      }),
+    ],
     handler: async (request) => {
       const { email, password, fullName, role } = request.body;
       const hashedPassword = await bcrypt.hash(password, 10);

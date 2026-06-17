@@ -845,6 +845,8 @@ model InventoryBatch {
   @@index([tenantId, deletedAt])
   @@index([tenantId, status, expiryDate])
   @@index([barcode])
+  @@index([tenantId, branchId, deletedAt])
+  @@index([tenantId, deletedAt, branchId, medicineId])
 }
 
 model BatchAuditLog {

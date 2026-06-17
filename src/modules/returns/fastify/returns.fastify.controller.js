@@ -166,7 +166,16 @@ class ReturnsFastifyController {
         .code(201)
         .send({ success: true, data: creditNote, message: 'Credit note generated successfully' });
     } catch (error) {
-      request.log.error({ err: error, endpoint: 'returns-credit-note' }, 'Returns error');
+      request.log.error(
+        {
+          event: 'CREDIT_NOTE_GENERATION_FAILURE',
+          error: error.message,
+          stack: error.stack,
+          returnId: request.params.id,
+          payload: request.body,
+        },
+        'Credit note generation failed',
+      );
       return reply.code(500).send({ success: false, message: error.message });
     }
   }

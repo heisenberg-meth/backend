@@ -118,10 +118,10 @@ export class InventoryService {
           status: 'ACTIVE',
         },
         _sum: {
-          quantity: true,
+          availableQuantity: true,
         },
       });
-      stock = batchSum._sum.quantity || 0;
+      stock = batchSum._sum.availableQuantity || 0;
       await this.updateCache(tenantId, medicineId, branchId, stock);
     }
 

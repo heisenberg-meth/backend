@@ -1,5 +1,4 @@
 import prisma from '../../../config/prisma.js';
-import { Prisma } from '@prisma/client';
 import redisClient from '../../../config/redis.js';
 import logger from '../../../shared/utils/logger.js';
 import medicineRepository from '../repository/medicine.prisma.repository.js';
@@ -67,49 +66,77 @@ class MedicinePrismaService {
 
   async getLowStockAlerts(tenantId, branchId = null) {
     const bId = branchId === 'null' || !branchId ? null : branchId;
-    const branchCondition = bId ? Prisma.sql`AND ib."branchId" = ${bId}` : Prisma.sql``;
 
-    const data = await prisma.$queryRaw`
-      WITH batch_aggregates AS (
-        SELECT 
-          ib."medicineId",
-          SUM(ib."quantity") as "stock",
-          MAX(i."reorderPoint") as "max_reorder_point"
-        FROM "InventoryBatch" ib
-        LEFT JOIN "Inventory" i 
-          ON i."medicineId" = ib."medicineId" 
-          AND (i."branchId" = ib."branchId" OR (i."branchId" IS NULL AND ib."branchId" IS NULL))
-          AND i."tenantId" = ${tenantId}
-        WHERE ib."tenantId" = ${tenantId}
-          AND ib."deletedAt" IS NULL
-        ${branchCondition}
-        GROUP BY ib."medicineId"
-      )
-      SELECT 
-        m."id",
-        m."name",
-        m."genericName",
-        COALESCE(ba."stock", 0) as "stock",
-        COALESCE(ba."max_reorder_point", m."reorderLevel", 10) as "reorderLevel",
-        supp."id" as "supplierId",
-        supp."name" as "supplierName",
-        supp."email" as "supplierEmail",
-        supp."phone" as "supplierPhone"
-      FROM "Medicine" m
-      LEFT JOIN batch_aggregates ba ON m."id" = ba."medicineId"
-      LEFT JOIN "Manufacturer" supp ON m."manufacturerId" = supp."id"
-      WHERE m."tenantId" = ${tenantId}
-        AND m."deletedAt" IS NULL
-        AND m."isActive" = true
-        AND COALESCE(ba."stock", 0) <= COALESCE(ba."max_reorder_point", m."reorderLevel", 10)
-      ORDER BY COALESCE(ba."stock", 0) ASC
-    `;
+    const medicines = await prisma.medicine.findMany({
+      where: {
+        tenantId,
+        deletedAt: null,
+        isActive: true,
+      },
+      select: {
+        id: true,
+        name: true,
+        genericName: true,
+        reorderLevel: true,
+        manufacturer: {
+          select: {
+            id: true,
+            name: true,
+            contactEmail: true,
+            phone: true,
+          },
+        },
+        inventoryBatches: {
+          where: {
+            tenantId,
+            deletedAt: null,
+            ...(bId ? { branchId: bId } : {}),
+          },
+          select: {
+            quantity: true,
+          },
+        },
+        inventory: {
+          where: {
+            tenantId,
+            ...(bId ? { branchId: bId } : {}),
+          },
+          select: {
+            reorderPoint: true,
+            branchId: true,
+          },
+        },
+      },
+    });
 
-    return data.map((d) => ({
-      ...d,
-      stock: Number(d.stock || 0),
-      reorderLevel: Number(d.reorderLevel || 10),
-    }));
+    const alerts = [];
+
+    for (const m of medicines) {
+      const stock = m.inventoryBatches.reduce((acc, b) => acc + (b.quantity || 0), 0);
+
+      const relevantInventory = m.inventory.filter((i) => (bId ? i.branchId === bId : true));
+
+      let maxReorderPoint = m.reorderLevel ?? 10;
+      if (relevantInventory.length > 0) {
+        maxReorderPoint = Math.max(...relevantInventory.map((i) => i.reorderPoint ?? 0));
+      }
+
+      if (stock <= maxReorderPoint) {
+        alerts.push({
+          id: m.id,
+          name: m.name,
+          genericName: m.genericName,
+          stock,
+          reorderLevel: maxReorderPoint,
+          supplierId: m.manufacturer?.id || null,
+          supplierName: m.manufacturer?.name || null,
+          supplierEmail: m.manufacturer?.contactEmail || null,
+          supplierPhone: m.manufacturer?.phone || null,
+        });
+      }
+    }
+
+    return alerts.sort((a, b) => a.stock - b.stock);
   }
 
   async getInventorySummary(tenantId, branchId = null) {

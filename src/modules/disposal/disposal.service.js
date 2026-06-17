@@ -118,19 +118,19 @@ class DisposalService {
         continue;
       }
 
-      if (batch.quantity < quantity) {
+      if (batch.availableQuantity < quantity) {
         results.push({
           medicineId,
           batchId,
           status: 'SKIPPED',
-          reason: `Insufficient quantity. Available: ${batch.quantity}, Requested: ${quantity}`,
+          reason: `Insufficient quantity. Available: ${batch.availableQuantity}, Requested: ${quantity}`,
         });
         continue;
       }
 
       await prisma.$transaction(async (tx) => {
         const batchBranchId = batch.branchId;
-        const remainingQuantity = Number(batch.quantity) - Number(quantity);
+        const remainingQuantity = Number(batch.availableQuantity) - Number(quantity);
         const newStatus = remainingQuantity <= 0 ? 'ARCHIVED' : batch.status;
 
         await tx.inventoryBatch.update({

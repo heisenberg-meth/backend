@@ -412,6 +412,7 @@ class AuthPrismaService {
   }
 
   async refreshSession(oldRefreshToken) {
+    const startTime = Date.now();
     const tokenHash = sessionService.hashToken(oldRefreshToken);
     const session = await sessionService.findSessionByRefreshToken(oldRefreshToken);
 
@@ -420,21 +421,49 @@ class AuthPrismaService {
         tokenHash,
         sessionFound: !!session,
         sessionId: session?.id,
+        lookupDuration: Date.now() - startTime,
       },
       'Session lookup during refresh',
     );
 
     if (!session || session.revoked) {
+      logger.info({
+        route: '/auth/refresh',
+        cookieReceived: true,
+        sessionFound: false,
+        userFound: false,
+        duration: Date.now() - startTime,
+      });
       throw new Error('Invalid or reused refresh token');
     }
 
     if (new Date() > session.expiresAt) {
       await sessionService.revokeSession(session.id);
+      logger.info({
+        route: '/auth/refresh',
+        cookieReceived: true,
+        sessionFound: true,
+        userFound: false,
+        duration: Date.now() - startTime,
+      });
       throw new Error('Refresh token expired');
     }
 
+    const userLookupStart = Date.now();
     const user = await authRepository.findUserById(session.userId);
+    logger.info(
+      { userFound: !!user, userLookupDuration: Date.now() - userLookupStart },
+      'User lookup during refresh',
+    );
+
     if (!user) {
+      logger.info({
+        route: '/auth/refresh',
+        cookieReceived: true,
+        sessionFound: true,
+        userFound: false,
+        duration: Date.now() - startTime,
+      });
       throw new Error('User not found');
     }
 

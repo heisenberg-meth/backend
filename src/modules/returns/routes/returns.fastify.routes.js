@@ -1,6 +1,7 @@
 import returnsController from '../fastify/returns.fastify.controller.js';
 import { authenticate, requireTenant } from '../../../middleware/auth.fastify.js';
 import { requirePermission } from '../../../middleware/permission.fastify.js';
+import { requireFeature } from '../../../middleware/feature.guard.fastify.js';
 
 async function returnsFastifyRoutes(fastify) {
   fastify.addHook('preHandler', authenticate);
@@ -82,7 +83,7 @@ async function returnsFastifyRoutes(fastify) {
     '/returns/:id/credit-note',
     {
       schema: { tags: ['Returns'], summary: 'Generate credit note for return' },
-      preHandler: [requirePermission('returns.create')],
+      preHandler: [requirePermission('returns.create'), requireFeature('CREDIT_NOTES')],
     },
     returnsController.generateCreditNote,
   );

@@ -8,21 +8,52 @@ export const SUBSCRIPTION_PLANS = {
     name: 'Free Trial',
     price: 0,
     billingCycle: 'one-time',
-    features: ['28-day free trial', 'Full feature access', 'Up to 5 users'],
+    features: [
+      'CREDIT_NOTES',
+      'REPORTS_PDF',
+      'REPORTS_EXCEL',
+      'ADVANCED_REPORTS',
+      'PREMIUM_ANALYTICS',
+    ],
+    limits: { users: 5, branches: 1, medicines: 1000, batches: 5000 },
   },
-  'basic-monthly': {
-    id: 'basic-monthly',
-    name: 'Basic Monthly',
+  free: {
+    id: 'free',
+    name: 'Free Plan',
+    price: 0,
+    billingCycle: 'monthly',
+    features: [],
+    limits: { users: 1, branches: 1, medicines: 100, batches: 500 },
+  },
+  starter: {
+    id: 'starter',
+    name: 'Starter Plan',
     price: 999,
     billingCycle: 'monthly',
-    features: ['Unlimited Medicines', 'Basic Analytics', 'Up to 3 users'],
+    features: ['CREDIT_NOTES', 'REPORTS_PDF'],
+    limits: { users: 3, branches: 2, medicines: 5000, batches: 10000 },
   },
-  'pro-monthly': {
-    id: 'pro-monthly',
-    name: 'Pro Monthly',
+  professional: {
+    id: 'professional',
+    name: 'Professional Plan',
     price: 2999,
     billingCycle: 'monthly',
-    features: ['Unlimited Medicines', 'Advanced Analytics', 'Priority Support', 'Up to 10 users'],
+    features: ['CREDIT_NOTES', 'REPORTS_PDF', 'REPORTS_EXCEL', 'PREMIUM_ANALYTICS'],
+    limits: { users: 10, branches: 5, medicines: 20000, batches: 50000 },
+  },
+  enterprise: {
+    id: 'enterprise',
+    name: 'Enterprise Plan',
+    price: 9999,
+    billingCycle: 'monthly',
+    features: [
+      'CREDIT_NOTES',
+      'REPORTS_PDF',
+      'REPORTS_EXCEL',
+      'ADVANCED_REPORTS',
+      'PREMIUM_ANALYTICS',
+    ],
+    limits: { users: -1, branches: -1, medicines: -1, batches: -1 }, // -1 implies unlimited
   },
 };
 
@@ -39,8 +70,4 @@ export const ALLOWED_TRANSITIONS = {
   EXPIRED: ['ACTIVE'],
   SUSPENDED: ['ACTIVE', 'CANCELLED'],
   CANCELLED: [],
-};
-
-export const PROTECTED_FEATURES = {
-  premium: ['Advanced Analytics', 'Custom Roles', 'Multi-store Sync'],
 };

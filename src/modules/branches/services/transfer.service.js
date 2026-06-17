@@ -18,14 +18,14 @@ class TransferService {
           FOR UPDATE
         `;
 
-        if (!batch || batch.quantity < item.quantity) {
+        if (!batch || batch.availableQuantity < item.quantity) {
           throw new Error(`Insufficient stock in source branch for batch ${item.batchId}`);
         }
 
         const updatedBatch = await tx.inventoryBatch.update({
           where: { id: batch.id },
           data: {
-            quantity: batch.quantity - item.quantity,
+            availableQuantity: batch.availableQuantity - item.quantity,
             reservedQuantity: batch.reservedQuantity + item.quantity,
           },
         });
@@ -106,6 +106,7 @@ class TransferService {
         await tx.inventoryBatch.update({
           where: { id: sourceBatch.id },
           data: {
+            quantity: sourceBatch.quantity - item.quantity,
             reservedQuantity: sourceBatch.reservedQuantity - item.quantity,
           },
         });
@@ -178,7 +179,10 @@ class TransferService {
         if (destBatch) {
           const updatedDest = await tx.inventoryBatch.update({
             where: { id: destBatch.id },
-            data: { quantity: destBatch.quantity + item.quantity },
+            data: {
+              quantity: destBatch.quantity + item.quantity,
+              availableQuantity: destBatch.availableQuantity + item.quantity,
+            },
           });
           newBatchId = destBatch.id;
           currentDestQty = updatedDest.quantity;
@@ -190,6 +194,7 @@ class TransferService {
               batchNumber: sourceBatch.batchNumber,
               barcode: sourceBatch.barcode,
               quantity: item.quantity,
+              availableQuantity: item.quantity,
               expiryDate: sourceBatch.expiryDate,
               manufacturingDate: sourceBatch.manufacturingDate,
               purchasePrice: sourceBatch.purchasePrice,

@@ -147,7 +147,13 @@ class PaymentFastifyController {
 
     const isValid = razorpayWebhookHandler.verifySignature(rawBody, signature);
     if (!isValid) {
-      logger.warn({ signature }, '[WEBHOOK] Invalid signature');
+      request.log.error(
+        {
+          event: 'WEBHOOK_INVALID_SIGNATURE',
+          signature,
+        },
+        'Invalid webhook signature',
+      );
       return reply.code(401).send({ error: 'Invalid signature' });
     }
 
@@ -159,7 +165,14 @@ class PaymentFastifyController {
 
       return reply.code(202).send({ received: true });
     } catch (error) {
-      logger.error({ error }, '[WEBHOOK] Queue error');
+      request.log.error(
+        {
+          event: 'WEBHOOK_QUEUE_FAILURE',
+          error: error.message,
+          stack: error.stack,
+        },
+        'Failed to queue webhook',
+      );
       return reply.code(500).send({ error: 'Failed to queue webhook' });
     }
   }

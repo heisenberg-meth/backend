@@ -9,7 +9,7 @@ class MovementService {
     const result = await prisma.$transaction(async (tx) => {
       const whereClause = {
         medicineId,
-        quantity: { gt: 0 },
+        availableQuantity: { gt: 0 },
         deletedAt: null,
       };
       if (batchId) {
@@ -30,7 +30,7 @@ class MovementService {
       for (const batch of batches) {
         if (remaining <= 0) break;
 
-        const take = Math.min(remaining, batch.quantity);
+        const take = Math.min(remaining, batch.availableQuantity);
         remaining -= take;
 
         await tx.inventoryBatch.update({

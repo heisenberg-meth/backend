@@ -5,6 +5,7 @@ import eventBus from '../../../shared/services/eventbus.service.js';
 import { getConfig } from '../../../config/payment.config.js';
 import { VALID_STATES } from '../services/payment.state-machine.js';
 import paymentLockService from '../services/payment.lock.service.js';
+import subscriptionService from '../../subscriptions/subscription.service.js';
 
 class RazorpayWebhookHandler {
   verifySignature(body, signature) {
@@ -29,7 +30,13 @@ class RazorpayWebhookHandler {
     const orderEntity = payload.payload?.order?.entity;
 
     if (!paymentEntity && !orderEntity) {
-      logger.warn({ event }, '[WEBHOOK] No payment or order entity');
+      logger.error(
+        {
+          event: 'WEBHOOK_MISSING_PAYLOAD',
+          webhookEvent: event,
+        },
+        '[WEBHOOK] No payment or order entity',
+      );
       return { received: true, skipped: true };
     }
 
@@ -43,7 +50,14 @@ class RazorpayWebhookHandler {
           where: { idempotencyKey },
         });
         if (existing) {
-          logger.info({ event, eventId }, '[WEBHOOK] Duplicate webhook ignored');
+          logger.error(
+            {
+              event: 'WEBHOOK_DUPLICATE_PROCESSING',
+              webhookEvent: event,
+              eventId,
+            },
+            '[WEBHOOK] Duplicate webhook ignored',
+          );
           return { received: true, ignored: true };
         }
 
@@ -133,6 +147,35 @@ class RazorpayWebhookHandler {
       amount: payment.amount,
     });
 
+    const notes = paymentEntity?.notes || {};
+    if (notes?.type === 'SUBSCRIPTION_UPGRADE') {
+      logger.info(
+        { tenantId: payment.tenantId, planId: notes.planId },
+        '[WEBHOOK] Activating subscription upgrade',
+      );
+      try {
+        const planId = notes.planId || 'pro';
+        const billingCycle = notes.billingCycle || 'monthly';
+        await subscriptionService.createSubscription(
+          payment.tenantId,
+          planId,
+          billingCycle,
+          prisma,
+        );
+      } catch (err) {
+        logger.error(
+          {
+            event: 'SUBSCRIPTION_ACTIVATION_FAILURE',
+            tenantId: payment.tenantId,
+            error: err.message,
+            stack: err.stack,
+            planId: notes.planId,
+          },
+          'Subscription activation failed during webhook processing',
+        );
+      }
+    }
+
     logger.info({ orderId, paymentId }, '[WEBHOOK] Payment captured');
   }
 
@@ -163,7 +206,27 @@ class RazorpayWebhookHandler {
       reason: paymentEntity?.error_description,
     });
 
-    logger.warn({ orderId, error: paymentEntity?.error_description }, '[WEBHOOK] Payment failed');
+    const notes = paymentEntity?.notes || {};
+    if (notes?.type === 'SUBSCRIPTION_UPGRADE') {
+      logger.warn(
+        { tenantId: payment.tenantId, planId: notes.planId },
+        '[WEBHOOK] Subscription payment failed - marking subscription as SUSPENDED',
+      );
+      await prisma.subscription.update({
+        where: { tenantId: payment.tenantId },
+        data: { status: 'SUSPENDED' },
+      });
+    }
+
+    logger.error(
+      {
+        event: 'BILLING_PAYMENT_FAILURE',
+        orderId,
+        error: paymentEntity?.error_description,
+        tenantId: payment.tenantId,
+      },
+      '[WEBHOOK] Payment failed',
+    );
   }
 
   async _handlePaymentAuthorized(orderId, paymentEntity) {

@@ -112,12 +112,24 @@ class AuthFastifyController {
           .send(errorResponse(firstIssue?.message || 'Validation failed', 'VALIDATION_ERROR'));
       }
       if (error?.message === 'Invalid credentials') {
+        request.log.warn(
+          { event: 'AUTH_LOGIN_FAILURE', email: request.body?.email },
+          'Login Failure',
+        );
         return reply.code(401).send(errorResponse(error.message, 'INVALID_CREDENTIALS'));
       }
       if (error?.message === 'Invalid 2FA code') {
+        request.log.warn(
+          { event: 'AUTH_LOGIN_FAILURE_2FA', email: request.body?.email },
+          'Invalid 2FA code',
+        );
         return reply.code(401).send(errorResponse(error.message, 'INVALID_2FA_CODE'));
       }
       if (error?.message === 'This browser is already linked to another account') {
+        request.log.warn(
+          { event: 'AUTH_FINGERPRINT_MISMATCH', email: request.body?.email },
+          'Fingerprint Mismatch',
+        );
         return reply.code(403).send(errorResponse(error.message, 'BROWSER_LOCKED'));
       }
       if (
@@ -127,6 +139,10 @@ class AuthFastifyController {
         return reply.code(400).send(errorResponse(error.message, 'INVALID_VERIFICATION_CODE'));
       }
       if (error?.message?.includes('active on another device')) {
+        request.log.warn(
+          { event: 'AUTH_SESSION_LIMIT', email: request.body?.email },
+          'Session Limit Reached',
+        );
         return reply.code(403).send(errorResponse(error.message, 'SESSION_LIMIT'));
       }
       return reply
@@ -136,6 +152,10 @@ class AuthFastifyController {
   }
 
   async refreshToken(request, reply) {
+    const startTime = Date.now();
+    let sessionFound = false;
+    let userFound = false;
+
     try {
       request.log.info(
         {
@@ -148,12 +168,24 @@ class AuthFastifyController {
       const refreshToken = request.cookies?.refresh_token;
 
       if (!refreshToken) {
+        request.log.info(
+          {
+            route: '/auth/refresh',
+            cookieReceived: false,
+            sessionFound: false,
+            userFound: false,
+            duration: Date.now() - startTime,
+          },
+          'Token refresh failed: Missing cookie',
+        );
         return reply
           .code(401)
           .send(errorResponse('Refresh token required', 'REFRESH_TOKEN_REQUIRED'));
       }
 
       const result = await authService.refreshSession(refreshToken);
+      sessionFound = true;
+      userFound = true;
 
       reply.setCookie('refresh_token', result.refreshToken, COOKIE_OPTIONS);
       reply.setCookie('accessToken', result.token, ACCESS_COOKIE_OPTIONS);
@@ -161,14 +193,43 @@ class AuthFastifyController {
       const responsePayload = { ...result };
       delete responsePayload.refreshToken;
 
+      request.log.info(
+        {
+          route: '/auth/refresh',
+          cookieReceived: true,
+          sessionFound: true,
+          userFound: true,
+          duration: Date.now() - startTime,
+        },
+        'Token refresh successful',
+      );
+
       return reply.send(success(responsePayload));
     } catch (error) {
       request.log.error(error);
-      if (
+
+      const isInvalidToken =
         error?.message === 'Invalid refresh token' ||
         error?.message === 'Invalid or reused refresh token' ||
-        error?.message === 'Refresh token expired'
-      ) {
+        error?.message === 'Refresh token expired';
+
+      if (!isInvalidToken && error?.message !== 'User not found') {
+        sessionFound = true; // Assuming session was found if it failed later
+        userFound = error?.message !== 'User not found';
+      }
+
+      request.log.info(
+        {
+          route: '/auth/refresh',
+          cookieReceived: true,
+          sessionFound,
+          userFound,
+          duration: Date.now() - startTime,
+        },
+        'Token refresh failed: ' + error?.message,
+      );
+
+      if (isInvalidToken) {
         reply.clearCookie('refresh_token', { path: '/' });
         const code =
           error.message === 'Invalid or reused refresh token'

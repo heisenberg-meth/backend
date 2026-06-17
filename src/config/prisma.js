@@ -9,8 +9,31 @@ const globalForPrisma = globalThis;
 export const prisma =
   globalForPrisma.prisma ||
   new PrismaClient({
-    log: ['query', 'info', 'warn', 'error'],
+    log: [
+      { emit: 'event', level: 'query' },
+      { emit: 'event', level: 'error' },
+      { emit: 'stdout', level: 'info' },
+      { emit: 'stdout', level: 'warn' },
+    ],
   });
+
+prisma.$on('query', (e) => {
+  if (e.duration >= 2000) {
+    logger.warn(
+      {
+        event: 'SLOW_QUERY',
+        query: e.query,
+        params: e.params,
+        durationMs: e.duration,
+      },
+      `Slow database query detected: ${e.duration}ms`,
+    );
+  }
+});
+
+prisma.$on('error', (e) => {
+  logger.error({ event: 'DB_ERROR', error: e.message }, 'Database Error');
+});
 
 if (process.env.NODE_ENV !== 'production') {
   globalForPrisma.prisma = prisma;

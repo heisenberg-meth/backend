@@ -5,6 +5,8 @@ import batchController from '../batches/fastify/batch.fastify.controller.js';
 import { authenticate, requireTenant } from '../../middleware/auth.fastify.js';
 import { requireBranch } from '../../middleware/requireBranch.js';
 import { requirePermission } from '../../middleware/permission.fastify.js';
+import { requireLimit } from '../../middleware/feature.guard.fastify.js';
+import prisma from '../../config/prisma.js';
 
 async function medicineRoutes(fastify) {
   fastify.addHook('preHandler', authenticate);
@@ -170,7 +172,14 @@ async function medicineRoutes(fastify) {
           },
         },
       },
-      preHandler: [requirePermission('VIEW_INVENTORY')],
+      preHandler: [
+        requirePermission('VIEW_INVENTORY'),
+        requireLimit('medicines', async (req) => {
+          return await prisma.medicine.count({
+            where: { tenantId: req.tenantId, deletedAt: null },
+          });
+        }),
+      ],
     },
     medicineController.createMedicine,
   );
