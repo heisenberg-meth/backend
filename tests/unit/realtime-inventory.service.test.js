@@ -18,6 +18,7 @@ const mockPrisma = {
 const mockRedis = {
   set: jest.fn(),
   get: jest.fn(),
+  scan: jest.fn().mockResolvedValue(['0', []]),
 };
 
 const mockSocket = {

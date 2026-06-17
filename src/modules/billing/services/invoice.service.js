@@ -36,11 +36,22 @@ class InvoiceService {
   }
 
   async getInvoices(tenantId, params) {
-    const { page = 1, limit = 20, branchId, patientId, status, fromDate, toDate } = params;
-    const skip = (parseInt(page) - 1) * parseInt(limit);
+    const {
+      page,
+      skip: skipParam,
+      limit = 20,
+      branchId,
+      patientId,
+      status,
+      fromDate,
+      toDate,
+    } = params;
+    const limitInt = parseInt(limit);
+    const skip =
+      skipParam !== undefined ? parseInt(skipParam) : (parseInt(page || 1) - 1) * limitInt;
     const result = await invoiceRepository.findAll(tenantId, {
       skip,
-      take: parseInt(limit),
+      take: limitInt,
       branchId,
       patientId,
       status,

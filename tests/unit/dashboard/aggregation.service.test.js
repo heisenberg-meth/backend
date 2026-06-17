@@ -43,6 +43,7 @@ const mockRedisClient = {
   set: jest.fn(),
   del: jest.fn(),
   keys: jest.fn(),
+  scan: jest.fn().mockResolvedValue(['0', []]),
 };
 
 const mockLogger = {
