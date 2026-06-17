@@ -52,7 +52,6 @@ export const requireFeature = (featureName) => {
     }
 
     // Check feature availability
-    const planFeatures = subscription.plan?.features || [];
     const planConfig = SUBSCRIPTION_PLANS[subscription.planId];
 
     if (planConfig && planConfig.features) {

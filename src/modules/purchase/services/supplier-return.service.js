@@ -1,6 +1,7 @@
 import ledgerService from '../../vendors/services/ledger.service.js';
 import prisma from '../../../config/prisma.js';
 import logger from '../../../shared/utils/logger.js';
+import { SUBSCRIPTION_PLANS } from '../../subscriptions/subscription.constants.js';
 
 class SupplierReturnService {
   async processReturn(tenantId, data, userId) {
@@ -160,6 +161,37 @@ class SupplierReturnService {
           },
         },
       });
+
+      // Check Subscription Feature for Credit Note Generation
+      const subscription = await tx.subscription.findUnique({
+        where: { tenantId },
+      });
+      const planId = subscription?.planId || 'free';
+      const planConfig = SUBSCRIPTION_PLANS[planId] || SUBSCRIPTION_PLANS['free'];
+      const hasCreditNoteFeature = planConfig.features?.includes('CREDIT_NOTES');
+
+      let creditNoteRecord = null;
+      if (hasCreditNoteFeature) {
+        const creditNoteNumber = `CN-${Date.now()}`;
+        const returnTotal = totalReturnAmount + totalGstAmount;
+
+        creditNoteRecord = await tx.supplierCreditNote.create({
+          data: {
+            tenantId,
+            supplierId,
+            returnId: returnRecord.id,
+            creditNoteNumber,
+            amount: returnTotal,
+            remainingAmount: returnTotal,
+            status: 'ISSUED',
+            createdBy: userId,
+          },
+        });
+
+        logger.info(
+          `[SupplierReturn] Auto-generated Credit Note ${creditNoteRecord.creditNoteNumber} for return ${returnRecord.id}`,
+        );
+      }
 
       // Supplier Ledger Adjustment
       await ledgerService.recordEntry(

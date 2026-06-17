@@ -18,6 +18,7 @@ class StockInService {
         subtotal: data.subtotal,
         gstAmount: data.gstAmount,
         totalAmount: data.totalAmount,
+        balanceAmount: data.totalAmount,
         status: 'RECEIVED',
         createdBy: userId,
       },

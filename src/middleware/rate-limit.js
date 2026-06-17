@@ -20,7 +20,6 @@ export const rateLimiter = (options = {}) => {
   return async (request, reply) => {
     const key = keyGenerator(request);
     const now = Date.now();
-    const windowStart = now - windowMs;
 
     // Get or create rate limit entry
     if (!rateLimitStore.has(key)) {
@@ -85,14 +84,17 @@ export const strictRateLimiter = rateLimiter({
 /**
  * Cleanup old entries periodically
  */
-setInterval(() => {
-  const now = Date.now();
-  for (const [key, entry] of rateLimitStore.entries()) {
-    if (now > entry.resetAt) {
-      rateLimitStore.delete(key);
+setInterval(
+  () => {
+    const now = Date.now();
+    for (const [key, entry] of rateLimitStore.entries()) {
+      if (now > entry.resetAt) {
+        rateLimitStore.delete(key);
+      }
     }
-  }
-}, 5 * 60 * 1000); // Cleanup every 5 minutes
+  },
+  5 * 60 * 1000,
+); // Cleanup every 5 minutes
 
 export default {
   rateLimiter,

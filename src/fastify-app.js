@@ -18,7 +18,8 @@ import { Prisma } from '@prisma/client';
 import prisma from './config/prisma.js';
 import { connectRedis } from './config/redis.js';
 import env from './config/env.js';
-import { initSentry, Sentry } from './config/sentry.js';
+import { initSentry } from './config/sentry.js';
+import uptimeMonitor from './shared/services/uptime-monitor.js';
 import authRoutes from './modules/auth/routes/auth.fastify.routes.js';
 import usersRoutes from './modules/users/users.fastify.routes.js';
 import twoFactorRoutes from './modules/users/2fa.fastify.routes.js';
@@ -430,6 +431,22 @@ const setupFastify = async () => {
     return { status: 'healthy' };
   });
 
+  // Uptime monitoring endpoints
+  fastify.get('/api/health/uptime', async (request, reply) => {
+    const status = await uptimeMonitor.getHealthStatus();
+    const allHealthy = status.every((s) => s.status === 'healthy');
+    return reply.code(allHealthy ? 200 : 503).send({
+      status: allHealthy ? 'healthy' : 'degraded',
+      services: status,
+      timestamp: new Date(),
+    });
+  });
+
+  fastify.post('/api/health/check', async (request, reply) => {
+    const status = await uptimeMonitor.checkAll();
+    return { success: true, data: status };
+  });
+
   fastify.addHook('preHandler', subscriptionGuard);
 
   await fastify.register(authRoutes, { prefix: '/api/auth' });
@@ -528,6 +545,9 @@ const setupFastify = async () => {
       });
     }
   });
+
+  // Start uptime monitor
+  uptimeMonitor.start();
 
   return fastify;
 };

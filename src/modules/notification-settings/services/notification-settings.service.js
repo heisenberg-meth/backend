@@ -458,8 +458,9 @@ class NotificationSettingsService {
         const configs = await repo.getChannelConfigs(tenantId, type);
         const activeConfig = configs.find((c) => c.isActive);
         if (!activeConfig) {
-          throw new Error(
-            `${type} channel cannot be enabled without an active provider configuration.`,
+          logger.warn(
+            { tenantId, type },
+            `${type} channel enabled without an active provider configuration. Notifications will not be sent until configured.`,
           );
         }
       }

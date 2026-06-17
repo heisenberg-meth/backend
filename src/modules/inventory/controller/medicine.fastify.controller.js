@@ -12,6 +12,7 @@ class MedicineFastifyController {
       categoryId,
       manufacturerId,
       isActive,
+      status,
       sortBy,
       order,
       page,
@@ -26,7 +27,16 @@ class MedicineFastifyController {
     const result = await medicineService.getMedicines({
       tenantId: request.tenantId,
       branchId: branchId || request.branchId, // Use explicit or session branch
-      query: { search: finalSearch, categoryId, manufacturerId, isActive, lowStock, sortBy, order },
+      query: {
+        search: finalSearch,
+        categoryId,
+        manufacturerId,
+        isActive,
+        lowStock,
+        status,
+        sortBy,
+        order,
+      },
       pagination: { page, limit },
     });
     const dataArray = Array.isArray(result)

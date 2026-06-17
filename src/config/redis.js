@@ -15,6 +15,10 @@ const getActiveClient = () => {
       lazyConnect: true,
       enableReadyCheck: true,
       retryStrategy(times) {
+        if (times > 10) {
+          logger.error('Redis max retries reached, giving up');
+          return null;
+        }
         return Math.min(times * 100, 3000);
       },
       reconnectOnError(err) {
@@ -28,14 +32,22 @@ const getActiveClient = () => {
         logger.info('Redis client connected');
       });
 
+      activeClient.on('ready', () => {
+        logger.info('Redis client ready');
+      });
+
       activeClient.on('reconnecting', () => {
         logger.warn('Redis reconnecting');
       });
 
       activeClient.on('error', (err) => {
         if (activeClient && activeClient.status !== 'end') {
-          logger.error({ err: err.message }, 'Redis error');
+          logger.warn({ err: err.message }, 'Redis error');
         }
+      });
+
+      activeClient.on('close', () => {
+        logger.warn('Redis connection closed');
       });
     }
   }
@@ -73,6 +85,10 @@ const getBullRedis = () => {
     lazyConnect: true,
     enableReadyCheck: true,
     retryStrategy(times) {
+      if (times > 10) {
+        logger.error('Bull Redis max retries reached, giving up');
+        return null;
+      }
       return Math.min(times * 100, 3000);
     },
     reconnectOnError(err) {
@@ -85,11 +101,17 @@ const getBullRedis = () => {
     client.on('connect', () => {
       logger.info(isWorker ? 'Bull Redis connected (Worker)' : 'Bull Redis connected (Shared Queue)');
     });
+    client.on('ready', () => {
+      logger.info(isWorker ? 'Bull Redis ready (Worker)' : 'Bull Redis ready (Shared Queue)');
+    });
     client.on('reconnecting', () => {
       logger.warn(isWorker ? 'Bull Redis reconnecting (Worker)' : 'Bull Redis reconnecting (Shared Queue)');
     });
     client.on('error', (err) => {
-      logger.error({ err: err.message }, 'Bull Redis error');
+      logger.warn({ err: err.message }, 'Bull Redis error');
+    });
+    client.on('close', () => {
+      logger.warn(isWorker ? 'Bull Redis closed (Worker)' : 'Bull Redis closed (Shared Queue)');
     });
   }
 

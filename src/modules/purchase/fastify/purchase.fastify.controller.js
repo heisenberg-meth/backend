@@ -1,5 +1,6 @@
 import supplierReturnService from '../services/supplier-return.service.js';
 import stockInService from '../services/stock-in.service.js';
+import supplierCreditNoteService from '../services/supplier-credit-note.service.js';
 
 class PurchaseFastifyController {
   async receiveGoods(request, reply) {
@@ -74,6 +75,62 @@ class PurchaseFastifyController {
       });
     } catch (error) {
       request.log.error({ err: error, tenantId: request.tenantId }, 'Get purchase returns failed');
+      return reply.code(500).send({ success: false, message: error.message });
+    }
+  }
+
+  async getCreditNotes(request, reply) {
+    try {
+      const { page, limit } = request.query;
+      const result = await supplierCreditNoteService.getCreditNotes(
+        request.tenantId,
+        parseInt(page) || 1,
+        parseInt(limit) || 20,
+      );
+      return reply.send({ success: true, data: result.creditNotes, pagination: result.pagination });
+    } catch (error) {
+      request.log.error({ err: error, tenantId: request.tenantId }, 'Get credit notes failed');
+      return reply.code(500).send({ success: false, message: error.message });
+    }
+  }
+
+  async getCreditNoteById(request, reply) {
+    try {
+      const { id } = request.params;
+      const result = await supplierCreditNoteService.getCreditNoteById(request.tenantId, id);
+      return reply.send({ success: true, data: result });
+    } catch (error) {
+      request.log.error({ err: error, tenantId: request.tenantId }, 'Get credit note by ID failed');
+      return reply.code(500).send({ success: false, message: error.message });
+    }
+  }
+
+  async applyCreditNote(request, reply) {
+    try {
+      const { id } = request.params;
+      const result = await supplierCreditNoteService.applyCreditNote(
+        request.tenantId,
+        id,
+        request.body,
+        request.user.id,
+      );
+      return reply.send({ success: true, message: 'Credit applied successfully', result });
+    } catch (error) {
+      request.log.error({ err: error, tenantId: request.tenantId }, 'Apply credit note failed');
+      return reply.code(400).send({ success: false, message: error.message });
+    }
+  }
+
+  async getSupplierCreditBalance(request, reply) {
+    try {
+      const { id } = request.params;
+      const result = await supplierCreditNoteService.getSupplierCreditBalance(request.tenantId, id);
+      return reply.send({ success: true, data: result });
+    } catch (error) {
+      request.log.error(
+        { err: error, tenantId: request.tenantId },
+        'Get supplier credit balance failed',
+      );
       return reply.code(500).send({ success: false, message: error.message });
     }
   }

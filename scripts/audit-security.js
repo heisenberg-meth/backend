@@ -1,6 +1,4 @@
 import { PrismaClient } from '@prisma/client';
-import fs from 'fs';
-import path from 'path';
 
 const prisma = new PrismaClient();
 const results = {
@@ -27,11 +25,8 @@ const results = {
 };
 
 async function auditTenantIsolation() {
-  console.log('\n🔒 AUDITING TENANT ISOLATION...');
+  console.log('\n AUDITING TENANT ISOLATION...');
   console.log('   Checking for queries without tenantId filter (IDOR vulnerabilities)');
-
-  // Check for queries that might leak data across tenants
-  const tenantIsolationIssues = [];
 
   // Check if any routes query by ID without tenantId
   const routesWithoutTenantFilter = await prisma.$queryRaw`
@@ -63,7 +58,7 @@ async function auditTenantIsolation() {
   `;
 
   console.log('   Table distribution across tenants:');
-  routesWithoutTenantFilter.forEach(t => {
+  routesWithoutTenantFilter.forEach((t) => {
     console.log(`     ${t.table}: ${t.total} rows across ${t.tenants} tenants`);
   });
 
@@ -78,12 +73,12 @@ async function auditTenantIsolation() {
   ];
 
   console.log('\n   IDOR Risk Assessment:');
-  idorPatterns.forEach(p => {
+  idorPatterns.forEach((p) => {
     const indicator = p.risk === 'HIGH' ? '🔴' : p.risk === 'MEDIUM' ? '🟡' : '🟢';
     console.log(`     ${indicator} ${p.table}.${p.column} - Risk: ${p.risk}`);
   });
 
-  results.tenantIsolation = idorPatterns.filter(p => p.risk === 'HIGH');
+  results.tenantIsolation = idorPatterns.filter((p) => p.risk === 'HIGH');
   results.summary.totalTenantIsolation = results.tenantIsolation.length;
 }
 
@@ -104,7 +99,7 @@ async function auditPermissionGaps() {
   ];
 
   console.log('   Critical routes requiring permission checks:');
-  criticalRoutes.forEach(r => {
+  criticalRoutes.forEach((r) => {
     const indicator = r.risk === 'HIGH' ? '🔴' : r.risk === 'MEDIUM' ? '🟡' : '🟢';
     console.log(`     ${indicator} ${r.route} → ${r.requiredPermission}`);
   });
@@ -114,7 +109,7 @@ async function auditPermissionGaps() {
   console.log('     ✅ ADMIN/OWNER role bypass implemented in permission.fastify.js');
   console.log('     ⚠️  Verify all critical routes use requirePermission() middleware');
 
-  results.permissionGaps = criticalRoutes.filter(r => r.risk === 'HIGH');
+  results.permissionGaps = criticalRoutes.filter((r) => r.risk === 'HIGH');
   results.summary.totalPermissionGaps = results.permissionGaps.length;
 }
 
@@ -140,7 +135,7 @@ async function auditJwtSecurity() {
   ];
 
   console.log('\n   JWT Security Checks:');
-  jwtChecks.forEach(c => {
+  jwtChecks.forEach((c) => {
     const indicator = c.status === 'PASS' ? '✅' : '❌';
     console.log(`     ${indicator} ${c.check}: ${c.detail}`);
   });
@@ -181,7 +176,7 @@ async function auditSessionSecurity() {
   ];
 
   console.log('\n   Session Security Checks:');
-  sessionChecks.forEach(c => {
+  sessionChecks.forEach((c) => {
     const indicator = c.status === 'PASS' ? '✅' : '❌';
     console.log(`     ${indicator} ${c.check}: ${c.detail}`);
   });
@@ -196,14 +191,26 @@ async function auditInputValidation() {
 
   // Check for potential SQL injection points
   const inputChecks = [
-    { check: 'Prisma parameterized queries', status: 'PASS', detail: 'Using Prisma ORM (parameterized)' },
-    { check: 'Raw query usage', status: 'WARN', detail: '$queryRaw used in some places - verify input sanitization' },
-    { check: 'Input validation middleware', status: 'PASS', detail: 'validate.middleware.js exists' },
+    {
+      check: 'Prisma parameterized queries',
+      status: 'PASS',
+      detail: 'Using Prisma ORM (parameterized)',
+    },
+    {
+      check: 'Raw query usage',
+      status: 'WARN',
+      detail: '$queryRaw used in some places - verify input sanitization',
+    },
+    {
+      check: 'Input validation middleware',
+      status: 'PASS',
+      detail: 'validate.middleware.js exists',
+    },
     { check: 'Zod schemas', status: 'PASS', detail: 'Zod validation for env vars' },
   ];
 
   console.log('\n   Input Validation Checks:');
-  inputChecks.forEach(c => {
+  inputChecks.forEach((c) => {
     const indicator = c.status === 'PASS' ? '✅' : c.status === 'WARN' ? '⚠️' : '❌';
     console.log(`     ${indicator} ${c.check}: ${c.detail}`);
   });
@@ -217,19 +224,27 @@ async function auditRateLimiting() {
   console.log('   Checking for rate limiting configuration');
 
   const rateLimitChecks = [
-    { check: 'Global rate limit', status: 'WARN', detail: 'Check if @fastify/rate-limit is registered globally' },
+    {
+      check: 'Global rate limit',
+      status: 'WARN',
+      detail: 'Check if @fastify/rate-limit is registered globally',
+    },
     { check: 'Auth endpoint rate limit', status: 'PASS', detail: 'Auth routes have rate limiting' },
     { check: 'API rate limit', status: 'WARN', detail: 'Verify API endpoints have rate limiting' },
-    { check: 'Brute force protection', status: 'WARN', detail: 'Check for account lockout after failed attempts' },
+    {
+      check: 'Brute force protection',
+      status: 'WARN',
+      detail: 'Check for account lockout after failed attempts',
+    },
   ];
 
   console.log('\n   Rate Limiting Checks:');
-  rateLimitChecks.forEach(c => {
+  rateLimitChecks.forEach((c) => {
     const indicator = c.status === 'PASS' ? '✅' : c.status === 'WARN' ? '⚠️' : '❌';
     console.log(`     ${indicator} ${c.check}: ${c.detail}`);
   });
 
-  results.rateLimiting = rateLimitChecks.filter(c => c.status === 'WARN');
+  results.rateLimiting = rateLimitChecks.filter((c) => c.status === 'WARN');
   results.summary.totalRateLimiting = results.rateLimiting.length;
 }
 
@@ -248,12 +263,12 @@ async function auditSecretManagement() {
   ];
 
   console.log('\n   Secret Management Checks:');
-  secretChecks.forEach(c => {
+  secretChecks.forEach((c) => {
     const indicator = c.status === 'PASS' ? '✅' : c.status === 'WARN' ? '⚠️' : '❌';
     console.log(`     ${indicator} ${c.check}: ${c.detail}`);
   });
 
-  results.secretManagement = secretChecks.filter(c => c.status === 'WARN');
+  results.secretManagement = secretChecks.filter((c) => c.status === 'WARN');
   results.summary.totalSecretManagement = results.secretManagement.length;
 }
 
@@ -269,7 +284,7 @@ async function auditCorsSecurity() {
   ];
 
   console.log('\n   CORS Security Checks:');
-  corsChecks.forEach(c => {
+  corsChecks.forEach((c) => {
     const indicator = c.status === 'PASS' ? '✅' : c.status === 'WARN' ? '⚠️' : '❌';
     console.log(`     ${indicator} ${c.check}: ${c.detail}`);
   });
@@ -285,18 +300,22 @@ async function auditPasswordSecurity() {
   // Check password hashing
   const passwordChecks = [
     { check: 'Bcrypt hashing', status: 'PASS', detail: 'bcryptjs with salt rounds 10' },
-    { check: 'Password complexity', status: 'WARN', detail: 'Verify minimum length and complexity requirements' },
+    {
+      check: 'Password complexity',
+      status: 'WARN',
+      detail: 'Verify minimum length and complexity requirements',
+    },
     { check: 'Password in transit', status: 'PASS', detail: 'HTTPS required for production' },
     { check: 'No plaintext passwords', status: 'PASS', detail: 'All passwords hashed' },
   ];
 
   console.log('\n   Password Security Checks:');
-  passwordChecks.forEach(c => {
+  passwordChecks.forEach((c) => {
     const indicator = c.status === 'PASS' ? '✅' : c.status === 'WARN' ? '⚠️' : '❌';
     console.log(`     ${indicator} ${c.check}: ${c.detail}`);
   });
 
-  results.passwordSecurity = passwordChecks.filter(c => c.status === 'WARN');
+  results.passwordSecurity = passwordChecks.filter((c) => c.status === 'WARN');
   results.summary.totalPasswordSecurity = results.passwordSecurity.length;
 }
 
@@ -317,7 +336,7 @@ function printSummary() {
   console.log(`  Password Security Issues:   ${results.summary.totalPasswordSecurity}`);
   console.log('');
 
-  const totalIssues = 
+  const totalIssues =
     results.summary.totalTenantIsolation +
     results.summary.totalPermissionGaps +
     results.summary.totalJwtIssues +

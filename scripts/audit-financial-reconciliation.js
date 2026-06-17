@@ -29,7 +29,9 @@ const results = {
 async function auditSalesReconciliation() {
   console.log('\n📊 AUDITING SALES RECONCILIATION...');
   console.log('   Verifying: Invoice.totalAmount = subtotal - discount + gstAmount');
-  console.log('   (Note: Item totals exclude invoice-level discounts, so we check the formula instead)');
+  console.log(
+    '   (Note: Item totals exclude invoice-level discounts, so we check the formula instead)',
+  );
 
   const mismatchedInvoices = await prisma.$queryRaw`
     SELECT 
@@ -57,7 +59,9 @@ async function auditSalesReconciliation() {
   if (mismatchedInvoices.length > 0) {
     console.log(`   ❌ FOUND ${mismatchedInvoices.length} SALES MISMATCHES:`);
     mismatchedInvoices.forEach((inv) => {
-      console.log(`      Invoice ${inv.invoiceNumber}: Invoice=₹${inv.invoiceTotal}, Items=₹${inv.itemsTotal}, Diff=₹${inv.difference}`);
+      console.log(
+        `      Invoice ${inv.invoiceNumber}: Invoice=₹${inv.invoiceTotal}, Items=₹${inv.itemsTotal}, Diff=₹${inv.difference}`,
+      );
     });
   } else {
     console.log('   ✅ All invoices match their item totals');
@@ -96,7 +100,9 @@ async function auditGstReconciliation() {
   if (gstMismatches.length > 0) {
     console.log(`   ❌ FOUND ${gstMismatches.length} GST MISMATCHES:`);
     gstMismatches.forEach((inv) => {
-      console.log(`      Invoice ${inv.invoiceNumber}: subtotal=${inv.subtotal}, gst=${inv.gstAmount}, discount=${inv.discountAmount}, total=${inv.totalAmount}, expected=${inv.expectedTotal}, diff=₹${inv.difference}`);
+      console.log(
+        `      Invoice ${inv.invoiceNumber}: subtotal=${inv.subtotal}, gst=${inv.gstAmount}, discount=${inv.discountAmount}, total=${inv.totalAmount}, expected=${inv.expectedTotal}, diff=₹${inv.difference}`,
+      );
     });
   } else {
     console.log('   ✅ All GST calculations are correct');
@@ -123,9 +129,13 @@ async function auditGstReconciliation() {
   `;
 
   if (gstSplitMismatches.length > 0) {
-    console.log(`   ❌ FOUND ${gstSplitMismatches.length} GST SPLIT MISMATCHES (CGST+SGST+IGST ≠ GST Amount):`);
+    console.log(
+      `   ❌ FOUND ${gstSplitMismatches.length} GST SPLIT MISMATCHES (CGST+SGST+IGST ≠ GST Amount):`,
+    );
     gstSplitMismatches.forEach((inv) => {
-      console.log(`      Invoice ${inv.invoiceNumber}: cgst=${inv.cgst}, sgst=${inv.sgst}, igst=${inv.igst}, gstAmount=${inv.gstAmount}, diff=₹${inv.difference}`);
+      console.log(
+        `      Invoice ${inv.invoiceNumber}: cgst=${inv.cgst}, sgst=${inv.sgst}, igst=${inv.igst}, gstAmount=${inv.gstAmount}, diff=₹${inv.difference}`,
+      );
     });
   } else {
     console.log('   ✅ All GST splits are correct');
@@ -158,7 +168,9 @@ async function auditPurchaseReconciliation() {
   if (purchaseMismatches.length > 0) {
     console.log(`   ❌ FOUND ${purchaseMismatches.length} PURCHASE MISMATCHES:`);
     purchaseMismatches.forEach((inv) => {
-      console.log(`      Invoice ${inv.invoiceNumber}: subtotal=${inv.subtotal}, gst=${inv.gstAmount}, total=${inv.totalAmount}, expected=${inv.expectedTotal}, diff=₹${inv.difference}`);
+      console.log(
+        `      Invoice ${inv.invoiceNumber}: subtotal=${inv.subtotal}, gst=${inv.gstAmount}, total=${inv.totalAmount}, expected=${inv.expectedTotal}, diff=₹${inv.difference}`,
+      );
     });
   } else {
     console.log('   ✅ All purchase invoices match their calculated totals');
@@ -185,7 +197,9 @@ async function auditPurchaseReconciliation() {
   if (purchaseBalanceMismatches.length > 0) {
     console.log(`   ❌ FOUND ${purchaseBalanceMismatches.length} PURCHASE BALANCE MISMATCHES:`);
     purchaseBalanceMismatches.forEach((inv) => {
-      console.log(`      Invoice ${inv.invoiceNumber}: total=${inv.totalAmount}, paid=${inv.paidAmount}, balance=${inv.balanceAmount}, expected=${inv.expectedTotal}`);
+      console.log(
+        `      Invoice ${inv.invoiceNumber}: total=${inv.totalAmount}, paid=${inv.paidAmount}, balance=${inv.balanceAmount}, expected=${inv.expectedTotal}`,
+      );
     });
   } else {
     console.log('   ✅ All purchase balances are correct');
@@ -219,7 +233,9 @@ async function auditCreditNoteReconciliation() {
   if (creditNoteMismatches.length > 0) {
     console.log(`   ❌ FOUND ${creditNoteMismatches.length} CREDIT NOTE MISMATCHES:`);
     creditNoteMismatches.forEach((cn) => {
-      console.log(`      Return ${cn.returnNumber}: returnAmount=₹${cn.returnAmount}, creditNote=₹${cn.creditNoteAmount}, diff=₹${cn.difference}`);
+      console.log(
+        `      Return ${cn.returnNumber}: returnAmount=₹${cn.returnAmount}, creditNote=₹${cn.creditNoteAmount}, diff=₹${cn.difference}`,
+      );
     });
   } else {
     console.log('   ✅ All credit notes match their supplier returns');
@@ -245,7 +261,9 @@ async function auditCreditNoteReconciliation() {
   `;
 
   if (returnsWithoutCreditNotes.length > 0) {
-    console.log(`   ⚠️  FOUND ${returnsWithoutCreditNotes.length} COMPLETED RETURNS WITHOUT CREDIT NOTES:`);
+    console.log(
+      `   ⚠️  FOUND ${returnsWithoutCreditNotes.length} COMPLETED RETURNS WITHOUT CREDIT NOTES:`,
+    );
     returnsWithoutCreditNotes.forEach((ret) => {
       console.log(`      Return ${ret.returnNumber}: amount=₹${ret.returnAmount}`);
     });
@@ -276,7 +294,9 @@ async function auditDuplicateInvoices() {
   if (duplicateInvoices.length > 0) {
     console.log(`   ❌ FOUND ${duplicateInvoices.length} DUPLICATE INVOICE NUMBERS:`);
     duplicateInvoices.forEach((inv) => {
-      console.log(`      Tenant ${inv.tenantId}: Invoice "${inv.invoiceNumber}" appears ${inv.count} times (IDs: ${inv.invoiceIds.join(', ')})`);
+      console.log(
+        `      Tenant ${inv.tenantId}: Invoice "${inv.invoiceNumber}" appears ${inv.count} times (IDs: ${inv.invoiceIds.join(', ')})`,
+      );
     });
   } else {
     console.log('   ✅ All invoice numbers are unique');
@@ -300,9 +320,13 @@ async function auditDuplicatePayments() {
   `;
 
   if (duplicateWebhooks.length > 0) {
-    console.log(`   ⚠️  FOUND ${duplicateWebhooks.length} DUPLICATE WEBHOOK ENTRIES (should be prevented by idempotency):`);
+    console.log(
+      `   ⚠️  FOUND ${duplicateWebhooks.length} DUPLICATE WEBHOOK ENTRIES (should be prevented by idempotency):`,
+    );
     duplicateWebhooks.forEach((wh) => {
-      console.log(`      Key "${wh.idempotencyKey}": ${wh.count} entries (IDs: ${wh.webhookIds.join(', ')})`);
+      console.log(
+        `      Key "${wh.idempotencyKey}": ${wh.count} entries (IDs: ${wh.webhookIds.join(', ')})`,
+      );
     });
   } else {
     console.log('   ✅ No duplicate webhook entries');
@@ -327,7 +351,9 @@ async function auditDuplicatePayments() {
   if (duplicateRazorpayPayments.length > 0) {
     console.log(`   ❌ FOUND ${duplicateRazorpayPayments.length} DUPLICATE RAZORPAY PAYMENT IDs:`);
     duplicateRazorpayPayments.forEach((pmt) => {
-      console.log(`      Razorpay ID "${pmt.razorpayPaymentId}": ${pmt.count} payments (IDs: ${pmt.paymentIds.join(', ')})`);
+      console.log(
+        `      Razorpay ID "${pmt.razorpayPaymentId}": ${pmt.count} payments (IDs: ${pmt.paymentIds.join(', ')})`,
+      );
     });
   } else {
     console.log('   ✅ All Razorpay payment IDs are unique');
@@ -349,7 +375,9 @@ async function auditDuplicatePayments() {
   if (duplicateIdempotencyKeys.length > 0) {
     console.log(`   ❌ FOUND ${duplicateIdempotencyKeys.length} DUPLICATE IDEMPOTENCY KEYS:`);
     duplicateIdempotencyKeys.forEach((ik) => {
-      console.log(`      Key "${ik.idempotencyKeyHash}": ${ik.count} payments (IDs: ${ik.paymentIds.join(', ')})`);
+      console.log(
+        `      Key "${ik.idempotencyKeyHash}": ${ik.count} payments (IDs: ${ik.paymentIds.join(', ')})`,
+      );
     });
   } else {
     console.log('   ✅ All idempotency keys are unique');
@@ -392,7 +420,9 @@ async function auditPaymentStatusConsistency() {
   if (paymentStatusMismatches.length > 0) {
     console.log(`   ❌ FOUND ${paymentStatusMismatches.length} PAYMENT STATUS MISMATCHES:`);
     paymentStatusMismatches.forEach((inv) => {
-      console.log(`      Invoice ${inv.invoiceNumber}: paid=₹${inv.paidAmount}, total=₹${inv.totalAmount}, status=${inv.paymentStatus}, expected=${inv.expectedStatus}`);
+      console.log(
+        `      Invoice ${inv.invoiceNumber}: paid=₹${inv.paidAmount}, total=₹${inv.totalAmount}, status=${inv.paymentStatus}, expected=${inv.expectedStatus}`,
+      );
     });
   } else {
     console.log('   ✅ All payment statuses are correct');
@@ -417,7 +447,9 @@ async function auditPaymentStatusConsistency() {
   if (overpaidInvoices.length > 0) {
     console.log(`   ⚠️  FOUND ${overpaidInvoices.length} OVERPAID INVOICES:`);
     overpaidInvoices.forEach((inv) => {
-      console.log(`      Invoice ${inv.invoiceNumber}: paid=₹${inv.paidAmount}, total=₹${inv.totalAmount}, overpayment=₹${inv.overpayment}`);
+      console.log(
+        `      Invoice ${inv.invoiceNumber}: paid=₹${inv.paidAmount}, total=₹${inv.totalAmount}, overpayment=₹${inv.overpayment}`,
+      );
     });
   } else {
     console.log('   ✅ No overpaid invoices found');
@@ -450,7 +482,9 @@ async function auditOutstandingBalances() {
   if (supplierBalanceMismatches.length > 0) {
     console.log(`   ❌ FOUND ${supplierBalanceMismatches.length} OUTSTANDING BALANCE MISMATCHES:`);
     supplierBalanceMismatches.forEach((sup) => {
-      console.log(`      Supplier "${sup.supplierName}": recorded=₹${sup.recordedBalance}, calculated=₹${sup.calculatedBalance}, diff=₹${sup.difference}`);
+      console.log(
+        `      Supplier "${sup.supplierName}": recorded=₹${sup.recordedBalance}, calculated=₹${sup.calculatedBalance}, diff=₹${sup.difference}`,
+      );
     });
   } else {
     console.log('   ✅ All supplier outstanding balances are correct');
@@ -474,9 +508,13 @@ async function auditOutstandingBalances() {
   `;
 
   if (patientCreditMismatches.length > 0) {
-    console.log(`   ⚠️  FOUND ${patientCreditMismatches.length} PATIENT CREDIT BALANCE MISMATCHES:`);
+    console.log(
+      `   ⚠️  FOUND ${patientCreditMismatches.length} PATIENT CREDIT BALANCE MISMATCHES:`,
+    );
     patientCreditMismatches.forEach((pat) => {
-      console.log(`      Patient "${pat.fullName}": recorded=₹${pat.recordedCreditUsed}, calculated=₹${pat.calculatedCreditUsed}`);
+      console.log(
+        `      Patient "${pat.fullName}": recorded=₹${pat.recordedCreditUsed}, calculated=₹${pat.calculatedCreditUsed}`,
+      );
     });
   } else {
     console.log('   ✅ All patient credit balances are correct');
@@ -511,7 +549,9 @@ async function auditDecimalPrecision() {
   if (roundingIssues.length > 0) {
     console.log(`   ⚠️  FOUND ${roundingIssues.length} DECIMAL PRECISION ISSUES:`);
     roundingIssues.forEach((inv) => {
-      console.log(`      Invoice ${inv.invoiceNumber}: subtotal=₹${inv.invoiceSubtotal}, calculated=₹${inv.calculatedSubtotal}, diff=₹${inv.difference}`);
+      console.log(
+        `      Invoice ${inv.invoiceNumber}: subtotal=₹${inv.invoiceSubtotal}, calculated=₹${inv.calculatedSubtotal}, diff=₹${inv.difference}`,
+      );
     });
   } else {
     console.log('   ✅ No decimal precision issues found');
@@ -544,7 +584,9 @@ async function auditDashboardRevenue() {
   if (dashboardMismatches.length > 0) {
     console.log(`   ⚠️  FOUND ${dashboardMismatches.length} DASHBOARD REVENUE MISMATCHES:`);
     dashboardMismatches.forEach((d) => {
-      console.log(`      Date ${d.salesDate}: dashboard=₹${d.dashboardTotal}, actual=₹${d.actualTotal}, diff=₹${d.difference}`);
+      console.log(
+        `      Date ${d.salesDate}: dashboard=₹${d.dashboardTotal}, actual=₹${d.actualTotal}, diff=₹${d.difference}`,
+      );
     });
   } else {
     console.log('   ✅ Dashboard revenue matches actual invoices');
@@ -573,7 +615,9 @@ async function auditRefundConsistency() {
   if (refundMismatches.length > 0) {
     console.log(`   ❌ FOUND ${refundMismatches.length} REFUND AMOUNT MISMATCHES:`);
     refundMismatches.forEach((r) => {
-      console.log(`      Return ${r.returnNumber}: returnTotal=₹${r.returnTotal}, itemsTotal=₹${r.itemsTotal}, diff=₹${r.difference}`);
+      console.log(
+        `      Return ${r.returnNumber}: returnTotal=₹${r.returnTotal}, itemsTotal=₹${r.itemsTotal}, diff=₹${r.difference}`,
+      );
     });
   } else {
     console.log('   ✅ All refund amounts match their item totals');
@@ -601,7 +645,9 @@ async function auditRefundConsistency() {
   if (refundPaymentMismatches.length > 0) {
     console.log(`   ❌ FOUND ${refundPaymentMismatches.length} REFUND PAYMENT MISMATCHES:`);
     refundPaymentMismatches.forEach((r) => {
-      console.log(`      Return ${r.returnNumber}: returnAmount=₹${r.totalReturnAmount}, refundPaid=₹${r.totalRefundPaid}, diff=₹${r.difference}`);
+      console.log(
+        `      Return ${r.returnNumber}: returnAmount=₹${r.totalReturnAmount}, refundPaid=₹${r.totalRefundPaid}, diff=₹${r.difference}`,
+      );
     });
   } else {
     console.log('   ✅ All refund payments match their return amounts');
@@ -635,7 +681,9 @@ async function auditSaleInvoiceConsistency() {
   if (saleInvoiceMismatches.length > 0) {
     console.log(`   ❌ FOUND ${saleInvoiceMismatches.length} SALE-INVOICE MISMATCHES:`);
     saleInvoiceMismatches.forEach((si) => {
-      console.log(`      Sale ${si.saleId}: saleTotal=₹${si.saleTotal}, invoiceTotal=₹${si.invoiceTotal}, diff=₹${si.totalDifference}`);
+      console.log(
+        `      Sale ${si.saleId}: saleTotal=₹${si.saleTotal}, invoiceTotal=₹${si.invoiceTotal}, diff=₹${si.totalDifference}`,
+      );
     });
   } else {
     console.log('   ✅ All sales match their linked invoices');
@@ -664,7 +712,7 @@ async function auditSequenceGaps() {
   });
 
   let totalGaps = 0;
-  for (const [tenantId, numbers] of Object.entries(tenantInvoices)) {
+  for (const [numbers] of Object.entries(tenantInvoices)) {
     const numericParts = numbers
       .map((n) => {
         const match = n.match(/\d+$/);
@@ -683,7 +731,9 @@ async function auditSequenceGaps() {
   }
 
   if (totalGaps > 0) {
-    console.log(`   ⚠️  Found ${totalGaps} gaps in invoice numbering (informational - may be intentional)`);
+    console.log(
+      `   ⚠️  Found ${totalGaps} gaps in invoice numbering (informational - may be intentional)`,
+    );
   } else {
     console.log('   ✅ No gaps detected in invoice numbering');
   }
@@ -706,7 +756,7 @@ function printSummary() {
   console.log(`  Decimal Precision Issues:    ${results.summary.totalDecimalPrecisionIssues}`);
   console.log('');
 
-  const totalIssues = 
+  const totalIssues =
     results.summary.totalSalesMismatch +
     results.summary.totalGstMismatch +
     results.summary.totalPurchaseMismatch +

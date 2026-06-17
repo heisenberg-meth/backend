@@ -1,6 +1,7 @@
 import supplierReturnController from '../controller/supplier-return.controller.js';
 import { authenticate, requireTenant } from '../../../middleware/auth.fastify.js';
 import { requirePermission } from '../../../middleware/permission.fastify.js';
+import { requireFeature } from '../../../middleware/feature.guard.fastify.js';
 
 async function supplierReturnsRoutes(fastify) {
   fastify.addHook('preHandler', authenticate);
@@ -104,7 +105,7 @@ async function supplierReturnsRoutes(fastify) {
           },
         },
       },
-      preHandler: [requirePermission('purchases.read')],
+      preHandler: [requirePermission('purchases.read'), requireFeature('CREDIT_NOTES')],
     },
     supplierReturnController.listCreditNotes,
   );
@@ -143,7 +144,7 @@ async function supplierReturnsRoutes(fastify) {
         summary: 'Generate credit note for return',
         params: idParam,
       },
-      preHandler: [requirePermission('purchases.create')],
+      preHandler: [requirePermission('purchases.create'), requireFeature('CREDIT_NOTES')],
     },
     supplierReturnController.generateCreditNote,
   );

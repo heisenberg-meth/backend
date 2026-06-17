@@ -56,8 +56,6 @@ async function repairSalesMismatches() {
         correctIgst += Number(item.igst || 0);
       }
 
-      const correctTotal = correctSubtotal + correctGst;
-
       // Get the invoice to check discount
       const invoice = await prisma.invoice.findUnique({
         where: { id: inv.invoiceId },
@@ -66,7 +64,9 @@ async function repairSalesMismatches() {
       const discountAmount = Number(invoice.discountAmount || 0);
       const finalTotal = correctSubtotal - discountAmount + correctGst;
 
-      console.log(`     Recalculated: subtotal=₹${correctSubtotal}, gst=₹${correctGst}, discount=₹${discountAmount}, total=₹${finalTotal}`);
+      console.log(
+        `     Recalculated: subtotal=₹${correctSubtotal}, gst=₹${correctGst}, discount=₹${discountAmount}, total=₹${finalTotal}`,
+      );
 
       await prisma.invoice.update({
         where: { id: inv.invoiceId },
@@ -127,7 +127,7 @@ async function repairPaymentStatus() {
   console.log(`   Found ${unpaidButPartial.length} invoices with paid=0 but status≠UNPAID`);
 
   if (!DRY_RUN && unpaidButPartial.length > 0) {
-    const ids = unpaidButPartial.map(i => i.invoiceId);
+    const ids = unpaidButPartial.map((i) => i.invoiceId);
     await prisma.invoice.updateMany({
       where: { id: { in: ids } },
       data: { paymentStatus: 'UNPAID' },
@@ -157,7 +157,7 @@ async function repairPaymentStatus() {
   console.log(`   Found ${fullyPaidButNotPaid.length} invoices with paid>=total but status≠PAID`);
 
   if (!DRY_RUN && fullyPaidButNotPaid.length > 0) {
-    const ids = fullyPaidButNotPaid.map(i => i.invoiceId);
+    const ids = fullyPaidButNotPaid.map((i) => i.invoiceId);
     await prisma.invoice.updateMany({
       where: { id: { in: ids } },
       data: { paymentStatus: 'PAID' },

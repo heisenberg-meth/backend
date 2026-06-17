@@ -207,6 +207,7 @@ model Branch {
   storeProfiles             StoreProfile[]
   storeProfileDocuments     StoreProfileDocument[]
   users                     User[]
+  supplierCreditNotes       SupplierCreditNote[]
 
   @@unique([tenantId, code])
   @@index([tenantId])
@@ -281,6 +282,8 @@ model User {
   supplierPayments             SupplierPayment[]
   approvedSupplierReturns      SupplierReturn[]           @relation("SupplierReturnApprover")
   createdSupplierReturns       SupplierReturn[]           @relation("SupplierReturnCreator")
+  supplierCreditNotes          SupplierCreditNote[]       @relation("SupplierCreditNoteCreator")
+  supplierCreditNoteUsages     SupplierCreditNoteUsage[]  @relation("SupplierCreditNoteUsageCreator")
   transactions                 Transaction[]
   branch                       Branch?                    @relation(fields: [branchId], references: [id])
   assignedRole                 AccessRole?                @relation(fields: [roleId], references: [id])
@@ -1252,24 +1255,46 @@ model SupplierReturnItem {
 }
 
 model SupplierCreditNote {
-  id               String           @id @default(uuid())
+  id               String                    @id @default(uuid())
   tenantId         String
+  branchId         String?
   supplierId       String
   returnId         String
   creditNoteNumber String
-  amount           Decimal          @db.Decimal(12, 2)
-  status           CreditNoteStatus @default(ISSUED)
-  issuedAt         DateTime         @default(now())
+  amount           Decimal                   @db.Decimal(12, 2)
+  remainingAmount  Decimal                   @default(0) @db.Decimal(12, 2)
+  status           CreditNoteStatus          @default(ISSUED)
+  issuedAt         DateTime                  @default(now())
   appliedAt        DateTime?
+  expiryDate       DateTime?
   notes            String?
-  createdAt        DateTime         @default(now())
-  updatedAt        DateTime         @updatedAt
-  return           SupplierReturn   @relation(fields: [returnId], references: [id])
-  supplier         Supplier         @relation(fields: [supplierId], references: [id])
-  tenant           Tenant           @relation(fields: [tenantId], references: [id])
+  createdBy        String?
+  createdAt        DateTime                  @default(now())
+  updatedAt        DateTime                  @updatedAt
+  return           SupplierReturn            @relation(fields: [returnId], references: [id])
+  supplier         Supplier                  @relation(fields: [supplierId], references: [id])
+  tenant           Tenant                    @relation(fields: [tenantId], references: [id])
+  branch           Branch?                   @relation(fields: [branchId], references: [id])
+  user             User?                     @relation("SupplierCreditNoteCreator", fields: [createdBy], references: [id])
+  usages           SupplierCreditNoteUsage[]
 
   @@unique([tenantId, creditNoteNumber])
   @@index([tenantId, supplierId, status])
+}
+
+model SupplierCreditNoteUsage {
+  id                String             @id @default(uuid())
+  creditNoteId      String
+  purchaseInvoiceId String
+  usedAmount        Decimal            @db.Decimal(12, 2)
+  usedAt            DateTime           @default(now())
+  createdBy         String?
+  creditNote        SupplierCreditNote @relation(fields: [creditNoteId], references: [id])
+  purchaseInvoice   PurchaseInvoice    @relation(fields: [purchaseInvoiceId], references: [id])
+  user              User?              @relation("SupplierCreditNoteUsageCreator", fields: [createdBy], references: [id])
+
+  @@index([creditNoteId])
+  @@index([purchaseInvoiceId])
 }
 
 model PurchaseOrder {
@@ -1403,6 +1428,7 @@ model PurchaseInvoice {
   tenant           Tenant                      @relation(fields: [tenantId], references: [id])
   allocations      SupplierPaymentAllocation[]
   supplierReturns  SupplierReturn[]
+  creditNoteUsages SupplierCreditNoteUsage[]
 
   @@unique([tenantId, invoiceNumber])
   @@index([tenantId, invoiceDate])
