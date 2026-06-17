@@ -141,22 +141,13 @@ class SupplierCreditNoteService {
 
       // Update credit note
       const newRemaining = available - amountToApply;
-      let newStatus = creditNote.status;
-      if (newRemaining === 0) {
-        newStatus = 'APPLIED';
-      } else if (newRemaining < Number(creditNote.amount)) {
-        // Assume 'PARTIAL' exists in CreditNoteStatus, or we keep it 'ISSUED'.
-        // Prisma enum has ISSUED, APPLIED, VOIDED, EXPIRED, PARTIAL. Wait, PARTIAL is there. Let's check.
-        // Wait, schema has 'PARTIAL' in 'CreditNoteStatus' ? Actually I saw it at line 4155 but it might belong to another enum.
-        // Let's fallback to 'ISSUED' if partially used, but we'll try to set PARTIAL if it is defined.
-        // Actually, the PRD said: Partially Utilized. I will check the enum later.
-      }
+      const newStatus = newRemaining === 0 ? 'APPLIED' : creditNote.status;
 
       await tx.supplierCreditNote.update({
         where: { id: creditNoteId },
         data: {
           remainingAmount: newRemaining,
-          status: newRemaining === 0 ? 'APPLIED' : creditNote.status, // We use 'APPLIED' when fully used, stick to original if not.
+          status: newStatus,
         },
       });
 

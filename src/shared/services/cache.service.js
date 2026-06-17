@@ -3,8 +3,8 @@
  * Provides TTL-based caching with automatic invalidation
  */
 
-import redis from '../config/redis.js';
-import logger from '../shared/utils/logger.js';
+import redis from '../../config/redis.js';
+import logger from '../utils/logger.js';
 
 const DEFAULT_TTL = 300; // 5 minutes
 const PREFIX = 'cache:';

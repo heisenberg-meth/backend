@@ -4,9 +4,10 @@
 import http from 'k6/http';
 import { check, sleep, group } from 'k6';
 import { Rate, Trend } from 'k6/metrics';
+import ENV from 'k6/x/env';
 
-const BASE_URL = __ENV.BASE_URL || 'http://localhost:8080';
-const AUTH_TOKEN = __ENV.AUTH_TOKEN || '';
+const BASE_URL = ENV.BASE_URL || 'http://localhost:8080';
+const AUTH_TOKEN = ENV.AUTH_TOKEN || '';
 
 const searchSuccessRate = new Rate('search_success');
 const searchDuration = new Trend('search_duration');
@@ -31,7 +32,7 @@ function getAuthHeaders() {
   return {
     headers: {
       'Content-Type': 'application/json',
-      'Authorization': `Bearer ${AUTH_TOKEN}`,
+      Authorization: `Bearer ${AUTH_TOKEN}`,
     },
   };
 }
@@ -43,7 +44,7 @@ export default function () {
 
     const res = http.get(
       `${BASE_URL}/api/inventory/medicines?search=${query}&page=1&limit=20`,
-      getAuthHeaders()
+      getAuthHeaders(),
     );
 
     check(res, {

@@ -2,11 +2,12 @@
 // Run: k6 run tests/load/stress-test.js
 
 import http from 'k6/http';
-import { check, sleep, group } from 'k6';
+import { check, sleep } from 'k6';
 import { Rate, Trend, Counter } from 'k6/metrics';
+import ENV from 'k6/x/env';
 
-const BASE_URL = __ENV.BASE_URL || 'http://localhost:8080';
-const AUTH_TOKEN = __ENV.AUTH_TOKEN || '';
+const BASE_URL = ENV.BASE_URL || 'http://localhost:8080';
+const AUTH_TOKEN = ENV.AUTH_TOKEN || '';
 
 const overallSuccessRate = new Rate('overall_success');
 const responseTime = new Trend('response_time');
@@ -14,15 +15,15 @@ const requestCount = new Counter('total_requests');
 
 export const options = {
   stages: [
-    { duration: '1m', target: 50 },    // Normal load
+    { duration: '1m', target: 50 }, // Normal load
     { duration: '2m', target: 50 },
-    { duration: '1m', target: 100 },   // Peak load
+    { duration: '1m', target: 100 }, // Peak load
     { duration: '2m', target: 100 },
-    { duration: '1m', target: 200 },   // Stress test
+    { duration: '1m', target: 200 }, // Stress test
     { duration: '2m', target: 200 },
-    { duration: '1m', target: 300 },   // Breaking point
+    { duration: '1m', target: 300 }, // Breaking point
     { duration: '2m', target: 300 },
-    { duration: '1m', target: 0 },     // Recovery
+    { duration: '1m', target: 0 }, // Recovery
   ],
   thresholds: {
     http_req_duration: ['p(95)<1000', 'p(99)<2000'],
@@ -35,7 +36,7 @@ function getAuthHeaders() {
   return {
     headers: {
       'Content-Type': 'application/json',
-      'Authorization': `Bearer ${AUTH_TOKEN}`,
+      Authorization: `Bearer ${AUTH_TOKEN}`,
     },
   };
 }

@@ -75,7 +75,7 @@ const redisClientProxy = new Proxy(
 
 const getBullRedis = () => {
   const isWorker = new Error().stack.includes('Worker');
-  
+
   if (!isWorker && sharedBullQueueClient && sharedBullQueueClient.status !== 'end') {
     return sharedBullQueueClient;
   }
@@ -99,13 +99,17 @@ const getBullRedis = () => {
 
   if (process.env.NODE_ENV !== 'test') {
     client.on('connect', () => {
-      logger.info(isWorker ? 'Bull Redis connected (Worker)' : 'Bull Redis connected (Shared Queue)');
+      logger.info(
+        isWorker ? 'Bull Redis connected (Worker)' : 'Bull Redis connected (Shared Queue)',
+      );
     });
     client.on('ready', () => {
       logger.info(isWorker ? 'Bull Redis ready (Worker)' : 'Bull Redis ready (Shared Queue)');
     });
     client.on('reconnecting', () => {
-      logger.warn(isWorker ? 'Bull Redis reconnecting (Worker)' : 'Bull Redis reconnecting (Shared Queue)');
+      logger.warn(
+        isWorker ? 'Bull Redis reconnecting (Worker)' : 'Bull Redis reconnecting (Shared Queue)',
+      );
     });
     client.on('error', (err) => {
       logger.warn({ err: err.message }, 'Bull Redis error');
@@ -116,11 +120,11 @@ const getBullRedis = () => {
   }
 
   bullRedisClients.push(client);
-  
+
   if (!isWorker && !sharedBullQueueClient) {
     sharedBullQueueClient = client;
   }
-  
+
   return client;
 };
 

@@ -442,7 +442,7 @@ const setupFastify = async () => {
     });
   });
 
-  fastify.post('/api/health/check', async (request, reply) => {
+  fastify.post('/api/health/check', async () => {
     const status = await uptimeMonitor.checkAll();
     return { success: true, data: status };
   });
