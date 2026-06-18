@@ -60,7 +60,10 @@ export const initEventSubscriptions = async (app) => {
           );
         }
       } else {
-        log.warn({ tenantId: data.tenantId }, 'No OWNER user found for tenant — low stock alert skipped');
+        log.warn(
+          { tenantId: data.tenantId },
+          'No OWNER user found for tenant — low stock alert skipped',
+        );
       }
     } catch (err) {
       log.error(err, 'Failed to save LOW_STOCK_DETECTED in-app notification');
@@ -94,7 +97,10 @@ export const initEventSubscriptions = async (app) => {
           );
         }
       } else {
-        log.warn({ tenantId: data.tenantId }, 'No OWNER user found for tenant — payment notification skipped');
+        log.warn(
+          { tenantId: data.tenantId },
+          'No OWNER user found for tenant — payment notification skipped',
+        );
       }
     } catch (err) {
       log.error(err, 'Failed to save PAYMENT_SUCCESS in-app notification');
