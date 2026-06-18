@@ -1,6 +1,6 @@
 import prisma from '../../../config/prisma.js';
 import dashboardAggregationService from '../aggregations/dashboard.aggregation.service.js';
-import analyticsRepository from '../../analytics/repository/analytics.repository.js';
+import expiryAnalyticsService from '../../inventory/service/expiry-analytics.service.js';
 
 class DashboardFastifyController {
   async getDashboardSummary(request, reply) {
@@ -9,33 +9,34 @@ class DashboardFastifyController {
         throw new Error('Tenant missing');
       }
       const tenantId = request.user.tenantId;
+      const branchId = request.branchId || null;
       const today = new Date();
       today.setHours(0, 0, 0, 0);
       const startOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
 
-      const [todaySalesAggRes, monthlySalesAggRes, stockAggRes, invoiceCountRes, expiredCountRes] =
+      const [todaySalesAggRes, monthlySalesAggRes, stockAggRes, invoiceCountRes, expiryMetricsRes] =
         await Promise.allSettled([
           prisma.sale.aggregate({
-            where: { tenantId, soldAt: { gte: today } },
+            where: { tenantId, ...(branchId && { branchId }), soldAt: { gte: today } },
             _sum: { totalAmount: true },
           }),
           prisma.sale.aggregate({
-            where: { tenantId, soldAt: { gte: startOfMonth } },
+            where: { tenantId, ...(branchId && { branchId }), soldAt: { gte: startOfMonth } },
             _sum: { totalAmount: true },
           }),
           prisma.inventoryBatch.aggregate({
             where: {
               tenantId,
-              status: 'ACTIVE',
+              ...(branchId && { branchId }),
               deletedAt: null,
               medicine: { deletedAt: null, isActive: true },
             },
             _sum: { quantity: true },
           }),
           prisma.invoice.count({
-            where: { tenantId, createdAt: { gte: today } },
+            where: { tenantId, ...(branchId && { branchId }), createdAt: { gte: today } },
           }),
-          analyticsRepository.getExpiredProductCount(tenantId),
+          expiryAnalyticsService.getExpiryMetrics(tenantId, branchId),
         ]);
 
       const todaySalesAgg =
@@ -49,7 +50,12 @@ class DashboardFastifyController {
       const stockAgg =
         stockAggRes.status === 'fulfilled' ? stockAggRes.value : { _sum: { quantity: 0 } };
       const invoiceCount = invoiceCountRes.status === 'fulfilled' ? invoiceCountRes.value : 0;
-      const expiredCount = expiredCountRes.status === 'fulfilled' ? expiredCountRes.value : 0;
+      const expiryMetrics = expiryMetricsRes.status === 'fulfilled' ? expiryMetricsRes.value : {
+        expiredProducts: 0,
+        expiring30Products: 0,
+        expiredUnits: 0,
+        expiredValue: 0,
+      };
 
       return reply.send({
         success: true,
@@ -58,7 +64,12 @@ class DashboardFastifyController {
           monthlySales: monthlySalesAgg?._sum?.totalAmount || 0,
           stockValue: stockAgg?._sum?.quantity || 0,
           totalInvoices: invoiceCount,
-          expiredMedicines: expiredCount,
+          // Dashboard uses PRODUCT counts (unique medicines)
+          expiredMedicines: expiryMetrics.expiredProducts,
+          expiring30Medicines: expiryMetrics.expiring30Products,
+          expiring7Medicines: expiryMetrics.expiring7Products,
+          expiredUnits: expiryMetrics.expiredUnits,
+          expiredValue: expiryMetrics.expiredValue,
         },
       });
     } catch (error) {

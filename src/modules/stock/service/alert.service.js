@@ -9,9 +9,12 @@ class AlertService {
   async processDailyExpiryChecks() {
     logger.info('Running bulk expiry status update...');
     try {
+      // Use startOfDay to ensure date-only comparison, consistent with all expiry logic
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
       const { count } = await prisma.inventoryBatch.updateMany({
         where: {
-          expiryDate: { lt: new Date() },
+          expiryDate: { lt: today },
           status: { not: 'EXPIRED' },
         },
         data: { status: 'EXPIRED' },

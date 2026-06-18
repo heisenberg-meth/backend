@@ -2,10 +2,32 @@ import prisma from '../../../config/prisma.js';
 import supplierReturnRepository from '../repository/supplier-return.repository.js';
 import movementService from '../../stock/service/movement.service.js';
 import logger from '../../../shared/utils/logger.js';
+import expiryService from '../../inventory/service/expiry.service.js';
 
 class SupplierReturnService {
   async getExpiredGroupedBySupplier(tenantId) {
-    return supplierReturnRepository.findExpiredBatchesGroupedBySupplier(tenantId);
+    const expiredBatches = await expiryService.getBatchesByBucket(tenantId, 'EXPIRED', null, {
+      supplierId: { not: null },
+    });
+
+    const grouped = {};
+    for (const batch of expiredBatches) {
+      const sid = batch.supplierId;
+      if (!grouped[sid]) {
+        grouped[sid] = {
+          supplier: batch.supplier,
+          items: [],
+          totalQty: 0,
+          totalLoss: 0,
+          itemCount: 0,
+        };
+      }
+      grouped[sid].items.push(batch);
+      grouped[sid].totalQty += batch.quantity;
+      grouped[sid].totalLoss += Number(batch.purchasePrice) * batch.quantity;
+      grouped[sid].itemCount++;
+    }
+    return Object.values(grouped);
   }
 
   async createReturn(tenantId, data, userId) {
@@ -174,18 +196,7 @@ class SupplierReturnService {
   }
 
   async getExpiredInventorySummary(tenantId) {
-    const expired = await prisma.inventoryBatch.findMany({
-      where: {
-        tenantId,
-        OR: [{ expiryDate: { lt: new Date() } }, { status: 'EXPIRED' }],
-        deletedAt: null,
-        availableQuantity: { gt: 0 },
-      },
-      include: {
-        supplier: { select: { id: true, name: true } },
-        medicine: { select: { id: true, name: true, genericName: true } },
-      },
-    });
+    const expired = await expiryService.getBatchesByBucket(tenantId, 'EXPIRED');
 
     const supplierIds = new Set();
     let totalValue = 0;

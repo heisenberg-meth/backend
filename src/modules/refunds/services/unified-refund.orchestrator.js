@@ -1,5 +1,6 @@
 import prisma from '../../../config/prisma.js';
 import movementService from '../../stock/service/movement.service.js';
+import cacheInvalidator from '../../inventory/service/cache-invalidator.service.js';
 
 class UnifiedRefundOrchestrator {
   /**
@@ -16,7 +17,7 @@ class UnifiedRefundOrchestrator {
     returnId = null,
     refundMethod = 'CASH',
   }) {
-    return await prisma.$transaction(async (tx) => {
+    const result = await prisma.$transaction(async (tx) => {
       // 1. Lock Invoice to prevent parallel refund race conditions
       const invoice = await tx.$queryRaw`
         SELECT * FROM "Invoice" WHERE id = ${invoiceId} AND "tenantId" = ${tenantId} FOR UPDATE
@@ -195,8 +196,23 @@ class UnifiedRefundOrchestrator {
         invoiceId,
         tenantId,
         actualRefundAmount,
+        medicineIds: resolvedItems.map(i => i.medicineId).filter(Boolean),
       };
     });
+
+    // Invalidate caches after transaction commits
+    try {
+      if (result.medicineIds && result.medicineIds.length > 0) {
+        await cacheInvalidator.invalidateInventoryCaches(tenantId, result.medicineIds);
+      } else {
+        await cacheInvalidator.invalidateInventoryCaches(tenantId);
+      }
+    } catch (err) {
+      // Non-critical, log but don't fail
+      console.error('[REFUND] Cache invalidation failed:', err.message);
+    }
+
+    return result;
   }
 }
 

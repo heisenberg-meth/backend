@@ -1,10 +1,16 @@
 class RefundCalculationService {
   NON_REFUNDABLE_CHARGES_RATE = 0;
 
-  calculateRefundAmount(item, quantity) {
+  calculateRefundAmount(item, returnQuantity) {
     const unitPrice = Number(item.unitPrice);
+    const originalQuantity = Number(item.quantity) || returnQuantity;
+    const itemDiscount = Number(item.discountAmount) || 0;
+
+    const proportionalDiscount =
+      originalQuantity > 0 ? (itemDiscount / originalQuantity) * returnQuantity : 0;
     const gstPercentage = Number(item.gstPercentage);
-    const lineTotal = unitPrice * quantity;
+
+    const lineTotal = unitPrice * returnQuantity - proportionalDiscount;
     const gstAmount = lineTotal * (gstPercentage / 100);
 
     let cgst = 0;
@@ -20,6 +26,7 @@ class RefundCalculationService {
 
     return {
       subtotal: parseFloat(lineTotal.toFixed(2)),
+      discountAmount: parseFloat(proportionalDiscount.toFixed(2)),
       cgst: parseFloat(cgst.toFixed(2)),
       sgst: parseFloat(sgst.toFixed(2)),
       igst: parseFloat(igst.toFixed(2)),
@@ -30,6 +37,7 @@ class RefundCalculationService {
 
   calculateTotalRefund(items) {
     let subtotal = 0;
+    let totalDiscountAmount = 0;
     let totalCgst = 0;
     let totalSgst = 0;
     let totalIgst = 0;
@@ -38,6 +46,7 @@ class RefundCalculationService {
 
     for (const item of items) {
       subtotal += item.subtotal;
+      totalDiscountAmount += item.discountAmount || 0;
       totalCgst += item.cgst;
       totalSgst += item.sgst;
       totalIgst += item.igst;
@@ -47,6 +56,7 @@ class RefundCalculationService {
 
     return {
       subtotal: parseFloat(subtotal.toFixed(2)),
+      discountAmount: parseFloat(totalDiscountAmount.toFixed(2)),
       cgst: parseFloat(totalCgst.toFixed(2)),
       sgst: parseFloat(totalSgst.toFixed(2)),
       igst: parseFloat(totalIgst.toFixed(2)),

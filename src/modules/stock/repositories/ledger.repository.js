@@ -3,13 +3,14 @@ import prisma from '../../../config/prisma.js';
 class LedgerRepository {
   async createTransaction(data, tx) {
     const client = tx || prisma;
+    const movementType = data.type || data.movementType || 'STOCK_IN';
     return client.stockMovement.create({
       data: {
         tenantId: data.tenantId,
         medicineId: data.medicineId,
         batchId: data.batchId,
         branchId: data.branchId,
-        movementType: data.type || data.movementType,
+        movementType,
         quantity: data.quantity,
         quantityBefore: data.previousStock ?? data.quantityBefore,
         quantityAfter: data.newStock ?? data.quantityAfter,

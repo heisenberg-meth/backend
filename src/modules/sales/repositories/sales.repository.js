@@ -89,8 +89,14 @@ class SalesRepository {
     return prisma.sale.findMany({
       where: { tenantId, ...this._dateFilter(dateFilter) },
       include: {
-        items: true,
+        items: {
+          include: {
+            medicine: true,
+            batch: true,
+          },
+        },
         patient: true,
+        invoice: true,
       },
       orderBy: { soldAt: 'desc' },
       skip,

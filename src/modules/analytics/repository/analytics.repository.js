@@ -32,16 +32,17 @@ class AnalyticsRepository {
 
   async getExpiringCount(tenantId, days = 30, branchId = null) {
     const branchCondition = branchId ? Prisma.sql`AND "branchId" = ${branchId}` : Prisma.sql``;
+    // Use CURRENT_DATE (date-only) to avoid UTC/IST timezone bugs
     const result = await prisma.$queryRaw`
       SELECT COUNT(*)::int as count
       FROM "InventoryBatch"
       WHERE "tenantId" = ${tenantId}
         AND "deletedAt" IS NULL
-        AND quantity > 0
+        AND "availableQuantity" > 0
         AND status != 'EXPIRED'
         AND status != 'ARCHIVED'
-        AND "expiryDate" >= NOW()
-        AND "expiryDate" < NOW() + INTERVAL '1 day' * ${days}
+        AND "expiryDate"::date >= CURRENT_DATE
+        AND "expiryDate"::date < CURRENT_DATE + INTERVAL '1 day' * ${days}
         ${branchCondition}
     `;
     return Number(Array.isArray(result) ? result[0]?.count || 0 : result?.count || 0);
@@ -52,11 +53,14 @@ class AnalyticsRepository {
   }
 
   async getExpiredProductCount(tenantId, branchId = null) {
-    const now = new Date();
+    // Use startOfDay to ensure date-only comparison, avoiding UTC/IST timezone bugs
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
     const where = {
       tenantId,
-      OR: [{ expiryDate: { lt: now } }, { status: 'EXPIRED' }],
-      quantity: { gt: 0 },
+      OR: [{ expiryDate: { lt: today } }, { status: 'EXPIRED' }],
+      availableQuantity: { gt: 0 },
+      status: { not: 'ARCHIVED' },
       deletedAt: null,
     };
     if (branchId) where.branchId = branchId;

@@ -606,8 +606,7 @@ class PurchaseOrderService {
           select: { balanceAfter: true },
         });
 
-        const currentBalance = Number(lastBalance?.balanceAfter || 0);
-        // Ensure balanceAfter is a proper number (not string-concatenated) for Prisma Decimal
+        const currentBalance = parseFloat(String(lastBalance?.balanceAfter || 0));
         const balanceAfter = Number((currentBalance + Number(totalVal)).toFixed(2));
 
         await tx.supplierLedger.create({

@@ -25,6 +25,7 @@ class InvoiceEngine {
       notes,
       discountAmount = 0,
       discountPercentage = 0,
+      discountType,
       patientName,
       patientPhone,
     } = data;
@@ -65,6 +66,9 @@ class InvoiceEngine {
         discountPercentage,
       );
 
+      const resolvedDiscountType =
+        discountType || (this._safeNumber(discountPercentage) > 0 ? 'PERCENTAGE' : 'FIXED');
+
       const invoice = await t.invoice.create({
         data: {
           tenantId,
@@ -74,8 +78,9 @@ class InvoiceEngine {
           patientName: patientName || defaultPatientName || 'Walk-in Customer',
           patientPhone: patientPhone || defaultPatientPhone || null,
           subtotal: this._safeNumber(totals.subtotal),
-          discountAmount: this._safeNumber(discountAmount || totals.discountAmount),
+          discountAmount: this._safeNumber(totals.discountAmount),
           discountPercentage: this._safeNumber(discountPercentage),
+          discountType: resolvedDiscountType,
           gstAmount: this._safeNumber(totals.totalGst),
           cgst: this._safeNumber(totals.totalCgst),
           sgst: this._safeNumber(totals.totalSgst),
@@ -152,6 +157,7 @@ class InvoiceEngine {
           quantity: item.quantity,
           unitPrice: item.unitPrice,
           gstPercentage: item.gstPercentage,
+          discountPercentage: this._safeNumber(discountPercentage),
           discountAmount: item.itemDiscountAmount,
           cgst: item.cgst,
           sgst: item.sgst,
@@ -176,6 +182,7 @@ class InvoiceEngine {
       notes,
       discountAmount = 0,
       discountPercentage = 0,
+      discountType,
       patientName,
       patientPhone,
     } = data;
@@ -220,6 +227,9 @@ class InvoiceEngine {
         discountPercentage,
       );
 
+      const resolvedDiscountType =
+        discountType || (this._safeNumber(discountPercentage) > 0 ? 'PERCENTAGE' : 'FIXED');
+
       // delete existing items
       await t.invoiceItem.deleteMany({ where: { invoiceId } });
 
@@ -230,8 +240,9 @@ class InvoiceEngine {
           patientName: patientName || defaultPatientName || 'Walk-in Customer',
           patientPhone: patientPhone || defaultPatientPhone || null,
           subtotal: this._safeNumber(totals.subtotal),
-          discountAmount: this._safeNumber(discountAmount || totals.discountAmount),
+          discountAmount: this._safeNumber(totals.discountAmount),
           discountPercentage: this._safeNumber(discountPercentage),
+          discountType: resolvedDiscountType,
           gstAmount: this._safeNumber(totals.totalGst),
           cgst: this._safeNumber(totals.totalCgst),
           sgst: this._safeNumber(totals.totalSgst),
@@ -306,6 +317,7 @@ class InvoiceEngine {
           quantity: item.quantity,
           unitPrice: item.unitPrice,
           gstPercentage: item.gstPercentage,
+          discountPercentage: this._safeNumber(discountPercentage),
           discountAmount: item.itemDiscountAmount,
           cgst: item.cgst,
           sgst: item.sgst,

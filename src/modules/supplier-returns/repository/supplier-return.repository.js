@@ -339,7 +339,7 @@ class SupplierReturnRepository {
       orderBy: { createdAt: 'desc' },
       select: { balanceAfter: true },
     });
-    const prevBalance = Number(lastEntry?.balanceAfter || 0);
+    const prevBalance = parseFloat(String(lastEntry?.balanceAfter || 0));
 
     const debitAmount = type === 'DEBIT' ? amount : 0;
     const creditAmount = type === 'CREDIT' ? amount : 0;

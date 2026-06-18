@@ -26,7 +26,7 @@ class LedgerService {
       select: { balanceAfter: true },
     });
 
-    const previousBalance = Number(lastEntry?.balanceAfter || 0);
+    const previousBalance = parseFloat(String(lastEntry?.balanceAfter || 0));
 
     // In Accounts Payable Ledger (Money you owe):
     // Debit increases what you owe (e.g. Purchase Invoice)

@@ -260,17 +260,19 @@ export const initListeners = () => {
   // ── PROCUREMENT LISTENERS ───────────────────────────────────
 
   localEventBus.on(DOMAIN_EVENTS.SALE_RETURNED, async (data) => {
-    const { invoiceId, tenantId, branchId, refundAmount } = data;
+    const { invoiceId, tenantId, branchId, refundAmount, refundedAt } = data;
     logger.info({ invoiceId, refundAmount }, '[RETURN] Sale returned, updating daily summary');
 
     try {
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
+      // Use the actual refund date, not today
+      const refundDate = refundedAt ? new Date(refundedAt) : new Date();
+      refundDate.setHours(0, 0, 0, 0);
+      
       await prisma.dailySalesSummary.updateMany({
         where: {
           tenantId,
           branchId: branchId || null,
-          salesDate: today,
+          salesDate: refundDate,
         },
         data: {
           totalReturns: { increment: refundAmount || 0 },

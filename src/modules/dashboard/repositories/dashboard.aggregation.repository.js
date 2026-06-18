@@ -135,7 +135,9 @@ class DashboardAggregationRepository {
   }
 
   async getStockHealthMetrics(tenantId, branchId = null) {
-    const now = new Date();
+    // Use startOfDay to ensure date-only comparison, avoiding UTC/IST timezone bugs
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
 
     const where = {
       medicine: { tenantId, deletedAt: null },
@@ -146,7 +148,7 @@ class DashboardAggregationRepository {
       tenantId,
       deletedAt: null,
       inventoryBatches: {
-        none: { quantity: { gt: 0 }, deletedAt: null },
+        none: { availableQuantity: { gt: 0 }, deletedAt: null },
       },
     };
     if (branchId) {
@@ -158,13 +160,13 @@ class DashboardAggregationRepository {
       prisma.inventoryBatch.count({ where: batchWhere }),
       prisma.inventoryBatch.aggregate({
         where: batchWhere,
-        _sum: { quantity: true },
+        _sum: { availableQuantity: true },
       }),
       prisma.inventoryBatch.count({
         where: {
           ...batchWhere,
-          OR: [{ expiryDate: { lt: now } }, { status: 'EXPIRED' }],
-          quantity: { gt: 0 },
+          OR: [{ expiryDate: { lt: today } }, { status: 'EXPIRED' }],
+          availableQuantity: { gt: 0 },
         },
       }),
       analyticsRepository.getExpiring30Count(tenantId, branchId),
@@ -184,7 +186,7 @@ class DashboardAggregationRepository {
 
     return {
       totalBatches,
-      totalStock: stockValueAgg?._sum?.quantity || 0,
+      totalStock: stockValueAgg?._sum?.availableQuantity || 0,
       expiredCount,
       expiringCount,
       outOfStockCount,
@@ -211,8 +213,19 @@ class DashboardAggregationRepository {
       prisma.inventoryBatch.findMany({
         where: {
           medicine: { tenantId, deletedAt: null },
-          OR: [{ expiryDate: { lt: new Date() } }, { status: 'EXPIRED' }],
-          quantity: { gt: 0 },
+          OR: [
+            {
+              expiryDate: {
+                lt: (() => {
+                  const d = new Date();
+                  d.setHours(0, 0, 0, 0);
+                  return d;
+                })(),
+              },
+            },
+            { status: 'EXPIRED' },
+          ],
+          availableQuantity: { gt: 0 },
           deletedAt: null,
           ...(branchId && { branchId }),
         },
