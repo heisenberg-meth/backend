@@ -8,6 +8,9 @@ import { initAnalyticsWorker } from './modules/billing-analytics/workers/analyti
 import { initRiskWorker } from './modules/medicine-alerts/workers/risk.worker.js';
 import { startCommunicationWorker } from './modules/communications/workers/communication.worker.js';
 import { initNotificationsModule } from './modules/notifications/index.js';
+import { initEventSubscriptions } from './modules/notifications/events/subscribers.js';
+import { scheduleCrmJobs } from './modules/crm/jobs/scheduler.js';
+import './modules/crm/workers/crm.worker.js';
 import {
   createInventoryQueue,
   createInventoryWorker,
@@ -194,6 +197,8 @@ const start = async () => {
     startCommunicationWorker();
     initNotificationsModule();
     initDashboardWorker();
+    await initEventSubscriptions(fastify);
+    await scheduleCrmJobs();
     sealQueueRegistry();
     logger.info('[BOOT] Workers started — all systems operational');
   } catch (err) {

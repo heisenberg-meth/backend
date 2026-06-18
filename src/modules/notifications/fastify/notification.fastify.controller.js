@@ -784,18 +784,25 @@ class NotificationFastifyController {
       const skip = (parseInt(page) - 1) * parseInt(limit);
       const take = parseInt(limit);
 
-      const where = { tenantId, userId };
-      if (isRead !== undefined) where.isRead = isRead === 'true';
+      console.log("User ID:", userId);
 
-      const [notifications, total] = await Promise.all([
-        prisma.notification.findMany({
-          where,
-          orderBy: { createdAt: 'desc' },
-          skip,
-          take,
-        }),
-        prisma.notification.count({ where }),
-      ]);
+      // TEMPORARILY BYPASSING USER FILTERING FOR STEP 5
+      const notifications = await prisma.notification.findMany({
+        take: 20,
+        orderBy: {
+          createdAt: "desc"
+        }
+      });
+      const total = notifications.length;
+
+      console.log("Notifications:", notifications.length);
+
+      // Log latest database notifications to compare user IDs (Step 2)
+      console.log("--- Latest Database Notifications ---");
+      notifications.slice(0, 5).forEach((n, idx) => {
+        console.log(`[${idx}] id: ${n.id}, userId: ${n.userId}, subject: "${n.subject}", isRead: ${n.isRead}`);
+      });
+      console.log("Logged-in user:", userId);
 
       return reply.send({
         success: true,

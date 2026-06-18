@@ -60,6 +60,7 @@ import refillRoutes from './modules/refill-reminders/routes/refill.fastify.route
 import prescriptionRoutes from './modules/prescriptions/routes/prescription.fastify.routes.js';
 import notificationRoutes from './modules/notifications/routes/notification.fastify.routes.js';
 import patientRoutes from './modules/patients/routes/patient.fastify.routes.js';
+import crmRoutes from './modules/crm/crm.fastify.routes.js';
 import rbacRoutes from './modules/access-control/routes/rbac.fastify.routes.js';
 import deliveryRoutes from './modules/delivery/routes/delivery.fastify.routes.js';
 import ecommerceRoutes from './modules/ecommerce/routes/ecommerce.fastify.routes.js';
@@ -488,6 +489,7 @@ const setupFastify = async () => {
   await fastify.register(refillRoutes, { prefix: '/api/refills' });
   await fastify.register(prescriptionRoutes, { prefix: '/api/prescriptions' });
   await fastify.register(notificationRoutes, { prefix: '/api/notifications' });
+  await fastify.register(crmRoutes, { prefix: '/api/crm' });
   await fastify.register(patientRoutes, { prefix: '/api/patients' });
   await fastify.register(rbacRoutes, { prefix: '/api/rbac' });
   await fastify.register(deliveryRoutes, { prefix: '/api/delivery' });

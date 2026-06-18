@@ -1,6 +1,6 @@
-import crmController from '../controllers/crm.controller.js';
-import { authenticate, requireTenant } from '../../../middleware/auth.fastify.js';
-import { requirePermission } from '../../../middleware/permission.fastify.js';
+import crmController from './controllers/crm.controller.js';
+import { authenticate, requireTenant } from '../../middleware/auth.fastify.js';
+import { requirePermission } from '../../middleware/permission.fastify.js';
 
 export default async function crmRoutes(fastify) {
   fastify.addHook('onRequest', authenticate);

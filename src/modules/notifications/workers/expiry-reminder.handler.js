@@ -8,7 +8,7 @@ export const processExpiryReminder = async () => {
 
   // Find alerts with high severity that haven't been resolved
   const alerts = await prisma.expiryAlert.findMany({
-    where: { resolved: false, daysRemaining: { lte: 30 } },
+    where: { isResolved: false, daysRemaining: { lte: 30 } },
     include: { batch: true, medicine: true, tenant: { include: { users: true } } },
   });
 
