@@ -103,6 +103,7 @@ const mockPrisma = {
   },
   invoiceItem: {
     create: jest.fn().mockResolvedValue({ id: 'item-1' }),
+    createMany: jest.fn().mockResolvedValue({ count: 1 }),
   },
   invoicePayment: {
     create: jest.fn().mockResolvedValue({ id: 'pay-1' }),

@@ -6,6 +6,8 @@ import { mainQueue } from '../../queue/index.js';
 class DisposalService {
   async getExpiredBatches(tenantId, branchId = null) {
     const now = new Date();
+    const targetBranchId =
+      branchId === 'null' || branchId === 'undefined' || !branchId ? null : branchId;
     const where = {
       tenantId,
       OR: [{ expiryDate: { lt: now } }, { status: 'EXPIRED' }],
@@ -14,7 +16,7 @@ class DisposalService {
       deletedAt: null,
       medicine: { deletedAt: null },
     };
-    if (branchId) where.branchId = branchId;
+    if (targetBranchId) where.branchId = targetBranchId;
 
     const batches = await prisma.inventoryBatch.findMany({
       where,
@@ -51,6 +53,8 @@ class DisposalService {
 
   async getExpiredOverview(tenantId, branchId = null) {
     const now = new Date();
+    const targetBranchId =
+      branchId === 'null' || branchId === 'undefined' || !branchId ? null : branchId;
     const where = {
       tenantId,
       OR: [{ expiryDate: { lt: now } }, { status: 'EXPIRED' }],
@@ -59,7 +63,7 @@ class DisposalService {
       deletedAt: null,
       medicine: { deletedAt: null },
     };
-    if (branchId) where.branchId = branchId;
+    if (targetBranchId) where.branchId = targetBranchId;
 
     const batches = await prisma.inventoryBatch.findMany({
       where,
@@ -222,8 +226,10 @@ class DisposalService {
     const { page = 1, limit = 20 } = pagination;
     const skip = (page - 1) * limit;
 
+    const targetBranchId =
+      branchId === 'null' || branchId === 'undefined' || !branchId ? null : branchId;
     const where = { tenantId };
-    if (branchId) where.branchId = branchId;
+    if (targetBranchId) where.branchId = targetBranchId;
 
     const [disposals, total] = await Promise.all([
       prisma.inventoryDisposal.findMany({

@@ -38,7 +38,8 @@ class AnalyticsRepository {
       WHERE "tenantId" = ${tenantId}
         AND "deletedAt" IS NULL
         AND quantity > 0
-        AND status = 'ACTIVE'
+        AND status != 'EXPIRED'
+        AND status != 'ARCHIVED'
         AND "expiryDate" >= NOW()
         AND "expiryDate" < NOW() + INTERVAL '1 day' * ${days}
         ${branchCondition}
@@ -71,9 +72,7 @@ class AnalyticsRepository {
         AND "deletedAt" IS NULL
         ${branchCondition}
     `;
-    return Number(
-      Array.isArray(result) ? result[0]?.value || 0 : result?.value || 0,
-    );
+    return Number(Array.isArray(result) ? result[0]?.value || 0 : result?.value || 0);
   }
 
   async getSupplierCount(tenantId) {

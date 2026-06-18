@@ -164,14 +164,12 @@ const setupFastify = async () => {
     contentSecurityPolicy: {
       directives: {
         defaultSrc: ["'self'"],
-        styleSrc: ["'self'", "'unsafe-inline'"],
-        imgSrc: [
-          "'self'",
-          'data:',
-          'validator.swagger.io',
-          'https://medassist-backend-hryu.onrender.com',
-        ],
-        scriptSrc: ["'self'"],
+        styleSrc: ["'self'", "'unsafe-inline'", 'https://fonts.googleapis.com'],
+        fontSrc: ["'self'", 'https://fonts.gstatic.com', 'data:'],
+        imgSrc: ["'self'", 'data:', 'https:'],
+        scriptSrc: ["'self'", "'unsafe-inline'", "'unsafe-eval'", 'https://checkout.razorpay.com'],
+        frameSrc: ["'self'", 'https://checkout.razorpay.com'],
+        connectSrc: ["'self'", 'https://api.razorpay.com'],
       },
     },
     crossOriginResourcePolicy: {
@@ -271,9 +269,9 @@ const setupFastify = async () => {
     maxRetriesPerRequest: null,
   });
 
-  // Global rate limit — 300 requests per minute per IP
+  // Global rate limit — 500 requests per minute per IP
   await fastify.register(rateLimit, {
-    max: 300,
+    max: 500,
     timeWindow: '1 minute',
     redis: fastify.redis,
     keyGenerator: (request) => {

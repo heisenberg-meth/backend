@@ -70,14 +70,19 @@ class BillingService {
 
   async getInvoices(tenantId, query) {
     const result = await invoiceService.getInvoices(tenantId, query);
+    const limit = parseInt(query.limit || 20);
+    let page = parseInt(query.page || 1);
+    if (query.skip !== undefined) {
+      page = Math.floor(parseInt(query.skip) / limit) + 1;
+    }
 
     return {
       data: result.invoices,
       pagination: {
-        page: parseInt(query.page || 1),
-        limit: parseInt(query.limit || 20),
+        page,
+        limit,
         total: result.total,
-        totalPages: Math.ceil(result.total / (query.limit || 20)),
+        totalPages: Math.ceil(result.total / limit),
       },
     };
   }

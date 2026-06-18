@@ -1,4 +1,4 @@
-import { jest , describe, afterEach, it, expect } from '@jest/globals';
+import { jest, describe, afterEach, it, expect } from '@jest/globals';
 
 // Mocks
 const mockLedgerRepository = {
@@ -63,10 +63,11 @@ const mockRedisClient = {
   connect: jest.fn(),
   quit: jest.fn(),
   on: jest.fn(),
+  scan: jest.fn().mockResolvedValue(['0', []]),
 };
 
 jest.unstable_mockModule('../../src/config/prisma.js', () => ({
-  default: mockPrisma
+  default: mockPrisma,
 }));
 
 jest.unstable_mockModule('../../src/config/redis.js', () => ({
@@ -82,23 +83,27 @@ jest.unstable_mockModule('ioredis', () => ({
 }));
 
 jest.unstable_mockModule('../../src/modules/stock/repositories/stock.repository.js', () => ({
-  default: mockStockRepository
+  default: mockStockRepository,
 }));
 
 jest.unstable_mockModule('../../src/modules/stock/repositories/ledger.repository.js', () => ({
-  default: mockLedgerRepository
+  default: mockLedgerRepository,
 }));
 
-jest.unstable_mockModule('../../src/modules/realtime-inventory/services/inventory.service.js', () => ({
-  default: mockInventoryService
-}));
+jest.unstable_mockModule(
+  '../../src/modules/realtime-inventory/services/inventory.service.js',
+  () => ({
+    default: mockInventoryService,
+  }),
+);
 
 jest.unstable_mockModule('../../src/modules/ecommerce/services/inventory-sync.service.js', () => ({
-  default: mockInventorySyncService
+  default: mockInventorySyncService,
 }));
 
 // Import after mocks are defined
-const { default: movementService } = await import('../../src/modules/stock/service/movement.service.js');
+const { default: movementService } =
+  await import('../../src/modules/stock/service/movement.service.js');
 
 describe('MovementService Unit Tests (Stock)', () => {
   const tenantId = 'tenant-1';
@@ -124,23 +129,31 @@ describe('MovementService Unit Tests (Stock)', () => {
       mockPrisma.inventoryBatch.update.mockResolvedValue({});
       mockLedgerRepository.createTransaction.mockResolvedValue({});
 
-      const result = await movementService.stockOut(tenantId, {
-        medicineId,
-        quantity: 15,
-        type: 'SALE'
-      }, userId);
+      const result = await movementService.stockOut(
+        tenantId,
+        {
+          medicineId,
+          quantity: 15,
+          type: 'SALE',
+        },
+        userId,
+      );
 
       expect(result.totalDeducted).toBe(15);
-      
-      expect(mockPrisma.inventoryBatch.update).toHaveBeenCalledWith(expect.objectContaining({
-        where: { id: 'b1' },
-        data: { quantity: 0, availableQuantity: 0 }
-      }));
 
-      expect(mockPrisma.inventoryBatch.update).toHaveBeenCalledWith(expect.objectContaining({
-        where: { id: 'b2' },
-        data: { quantity: 45, availableQuantity: 45 }
-      }));
+      expect(mockPrisma.inventoryBatch.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: 'b1' },
+          data: { quantity: 0, availableQuantity: 0 },
+        }),
+      );
+
+      expect(mockPrisma.inventoryBatch.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: 'b2' },
+          data: { quantity: 45, availableQuantity: 45 },
+        }),
+      );
     });
 
     it('should throw error if insufficient total stock', async () => {
@@ -148,14 +161,20 @@ describe('MovementService Unit Tests (Stock)', () => {
       const futureDate = new Date();
       futureDate.setDate(futureDate.getDate() + 30);
       mockPrisma.inventoryBatch.findMany.mockResolvedValue([
-        { id: 'b1', quantity: 5, availableQuantity: 5, expiryDate: futureDate }
+        { id: 'b1', quantity: 5, availableQuantity: 5, expiryDate: futureDate },
       ]);
 
-      await expect(movementService.stockOut(tenantId, {
-        medicineId,
-        quantity: 10,
-        type: 'SALE'
-      }, userId)).rejects.toThrow('Insufficient stock');
+      await expect(
+        movementService.stockOut(
+          tenantId,
+          {
+            medicineId,
+            quantity: 10,
+            type: 'SALE',
+          },
+          userId,
+        ),
+      ).rejects.toThrow('Insufficient stock');
     });
   });
 
@@ -167,7 +186,7 @@ describe('MovementService Unit Tests (Stock)', () => {
         quantity: 100,
         expiryDate: '2027-01-01',
         purchasePrice: 10,
-        sellingPrice: 15
+        sellingPrice: 15,
       };
 
       mockStockRepository.getCurrentStock.mockResolvedValue({ totalQuantity: 0 });
@@ -177,12 +196,15 @@ describe('MovementService Unit Tests (Stock)', () => {
       const result = await movementService.stockIn(tenantId, data, userId);
 
       expect(mockPrisma.inventoryBatch.create).toHaveBeenCalled();
-      expect(mockLedgerRepository.createTransaction).toHaveBeenCalledWith(expect.objectContaining({
-        type: 'STOCK_IN',
-        quantity: 100,
-        previousStock: 0,
-        newStock: 100
-      }), mockPrisma);
+      expect(mockLedgerRepository.createTransaction).toHaveBeenCalledWith(
+        expect.objectContaining({
+          type: 'STOCK_IN',
+          quantity: 100,
+          previousStock: 0,
+          newStock: 100,
+        }),
+        mockPrisma,
+      );
       expect(result.id).toBe('b1');
     });
   });

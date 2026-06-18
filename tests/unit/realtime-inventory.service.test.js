@@ -1,4 +1,4 @@
-import { jest , describe, afterEach, it, expect } from '@jest/globals';
+import { jest, describe, afterEach, it, expect } from '@jest/globals';
 
 const mockPrisma = {
   stockMovement: {
@@ -7,17 +7,18 @@ const mockPrisma = {
   },
   inventoryBatch: {
     update: jest.fn(),
-    aggregate: jest.fn()
+    aggregate: jest.fn(),
   },
   inventoryTransaction: {
-    create: jest.fn()
+    create: jest.fn(),
   },
-  $transaction: jest.fn((cb) => cb(mockPrisma))
+  $transaction: jest.fn((cb) => cb(mockPrisma)),
 };
 
 const mockRedis = {
   set: jest.fn(),
-  get: jest.fn()
+  get: jest.fn(),
+  scan: jest.fn().mockResolvedValue(['0', []]),
 };
 
 const mockSocket = {
@@ -44,11 +45,15 @@ const mockInventoryQueue = {
   add: jest.fn().mockResolvedValue({}),
 };
 
-jest.unstable_mockModule('../../src/modules/realtime-inventory/workers/inventory.worker.js', () => ({
-  inventoryQueue: mockInventoryQueue,
-}));
+jest.unstable_mockModule(
+  '../../src/modules/realtime-inventory/workers/inventory.worker.js',
+  () => ({
+    inventoryQueue: mockInventoryQueue,
+  }),
+);
 
-const { default: inventoryService } = await import('../../src/modules/realtime-inventory/services/inventory.service.js');
+const { default: inventoryService } =
+  await import('../../src/modules/realtime-inventory/services/inventory.service.js');
 
 describe('Real-Time Inventory Service Unit Tests', () => {
   const tenantId = 'tenant-1';
@@ -68,7 +73,7 @@ describe('Real-Time Inventory Service Unit Tests', () => {
         quantity: -5,
         quantityAfter: 45,
         referenceType: 'INVOICE',
-        referenceId: 'INV-001'
+        referenceId: 'INV-001',
       };
 
       mockPrisma.stockMovement.create.mockResolvedValue({ id: 'tx1', ...data });
@@ -76,18 +81,23 @@ describe('Real-Time Inventory Service Unit Tests', () => {
 
       await inventoryService.recordTransaction(mockPrisma, tenantId, data, userId);
 
-      expect(mockPrisma.stockMovement.create).toHaveBeenCalledWith(expect.objectContaining({
-        data: expect.objectContaining({
-          movementType: 'SALE',
-          quantity: -5
-        })
-      }));
+      expect(mockPrisma.stockMovement.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            movementType: 'SALE',
+            quantity: -5,
+          }),
+        }),
+      );
       expect(mockRedis.set).toHaveBeenCalled();
       expect(mockSocket.to).toHaveBeenCalledWith(`tenant:${tenantId}`);
-      expect(mockSocket.emit).toHaveBeenCalledWith('INVENTORY_UPDATE', expect.objectContaining({
-        event: 'STOCK_UPDATED',
-        newQuantity: 45
-      }));
+      expect(mockSocket.emit).toHaveBeenCalledWith(
+        'INVENTORY_UPDATE',
+        expect.objectContaining({
+          event: 'STOCK_UPDATED',
+          newQuantity: 45,
+        }),
+      );
     });
   });
 
@@ -103,7 +113,7 @@ describe('Real-Time Inventory Service Unit Tests', () => {
 
     it('should fetch from DB and update cache on Redis miss', async () => {
       mockRedis.get.mockResolvedValue(null);
-      mockPrisma.inventoryBatch.aggregate.mockResolvedValue({ _sum: { quantity: 100 } });
+      mockPrisma.inventoryBatch.aggregate.mockResolvedValue({ _sum: { availableQuantity: 100 } });
 
       const stock = await inventoryService.getLiveStock(tenantId, 'm1', 'br1');
 

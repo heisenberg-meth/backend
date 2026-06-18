@@ -45,16 +45,19 @@ class InventoryBatchRepository {
 
     const where = {
       tenantId,
-      branchId,
       quantity: { gt: 0 },
       deletedAt: null,
     };
 
+    if (branchId) {
+      where.branchId = branchId;
+    }
+
     if (days === 0) {
-      where.expiryDate = { lte: thresholdDate };
+      where.OR = [{ expiryDate: { lte: thresholdDate } }, { status: 'EXPIRED' }];
     } else {
       where.expiryDate = { gte: now, lte: thresholdDate };
-      where.status = 'ACTIVE';
+      where.status = { notIn: ['EXPIRED', 'ARCHIVED'] };
     }
 
     return prisma.inventoryBatch.findMany({

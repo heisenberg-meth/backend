@@ -5,15 +5,14 @@ class BatchRepository {
     const { status, medicineId, minQty } = filters;
     return prisma.inventoryBatch.findMany({
       where: {
-        medicine: {
-          tenantId,
-          deletedAt: null,
-          isActive: true,
-        },
+        tenantId,
         ...(status && { status }),
         ...(medicineId && { medicineId }),
         ...(minQty !== undefined && { quantity: { gte: minQty } }),
         deletedAt: null,
+        medicine: {
+          deletedAt: null,
+        },
       },
       include: { medicine: true, supplier: true },
       orderBy: { expiryDate: 'asc' },
@@ -24,12 +23,11 @@ class BatchRepository {
     return prisma.inventoryBatch.findFirst({
       where: {
         id,
-        medicine: {
-          tenantId,
-          deletedAt: null,
-          isActive: true,
-        },
+        tenantId,
         deletedAt: null,
+        medicine: {
+          deletedAt: null,
+        },
       },
       include: { medicine: true },
     });
@@ -46,21 +44,23 @@ class BatchRepository {
     const thresholdDate = new Date();
     thresholdDate.setDate(thresholdDate.getDate() + days);
 
-    const isExpiredCheck = days <= 0
-      ? { expiryDate: { lte: thresholdDate } }
-      : { expiryDate: { gte: new Date(), lte: thresholdDate } };
+    const isExpiredCheck =
+      days <= 0
+        ? {
+            OR: [{ expiryDate: { lte: thresholdDate } }, { status: 'EXPIRED' }],
+          }
+        : { expiryDate: { gte: new Date(), lte: thresholdDate } };
 
     return prisma.inventoryBatch.findMany({
       where: {
-        medicine: {
-          tenantId,
-          deletedAt: null,
-          isActive: true,
-        },
+        tenantId,
         ...isExpiredCheck,
-        status: { not: 'QUARANTINED' },
+        status: { notIn: ['QUARANTINED', 'ARCHIVED'] },
         quantity: { gt: 0 },
         deletedAt: null,
+        medicine: {
+          deletedAt: null,
+        },
       },
       include: { medicine: true },
       orderBy: { expiryDate: 'asc' },
