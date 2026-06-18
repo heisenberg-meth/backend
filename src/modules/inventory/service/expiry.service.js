@@ -1,30 +1,98 @@
-import inventoryBatchRepository from '../repository/inventory_batch.repository.js';
-import analyticsRepository from '../../analytics/repository/analytics.repository.js';
+import prisma from '../../../config/prisma.js';
 
 class ExpiryService {
   /**
-   * Get batches that are expiring within the specified days
+   * Helper to get date boundaries for expiry buckets
    */
-  async getNearExpiryBatches(tenantId, days = 30, branchId = null) {
-    return inventoryBatchRepository.getNearExpiry(tenantId, days, branchId);
+  getDateBoundaries() {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    const plus7 = new Date(today);
+    plus7.setDate(today.getDate() + 7);
+
+    const plus8 = new Date(today);
+    plus8.setDate(today.getDate() + 8);
+
+    const plus30 = new Date(today);
+    plus30.setDate(today.getDate() + 30);
+
+    const plus31 = new Date(today);
+    plus31.setDate(today.getDate() + 31);
+
+    const plus90 = new Date(today);
+    plus90.setDate(today.getDate() + 90);
+
+    return { today, plus7, plus8, plus30, plus31, plus90 };
   }
 
-  /**
-   * Get a dashboard summary of expiries
-   */
+  getExpiryWhereClause(bucket) {
+    const { today, plus7, plus8, plus30, plus31, plus90 } = this.getDateBoundaries();
+
+    switch (bucket) {
+      case 'EXPIRED':
+        return { expiryDate: { lt: today } };
+      case 'SEVEN_DAYS':
+        return { expiryDate: { gte: today, lte: plus7 } };
+      case 'THIRTY_DAYS':
+        return { expiryDate: { gte: plus8, lte: plus30 } };
+      case 'NINETY_DAYS':
+        return { expiryDate: { gte: plus31, lte: plus90 } };
+      case 'SAFE':
+        return { expiryDate: { gt: plus90 } };
+      default:
+        return {};
+    }
+  }
+
+  async getBatchesByBucket(tenantId, bucket, branchId = null, additionalWhere = {}) {
+    return prisma.inventoryBatch.findMany({
+      where: {
+        tenantId,
+        ...(branchId ? { branchId } : {}),
+        ...this.getExpiryWhereClause(bucket),
+        deletedAt: null,
+        availableQuantity: { gt: 0 },
+        ...additionalWhere,
+      },
+      include: {
+        medicine: { select: { id: true, name: true, genericName: true } },
+        supplier: { select: { id: true, name: true } },
+      },
+      orderBy: { expiryDate: 'asc' },
+    });
+  }
+
   async getExpirySummary(tenantId, branchId = null) {
-    const [expired, expiring30, expiring60, expiring90] = await Promise.all([
-      inventoryBatchRepository.getNearExpiry(tenantId, 0, branchId),
-      analyticsRepository.getExpiringCount(tenantId, 30, branchId),
-      analyticsRepository.getExpiringCount(tenantId, 60, branchId),
-      analyticsRepository.getExpiringCount(tenantId, 90, branchId),
+    const baseWhere = {
+      tenantId,
+      ...(branchId ? { branchId } : {}),
+      deletedAt: null,
+      availableQuantity: { gt: 0 },
+    };
+
+    const { today, plus7, plus8, plus30, plus31, plus90 } = this.getDateBoundaries();
+
+    const [expired, days7, days30, days90, safe] = await Promise.all([
+      prisma.inventoryBatch.count({ where: { ...baseWhere, expiryDate: { lt: today } } }),
+      prisma.inventoryBatch.count({
+        where: { ...baseWhere, expiryDate: { gte: today, lte: plus7 } },
+      }),
+      prisma.inventoryBatch.count({
+        where: { ...baseWhere, expiryDate: { gte: plus8, lte: plus30 } },
+      }),
+      prisma.inventoryBatch.count({
+        where: { ...baseWhere, expiryDate: { gte: plus31, lte: plus90 } },
+      }),
+      prisma.inventoryBatch.count({ where: { ...baseWhere, expiryDate: { gt: plus90 } } }),
     ]);
 
     return {
-      expired: expired.length,
-      expiring30Days: expiring30,
-      expiring60Days: expiring60,
-      expiring90Days: expiring90,
+      expired,
+      expiring7Days: days7,
+      expiring30Days: days30,
+      expiring90Days: days90,
+      safe,
     };
   }
 }

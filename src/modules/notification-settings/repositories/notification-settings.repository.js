@@ -27,12 +27,25 @@ class NotificationSettingsRepository {
   }
 
   async upsert(tenantId, data, branchId = null) {
-    return prisma.notificationSettings.upsert({
-      where: {
-        tenantId_branchId: { tenantId, branchId },
-      },
-      update: data,
-      create: { tenantId, branchId, ...data },
+    // Find existing record first (compound unique with null branchId doesn't work in Prisma upsert)
+    const existing = await prisma.notificationSettings.findFirst({
+      where: { tenantId, branchId },
+    });
+
+    if (existing) {
+      return prisma.notificationSettings.update({
+        where: { id: existing.id },
+        data,
+        include: {
+          channelConfigs: true,
+          escalationPolicies: { include: { rules: true } },
+          reminderRules: true,
+        },
+      });
+    }
+
+    return prisma.notificationSettings.create({
+      data: { tenantId, branchId, ...data },
       include: {
         channelConfigs: true,
         escalationPolicies: { include: { rules: true } },

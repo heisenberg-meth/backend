@@ -136,6 +136,35 @@ class ReturnService {
       tenantId,
     });
 
+    if (saleId) {
+      const saleToUpdate = await prisma.sale.findUnique({ where: { id: saleId } });
+      if (saleToUpdate) {
+        const newReturnedAmount = Number(saleToUpdate.returnedAmount || 0) + totalReturnAmount;
+        const newReturnCount = (saleToUpdate.returnCount || 0) + 1;
+
+        let newStatus = saleToUpdate.status;
+        let newPaymentStatus = saleToUpdate.paymentStatus;
+
+        if (newReturnedAmount >= Number(saleToUpdate.totalAmount)) {
+          newStatus = 'REFUNDED';
+          newPaymentStatus = 'REFUNDED';
+        } else {
+          newStatus = 'PARTIAL_RETURN';
+          newPaymentStatus = 'PARTIAL';
+        }
+
+        await prisma.sale.update({
+          where: { id: saleId },
+          data: {
+            returnedAmount: newReturnedAmount,
+            returnCount: newReturnCount,
+            status: newStatus,
+            paymentStatus: newPaymentStatus,
+          },
+        });
+      }
+    }
+
     logger.info(`[Return] Created ${returnNumber} for invoice ${invoice.invoiceNumber}`);
 
     return {

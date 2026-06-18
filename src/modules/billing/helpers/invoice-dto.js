@@ -4,8 +4,10 @@ export function normalizeInvoice(invoice) {
   const items = (invoice.items || []).map((item) => ({
     id: item.id || item.medicineId,
     medicineId: item.medicineId,
-    name: item.medicine?.name || item.medicineName || 'Unknown',
+    medicineName: item.medicine?.name || item.medicineName || item.name || 'Unknown',
+    name: item.medicine?.name || item.medicineName || item.name || 'Unknown',
     qty: Number(item.quantity || 0),
+    quantity: Number(item.quantity || 0),
     price: Number(item.unitPrice || 0),
     mrp: Number(item.mrp || item.unitPrice || 0),
     gst: Number(item.gstPercentage || 0),
@@ -34,7 +36,12 @@ export function normalizeInvoice(invoice) {
   return {
     id: invoice.id,
     invoiceId: invoice.invoiceId || invoice.id,
-    invoiceNumber: invoice.invoiceNumber || invoice.billNumber || `INV-${invoice.id.slice(0, 8)}`,
+    invoiceNumber:
+      invoice.invoiceNumber ||
+      invoice.invoice?.invoiceNumber ||
+      invoice.billNumber ||
+      invoice.invoice?.billNumber ||
+      `INV-${invoice.id.slice(0, 8)}`,
     createdAt: timestamp.toISOString(),
     date: timestamp.toISOString().split('T')[0],
     time: timestamp.toLocaleTimeString('en-US', {
@@ -43,19 +50,34 @@ export function normalizeInvoice(invoice) {
       hour12: true,
     }),
     status: invoice.status,
+    invoiceStatus: invoice.status,
     paymentStatus: invoice.paymentStatus,
+    paymentMode:
+      invoice.paymentMethod ||
+      invoice.paymentMode ||
+      (invoice.payments && invoice.payments[0]?.paymentMode) ||
+      'CASH',
     paymentMethod:
-      invoice.paymentMethod || (invoice.payments && invoice.payments[0]?.paymentMode) || 'CASH',
+      invoice.paymentMethod ||
+      invoice.paymentMode ||
+      (invoice.payments && invoice.payments[0]?.paymentMode) ||
+      'CASH',
     patient,
-    patientName: patient?.name || invoice.patientName || 'Walk-in Customer',
-    patientPhone: patient?.phone || invoice.patientPhone || 'N/A',
+    patientName: patient?.name || invoice.patientName || invoice.customerName || 'Walk-in Customer',
+    patientPhone: patient?.phone || invoice.patientPhone || invoice.phone || 'N/A',
+    phone: patient?.phone || invoice.patientPhone || invoice.phone || 'N/A',
     items,
     subtotal: Number(invoice.subtotal || 0),
+    discountAmount: Number(invoice.discountAmount || 0),
     discount: Number(invoice.discountAmount || 0),
+    gstAmount: Number(invoice.gstAmount || 0),
     gst: Number(invoice.gstAmount || 0),
+    totalAmount: Number(invoice.totalAmount || 0),
     total: Number(invoice.totalAmount || 0),
     paidAmount: Number(invoice.paidAmount || 0),
     balanceAmount: Number(invoice.balanceAmount || 0),
+    returnedAmount: Number(invoice.returnedAmount || 0),
+    returnCount: Number(invoice.returnCount || 0),
     notes: invoice.notes,
     pdfUrl: invoice.pdfUrl,
   };

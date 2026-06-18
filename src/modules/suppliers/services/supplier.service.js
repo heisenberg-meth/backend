@@ -339,7 +339,7 @@ class SupplierService {
       orderBy: { createdAt: 'desc' },
       select: { balanceAfter: true },
     });
-    return Number(lastEntry?.balanceAfter || 0);
+    return parseFloat(String(lastEntry?.balanceAfter || 0));
   }
 
   async getPurchaseOrders(id, tenantId, query) {

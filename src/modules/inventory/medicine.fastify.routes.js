@@ -2,6 +2,8 @@ import medicineController from './controller/medicine.fastify.controller.js';
 import categoryController from '../medicine-categories/fastify/category.fastify.controller.js';
 import manufacturerController from '../manufacturers/fastify/manufacturer.fastify.controller.js';
 import batchController from '../batches/fastify/batch.fastify.controller.js';
+import expiryMetricsController from './controller/expiry-metrics.controller.js';
+import inventoryReconciliationController from './controller/inventory-reconciliation.controller.js';
 import { authenticate, requireTenant } from '../../middleware/auth.fastify.js';
 import { requireBranch } from '../../middleware/requireBranch.js';
 import { requirePermission } from '../../middleware/permission.fastify.js';
@@ -12,6 +14,78 @@ async function medicineRoutes(fastify) {
   fastify.addHook('preHandler', authenticate);
   fastify.addHook('preHandler', requireTenant);
   fastify.addHook('preHandler', requireBranch);
+
+  // ═══════════════════════════════════════════════════════════════
+  // UNIFIED INVENTORY RECONCILIATION - Single Source of Truth
+  // ═══════════════════════════════════════════════════════════════
+  fastify.get(
+    '/reconciliation',
+    {
+      schema: {
+        tags: ['Inventory'],
+        summary: 'Get unified inventory reconciliation (Single Source of Truth)',
+        description: 'Returns inventory status counts that all modules must use',
+      },
+      preHandler: [requirePermission('VIEW_INVENTORY')],
+    },
+    inventoryReconciliationController.getReconciliation,
+  );
+
+  // ═══════════════════════════════════════════════════════════════
+  // UNIFIED EXPIRY METRICS - Single Source of Truth
+  // ═══════════════════════════════════════════════════════════════
+  fastify.get(
+    '/expiry-metrics',
+    {
+      schema: {
+        tags: ['Inventory', 'Expiry'],
+        summary: 'Get unified expiry metrics (Single Source of Truth)',
+        description: 'Returns expiry counts used by Dashboard, Expiry Page, Reports, Supplier Returns, and Bulk Disposal',
+      },
+      preHandler: [requirePermission('VIEW_INVENTORY')],
+    },
+    expiryMetricsController.getExpiryMetrics,
+  );
+
+  fastify.get(
+    '/expiry-audit',
+    {
+      schema: {
+        tags: ['Inventory', 'Expiry'],
+        summary: 'Audit endpoint - verify all modules show same numbers',
+      },
+      preHandler: [requirePermission('VIEW_INVENTORY')],
+    },
+    expiryMetricsController.expiryAudit,
+  );
+
+  // ═══════════════════════════════════════════════════════════════
+  // UNIFIED EXPIRY METRICS - Single Source of Truth
+  // ═══════════════════════════════════════════════════════════════
+  fastify.get(
+    '/expiry-metrics',
+    {
+      schema: {
+        tags: ['Inventory', 'Expiry'],
+        summary: 'Get unified expiry metrics (Single Source of Truth)',
+        description: 'Returns expiry counts used by Dashboard, Expiry Page, Reports, Supplier Returns, and Bulk Disposal',
+      },
+      preHandler: [requirePermission('VIEW_INVENTORY')],
+    },
+    expiryMetricsController.getExpiryMetrics,
+  );
+
+  fastify.get(
+    '/expiry-audit',
+    {
+      schema: {
+        tags: ['Inventory', 'Expiry'],
+        summary: 'Audit endpoint - verify all modules show same numbers',
+      },
+      preHandler: [requirePermission('VIEW_INVENTORY')],
+    },
+    expiryMetricsController.expiryAudit,
+  );
 
   fastify.get(
     '/medicines',

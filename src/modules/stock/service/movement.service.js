@@ -265,9 +265,7 @@ class MovementService {
     };
 
     const result = tx ? await execute(tx) : await prisma.$transaction(execute);
-    if (!tx) {
-      await cacheInvalidatorService.invalidateInventoryCaches(tenantId, medicineId);
-    }
+    await cacheInvalidatorService.invalidateInventoryCaches(tenantId, medicineId);
     return result;
   }
 }

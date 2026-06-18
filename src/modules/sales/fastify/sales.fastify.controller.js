@@ -8,6 +8,11 @@ class SalesFastifyController {
   async getSalesHistory(request, reply) {
     try {
       const { page, limit, startDate, endDate } = request.query;
+
+      if (startDate && endDate && new Date(startDate) > new Date(endDate)) {
+        return reply.code(400).send({ success: false, message: 'Invalid date range' });
+      }
+
       const history = await salesService.getSalesHistory(
         request.tenantId,
         parseInt(page) || 1,
@@ -98,7 +103,11 @@ class SalesFastifyController {
         refundAmount: request.body.refundAmount || 0,
         branchId: request.branchId || sale.branchId || null,
       };
-      const result = await refundService.createRefund(request.tenantId, refundData, request.user.id);
+      const result = await refundService.createRefund(
+        request.tenantId,
+        refundData,
+        request.user.id,
+      );
       return reply.send(success(result));
     } catch (error) {
       request.log.error({ err: error, endpoint: 'sales-refund' }, 'Sales error');

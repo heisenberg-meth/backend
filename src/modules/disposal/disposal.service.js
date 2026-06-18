@@ -5,14 +5,16 @@ import { mainQueue } from '../../queue/index.js';
 
 class DisposalService {
   async getExpiredBatches(tenantId, branchId = null) {
-    const now = new Date();
+    // Use startOfDay to ensure date-only comparison, avoiding UTC/IST timezone bugs
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
     const targetBranchId =
       branchId === 'null' || branchId === 'undefined' || !branchId ? null : branchId;
     const where = {
       tenantId,
-      OR: [{ expiryDate: { lt: now } }, { status: 'EXPIRED' }],
+      OR: [{ expiryDate: { lt: today } }, { status: 'EXPIRED' }],
       status: { not: 'ARCHIVED' },
-      quantity: { gt: 0 },
+      availableQuantity: { gt: 0 },
       deletedAt: null,
       medicine: { deletedAt: null },
     };
@@ -40,11 +42,11 @@ class DisposalService {
       dosageForm: b.medicine.dosageForm,
       batchNumber: b.batchNumber,
       expiryDate: b.expiryDate,
-      quantity: b.quantity,
+      quantity: b.availableQuantity,
       purchasePrice: Number(b.purchasePrice),
       sellingPrice: Number(b.sellingPrice),
       mrp: Number(b.mrp),
-      totalValue: Number(b.quantity) * Number(b.purchasePrice),
+      totalValue: Number(b.availableQuantity) * Number(b.purchasePrice),
       rackLocation: b.rackLocation,
       supplierId: b.supplierId,
       supplierName: b.supplier?.name,
@@ -52,14 +54,16 @@ class DisposalService {
   }
 
   async getExpiredOverview(tenantId, branchId = null) {
-    const now = new Date();
+    // Use startOfDay to ensure date-only comparison, avoiding UTC/IST timezone bugs
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
     const targetBranchId =
       branchId === 'null' || branchId === 'undefined' || !branchId ? null : branchId;
     const where = {
       tenantId,
-      OR: [{ expiryDate: { lt: now } }, { status: 'EXPIRED' }],
+      OR: [{ expiryDate: { lt: today } }, { status: 'EXPIRED' }],
       status: { not: 'ARCHIVED' },
-      quantity: { gt: 0 },
+      availableQuantity: { gt: 0 },
       deletedAt: null,
       medicine: { deletedAt: null },
     };
@@ -69,22 +73,28 @@ class DisposalService {
       where,
       select: {
         id: true,
-        quantity: true,
+        medicineId: true,
+        availableQuantity: true,
         purchasePrice: true,
         mrp: true,
       },
     });
 
     const totalItems = batches.length;
-    const totalUnits = batches.reduce((s, b) => s + b.quantity, 0);
+    const totalProducts = new Set(batches.map((b) => b.medicineId)).size;
+    const totalUnits = batches.reduce((s, b) => s + b.availableQuantity, 0);
     const totalValue = batches.reduce(
-      (s, b) => s + Number(b.quantity) * Number(b.purchasePrice),
+      (s, b) => s + Number(b.availableQuantity) * Number(b.purchasePrice),
       0,
     );
-    const totalMrpLoss = batches.reduce((s, b) => s + Number(b.quantity) * Number(b.mrp), 0);
+    const totalMrpLoss = batches.reduce(
+      (s, b) => s + Number(b.availableQuantity) * Number(b.mrp),
+      0,
+    );
 
     return {
-      totalExpiredProducts: totalItems,
+      totalExpiredProducts: totalProducts,
+      totalExpiredBatches: totalItems,
       totalUnits,
       totalInventoryValue: totalValue,
       totalMrpLoss,
