@@ -94,6 +94,7 @@ class MedicinePrismaService {
           },
           select: {
             quantity: true,
+            purchasePrice: true,
           },
         },
         inventory: {
@@ -122,6 +123,9 @@ class MedicinePrismaService {
       }
 
       if (stock <= maxReorderPoint) {
+        const latestBatch = m.inventoryBatches?.[0] || null;
+        const purchasePrice = latestBatch ? Number(latestBatch.purchasePrice || 0) : 0;
+
         alerts.push({
           id: m.id,
           name: m.name,
@@ -132,6 +136,7 @@ class MedicinePrismaService {
           supplierName: m.manufacturer?.name || null,
           supplierEmail: m.manufacturer?.contactEmail || null,
           supplierPhone: m.manufacturer?.phone || null,
+          purchaseCost: purchasePrice,
         });
       }
     }
