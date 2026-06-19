@@ -12,7 +12,7 @@ class ReportQueryService {
       where: {
         tenantId,
         createdAt: { gte: fromDate, lte: toDate },
-        status: { in: ['COMPLETED'] },
+        status: { in: ['PAID', 'FINALIZED'] },
       },
       include: {
         payments: true,
@@ -23,7 +23,7 @@ class ReportQueryService {
       where: {
         tenantId,
         createdAt: { gte: fromDate, lte: toDate },
-        status: { in: ['COMPLETED', 'APPROVED'] },
+        status: { in: ['REFUNDED', 'APPROVED'] },
       },
     });
 
@@ -79,7 +79,7 @@ class ReportQueryService {
         invoice: {
           tenantId,
           createdAt: { gte: fromDate, lte: toDate },
-          status: { in: ['COMPLETED'] },
+          status: { in: ['PAID', 'FINALIZED'] },
         },
       },
       _sum: {
