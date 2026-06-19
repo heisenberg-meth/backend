@@ -1,0 +1,6 @@
+-- AlterTable
+ALTER TABLE "Invoice"
+ADD COLUMN IF NOT EXISTS "discountType" VARCHAR(20);
+-- AlterTable
+ALTER TABLE "Sale"
+ADD COLUMN IF NOT EXISTS "returnedAmount" DECIMAL(12, 2) NOT NULL DEFAULT 0;
