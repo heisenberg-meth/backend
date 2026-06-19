@@ -779,9 +779,8 @@ class NotificationFastifyController {
 
   async getUserNotifications(request, reply) {
     try {
-      const { tenantId, id: userId } = request.user;
-      const { page = 1, limit = 50, isRead } = request.query;
-      const skip = (parseInt(page) - 1) * parseInt(limit);
+      const { id: userId } = request.user;
+      const { page = 1, limit = 50 } = request.query;
       const take = parseInt(limit);
 
       console.log('User ID:', userId);

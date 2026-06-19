@@ -1,23 +1,22 @@
 /**
  * InventoryStatusService - Single Source of Truth
- * 
+ *
  * ALL inventory status calculations MUST go through this service.
  * No module may calculate status independently.
- * 
+ *
  * Status Priority: Expired > Out Of Stock > Low Stock > In Stock
  * Every medicine belongs to exactly ONE status bucket.
  */
 
 import prisma from '../../../config/prisma.js';
 import cache from '../../../shared/services/cache.service.js';
-import logger from '../../../shared/utils/logger.js';
 
 const CACHE_TTL = 120; // 2 minutes
 
 class InventoryStatusService {
   /**
    * Calculate status for a single medicine based on its batches
-   * 
+   *
    * @param {Object} medicine - Medicine with inventoryBatches
    * @returns {string} Status: "EXPIRED" | "OUT_OF_STOCK" | "LOW_STOCK" | "IN_STOCK"
    */
@@ -25,15 +24,15 @@ class InventoryStatusService {
     if (!medicine) return 'IN_STOCK';
 
     const batches = medicine.inventoryBatches || [];
-    const activeBatches = batches.filter(b => b.availableQuantity > 0 && !b.deletedAt);
-    
+    const activeBatches = batches.filter((b) => b.availableQuantity > 0 && !b.deletedAt);
+
     const totalAvailable = activeBatches.reduce((sum, b) => sum + (b.availableQuantity || 0), 0);
     const reorderLevel = medicine.reorderLevel || medicine.reorderPoint || 10;
-    
+
     const now = new Date();
     now.setHours(0, 0, 0, 0);
-    
-    const hasExpiredBatches = activeBatches.some(b => {
+
+    const hasExpiredBatches = activeBatches.some((b) => {
       if (!b.expiryDate) return false;
       const expDate = new Date(b.expiryDate);
       expDate.setHours(0, 0, 0, 0);
@@ -44,47 +43,45 @@ class InventoryStatusService {
     if (hasExpiredBatches && totalAvailable > 0) {
       // Has expired batches but also has non-expired stock
       // Check if ALL stock is expired
-      const nonExpiredBatches = activeBatches.filter(b => {
+      const nonExpiredBatches = activeBatches.filter((b) => {
         if (!b.expiryDate) return true;
         const expDate = new Date(b.expiryDate);
         expDate.setHours(0, 0, 0, 0);
         return expDate > now;
       });
-      
+
       if (nonExpiredBatches.length === 0) {
         return 'EXPIRED';
       }
     }
-    
+
     if (totalAvailable === 0) {
       return 'OUT_OF_STOCK';
     }
-    
+
     if (totalAvailable <= reorderLevel) {
       return 'LOW_STOCK';
     }
-    
+
     return 'IN_STOCK';
   }
 
   /**
    * Get unified inventory metrics for a tenant
    * This is THE source of truth for all inventory counts
-   * 
+   *
    * @param {string} tenantId
    * @param {string|null} branchId
    * @returns {Object} Inventory metrics
    */
   async getInventoryMetrics(tenantId, branchId = null) {
     const cacheKey = `inventory:metrics:${tenantId}:${branchId || 'all'}`;
-    
+
     const cached = await cache.get(cacheKey);
     if (cached) return cached;
 
     const bId = branchId === 'null' || !branchId ? null : branchId;
-    const branchCondition = bId 
-      ? prisma.$queryRaw`AND ib."branchId" = ${bId}` 
-      : prisma.$queryRaw``;
+    const branchCondition = bId ? prisma.$queryRaw`AND ib."branchId" = ${bId}` : prisma.$queryRaw``;
 
     // Single atomic query - all metrics from one source
     const [metrics] = await prisma.$queryRaw`
@@ -140,7 +137,7 @@ class InventoryStatusService {
     const lowStock = Number(metrics?.low_stock || 0);
     const outOfStock = Number(metrics?.out_of_stock || 0);
     const expired = Number(metrics?.expired || 0);
-    
+
     // Verify reconciliation
     const calculatedTotal = inStock + lowStock + outOfStock + expired;
     const reconciliationOk = calculatedTotal === totalSku;

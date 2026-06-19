@@ -207,7 +207,6 @@ model Branch {
   storeProfiles             StoreProfile[]
   storeProfileDocuments     StoreProfileDocument[]
   users                     User[]
-  supplierCreditNotes       SupplierCreditNote[]
 
   @@unique([tenantId, code])
   @@index([tenantId])

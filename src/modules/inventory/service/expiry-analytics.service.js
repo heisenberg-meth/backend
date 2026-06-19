@@ -1,16 +1,15 @@
 /**
  * ExpiryAnalyticsService - Single Source of Truth
- * 
+ *
  * All expiry calculations MUST go through this service.
  * No module may calculate expiry independently.
- * 
+ *
  * Dashboard, Expiry Page, Reports, Supplier Returns, Bulk Disposal
  * all consume from this service only.
  */
 
 import prisma from '../../../config/prisma.js';
 import cache from '../../../shared/services/cache.service.js';
-import logger from '../../../shared/utils/logger.js';
 
 const CACHE_TTL = 120; // 2 minutes
 
@@ -18,21 +17,19 @@ class ExpiryAnalyticsService {
   /**
    * Get complete expiry metrics for a tenant
    * This is THE source of truth for all expiry counts
-   * 
+   *
    * @param {string} tenantId
    * @param {string|null} branchId - optional branch filter
    * @returns {Object} Expiry metrics
    */
   async getExpiryMetrics(tenantId, branchId = null) {
     const cacheKey = `expiry:metrics:${tenantId}:${branchId || 'all'}`;
-    
+
     const cached = await cache.get(cacheKey);
     if (cached) return cached;
 
     const bId = branchId === 'null' || !branchId ? null : branchId;
-    const branchCondition = bId 
-      ? prisma.$queryRaw`AND "branchId" = ${bId}` 
-      : prisma.$queryRaw``;
+    const branchCondition = bId ? prisma.$queryRaw`AND "branchId" = ${bId}` : prisma.$queryRaw``;
 
     // Single atomic query - all metrics from one source
     const [metrics] = await prisma.$queryRaw`
@@ -111,8 +108,10 @@ class ExpiryAnalyticsService {
     `;
 
     // Combined expiring 30D = expiring7 + expiring30 (for backward compatibility)
-    const expiring30CombinedBatches = Number(metrics?.expiring7Batches || 0) + Number(metrics?.expiring30Batches || 0);
-    const expiring30CombinedProducts = Number(metrics?.expiring7Products || 0) + Number(metrics?.expiring30Products || 0);
+    const expiring30CombinedBatches =
+      Number(metrics?.expiring7Batches || 0) + Number(metrics?.expiring30Batches || 0);
+    const expiring30CombinedProducts =
+      Number(metrics?.expiring7Products || 0) + Number(metrics?.expiring30Products || 0);
 
     const result = {
       // Dashboard metrics (product-based)
@@ -120,18 +119,18 @@ class ExpiryAnalyticsService {
       expiring7Products: Number(metrics?.expiring7Products || 0),
       expiring30Products: expiring30CombinedProducts,
       expiring90Products: Number(metrics?.expiring90Products || 0),
-      
+
       // Expiry page metrics (batch-based)
       expiredBatches: Number(metrics?.expiredBatches || 0),
       expiring7Batches: Number(metrics?.expiring7Batches || 0),
       expiring30Batches: Number(metrics?.expiring30Batches || 0),
       expiring30CombinedBatches: expiring30CombinedBatches,
       expiring90Batches: Number(metrics?.expiring90Batches || 0),
-      
+
       // Value metrics
       expiredUnits: Number(metrics?.expiredUnits || 0),
       expiredValue: Number(metrics?.expiredValue || 0),
-      
+
       // Total inventory
       totalBatches: Number(metrics?.totalBatches || 0),
       totalProducts: Number(metrics?.totalProducts || 0),
