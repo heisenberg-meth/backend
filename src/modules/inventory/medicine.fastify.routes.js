@@ -15,9 +15,6 @@ async function medicineRoutes(fastify) {
   fastify.addHook('preHandler', requireTenant);
   fastify.addHook('preHandler', requireBranch);
 
-  // ═══════════════════════════════════════════════════════════════
-  // UNIFIED INVENTORY RECONCILIATION - Single Source of Truth
-  // ═══════════════════════════════════════════════════════════════
   fastify.get(
     '/reconciliation',
     {
@@ -40,35 +37,8 @@ async function medicineRoutes(fastify) {
       schema: {
         tags: ['Inventory', 'Expiry'],
         summary: 'Get unified expiry metrics (Single Source of Truth)',
-        description: 'Returns expiry counts used by Dashboard, Expiry Page, Reports, Supplier Returns, and Bulk Disposal',
-      },
-      preHandler: [requirePermission('VIEW_INVENTORY')],
-    },
-    expiryMetricsController.getExpiryMetrics,
-  );
-
-  fastify.get(
-    '/expiry-audit',
-    {
-      schema: {
-        tags: ['Inventory', 'Expiry'],
-        summary: 'Audit endpoint - verify all modules show same numbers',
-      },
-      preHandler: [requirePermission('VIEW_INVENTORY')],
-    },
-    expiryMetricsController.expiryAudit,
-  );
-
-  // ═══════════════════════════════════════════════════════════════
-  // UNIFIED EXPIRY METRICS - Single Source of Truth
-  // ═══════════════════════════════════════════════════════════════
-  fastify.get(
-    '/expiry-metrics',
-    {
-      schema: {
-        tags: ['Inventory', 'Expiry'],
-        summary: 'Get unified expiry metrics (Single Source of Truth)',
-        description: 'Returns expiry counts used by Dashboard, Expiry Page, Reports, Supplier Returns, and Bulk Disposal',
+        description:
+          'Returns expiry counts used by Dashboard, Expiry Page, Reports, Supplier Returns, and Bulk Disposal',
       },
       preHandler: [requirePermission('VIEW_INVENTORY')],
     },
@@ -380,11 +350,6 @@ async function medicineRoutes(fastify) {
   fastify.get('/expiry/summary', {
     schema: { tags: ['Inventory'], summary: 'Get expiry summary' },
     handler: medicineController.getExpirySummary,
-  });
-
-  fastify.get('/expiry-metrics', {
-    schema: { tags: ['Inventory'], summary: 'Get unified inventory expiry metrics' },
-    handler: medicineController.getExpiryMetrics,
   });
 
   fastify.post(

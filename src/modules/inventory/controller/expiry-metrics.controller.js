@@ -1,23 +1,6 @@
-/**
- * Expiry Metrics API - Single Source of Truth
- * 
- * GET /inventory/expiry-metrics
- * 
- * Returns unified expiry metrics used by:
- * - Dashboard
- * - Expiry & Batch page
- * - Supplier Returns
- * - Bulk Disposal
- * - Reports
- */
-
 import expiryAnalyticsService from '../service/expiry-analytics.service.js';
 
 class ExpiryMetricsController {
-  /**
-   * Get expiry metrics for dashboard and expiry page
-   * GET /inventory/expiry-metrics?branchId=xxx
-   */
   async getExpiryMetrics(request, reply) {
     try {
       const tenantId = request.tenantId;
@@ -37,11 +20,14 @@ class ExpiryMetricsController {
         data: metrics,
       });
     } catch (error) {
-      request.log.error({
-        endpoint: 'expiry-metrics',
-        error: error.message,
-        stack: error.stack,
-      }, 'Failed to get expiry metrics');
+      request.log.error(
+        {
+          endpoint: 'expiry-metrics',
+          error: error.message,
+          stack: error.stack,
+        },
+        'Failed to get expiry metrics',
+      );
 
       return reply.code(500).send({
         success: false,
@@ -50,10 +36,6 @@ class ExpiryMetricsController {
     }
   }
 
-  /**
-   * Audit endpoint - verify all modules show same numbers
-   * GET /inventory/expiry-audit
-   */
   async expiryAudit(request, reply) {
     try {
       const tenantId = request.tenantId;
@@ -73,10 +55,13 @@ class ExpiryMetricsController {
         data: audit,
       });
     } catch (error) {
-      request.log.error({
-        endpoint: 'expiry-audit',
-        error: error.message,
-      }, 'Expiry audit failed');
+      request.log.error(
+        {
+          endpoint: 'expiry-audit',
+          error: error.message,
+        },
+        'Expiry audit failed',
+      );
 
       return reply.code(500).send({
         success: false,
