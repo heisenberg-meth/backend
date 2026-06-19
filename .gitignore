@@ -31,3 +31,4 @@ scripts/backup-db.sh
 scripts/restore-db.sh
 dump.rdb
 tests/load/setup-token.sh
+scratch/schema_diff.py

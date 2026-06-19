@@ -20,7 +20,7 @@ class UnifiedInventorySummaryService {
       }
     }
 
-    const bId = branchId === 'null' || !branchId ? null : branchId;
+    const bId = branchId === 'null' || branchId === 'undefined' || !branchId ? null : branchId;
     const branchCondition = bId ? Prisma.sql`ib."branchId" = ${bId}` : Prisma.sql`1=1`;
 
     // Use CURRENT_DATE (date-only) everywhere to avoid UTC/IST timezone mismatch.
@@ -31,12 +31,12 @@ class UnifiedInventorySummaryService {
       analyticsRepository.getInventoryValue(tenantId, bId),
       prisma.$queryRaw`
         SELECT COUNT(*)::int as count
-        FROM "InventoryBatch"
-        WHERE "tenantId" = ${tenantId}
-          AND "deletedAt" IS NULL
-          AND "availableQuantity" > 0
-          AND ("expiryDate"::date < CURRENT_DATE OR status = 'EXPIRED')
-          AND status != 'ARCHIVED'
+        FROM "InventoryBatch" ib
+        WHERE ib."tenantId" = ${tenantId}
+          AND ib."deletedAt" IS NULL
+          AND ib."availableQuantity" > 0
+          AND (ib."expiryDate"::date < CURRENT_DATE OR ib."status" = 'EXPIRED')
+          AND ib."status" != 'ARCHIVED'
           AND ${branchCondition}
       `.then((r) => Number(r[0]?.count || 0)),
       prisma.$queryRaw`
@@ -134,7 +134,7 @@ class UnifiedInventorySummaryService {
   }
 
   async getExpiryMetrics(tenantId, branchId = null) {
-    const bId = branchId === 'null' || !branchId ? null : branchId;
+    const bId = branchId === 'null' || branchId === 'undefined' || !branchId ? null : branchId;
     const branchCondition = bId ? Prisma.sql`AND "branchId" = ${bId}` : Prisma.sql``;
 
     // Single query to get all expiry metrics consistently.
@@ -236,7 +236,7 @@ class UnifiedInventorySummaryService {
   }
 
   async getValueSummary(tenantId, branchId = null) {
-    const bId = branchId === 'null' || !branchId ? null : branchId;
+    const bId = branchId === 'null' || branchId === 'undefined' || !branchId ? null : branchId;
     const branchCondition = bId ? Prisma.sql`ib."branchId" = ${bId}` : Prisma.sql`1=1`;
 
     const data = await prisma.$queryRaw`
@@ -262,7 +262,7 @@ class UnifiedInventorySummaryService {
   }
 
   async getCategoryBreakdown(tenantId, branchId = null) {
-    const bId = branchId === 'null' || !branchId ? null : branchId;
+    const bId = branchId === 'null' || branchId === 'undefined' || !branchId ? null : branchId;
     const branchCondition = bId ? Prisma.sql`ib."branchId" = ${bId}` : Prisma.sql`1=1`;
 
     const data = await prisma.$queryRaw`
@@ -291,7 +291,7 @@ class UnifiedInventorySummaryService {
   }
 
   async getHighValueStock(tenantId, branchId = null) {
-    const bId = branchId === 'null' || !branchId ? null : branchId;
+    const bId = branchId === 'null' || branchId === 'undefined' || !branchId ? null : branchId;
     const branchCondition = bId ? Prisma.sql`ib."branchId" = ${bId}` : Prisma.sql`1=1`;
 
     const data = await prisma.$queryRaw`
@@ -322,7 +322,7 @@ class UnifiedInventorySummaryService {
   }
 
   async getExpiryRisk(tenantId, branchId = null) {
-    const bId = branchId === 'null' || !branchId ? null : branchId;
+    const bId = branchId === 'null' || branchId === 'undefined' || !branchId ? null : branchId;
     const branchCondition = bId ? Prisma.sql`ib."branchId" = ${bId}` : Prisma.sql`1=1`;
 
     const data = await prisma.$queryRaw`
