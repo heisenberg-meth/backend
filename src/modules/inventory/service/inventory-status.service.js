@@ -8,6 +8,7 @@
  * Every medicine belongs to exactly ONE status bucket.
  */
 
+import { Prisma } from '@prisma/client';
 import prisma from '../../../config/prisma.js';
 import cache from '../../../shared/services/cache.service.js';
 
@@ -81,7 +82,7 @@ class InventoryStatusService {
     if (cached) return cached;
 
     const bId = branchId === 'null' || !branchId ? null : branchId;
-    const branchCondition = bId ? prisma.$queryRaw`AND ib."branchId" = ${bId}` : prisma.$queryRaw``;
+    const branchCondition = bId ? Prisma.sql`AND ib."branchId" = ${bId}` : Prisma.sql``;
 
     // Single atomic query - all metrics from one source
     const [metrics] = await prisma.$queryRaw`
