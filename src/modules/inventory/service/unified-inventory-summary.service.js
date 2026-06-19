@@ -66,19 +66,25 @@ class UnifiedInventorySummaryService {
       medicine_stats AS (
         SELECT
           COUNT(*) as total_medicines,
-          COUNT(*) FILTER (WHERE COALESCE(ba.total_quantity, 0) > 0) as medicines_with_stock,
-          COUNT(*) FILTER (WHERE COALESCE(ba.total_quantity, 0) = 0) as out_of_stock_medicines,
-          COUNT(*) FILTER (WHERE COALESCE(ba.total_quantity, 0) <= COALESCE(ba.max_reorder_point, m."reorderLevel", 0)) as low_stock_medicines,
-          COUNT(*) FILTER (WHERE COALESCE(ba.total_quantity, 0) > COALESCE(ba.max_reorder_point, m."reorderLevel", 0)) as in_stock_medicines,
+          COUNT(*) FILTER (WHERE m."isActive" = true AND COALESCE(ba.total_quantity, 0) > 0) as medicines_with_stock,
+          COUNT(*) FILTER (WHERE m."isActive" = true AND COALESCE(ba.total_quantity, 0) = 0) as out_of_stock_medicines,
+          COUNT(*) FILTER (
+            WHERE m."isActive" = true
+              AND COALESCE(ba.total_quantity, 0) > 0
+              AND COALESCE(ba.total_quantity, 0) <= COALESCE(ba.max_reorder_point, m."reorderLevel", 10)
+          ) as low_stock_medicines,
+          COUNT(*) FILTER (
+            WHERE m."isActive" = true
+              AND COALESCE(ba.total_quantity, 0) > COALESCE(ba.max_reorder_point, m."reorderLevel", 10)
+          ) as in_stock_medicines,
           COALESCE(SUM(ba.total_quantity), 0) as total_stock_units,
           COALESCE(SUM(ba.total_value), 0) as inventory_value,
           COALESCE(SUM(ba.expired_batches), 0) as expired_batches_count,
-          COUNT(*) FILTER (WHERE COALESCE(ba.total_quantity, 0) > 0 AND ba.expired_batches > 0) as medicines_with_expired
+          COUNT(*) FILTER (WHERE m."isActive" = true AND COALESCE(ba.total_quantity, 0) > 0 AND ba.expired_batches > 0) as medicines_with_expired
         FROM "Medicine" m
         LEFT JOIN batch_aggregates ba ON m."id" = ba."medicineId"
         WHERE m."tenantId" = ${tenantId}
           AND m."deletedAt" IS NULL
-          AND m."isActive" = true
       )
       SELECT
         total_medicines as "totalMedicines",
