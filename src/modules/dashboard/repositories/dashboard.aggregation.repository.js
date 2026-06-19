@@ -1,7 +1,7 @@
 import { Prisma } from '@prisma/client';
 import prisma from '../../../config/prisma.js';
-import analyticsRepository from '../../analytics/repository/analytics.repository.js';
 import { PURCHASE_ORDER_STATUS } from '../../../shared/constants/purchase-order-status.js';
+import unifiedInventorySummaryService from '../../inventory/service/unified-inventory-summary.service.js';
 
 class DashboardAggregationRepository {
   async getTodaySales(tenantId, branchId = null) {
@@ -135,62 +135,16 @@ class DashboardAggregationRepository {
   }
 
   async getStockHealthMetrics(tenantId, branchId = null) {
-    // Use startOfDay to ensure date-only comparison, avoiding UTC/IST timezone bugs
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-
-    const where = {
-      medicine: { tenantId, deletedAt: null },
-      deletedAt: null,
-    };
-    const batchWhere = { ...where };
-    const medicineWhere = {
-      tenantId,
-      deletedAt: null,
-      inventoryBatches: {
-        none: { availableQuantity: { gt: 0 }, deletedAt: null },
-      },
-    };
-    if (branchId) {
-      batchWhere.branchId = branchId;
-      medicineWhere.inventoryBatches.none.branchId = branchId;
-    }
-
-    const results = await Promise.allSettled([
-      prisma.inventoryBatch.count({ where: batchWhere }),
-      prisma.inventoryBatch.aggregate({
-        where: batchWhere,
-        _sum: { availableQuantity: true },
-      }),
-      prisma.inventoryBatch.count({
-        where: {
-          ...batchWhere,
-          OR: [{ expiryDate: { lt: today } }, { status: 'EXPIRED' }],
-          availableQuantity: { gt: 0 },
-        },
-      }),
-      analyticsRepository.getExpiring30Count(tenantId, branchId),
-      prisma.medicine.count({
-        where: medicineWhere,
-      }),
-      this.getLowStockCount(tenantId, branchId),
-    ]);
-
-    const totalBatches = results[0].status === 'fulfilled' ? results[0].value : 0;
-    const stockValueAgg =
-      results[1].status === 'fulfilled' ? results[1].value : { _sum: { quantity: 0 } };
-    const expiredCount = results[2].status === 'fulfilled' ? results[2].value : 0;
-    const expiringCount = results[3].status === 'fulfilled' ? results[3].value : 0;
-    const outOfStockCount = results[4].status === 'fulfilled' ? results[4].value : 0;
-    const lowStockCount = results[5].status === 'fulfilled' ? results[5].value : 0;
+    const summary = await unifiedInventorySummaryService.getUnifiedSummary(tenantId, branchId);
+    const expiry = await unifiedInventorySummaryService.getExpiryMetrics(tenantId, branchId);
 
     return {
-      totalBatches,
-      totalStock: stockValueAgg?._sum?.availableQuantity || 0,
-      expiredCount,
-      expiringCount,
-      outOfStockCount,
-      lowStockCount,
+      totalBatches: expiry.totalBatches,
+      totalStock: summary.totalStock,
+      expiredCount: expiry.expiredBatches,
+      expiringCount: expiry.expiring30CombinedBatches,
+      outOfStockCount: summary.outOfStockCount,
+      lowStockCount: summary.lowStockCount,
     };
   }
 

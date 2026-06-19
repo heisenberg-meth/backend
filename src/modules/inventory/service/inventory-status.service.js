@@ -8,9 +8,8 @@
  * Every medicine belongs to exactly ONE status bucket.
  */
 
-import { Prisma } from '@prisma/client';
-import prisma from '../../../config/prisma.js';
 import cache from '../../../shared/services/cache.service.js';
+import unifiedInventorySummaryService from './unified-inventory-summary.service.js';
 
 const CACHE_TTL = 120; // 2 minutes
 
@@ -82,81 +81,29 @@ class InventoryStatusService {
     if (cached) return cached;
 
     const bId = branchId === 'null' || !branchId ? null : branchId;
-    const branchCondition = bId ? Prisma.sql`AND ib."branchId" = ${bId}` : Prisma.sql``;
+    const summary = await unifiedInventorySummaryService.getUnifiedSummary(tenantId, bId);
+    const expiry = await unifiedInventorySummaryService.getExpiryMetrics(tenantId, bId);
 
-    // Single atomic query - all metrics from one source
-    const [metrics] = await prisma.$queryRaw`
-      WITH batch_data AS (
-        SELECT 
-          ib."medicineId",
-          ib."availableQuantity",
-          ib."purchasePrice",
-          ib."expiryDate",
-          ib."status" as batch_status,
-          m."reorderLevel",
-          m."name" as medicine_name
-        FROM "InventoryBatch" ib
-        JOIN "Medicine" m ON m."id" = ib."medicineId"
-        WHERE ib."tenantId" = ${tenantId}
-          AND ib."deletedAt" IS NULL
-          AND m."deletedAt" IS NULL
-          AND m."isActive" = true
-          ${branchCondition}
-      ),
-      medicine_stats AS (
-        SELECT
-          "medicineId",
-          SUM("availableQuantity") as total_stock,
-          MAX("reorderLevel") as reorder_level,
-          MIN("expiryDate") as earliest_expiry,
-          SUM(CASE WHEN "expiryDate"::date < CURRENT_DATE THEN "availableQuantity" ELSE 0 END) as expired_stock,
-          SUM(CASE WHEN "expiryDate"::date >= CURRENT_DATE AND "expiryDate"::date < CURRENT_DATE + INTERVAL '7 days' THEN "availableQuantity" ELSE 0 END) as expiring7_stock,
-          SUM(CASE WHEN "expiryDate"::date >= CURRENT_DATE + INTERVAL '7 days' AND "expiryDate"::date < CURRENT_DATE + INTERVAL '30 days' THEN "availableQuantity" ELSE 0 END) as expiring30_stock,
-          SUM(CASE WHEN "expiryDate"::date >= CURRENT_DATE + INTERVAL '30 days' AND "expiryDate"::date < CURRENT_DATE + INTERVAL '90 days' THEN "availableQuantity" ELSE 0 END) as expiring90_stock,
-          SUM("availableQuantity" * COALESCE("purchasePrice", 0)) as inventory_value
-        FROM batch_data
-        WHERE "availableQuantity" > 0
-        GROUP BY "medicineId"
-      )
-      SELECT
-        COUNT(*) as total_sku,
-        COUNT(*) FILTER (WHERE total_stock > 0 AND (earliest_expiry IS NULL OR earliest_expiry::date >= CURRENT_DATE) AND (earliest_expiry IS NULL OR earliest_expiry::date >= CURRENT_DATE + INTERVAL '30 days' OR earliest_expiry IS NULL OR total_stock > reorder_level)) as in_stock,
-        COUNT(*) FILTER (WHERE total_stock > 0 AND total_stock <= reorder_level AND (earliest_expiry IS NULL OR earliest_expiry::date >= CURRENT_DATE)) as low_stock,
-        COUNT(*) FILTER (WHERE total_stock = 0) as out_of_stock,
-        COUNT(*) FILTER (WHERE total_stock > 0 AND earliest_expiry IS NOT NULL AND earliest_expiry::date < CURRENT_DATE) as expired,
-        COUNT(*) FILTER (WHERE total_stock > 0 AND earliest_expiry IS NOT NULL AND earliest_expiry::date >= CURRENT_DATE AND earliest_expiry::date < CURRENT_DATE + INTERVAL '7 days') as expiring7,
-        COUNT(*) FILTER (WHERE total_stock > 0 AND earliest_expiry IS NOT NULL AND earliest_expiry::date >= CURRENT_DATE + INTERVAL '7 days' AND earliest_expiry::date < CURRENT_DATE + INTERVAL '30 days') as expiring30,
-        COUNT(*) FILTER (WHERE total_stock > 0 AND earliest_expiry IS NOT NULL AND earliest_expiry::date >= CURRENT_DATE + INTERVAL '30 days' AND earliest_expiry::date < CURRENT_DATE + INTERVAL '90 days') as expiring90,
-        COALESCE(SUM(inventory_value), 0) as inventory_value,
-        COALESCE(SUM(total_stock), 0) as total_stock,
-        COUNT(*) FILTER (WHERE total_stock > 0 AND expired_stock > 0 AND (total_stock - expired_stock) > 0) as mixed_status_count
-      FROM medicine_stats
-    `;
-
-    const totalSku = Number(metrics?.total_sku || 0);
-    const inStock = Number(metrics?.in_stock || 0);
-    const lowStock = Number(metrics?.low_stock || 0);
-    const outOfStock = Number(metrics?.out_of_stock || 0);
-    const expired = Number(metrics?.expired || 0);
-
-    // Verify reconciliation
-    const calculatedTotal = inStock + lowStock + outOfStock + expired;
-    const reconciliationOk = calculatedTotal === totalSku;
+    const calculatedTotal =
+      summary.inStockCount +
+      summary.lowStockCount +
+      summary.outOfStockCount +
+      expiry.expiredBatches;
 
     const result = {
-      totalSku,
-      inStock,
-      lowStock,
-      outOfStock,
-      expired,
-      expiring7: Number(metrics?.expiring7 || 0),
-      expiring30: Number(metrics?.expiring30 || 0),
-      expiring30Combined: Number(metrics?.expiring7 || 0) + Number(metrics?.expiring30 || 0),
-      expiring90: Number(metrics?.expiring90 || 0),
-      inventoryValue: Number(metrics?.inventory_value || 0),
-      totalStock: Number(metrics?.total_stock || 0),
-      mixedStatusCount: Number(metrics?.mixed_status_count || 0),
-      reconciliationOk,
+      totalSku: summary.totalMedicines,
+      inStock: summary.inStockCount,
+      lowStock: summary.lowStockCount,
+      outOfStock: summary.outOfStockCount,
+      expired: expiry.expiredBatches,
+      expiring7: expiry.expiring7Batches,
+      expiring30: expiry.expiring30Batches,
+      expiring30Combined: expiry.expiring30CombinedBatches,
+      expiring90: expiry.expiring90Batches,
+      inventoryValue: summary.inventoryValue,
+      totalStock: summary.totalStock,
+      mixedStatusCount: 0,
+      reconciliationOk: calculatedTotal === summary.totalMedicines,
       calculatedTotal,
     };
 

@@ -1,6 +1,7 @@
 import prisma from '../../../config/prisma.js';
 import dashboardAggregationService from '../aggregations/dashboard.aggregation.service.js';
 import expiryAnalyticsService from '../../inventory/service/expiry-analytics.service.js';
+import unifiedInventorySummaryService from '../../inventory/service/unified-inventory-summary.service.js';
 
 class DashboardFastifyController {
   async getDashboardSummary(request, reply) {
@@ -14,30 +15,27 @@ class DashboardFastifyController {
       today.setHours(0, 0, 0, 0);
       const startOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
 
-      const [todaySalesAggRes, monthlySalesAggRes, stockAggRes, invoiceCountRes, expiryMetricsRes] =
-        await Promise.allSettled([
-          prisma.sale.aggregate({
-            where: { tenantId, ...(branchId && { branchId }), soldAt: { gte: today } },
-            _sum: { totalAmount: true },
-          }),
-          prisma.sale.aggregate({
-            where: { tenantId, ...(branchId && { branchId }), soldAt: { gte: startOfMonth } },
-            _sum: { totalAmount: true },
-          }),
-          prisma.inventoryBatch.aggregate({
-            where: {
-              tenantId,
-              ...(branchId && { branchId }),
-              deletedAt: null,
-              medicine: { deletedAt: null, isActive: true },
-            },
-            _sum: { quantity: true },
-          }),
-          prisma.invoice.count({
-            where: { tenantId, ...(branchId && { branchId }), createdAt: { gte: today } },
-          }),
-          expiryAnalyticsService.getExpiryMetrics(tenantId, branchId),
-        ]);
+      const [
+        todaySalesAggRes,
+        monthlySalesAggRes,
+        inventorySummaryRes,
+        invoiceCountRes,
+        expiryMetricsRes,
+      ] = await Promise.allSettled([
+        prisma.sale.aggregate({
+          where: { tenantId, ...(branchId && { branchId }), soldAt: { gte: today } },
+          _sum: { totalAmount: true },
+        }),
+        prisma.sale.aggregate({
+          where: { tenantId, ...(branchId && { branchId }), soldAt: { gte: startOfMonth } },
+          _sum: { totalAmount: true },
+        }),
+        unifiedInventorySummaryService.getUnifiedSummary(tenantId, branchId),
+        prisma.invoice.count({
+          where: { tenantId, ...(branchId && { branchId }), createdAt: { gte: today } },
+        }),
+        expiryAnalyticsService.getExpiryMetrics(tenantId, branchId),
+      ]);
 
       const todaySalesAgg =
         todaySalesAggRes.status === 'fulfilled'
@@ -47,24 +45,26 @@ class DashboardFastifyController {
         monthlySalesAggRes.status === 'fulfilled'
           ? monthlySalesAggRes.value
           : { _sum: { totalAmount: 0 } };
-      const stockAgg =
-        stockAggRes.status === 'fulfilled' ? stockAggRes.value : { _sum: { quantity: 0 } };
+      const inventorySummary =
+        inventorySummaryRes.status === 'fulfilled' ? inventorySummaryRes.value : { totalStock: 0 };
       const invoiceCount = invoiceCountRes.status === 'fulfilled' ? invoiceCountRes.value : 0;
-      const expiryMetrics = expiryMetricsRes.status === 'fulfilled' ? expiryMetricsRes.value : {
-        expiredProducts: 0,
-        expiring30Products: 0,
-        expiredUnits: 0,
-        expiredValue: 0,
-      };
+      const expiryMetrics =
+        expiryMetricsRes.status === 'fulfilled'
+          ? expiryMetricsRes.value
+          : {
+              expiredProducts: 0,
+              expiring30Products: 0,
+              expiredUnits: 0,
+              expiredValue: 0,
+            };
 
       return reply.send({
         success: true,
         data: {
           todaySales: todaySalesAgg?._sum?.totalAmount || 0,
           monthlySales: monthlySalesAgg?._sum?.totalAmount || 0,
-          stockValue: stockAgg?._sum?.quantity || 0,
+          stockValue: inventorySummary.totalStock,
           totalInvoices: invoiceCount,
-          // Dashboard uses PRODUCT counts (unique medicines)
           expiredMedicines: expiryMetrics.expiredProducts,
           expiring30Medicines: expiryMetrics.expiring30Products,
           expiring7Medicines: expiryMetrics.expiring7Products,

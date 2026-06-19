@@ -3,7 +3,6 @@ import prisma from '../../../config/prisma.js';
 import redisClient from '../../../config/redis.js';
 import logger from '../../../shared/utils/logger.js';
 import { scanKeys } from '../../../shared/utils/scan-keys.js';
-import analyticsRepository from '../../analytics/repository/analytics.repository.js';
 
 class UnifiedInventorySummaryService {
   async getUnifiedSummary(tenantId, branchId = null, forceRefresh = false) {
@@ -21,24 +20,12 @@ class UnifiedInventorySummaryService {
     }
 
     const bId = branchId === 'null' || branchId === 'undefined' || !branchId ? null : branchId;
-    const branchCondition = bId ? Prisma.sql`ib."branchId" = ${bId}` : Prisma.sql`1=1`;
 
     // Use CURRENT_DATE (date-only) everywhere to avoid UTC/IST timezone mismatch.
     // A medicine is expired when expiryDate::date < CURRENT_DATE.
     // expiryDate = today means "expires today" = NOT yet expired.
-    const [expiringCount, inventoryValue, trueExpiredCount, [summary]] = await Promise.all([
-      analyticsRepository.getExpiring30Count(tenantId, bId),
-      analyticsRepository.getInventoryValue(tenantId, bId),
-      prisma.$queryRaw`
-        SELECT COUNT(*)::int as count
-        FROM "InventoryBatch" ib
-        WHERE ib."tenantId" = ${tenantId}
-          AND ib."deletedAt" IS NULL
-          AND ib."availableQuantity" > 0
-          AND (ib."expiryDate"::date < CURRENT_DATE OR ib."status" = 'EXPIRED')
-          AND ib."status" != 'ARCHIVED'
-          AND ${branchCondition}
-      `.then((r) => Number(r[0]?.count || 0)),
+    const [expiryMetrics, [summary]] = await Promise.all([
+      this.getExpiryMetrics(tenantId, bId),
       prisma.$queryRaw`
       WITH batch_aggregates AS (
         SELECT 
@@ -60,7 +47,7 @@ class UnifiedInventorySummaryService {
           AND ib."deletedAt" IS NULL
           AND m."deletedAt" IS NULL
           AND m."isActive" = true
-          AND ${branchCondition}
+          ${bId ? Prisma.sql`AND ib."branchId" = ${bId}` : Prisma.empty}
         GROUP BY ib."medicineId"
       ),
       medicine_stats AS (
@@ -103,19 +90,19 @@ class UnifiedInventorySummaryService {
     const result = {
       totalMedicines: Number(summary?.totalMedicines || 0),
       totalStock: Number(summary?.totalStock || 0),
-      inventoryValue: Number(inventoryValue || 0),
+      inventoryValue: Number(summary?.inventoryValue || 0),
       lowStockCount: Number(summary?.lowStockCount || 0),
       outOfStockCount: Number(summary?.outOfStockCount || 0),
-      expiredBatches: Number(trueExpiredCount || 0),
-      expiringBatches: Number(expiringCount || 0),
+      expiredBatches: Number(expiryMetrics?.expiredBatches || 0),
+      expiringBatches: Number(expiryMetrics?.expiring30 || 0),
       inStockCount: Number(summary?.inStockCount || 0),
       medicinesWithExpired: Number(summary?.medicinesWithExpired || 0),
       totalProducts: Number(summary?.totalProducts || 0),
       // Legacy compatibility
       lowStock: Number(summary?.lowStockCount || 0),
       outOfStock: Number(summary?.outOfStockCount || 0),
-      expired: Number(trueExpiredCount || 0),
-      expiring30d: Number(expiringCount || 0),
+      expired: Number(expiryMetrics?.expiredBatches || 0),
+      expiring30d: Number(expiryMetrics?.expiring30 || 0),
       inStock: Number(summary?.inStockCount || 0),
     };
 
@@ -141,7 +128,6 @@ class UnifiedInventorySummaryService {
 
   async getExpiryMetrics(tenantId, branchId = null) {
     const bId = branchId === 'null' || branchId === 'undefined' || !branchId ? null : branchId;
-    const branchCondition = bId ? Prisma.sql`AND "branchId" = ${bId}` : Prisma.sql``;
 
     // Single query to get all expiry metrics consistently.
     // Uses CURRENT_DATE (date-only) to avoid UTC/IST timezone bugs.
@@ -149,59 +135,114 @@ class UnifiedInventorySummaryService {
     // Uses availableQuantity (remaining stock) not quantity (original stock).
     const [metrics] = await prisma.$queryRaw`
       SELECT
+        -- Expired: expiryDate < TODAY AND availableQuantity > 0
         COUNT(*) FILTER (
-          WHERE ("expiryDate"::date < CURRENT_DATE OR status = 'EXPIRED')
+          WHERE (ib."expiryDate"::date < CURRENT_DATE OR ib.status = 'EXPIRED')
+            AND ib."availableQuantity" > 0
         )::int as "expiredBatches",
-        COUNT(DISTINCT "medicineId") FILTER (
-          WHERE ("expiryDate"::date < CURRENT_DATE OR status = 'EXPIRED')
+        
+        COUNT(DISTINCT ib."medicineId") FILTER (
+          WHERE (ib."expiryDate"::date < CURRENT_DATE OR ib.status = 'EXPIRED')
+            AND ib."availableQuantity" > 0
         )::int as "expiredProducts",
-        COALESCE(SUM("availableQuantity") FILTER (
-          WHERE ("expiryDate"::date < CURRENT_DATE OR status = 'EXPIRED')
+        
+        COALESCE(SUM(ib."availableQuantity") FILTER (
+          WHERE (ib."expiryDate"::date < CURRENT_DATE OR ib.status = 'EXPIRED')
+            AND ib."availableQuantity" > 0
         ), 0)::int as "expiredUnits",
-        COALESCE(SUM("availableQuantity" * COALESCE("purchasePrice", 0)) FILTER (
-          WHERE ("expiryDate"::date < CURRENT_DATE OR status = 'EXPIRED')
+        
+        COALESCE(SUM(ib."availableQuantity" * COALESCE(ib."purchasePrice", 0)) FILTER (
+          WHERE (ib."expiryDate"::date < CURRENT_DATE OR ib.status = 'EXPIRED')
+            AND ib."availableQuantity" > 0
         ), 0)::numeric as "expiredValue",
+
+        -- Expiring 7 Days: TODAY <= expiryDate <= TODAY+7
         COUNT(*) FILTER (
-          WHERE status != 'EXPIRED'
-            AND "expiryDate"::date >= CURRENT_DATE
-            AND "expiryDate"::date < CURRENT_DATE + INTERVAL '7 days'
-        )::int as "expiring7",
+          WHERE ib.status != 'EXPIRED'
+            AND ib."expiryDate"::date >= CURRENT_DATE
+            AND ib."expiryDate"::date <= CURRENT_DATE + INTERVAL '7 days'
+            AND ib."availableQuantity" > 0
+        )::int as "expiring7Batches",
+        
+        COUNT(DISTINCT ib."medicineId") FILTER (
+          WHERE ib.status != 'EXPIRED'
+            AND ib."expiryDate"::date >= CURRENT_DATE
+            AND ib."expiryDate"::date <= CURRENT_DATE + INTERVAL '7 days'
+            AND ib."availableQuantity" > 0
+        )::int as "expiring7Products",
+
+        -- Expiring 30 Days: TODAY+8 <= expiryDate <= TODAY+30
         COUNT(*) FILTER (
-          WHERE status != 'EXPIRED'
-            AND "expiryDate"::date >= CURRENT_DATE
-            AND "expiryDate"::date < CURRENT_DATE + INTERVAL '30 days'
-        )::int as "expiring30",
+          WHERE ib.status != 'EXPIRED'
+            AND ib."expiryDate"::date > CURRENT_DATE + INTERVAL '7 days'
+            AND ib."expiryDate"::date <= CURRENT_DATE + INTERVAL '30 days'
+            AND ib."availableQuantity" > 0
+        )::int as "expiring30Batches",
+        
+        COUNT(DISTINCT ib."medicineId") FILTER (
+          WHERE ib.status != 'EXPIRED'
+            AND ib."expiryDate"::date > CURRENT_DATE + INTERVAL '7 days'
+            AND ib."expiryDate"::date <= CURRENT_DATE + INTERVAL '30 days'
+            AND ib."availableQuantity" > 0
+        )::int as "expiring30Products",
+
+        -- Expiring 90 Days: TODAY+31 <= expiryDate <= TODAY+90
         COUNT(*) FILTER (
-          WHERE status != 'EXPIRED'
-            AND "expiryDate"::date >= CURRENT_DATE
-            AND "expiryDate"::date < CURRENT_DATE + INTERVAL '90 days'
-        )::int as "expiring90",
-        COUNT(*) FILTER (
-          WHERE "expiryDate"::date >= CURRENT_DATE
-            AND status != 'EXPIRED'
-        )::int as "safeBatches",
-        COUNT(*)::int as "totalBatches"
-      FROM "InventoryBatch"
-      WHERE "tenantId" = ${tenantId}
-        AND "deletedAt" IS NULL
-        AND "availableQuantity" > 0
-        AND status != 'ARCHIVED'
-        ${branchCondition}
+          WHERE ib.status != 'EXPIRED'
+            AND ib."expiryDate"::date > CURRENT_DATE + INTERVAL '30 days'
+            AND ib."expiryDate"::date <= CURRENT_DATE + INTERVAL '90 days'
+            AND ib."availableQuantity" > 0
+        )::int as "expiring90Batches",
+        
+        COUNT(DISTINCT ib."medicineId") FILTER (
+          WHERE ib.status != 'EXPIRED'
+            AND ib."expiryDate"::date > CURRENT_DATE + INTERVAL '30 days'
+            AND ib."expiryDate"::date <= CURRENT_DATE + INTERVAL '90 days'
+            AND ib."availableQuantity" > 0
+        )::int as "expiring90Products",
+
+        -- Total inventory
+        COUNT(*)::int as "totalBatches",
+        COUNT(DISTINCT ib."medicineId")::int as "totalProducts",
+        COALESCE(SUM(ib."availableQuantity"), 0)::int as "totalUnits"
+
+      FROM "InventoryBatch" ib
+      WHERE ib."tenantId" = ${tenantId}
+        AND ib."deletedAt" IS NULL
+        AND ib."availableQuantity" > 0
+        AND ib.status != 'ARCHIVED'
+        ${bId ? Prisma.sql`AND ib."branchId" = ${bId}` : Prisma.empty}
     `;
 
+    const expiring30CombinedBatches =
+      Number(metrics?.expiring7Batches || 0) + Number(metrics?.expiring30Batches || 0);
+    const expiring30CombinedProducts =
+      Number(metrics?.expiring7Products || 0) + Number(metrics?.expiring30Products || 0);
+
     return {
-      // Legacy fields (batch counts) — kept for backward compatibility
+      // Legacy fields (batch counts)
       expired: Number(metrics?.expiredBatches || 0),
-      expiring7: Number(metrics?.expiring7 || 0),
-      expiring30: Number(metrics?.expiring30 || 0),
-      expiring90: Number(metrics?.expiring90 || 0),
+      expiring7: Number(metrics?.expiring7Batches || 0),
+      expiring30: expiring30CombinedBatches,
+      expiring90: Number(metrics?.expiring90Batches || 0),
       // New detailed fields
       expiredProducts: Number(metrics?.expiredProducts || 0),
+      expiring7Products: Number(metrics?.expiring7Products || 0),
+      expiring30Products: expiring30CombinedProducts,
+      expiring90Products: Number(metrics?.expiring90Products || 0),
+
       expiredBatches: Number(metrics?.expiredBatches || 0),
+      expiring7Batches: Number(metrics?.expiring7Batches || 0),
+      expiring30Batches: Number(metrics?.expiring30Batches || 0),
+      expiring30CombinedBatches: expiring30CombinedBatches,
+      expiring90Batches: Number(metrics?.expiring90Batches || 0),
+
       expiredUnits: Number(metrics?.expiredUnits || 0),
       expiredValue: Number(metrics?.expiredValue || 0),
-      safeBatches: Number(metrics?.safeBatches || 0),
+
       totalBatches: Number(metrics?.totalBatches || 0),
+      totalProducts: Number(metrics?.totalProducts || 0),
+      totalUnits: Number(metrics?.totalUnits || 0),
     };
   }
 
@@ -243,21 +284,20 @@ class UnifiedInventorySummaryService {
 
   async getValueSummary(tenantId, branchId = null) {
     const bId = branchId === 'null' || branchId === 'undefined' || !branchId ? null : branchId;
-    const branchCondition = bId ? Prisma.sql`ib."branchId" = ${bId}` : Prisma.sql`1=1`;
 
     const data = await prisma.$queryRaw`
       SELECT 
-        SUM(ib."quantity" * COALESCE(ib."purchasePrice", 0)) as "totalValue",
-        SUM(ib."quantity" * COALESCE(ib."sellingPrice", ib."mrp", 0)) as "retailValue",
-        SUM(ib."quantity" * COALESCE(ib."sellingPrice", ib."mrp", 0)) - SUM(ib."quantity" * COALESCE(ib."purchasePrice", 0)) as "potentialProfit"
+        SUM(ib."availableQuantity" * COALESCE(ib."purchasePrice", 0)) as "totalValue",
+        SUM(ib."availableQuantity" * COALESCE(ib."sellingPrice", ib."mrp", 0)) as "retailValue",
+        SUM(ib."availableQuantity" * COALESCE(ib."sellingPrice", ib."mrp", 0)) - SUM(ib."availableQuantity" * COALESCE(ib."purchasePrice", 0)) as "potentialProfit"
       FROM "InventoryBatch" ib
       INNER JOIN "Medicine" m ON ib."medicineId" = m."id"
       WHERE m."tenantId" = ${tenantId}
         AND ib."deletedAt" IS NULL
         AND m."deletedAt" IS NULL
         AND m."isActive" = true
-        AND ib."quantity" > 0
-        AND ${branchCondition}
+        AND ib."availableQuantity" > 0
+        ${bId ? Prisma.sql`AND ib."branchId" = ${bId}` : Prisma.empty}
     `;
 
     return {
@@ -269,13 +309,12 @@ class UnifiedInventorySummaryService {
 
   async getCategoryBreakdown(tenantId, branchId = null) {
     const bId = branchId === 'null' || branchId === 'undefined' || !branchId ? null : branchId;
-    const branchCondition = bId ? Prisma.sql`ib."branchId" = ${bId}` : Prisma.sql`1=1`;
 
     const data = await prisma.$queryRaw`
       SELECT 
         c."name" as category,
-        SUM(ib."quantity" * COALESCE(ib."purchasePrice", 0)) as value,
-        SUM(ib."quantity") as quantity
+        SUM(ib."availableQuantity" * COALESCE(ib."purchasePrice", 0)) as value,
+        SUM(ib."availableQuantity") as quantity
       FROM "InventoryBatch" ib
       INNER JOIN "Medicine" m ON ib."medicineId" = m."id"
       LEFT JOIN "MedicineCategory" c ON m."categoryId" = c."id"
@@ -283,8 +322,8 @@ class UnifiedInventorySummaryService {
         AND ib."deletedAt" IS NULL
         AND m."deletedAt" IS NULL
         AND m."isActive" = true
-        AND ib."quantity" > 0
-        AND ${branchCondition}
+        AND ib."availableQuantity" > 0
+        ${bId ? Prisma.sql`AND ib."branchId" = ${bId}` : Prisma.empty}
       GROUP BY c."name"
       ORDER BY value DESC
     `;
@@ -298,22 +337,21 @@ class UnifiedInventorySummaryService {
 
   async getHighValueStock(tenantId, branchId = null) {
     const bId = branchId === 'null' || branchId === 'undefined' || !branchId ? null : branchId;
-    const branchCondition = bId ? Prisma.sql`ib."branchId" = ${bId}` : Prisma.sql`1=1`;
 
     const data = await prisma.$queryRaw`
       SELECT 
         m."name",
         m."genericName",
-        SUM(ib."quantity") as quantity,
-        SUM(ib."quantity" * COALESCE(ib."purchasePrice", 0)) as "totalValue"
+        SUM(ib."availableQuantity") as quantity,
+        SUM(ib."availableQuantity" * COALESCE(ib."purchasePrice", 0)) as "totalValue"
       FROM "InventoryBatch" ib
       INNER JOIN "Medicine" m ON ib."medicineId" = m."id"
       WHERE m."tenantId" = ${tenantId}
         AND ib."deletedAt" IS NULL
         AND m."deletedAt" IS NULL
         AND m."isActive" = true
-        AND ib."quantity" > 0
-        AND ${branchCondition}
+        AND ib."availableQuantity" > 0
+        ${bId ? Prisma.sql`AND ib."branchId" = ${bId}` : Prisma.empty}
       GROUP BY m."id", m."name", m."genericName"
       ORDER BY "totalValue" DESC
       LIMIT 10
@@ -329,7 +367,6 @@ class UnifiedInventorySummaryService {
 
   async getExpiryRisk(tenantId, branchId = null) {
     const bId = branchId === 'null' || branchId === 'undefined' || !branchId ? null : branchId;
-    const branchCondition = bId ? Prisma.sql`ib."branchId" = ${bId}` : Prisma.sql`1=1`;
 
     const data = await prisma.$queryRaw`
       SELECT 
@@ -348,7 +385,7 @@ class UnifiedInventorySummaryService {
         AND m."deletedAt" IS NULL
         AND m."isActive" = true
         AND ib."availableQuantity" > 0
-        AND ${branchCondition}
+        ${bId ? Prisma.sql`AND ib."branchId" = ${bId}` : Prisma.empty}
       GROUP BY risk_category
     `;
 
