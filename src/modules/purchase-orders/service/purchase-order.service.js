@@ -118,6 +118,140 @@ class PurchaseOrderService {
     return order;
   }
 
+  async createReorder(tenantId, userId, { medicineId, quantity }) {
+    if (!medicineId) throw new Error('medicineId is required');
+    if (!quantity || quantity <= 0) throw new Error('Quantity must be greater than zero');
+
+    // 1. Load medicine with its inventory and last supplier batch
+    const medicine = await prisma.medicine.findFirst({
+      where: { id: medicineId, tenantId, deletedAt: null },
+      include: {
+        inventory: { where: { tenantId }, take: 1 },
+        inventoryBatches: {
+          where: { tenantId, deletedAt: null },
+          orderBy: { createdAt: 'desc' },
+          take: 1,
+          include: { supplier: { select: { id: true, name: true } } },
+        },
+      },
+    });
+
+    if (!medicine) throw new Error('Medicine not found or has been deleted');
+
+    // 2. Resolve supplier — prefer last batch supplier, else medicine-level supplier
+    const lastBatch = medicine.inventoryBatches?.[0];
+    const supplierId = lastBatch?.supplierId ?? null;
+    const supplier = lastBatch?.supplier ?? null;
+
+    if (!supplierId) {
+      throw new Error(
+        `No supplier configured for ${medicine.name}. Please add a supplier via the Suppliers module first.`,
+      );
+    }
+
+    // 3. Resolve pricing from last batch or medicine defaults
+    const purchasePrice = Number(lastBatch?.purchasePrice ?? medicine.purchasePrice ?? 0);
+    const sellingPrice = Number(lastBatch?.sellingPrice ?? medicine.sellingPrice ?? purchasePrice * 1.2);
+    const mrp = Number(lastBatch?.mrp ?? medicine.mrp ?? sellingPrice);
+    const gstPercentage = Number(medicine.gstPercentage ?? 0);
+
+    const currentStock = medicine.inventory?.[0]?.currentStock ?? 0;
+    const reorderLevel = medicine.reorderLevel ?? medicine.reorderPoint ?? 10;
+
+    // 4. Generate PO number
+    const now = new Date();
+    const dateStr =
+      now.getFullYear() +
+      String(now.getMonth() + 1).padStart(2, '0') +
+      String(now.getDate()).padStart(2, '0');
+    const random = Math.floor(1000 + Math.random() * 9000);
+    const orderNumber = `PO-${dateStr}-${random}`;
+
+    // 5. Resolve branchId
+    let branchId = null;
+    const creator = await prisma.user.findUnique({ where: { id: userId }, select: { branchId: true } });
+    branchId = creator?.branchId;
+    if (!branchId) {
+      const firstBranch = await prisma.branch.findFirst({ where: { tenantId }, select: { id: true } });
+      branchId = firstBranch?.id;
+    }
+
+    const subtotal = Number((quantity * purchasePrice).toFixed(2));
+    const gstAmount = Number((subtotal * gstPercentage / 100).toFixed(2));
+    const totalAmount = Number((subtotal + gstAmount).toFixed(2));
+
+    // 6. Create Purchase Order in a transaction
+    const order = await prisma.$transaction(async (tx) => {
+      const po = await tx.purchaseOrder.create({
+        data: {
+          tenantId,
+          supplierId,
+          orderNumber,
+          status: 'DRAFT',
+          branchId,
+          subtotal,
+          gstAmount,
+          totalAmount,
+          notes: `Auto-generated reorder from Inventory. Medicine: ${medicine.name}, Current Stock: ${currentStock}, Reorder Level: ${reorderLevel}`,
+          createdBy: userId,
+          items: {
+            create: {
+              medicineId,
+              medicineName: medicine.name,
+              currentStock,
+              reorderQty: reorderLevel,
+              quantity,
+              unitPrice: purchasePrice,
+              gstPercentage,
+              totalAmount: subtotal,
+            },
+          },
+        },
+        include: {
+          items: true,
+          supplier: { select: { id: true, name: true } },
+        },
+      });
+
+      // 7. Create audit entry
+      await tx.auditLog.create({
+        data: {
+          tenantId,
+          userId,
+          action: 'REORDER_CREATED',
+          targetType: 'PURCHASE_ORDER',
+          targetId: po.id,
+          metadata: {
+            medicineId,
+            medicineName: medicine.name,
+            purchaseOrderId: po.id,
+            quantity,
+            supplierId,
+          },
+        },
+      });
+
+      return po;
+    });
+
+    // Return enriched result for PDF generation
+    return {
+      purchaseOrder: order,
+      medicine: {
+        id: medicineId,
+        name: medicine.name,
+        genericName: medicine.genericName,
+        currentStock,
+        reorderLevel,
+        gstPercentage,
+      },
+      supplier: { id: supplierId, name: supplier?.name ?? 'Unknown Supplier' },
+      pricing: { purchasePrice, sellingPrice, mrp, gstPercentage },
+      totals: { subtotal, gstAmount, totalAmount },
+    };
+  }
+
+
   async submitOrder(tenantId, id) {
     const order = await this.getOrderById(tenantId, id);
     const nextStatus = procurementStateMachine.transition(order.status, 'SUBMIT');

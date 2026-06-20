@@ -55,7 +55,7 @@ class SalesRepository {
         },
         invoice: true,
         patient: true,
-        returns: true,
+        salesReturns: true,
       },
     });
   }

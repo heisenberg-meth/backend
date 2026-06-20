@@ -80,5 +80,7 @@ export function normalizeInvoice(invoice) {
     returnCount: Number(invoice.returnCount || 0),
     notes: invoice.notes,
     pdfUrl: invoice.pdfUrl,
+    salesReturns: invoice.salesReturns || [],
+    returns: invoice.salesReturns || [],
   };
 }

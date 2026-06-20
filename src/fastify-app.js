@@ -164,9 +164,12 @@ const setupFastify = async () => {
     contentSecurityPolicy: {
       directives: {
         defaultSrc: ["'self'"],
-        styleSrc: ["'self'", "'unsafe-inline'", 'https://fonts.googleapis.com'],
-        fontSrc: ["'self'", 'https://fonts.gstatic.com', 'data:'],
-        imgSrc: ["'self'", 'data:', 'https:', 'https://*.razorpay.com'],
+        baseUri: ["'self'"],
+        fontSrc: ["'self'", 'https://fonts.gstatic.com', 'https:', 'data:'],
+        formAction: ["'self'"],
+        frameAncestors: ["'self'"],
+        imgSrc: ["'self'", 'data:', 'https:', 'validator.swagger.io', 'https://*.razorpay.com'],
+        objectSrc: ["'none'"],
         scriptSrc: [
           "'self'",
           "'unsafe-inline'",
@@ -181,13 +184,22 @@ const setupFastify = async () => {
           'https://checkout.razorpay.com',
           'https://*.razorpay.com',
         ],
-        frameSrc: ["'self'", 'https://checkout.razorpay.com', 'https://*.razorpay.com'],
-        connectSrc: [
+        scriptSrcAttr: ["'none'"],
+        styleSrc: ["'self'", 'https:', 'https://fonts.googleapis.com', "'unsafe-inline'", 'https://*.razorpay.com'],
+        frameSrc: [
           "'self'",
           'https://api.razorpay.com',
           'https://checkout.razorpay.com',
           'https://*.razorpay.com',
         ],
+        connectSrc: [
+          "'self'",
+          'https://api.razorpay.com',
+          'https://checkout.razorpay.com',
+          'https://*.razorpay.com',
+          'wss://*.razorpay.com',
+        ],
+        upgradeInsecureRequests: [],
       },
     },
     crossOriginResourcePolicy: {

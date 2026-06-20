@@ -55,7 +55,7 @@ function mockPrescription(overrides = {}) {
     patientId: 'pat-1',
     doctorId: 'doc-1',
     doctorName: 'Dr. Kumar',
-    prescriptionDate: new Date('2026-05-15'),
+    prescriptionDate: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000), // 2 days ago
     status: 'ACTIVE',
     verificationStatus: 'PENDING',
     refillCount: 0,

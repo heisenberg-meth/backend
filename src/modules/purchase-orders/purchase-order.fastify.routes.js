@@ -205,6 +205,42 @@ async function purchaseOrderRoutes(fastify) {
     },
     purchaseOrderController.updateStatus,
   );
+
+  // ── Smart Reorder ──────────────────────────────────────────────
+  fastify.post(
+    '/reorder',
+    {
+      schema: {
+        tags: ['Purchase Orders'],
+        summary: 'Create a one-click reorder PO from inventory — auto-fills medicine, supplier, and pricing',
+        body: {
+          type: 'object',
+          required: ['medicineId', 'quantity'],
+          properties: {
+            medicineId: { type: 'string', format: 'uuid' },
+            quantity: { type: 'integer', minimum: 1 },
+          },
+        },
+      },
+      preHandler: [requirePermission('purchase-orders.create')],
+    },
+    purchaseOrderController.createReorder,
+  );
+
+  // ── PDF Generation ─────────────────────────────────────────────
+  fastify.get(
+    '/:id/pdf',
+    {
+      schema: {
+        tags: ['Purchase Orders'],
+        summary: 'Generate a printable HTML purchase order document',
+        params: { type: 'object', properties: { id: { type: 'string', format: 'uuid' } } },
+      },
+      preHandler: [requirePermission('purchase-orders.read')],
+    },
+    purchaseOrderController.generatePdf,
+  );
 }
 
 export default purchaseOrderRoutes;
+

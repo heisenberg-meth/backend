@@ -65,6 +65,11 @@ const mockUnifiedInventorySummaryService = {
     medicinesWithExpired: 5,
     totalProducts: 100,
   }),
+  getExpiryMetrics: jest.fn().mockResolvedValue({
+    totalBatches: 200,
+    expiredBatches: 5,
+    expiring30CombinedBatches: 10,
+  }),
 };
 
 jest.unstable_mockModule('../../../src/config/prisma.js', () => ({ default: mockPrisma }));

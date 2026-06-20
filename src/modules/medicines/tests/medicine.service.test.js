@@ -1,4 +1,18 @@
 import { jest, describe, afterEach, it, expect } from '@jest/globals';
+import path from 'path';
+import { fileURLToPath } from 'url';
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+
+const prismaPath = path.resolve(__dirname, '../../../config/prisma.js');
+const medicineRepositoryPath = path.resolve(__dirname, '../repositories/medicine.repository.js');
+const redisPath = path.resolve(__dirname, '../../../config/redis.js');
+const auditServicePath = path.resolve(__dirname, '../../audit/service/audit.prisma.service.js');
+const eventBusPath = path.resolve(__dirname, '../../../shared/services/eventbus.service.js');
+const mainQueuePath = path.resolve(__dirname, '../../../queue/index.js');
+const movementServicePath = path.resolve(__dirname, '../../stock/service/movement.service.js');
+const scanKeysPath = path.resolve(__dirname, '../../../shared/utils/scan-keys.js');
+const medicineServicePath = path.resolve(__dirname, '../services/medicine.service.js');
 
 // Define mocks first
 const mockMedicineRepository = {
@@ -62,37 +76,43 @@ const mockMovementService = {
   stockIn: jest.fn().mockResolvedValue({ id: 'batch-1', batchNumber: 'P001' }),
 };
 
+const mockScanKeys = jest.fn().mockResolvedValue([]);
+
 // Use unstable_mockModule for ESM mocking
-jest.unstable_mockModule('../../../config/prisma.js', () => ({
+jest.unstable_mockModule(prismaPath, () => ({
   default: mockPrisma,
 }));
 
-jest.unstable_mockModule('../repositories/medicine.repository.js', () => ({
+jest.unstable_mockModule(medicineRepositoryPath, () => ({
   default: mockMedicineRepository,
 }));
 
-jest.unstable_mockModule('../../../config/redis.js', () => ({
+jest.unstable_mockModule(redisPath, () => ({
   default: mockRedis,
 }));
 
-jest.unstable_mockModule('../../audit/service/audit.prisma.service.js', () => ({
+jest.unstable_mockModule(auditServicePath, () => ({
   default: mockAuditService,
 }));
 
-jest.unstable_mockModule('../../../shared/services/eventbus.service.js', () => ({
+jest.unstable_mockModule(eventBusPath, () => ({
   default: mockEventBus,
 }));
 
-jest.unstable_mockModule('../../../queue/index.js', () => ({
+jest.unstable_mockModule(mainQueuePath, () => ({
   mainQueue: mockMainQueue,
 }));
 
-jest.unstable_mockModule('../../stock/service/movement.service.js', () => ({
+jest.unstable_mockModule(movementServicePath, () => ({
   default: mockMovementService,
 }));
 
+jest.unstable_mockModule(scanKeysPath, () => ({
+  scanKeys: mockScanKeys,
+}));
+
 // Import after mocks are defined
-const { default: medicineService } = await import('../services/medicine.service.js');
+const { default: medicineService } = await import(medicineServicePath);
 
 describe('MedicineIntelligenceService Consolidation (ESM)', () => {
   const tenantId = 'tenant-1';
@@ -128,6 +148,8 @@ describe('MedicineIntelligenceService Consolidation (ESM)', () => {
           quantity: 100,
           expiryDate: '2027-01-01',
           purchasePrice: 10,
+          sellingPrice: 12,
+          mrp: 15,
         },
       };
 

@@ -4,7 +4,7 @@ import { DOMAIN_EVENTS } from '../../../../shared/constants/events.js';
 import { emitLocalEvent } from '../../../../shared/events/local-event-bus.js';
 import { emitEvent } from '../../../../shared/events/erp-event-bus.js';
 import auditService from '../../../audit/service/audit.prisma.service.js';
-import logger from '@/shared/utils/logger.js';
+import logger from '../../../../shared/utils/logger.js';
 
 class SettlementService {
   /**

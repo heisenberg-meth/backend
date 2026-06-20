@@ -1,6 +1,42 @@
-import { beforeAll, afterAll } from '@jest/globals';
+import { beforeAll, afterAll, jest } from '@jest/globals';
 import logger from '../src/shared/utils/logger.js';
 import process from 'node:process';
+
+jest.unstable_mockModule('bullmq', () => {
+  return {
+    Queue: class MockQueue {
+      constructor(name) {
+        this.name = name;
+      }
+      async add() {
+        return { id: 'mock-job-id' };
+      }
+      async close() {}
+      async getJobs() {
+        return [];
+      }
+      async clean() {}
+      on() {
+        return this;
+      }
+      off() {
+        return this;
+      }
+    },
+    Worker: class MockWorker {
+      constructor(name) {
+        this.name = name;
+      }
+      async close() {}
+      on() {
+        return this;
+      }
+      off() {
+        return this;
+      }
+    },
+  };
+});
 
 if (process.env.NODE_ENV === 'test' && !process.env.FORCE_REAL_REDIS) {
   delete process.env.REDIS_URL;
@@ -17,7 +53,10 @@ beforeAll(async () => {
       await prisma.$executeRawUnsafe(`DROP SCHEMA IF EXISTS "${schemaName}" CASCADE;`);
       await prisma.$executeRawUnsafe(`CREATE SCHEMA "${schemaName}";`);
     } catch (err) {
-      logger.info(err);
+      logger.warn(
+        '[SETUP] Could not connect to database for schema setup. Skipping DB initialization.',
+        err,
+      );
     }
   }
 

@@ -1,4 +1,15 @@
 import { jest, describe, it, expect, beforeEach, afterEach } from '@jest/globals';
+import path from 'path';
+import { fileURLToPath } from 'url';
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+
+const prismaPath = path.resolve(__dirname, '../../../config/prisma.js');
+const redisPath = path.resolve(__dirname, '../../../config/redis.js');
+const alertRepositoryPath = path.resolve(__dirname, '../repositories/alert.repository.js');
+const forecastingServicePath = path.resolve(__dirname, '../forecasting/forecasting.service.js');
+const scanKeysPath = path.resolve(__dirname, '../../../shared/utils/scan-keys.js');
+const medicineAlertServicePath = path.resolve(__dirname, '../services/medicine-alert.service.js');
 
 const mockRedis = {
   get: jest.fn(),
@@ -50,28 +61,41 @@ const mockForecastingService = {
   getReorderRecommendations: jest.fn(),
 };
 
-jest.unstable_mockModule('../../../config/prisma.js', () => ({
+const mockScanKeys = jest
+  .fn()
+  .mockResolvedValue([
+    'alerts:tenant-1:low-stock',
+    'alerts:tenant-1:expiry',
+    'alerts:tenant-1:out-of-stock',
+  ]);
+
+jest.unstable_mockModule(prismaPath, () => ({
   default: mockPrisma,
 }));
 
-jest.unstable_mockModule('../../../config/redis.js', () => ({
+jest.unstable_mockModule(redisPath, () => ({
   default: mockRedis,
   quitRedis: jest.fn().mockResolvedValue(undefined),
 }));
 
-jest.unstable_mockModule('../repositories/alert.repository.js', () => ({
+jest.unstable_mockModule(alertRepositoryPath, () => ({
   default: mockAlertRepository,
 }));
 
-jest.unstable_mockModule('../forecasting/forecasting.service.js', () => ({
+jest.unstable_mockModule(forecastingServicePath, () => ({
   default: mockForecastingService,
 }));
 
-const { default: medicineAlertService } = await import('../services/medicine-alert.service.js');
-const { default: alertRepository } = await import('../repositories/alert.repository.js');
-const { default: forecastingService } = await import('../forecasting/forecasting.service.js');
-const { default: redisClient } = await import('../../../config/redis.js');
-const { default: prisma } = await import('../../../config/prisma.js');
+jest.unstable_mockModule(scanKeysPath, () => ({
+  scanKeys: mockScanKeys,
+}));
+
+const { default: medicineAlertService } = await import(medicineAlertServicePath);
+const { default: alertRepository } = await import(alertRepositoryPath);
+const { default: forecastingService } = await import(forecastingServicePath);
+const { default: redisClient } = await import(redisPath);
+const { default: prisma } = await import(prismaPath);
+const { scanKeys } = await import(scanKeysPath);
 
 describe('MedicineAlertService - Edge Cases', () => {
   beforeEach(() => {
@@ -204,7 +228,7 @@ describe('MedicineAlertService - Edge Cases', () => {
 
   describe('Cache invalidation', () => {
     it('should invalidate all alert caches for a tenant', async () => {
-      redisClient.keys.mockResolvedValue([
+      scanKeys.mockResolvedValue([
         'alerts:tenant-1:low-stock',
         'alerts:tenant-1:expiry',
         'alerts:tenant-1:out-of-stock',
@@ -220,7 +244,7 @@ describe('MedicineAlertService - Edge Cases', () => {
     });
 
     it('should handle Redis errors gracefully during cache invalidation', async () => {
-      redisClient.keys.mockRejectedValue(new Error('Redis connection lost'));
+      scanKeys.mockRejectedValue(new Error('Redis connection lost'));
 
       await expect(medicineAlertService._invalidateCache('tenant-1')).resolves.not.toThrow();
     });

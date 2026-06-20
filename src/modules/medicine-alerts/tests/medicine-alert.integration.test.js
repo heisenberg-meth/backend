@@ -1,5 +1,21 @@
 import { jest, describe, it, expect, beforeAll, afterAll } from '@jest/globals';
 import Fastify from 'fastify';
+import path from 'path';
+import { fileURLToPath } from 'url';
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+
+const prismaPath = path.resolve(__dirname, '../../../config/prisma.js');
+const redisPath = path.resolve(__dirname, '../../../config/redis.js');
+const alertRepoPath = path.resolve(__dirname, '../repositories/alert.repository.js');
+const forecastingServicePath = path.resolve(__dirname, '../forecasting/forecasting.service.js');
+const erpEventBusPath = path.resolve(__dirname, '../../../shared/events/erp-event-bus.js');
+const localEventBusPath = path.resolve(__dirname, '../../../shared/events/local-event-bus.js');
+const loggerPath = path.resolve(__dirname, '../../../shared/utils/logger.js');
+const eventbusServicePath = path.resolve(__dirname, '../../../shared/services/eventbus.service.js');
+const queueRegistryPath = path.resolve(__dirname, '../../../config/queue-registry.js');
+const paymentConfigPath = path.resolve(__dirname, '../../../config/payment.config.js');
+const razorpayPath = path.resolve(__dirname, '../../../config/razorpay.js');
 
 const mockPrisma = {
   stockAlert: {
@@ -33,20 +49,24 @@ const mockPrisma = {
   },
 };
 
-jest.unstable_mockModule('../../../config/prisma.js', () => ({
+jest.unstable_mockModule(prismaPath, () => ({
   default: mockPrisma,
 }));
 
-jest.unstable_mockModule('../../../config/redis.js', () => ({
+jest.unstable_mockModule(redisPath, () => ({
   default: {
     get: jest.fn().mockResolvedValue(null),
     set: jest.fn().mockResolvedValue('OK'),
     del: jest.fn().mockResolvedValue(0),
     keys: jest.fn().mockResolvedValue([]),
   },
+  initRedis: jest.fn(),
+  getBullRedis: jest.fn(),
+  connectRedis: jest.fn(),
+  quitRedis: jest.fn(),
 }));
 
-jest.unstable_mockModule('../repositories/alert.repository.js', () => ({
+jest.unstable_mockModule(alertRepoPath, () => ({
   default: {
     findLowStockAlerts: jest.fn().mockResolvedValue({
       alerts: [],
@@ -67,7 +87,7 @@ jest.unstable_mockModule('../repositories/alert.repository.js', () => ({
   },
 }));
 
-jest.unstable_mockModule('../forecasting/forecasting.service.js', () => ({
+jest.unstable_mockModule(forecastingServicePath, () => ({
   default: {
     predictDaysRemaining: jest.fn().mockResolvedValue(30),
     getReorderRecommendations: jest.fn().mockResolvedValue({
@@ -78,25 +98,25 @@ jest.unstable_mockModule('../forecasting/forecasting.service.js', () => ({
   },
 }));
 
-jest.unstable_mockModule('../../../shared/events/erp-event-bus.js', () => ({
+jest.unstable_mockModule(erpEventBusPath, () => ({
   emitEvent: jest.fn().mockResolvedValue(undefined),
   erpEventBus: { add: jest.fn(), close: jest.fn() },
 }));
 
-jest.unstable_mockModule('../../../shared/events/local-event-bus.js', () => ({
+jest.unstable_mockModule(localEventBusPath, () => ({
   emitLocalEvent: jest.fn(),
   localEventBus: { removeAllListeners: jest.fn() },
 }));
 
-jest.unstable_mockModule('../../../shared/utils/logger.js', () => ({
+jest.unstable_mockModule(loggerPath, () => ({
   default: { info: jest.fn(), warn: jest.fn(), error: jest.fn() },
 }));
 
-jest.unstable_mockModule('../../../shared/services/eventbus.service.js', () => ({
+jest.unstable_mockModule(eventbusServicePath, () => ({
   default: { publish: jest.fn() },
 }));
 
-jest.unstable_mockModule('../../../config/queue-registry.js', () => ({
+jest.unstable_mockModule(queueRegistryPath, () => ({
   registerQueue: jest.fn((q) => q),
   registerWorker: jest.fn((w) => w),
   closeAllQueuesAndWorkers: jest.fn(),
@@ -104,7 +124,7 @@ jest.unstable_mockModule('../../../config/queue-registry.js', () => ({
   activeWorkers: [],
 }));
 
-jest.unstable_mockModule('../../../config/payment.config.js', () => ({
+jest.unstable_mockModule(paymentConfigPath, () => ({
   getConfig: jest.fn(() => ({
     keyId: 'rzp_test_dummy12345678',
     keySecret: 'testsecret1234567890',
@@ -124,7 +144,7 @@ jest.unstable_mockModule('../../../config/payment.config.js', () => ({
   },
 }));
 
-jest.unstable_mockModule('../../../config/razorpay.js', () => ({
+jest.unstable_mockModule(razorpayPath, () => ({
   default: {
     orders: { create: jest.fn(), fetch: jest.fn() },
     payments: { all: jest.fn(), fetch: jest.fn() },

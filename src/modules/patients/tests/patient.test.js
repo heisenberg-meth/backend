@@ -1,6 +1,14 @@
 import { jest, describe, beforeEach, it, expect } from '@jest/globals';
+import path from 'path';
+import { fileURLToPath } from 'url';
 
-jest.unstable_mockModule('../../../config/prisma.js', () => ({
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const prismaPath = path.resolve(__dirname, '../../../config/prisma.js');
+const loggerPath = path.resolve(__dirname, '../../../shared/utils/logger.js');
+const eventBusPath = path.resolve(__dirname, '../../../shared/events/local-event-bus.js');
+const queuePath = path.resolve(__dirname, '../../../queue/index.js');
+
+jest.unstable_mockModule(prismaPath, () => ({
   default: {
     patient: {
       findFirst: jest.fn(),
@@ -40,15 +48,15 @@ jest.unstable_mockModule('../../../config/prisma.js', () => ({
   },
 }));
 
-jest.unstable_mockModule('../../../shared/utils/logger.js', () => ({
+jest.unstable_mockModule(loggerPath, () => ({
   default: { info: jest.fn(), error: jest.fn(), warn: jest.fn(), debug: jest.fn() },
 }));
 
-jest.unstable_mockModule('../../../shared/events/local-event-bus.js', () => ({
+jest.unstable_mockModule(eventBusPath, () => ({
   emitLocalEvent: jest.fn(),
 }));
 
-jest.unstable_mockModule('../../../queue/index.js', () => ({
+jest.unstable_mockModule(queuePath, () => ({
   mainQueue: { add: jest.fn() },
 }));
 

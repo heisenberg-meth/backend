@@ -1,4 +1,9 @@
 import { jest, describe, afterEach, it, expect } from '@jest/globals';
+import path from 'path';
+import { fileURLToPath } from 'url';
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const prismaPath = path.resolve(__dirname, '../../src/config/prisma.js');
 
 const mockPrisma = {
   manufacturer: {
@@ -7,7 +12,7 @@ const mockPrisma = {
   },
 };
 
-jest.unstable_mockModule('../../src/config/prisma.js', () => ({
+jest.unstable_mockModule(prismaPath, () => ({
   default: mockPrisma,
 }));
 

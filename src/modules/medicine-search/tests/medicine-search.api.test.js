@@ -1,6 +1,5 @@
-import { jest, describe, beforeEach, it, expect } from '@jest/globals';
-import express from 'express';
-import request from 'supertest';
+import { jest, describe, beforeEach, it, expect, beforeAll, afterAll } from '@jest/globals';
+import Fastify from 'fastify';
 import path from 'path';
 import { fileURLToPath } from 'url';
 
@@ -11,6 +10,7 @@ const prismaPath = path.resolve(__dirname, '../../../config/prisma.js');
 const localEventBusPath = path.resolve(__dirname, '../../../shared/events/local-event-bus.js');
 const erpEventBusPath = path.resolve(__dirname, '../../../shared/events/erp-event-bus.js');
 const loggerPath = path.resolve(__dirname, '../../../shared/utils/logger.js');
+const authFastifyPath = path.resolve(__dirname, '../../../middleware/auth.fastify.js');
 
 const mockPrisma = {
   medicine: {
@@ -98,29 +98,32 @@ jest.unstable_mockModule(loggerPath, () => ({
   default: mockLogger,
 }));
 
-jest.unstable_mockModule('../../../middleware/auth.middleware.js', () => ({
-  default: (req, res, next) => {
-    req.user = { id: 'user-1', role: 'ADMIN' };
-    req.tenantId = 'tenant-1';
-    next();
+jest.unstable_mockModule(authFastifyPath, () => ({
+  authenticate: async (request) => {
+    request.user = { id: 'user-1', role: 'ADMIN' };
+    request.tenantId = 'tenant-1';
+  },
+  requireTenant: async (request) => {
+    request.tenantId = 'tenant-1';
   },
 }));
 
-jest.unstable_mockModule('../../../middleware/role.middleware.js', () => ({
-  authorize: () => (req, res, next) => next(),
-}));
-
-jest.unstable_mockModule('../../../middleware/validate.middleware.js', () => ({
-  default: () => (req, res, next) => next(),
-}));
-
-const { default: medicineSearchRoutes } = await import('../routes/medicine-search.routes.js');
-
-const app = express();
-app.use(express.json());
-app.use('/api/medicines', medicineSearchRoutes);
+const { default: medicineSearchRoutes } =
+  await import('../routes/medicine-search.fastify.routes.js');
 
 describe('Medicine Search API Integration', () => {
+  let app;
+
+  beforeAll(async () => {
+    app = Fastify();
+    await app.register(medicineSearchRoutes, { prefix: '/api/medicines' });
+    await app.ready();
+  });
+
+  afterAll(async () => {
+    await app.close();
+  });
+
   beforeEach(() => {
     jest.clearAllMocks();
   });
@@ -137,25 +140,31 @@ describe('Medicine Search API Integration', () => {
         },
       ]);
 
-      const response = await request(app)
-        .get('/api/medicines/search')
-        .query({ q: 'dolo', limit: '10' })
-        .expect(200);
+      const response = await app.inject({
+        method: 'GET',
+        url: '/api/medicines/search',
+        query: { q: 'dolo', limit: '10' },
+      });
 
-      expect(response.body.success).toBe(true);
-      expect(response.body.meta.count).toBe(1);
+      expect(response.statusCode).toBe(200);
+      const body = JSON.parse(response.payload);
+      expect(body.success).toBe(true);
+      expect(body.meta.count).toBe(1);
     });
 
     it('should support category filter', async () => {
       mockCache.getSearch.mockResolvedValue(null);
       mockSearchRepository.search.mockResolvedValue([]);
 
-      const response = await request(app)
-        .get('/api/medicines/search')
-        .query({ q: 'para', category: 'cat-uuid-1234' })
-        .expect(200);
+      const response = await app.inject({
+        method: 'GET',
+        url: '/api/medicines/search',
+        query: { q: 'para', category: 'cat-uuid-1234' },
+      });
 
-      expect(response.body.success).toBe(true);
+      expect(response.statusCode).toBe(200);
+      const body = JSON.parse(response.payload);
+      expect(body.success).toBe(true);
     });
 
     it('should support inStockOnly filter', async () => {
@@ -168,12 +177,15 @@ describe('Medicine Search API Integration', () => {
         },
       ]);
 
-      const response = await request(app)
-        .get('/api/medicines/search')
-        .query({ q: 'dolo', inStockOnly: 'true' })
-        .expect(200);
+      const response = await app.inject({
+        method: 'GET',
+        url: '/api/medicines/search',
+        query: { q: 'dolo', inStockOnly: 'true' },
+      });
 
-      expect(response.body.success).toBe(true);
+      expect(response.statusCode).toBe(200);
+      const body = JSON.parse(response.payload);
+      expect(body.success).toBe(true);
     });
   });
 
@@ -185,13 +197,16 @@ describe('Medicine Search API Integration', () => {
         { id: 'med-2', name: 'Dolo 250', genericName: 'Paracetamol' },
       ]);
 
-      const response = await request(app)
-        .get('/api/medicines/autocomplete')
-        .query({ prefix: 'dol' })
-        .expect(200);
+      const response = await app.inject({
+        method: 'GET',
+        url: '/api/medicines/autocomplete',
+        query: { prefix: 'dol' },
+      });
 
-      expect(response.body.success).toBe(true);
-      expect(response.body.data).toHaveLength(2);
+      expect(response.statusCode).toBe(200);
+      const body = JSON.parse(response.payload);
+      expect(body.success).toBe(true);
+      expect(body.data).toHaveLength(2);
     });
   });
 
@@ -207,17 +222,22 @@ describe('Medicine Search API Integration', () => {
           {
             quantity: 100,
             reservedQuantity: 0,
-            expiryDate: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000),
+            expiryDate: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString(),
             sellingPrice: 30,
             mrp: 35,
           },
         ],
       });
 
-      const response = await request(app).get('/api/medicines/barcode/890123456789').expect(200);
+      const response = await app.inject({
+        method: 'GET',
+        url: '/api/medicines/barcode/890123456789',
+      });
 
-      expect(response.body.success).toBe(true);
-      expect(response.body.data.medicine.name).toBe('Dolo 650');
+      expect(response.statusCode).toBe(200);
+      const body = JSON.parse(response.payload);
+      expect(body.success).toBe(true);
+      expect(body.data.medicine.name).toBe('Dolo 650');
     });
 
     it('should return 404 for non-existent barcode', async () => {
@@ -225,9 +245,14 @@ describe('Medicine Search API Integration', () => {
       mockSearchRepository.findByBarcode.mockResolvedValue(null);
       mockSearchRepository.findByBarcodeMapping.mockResolvedValue(null);
 
-      const response = await request(app).get('/api/medicines/barcode/nonexistent').expect(404);
+      const response = await app.inject({
+        method: 'GET',
+        url: '/api/medicines/barcode/nonexistent',
+      });
 
-      expect(response.body.success).toBe(false);
+      expect(response.statusCode).toBe(404);
+      const body = JSON.parse(response.payload);
+      expect(body.success).toBe(false);
     });
   });
 
@@ -248,19 +273,29 @@ describe('Medicine Search API Integration', () => {
         ],
       });
 
-      const response = await request(app).get('/api/medicines/sku/MED-PARA-650-TAB').expect(200);
+      const response = await app.inject({
+        method: 'GET',
+        url: '/api/medicines/sku/MED-PARA-650-TAB',
+      });
 
-      expect(response.body.success).toBe(true);
-      expect(response.body.data.medicine.sku).toBe('MED-PARA-650-TAB');
+      expect(response.statusCode).toBe(200);
+      const body = JSON.parse(response.payload);
+      expect(body.success).toBe(true);
+      expect(body.data.medicine.sku).toBe('MED-PARA-650-TAB');
     });
 
     it('should return 404 for non-existent SKU', async () => {
       mockCache.getSku.mockResolvedValue(null);
       mockSearchRepository.findBySku.mockResolvedValue(null);
 
-      const response = await request(app).get('/api/medicines/sku/nonexistent-sku').expect(404);
+      const response = await app.inject({
+        method: 'GET',
+        url: '/api/medicines/sku/nonexistent-sku',
+      });
 
-      expect(response.body.success).toBe(false);
+      expect(response.statusCode).toBe(404);
+      const body = JSON.parse(response.payload);
+      expect(body.success).toBe(false);
     });
   });
 
@@ -270,10 +305,15 @@ describe('Medicine Search API Integration', () => {
         { id: 'med-2', name: 'Crocin 650', genericName: 'Paracetamol' },
       ]);
 
-      const response = await request(app).get('/api/medicines/med-1/alternatives').expect(200);
+      const response = await app.inject({
+        method: 'GET',
+        url: '/api/medicines/med-1/alternatives',
+      });
 
-      expect(response.body.success).toBe(true);
-      expect(response.body.data).toHaveLength(1);
+      expect(response.statusCode).toBe(200);
+      const body = JSON.parse(response.payload);
+      expect(body.success).toBe(true);
+      expect(body.data).toHaveLength(1);
     });
   });
 
@@ -285,7 +325,7 @@ describe('Medicine Search API Integration', () => {
           branchName: 'Main Branch',
           availableStock: 50,
           totalStock: 60,
-          expiryDate: new Date(Date.now() + 180 * 24 * 60 * 60 * 1000),
+          expiryDate: new Date(Date.now() + 180 * 24 * 60 * 60 * 1000).toISOString(),
         },
         {
           branchId: 'branch-2',
@@ -295,10 +335,15 @@ describe('Medicine Search API Integration', () => {
         },
       ]);
 
-      const response = await request(app).get('/api/medicines/med-1/availability').expect(200);
+      const response = await app.inject({
+        method: 'GET',
+        url: '/api/medicines/med-1/availability',
+      });
 
-      expect(response.body.success).toBe(true);
-      expect(response.body.data).toHaveLength(2);
+      expect(response.statusCode).toBe(200);
+      const body = JSON.parse(response.payload);
+      expect(body.success).toBe(true);
+      expect(body.data).toHaveLength(2);
     });
   });
 
@@ -310,10 +355,15 @@ describe('Medicine Search API Integration', () => {
         { query: 'paracetamol', count: 120 },
       ]);
 
-      const response = await request(app).get('/api/medicines/popular-searches').expect(200);
+      const response = await app.inject({
+        method: 'GET',
+        url: '/api/medicines/popular-searches',
+      });
 
-      expect(response.body.success).toBe(true);
-      expect(response.body.data).toHaveLength(2);
+      expect(response.statusCode).toBe(200);
+      const body = JSON.parse(response.payload);
+      expect(body.success).toBe(true);
+      expect(body.data).toHaveLength(2);
     });
   });
 });

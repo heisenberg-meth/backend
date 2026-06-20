@@ -1,6 +1,17 @@
 import { jest, describe, afterEach, it, expect } from '@jest/globals';
+import path from 'path';
+import { fileURLToPath } from 'url';
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const cacheInvalidatorPath = path.resolve(
+  __dirname,
+  '../../src/modules/inventory/service/cache-invalidator.service.js',
+);
 
 // Mocks
+const mockCacheInvalidator = {
+  invalidateInventoryCaches: jest.fn().mockResolvedValue(undefined),
+};
 const mockSalesRepository = {
   createSale: jest.fn(),
   findById: jest.fn(),
@@ -35,6 +46,17 @@ const mockPrisma = {
   stockMovement: {
     create: jest.fn(),
   },
+  inventory: {
+    findFirst: jest.fn(),
+    update: jest.fn(),
+  },
+  invoice: {
+    findUnique: jest.fn(),
+    update: jest.fn(),
+  },
+  salesReturn: {
+    aggregate: jest.fn(),
+  },
 };
 
 const mockAuditService = {
@@ -63,6 +85,10 @@ jest.unstable_mockModule('../../src/modules/stock/service/movement.service.js', 
 
 jest.unstable_mockModule('../../src/modules/audit/service/audit.prisma.service.js', () => ({
   default: mockAuditService,
+}));
+
+jest.unstable_mockModule(cacheInvalidatorPath, () => ({
+  default: mockCacheInvalidator,
 }));
 
 const { default: returnsService } =
@@ -104,6 +130,14 @@ describe('Sales Module Unit Tests', () => {
       mockMovementService.stockIn.mockResolvedValue({});
       mockPrisma.inventoryBatch.update.mockResolvedValue({});
       mockPrisma.sale.update.mockResolvedValue({});
+      mockPrisma.inventory.findFirst.mockResolvedValue({ id: 'inv-1' });
+      mockPrisma.inventory.update.mockResolvedValue({});
+      mockPrisma.invoice.findUnique.mockResolvedValue({
+        id: 'inv-1',
+        items: [{ id: 'si-1', quantity: 10 }],
+      });
+      mockPrisma.salesReturn.aggregate.mockResolvedValue({ _sum: { quantity: 2 } });
+      mockPrisma.invoice.update.mockResolvedValue({});
 
       const result = await returnsService.processReturn(tenantId, data, userId);
 
@@ -147,13 +181,21 @@ describe('Sales Module Unit Tests', () => {
       mockMovementService.stockIn.mockResolvedValue({});
       mockPrisma.inventoryBatch.update.mockResolvedValue({});
       mockPrisma.sale.update.mockResolvedValue({});
+      mockPrisma.inventory.findFirst.mockResolvedValue({ id: 'inv-1' });
+      mockPrisma.inventory.update.mockResolvedValue({});
+      mockPrisma.invoice.findUnique.mockResolvedValue({
+        id: 'inv-1',
+        items: [{ id: 'si-1', quantity: 10 }],
+      });
+      mockPrisma.salesReturn.aggregate.mockResolvedValue({ _sum: { quantity: 10 } });
+      mockPrisma.invoice.update.mockResolvedValue({});
 
       await returnsService.processReturn(tenantId, data, userId);
 
       expect(mockPrisma.sale.update).toHaveBeenCalledWith(
         expect.objectContaining({
           where: { id: 's-1' },
-          data: { status: 'COMPLETED' },
+          data: { status: 'REFUNDED' },
         }),
       );
     });

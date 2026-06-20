@@ -1,5 +1,14 @@
-import { jest , describe, beforeEach, it, expect } from '@jest/globals';
+import { jest, describe, beforeEach, it, expect } from '@jest/globals';
 import crypto from 'crypto';
+import path from 'path';
+import { fileURLToPath } from 'url';
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const prismaPath = path.resolve(__dirname, '../../../src/config/prisma.js');
+const paymentServicePath = path.resolve(
+  __dirname,
+  '../../../src/modules/payments/services/payment.service.js',
+);
 
 const mockPaymentCreate = jest.fn();
 const mockPaymentFindUnique = jest.fn();
@@ -9,7 +18,7 @@ const mockSubscriptionUpdate = jest.fn();
 const mockIdempotencyFindUnique = jest.fn();
 const mockIdempotencyCreate = jest.fn();
 
-jest.unstable_mockModule('../../../src/config/prisma.js', () => ({
+jest.unstable_mockModule(prismaPath, () => ({
   default: {
     payment: {
       create: mockPaymentCreate,
@@ -27,9 +36,7 @@ jest.unstable_mockModule('../../../src/config/prisma.js', () => ({
   },
 }));
 
-const { default: paymentService } = await import(
-  '../../../src/modules/payments/services/payment.service.js'
-);
+const { default: paymentService } = await import(paymentServicePath);
 
 describe('Webhook Security Tests', () => {
   const secret = 'test_secret';
@@ -40,7 +47,10 @@ describe('Webhook Security Tests', () => {
 
   it('should ignore duplicate webhook', async () => {
     const payload = { transactionId: 'txn_dup', status: 'SUCCESS' };
-    const signature = crypto.createHmac('sha256', secret).update(JSON.stringify(payload)).digest('hex');
+    const signature = crypto
+      .createHmac('sha256', secret)
+      .update(JSON.stringify(payload))
+      .digest('hex');
 
     mockPaymentFindUnique.mockResolvedValue({
       transactionId: 'txn_dup',
@@ -57,16 +67,21 @@ describe('Webhook Security Tests', () => {
     const payload = { transactionId: 'txn_inv', status: 'SUCCESS' };
     const signature = 'invalid_signature_hash';
 
-    await expect(paymentService.handleWebhook(payload, signature, secret))
-      .rejects.toThrow('Invalid signature');
+    await expect(paymentService.handleWebhook(payload, signature, secret)).rejects.toThrow(
+      'Invalid signature',
+    );
   });
 
   it('should reject replay attacks / modified payloads', async () => {
     const payload = { transactionId: 'txn_1', status: 'SUCCESS', amount: 100 };
     const tamperedPayload = { transactionId: 'txn_1', status: 'SUCCESS', amount: 10 };
-    const signature = crypto.createHmac('sha256', secret).update(JSON.stringify(payload)).digest('hex');
+    const signature = crypto
+      .createHmac('sha256', secret)
+      .update(JSON.stringify(payload))
+      .digest('hex');
 
-    await expect(paymentService.handleWebhook(tamperedPayload, signature, secret))
-      .rejects.toThrow('Invalid signature');
+    await expect(paymentService.handleWebhook(tamperedPayload, signature, secret)).rejects.toThrow(
+      'Invalid signature',
+    );
   });
 });

@@ -283,13 +283,62 @@ class CsvImportService {
     return map;
   }
 
-  _getColumn(row, aliases) {
+  _getColumn(row, aliases, excludes = []) {
     const keys = Object.keys(row);
+
+    // First try: Case-insensitive exact match
     for (const alias of aliases) {
-      const match = keys.find((k) => k.toLowerCase().includes(alias));
-      if (match) return row[match];
+      const match = keys.find((k) => {
+        const lowerKey = k.toLowerCase().trim();
+        const lowerAlias = alias.toLowerCase().trim();
+        if (lowerKey === lowerAlias) {
+          const hasExclude = excludes.some((ex) => lowerKey.includes(ex.toLowerCase()));
+          if (!hasExclude) return true;
+        }
+        return false;
+      });
+      if (match !== undefined) return row[match];
     }
+
+    // Second try: Case-insensitive substring match
+    for (const alias of aliases) {
+      const match = keys.find((k) => {
+        const lowerKey = k.toLowerCase().trim();
+        const lowerAlias = alias.toLowerCase().trim();
+        if (lowerKey.includes(lowerAlias)) {
+          const hasExclude = excludes.some((ex) => lowerKey.includes(ex.toLowerCase()));
+          if (!hasExclude) return true;
+        }
+        return false;
+      });
+      if (match !== undefined) return row[match];
+    }
+
     return '';
+  }
+
+  _parseQuantity(val) {
+    if (val === undefined || val === null) return NaN;
+    const clean = String(val).trim().replace(/,/g, '').replace(/[^0-9.-]/g, '');
+    if (clean === '') return NaN;
+    const num = parseFloat(clean);
+    return isNaN(num) ? NaN : Math.round(num);
+  }
+
+  _parsePrice(val) {
+    if (val === undefined || val === null) return NaN;
+    const clean = String(val).trim().replace(/,/g, '').replace(/[^0-9.-]/g, '');
+    if (clean === '') return NaN;
+    const num = parseFloat(clean);
+    return isNaN(num) ? NaN : num;
+  }
+
+  _parseGst(val) {
+    if (val === undefined || val === null) return 0;
+    const clean = String(val).trim().replace(/%/g, '').replace(/,/g, '').replace(/[^0-9.-]/g, '');
+    if (clean === '') return 0;
+    const num = parseFloat(clean);
+    return isNaN(num) ? 0 : num;
   }
 
   _processChunk(rows, ctx) {
@@ -297,28 +346,22 @@ class CsvImportService {
       ctx;
 
     for (const row of rows) {
-      const name = this._getColumn(row, ['name', 'med', 'medicine', 'drug', 'item']);
-      const qtyStr = this._getColumn(row, ['qty', 'quantity', 'stock', 'units', 'count']);
-      const expiryStr = this._getColumn(row, ['expiry', 'exp', 'date', 'valid']);
-      const priceStr = this._getColumn(row, ['price', 'rate', 'cost', 'inr']);
-      const batchNo = this._getColumn(row, ['batch', 'lot', 'no', 'code']);
-      const barcode = this._getColumn(row, ['barcode', 'upc', 'ean', 'sku']);
-      const category = this._getColumn(row, ['category', 'cat', 'type', 'group', 'classification']);
-      const manufacturer = this._getColumn(row, [
-        'manufacturer',
-        'mfr',
-        'maker',
-        'brand',
-        'company',
-        'vendor',
-      ]);
-      const genericName = this._getColumn(row, ['generic', 'gen', 'salt', 'composition']);
-      const strength = this._getColumn(row, ['strength', 'mg', 'ml', 'dose', 'concentration']);
-      const dosageForm = this._getColumn(row, ['dosage', 'form', 'type', 'drug_form']);
-      const hsnCode = this._getColumn(row, ['hsn', 'hsn_code', 'hsncode', 'sac', 'tariff']);
-      const gstStr = this._getColumn(row, ['gst', 'gst%', 'tax', 'tax_percent', 'gst_percent']);
+      const name = this._getColumn(row, ['name', 'med', 'medicine', 'drug', 'item'], ['generic', 'price', 'rate', 'cost', 'qty', 'quantity', 'stock', 'expiry', 'date', 'batch', 'barcode', 'sku']);
+      const qtyStr = this._getColumn(row, ['qty', 'quantity', 'stock', 'unit', 'units', 'count', 'on hand', 'available'], ['price', 'rate', 'cost', 'inr', 'date', 'expiry', 'name', 'med', 'batch', 'barcode', 'sku']);
+      const expiryStr = this._getColumn(row, ['expiry', 'exp', 'date', 'valid'], ['name', 'med', 'price', 'qty', 'batch', 'barcode', 'sku']);
+      const priceStr = this._getColumn(row, ['price', 'rate', 'cost', 'inr'], ['qty', 'quantity', 'stock', 'units', 'count', 'name', 'med', 'expiry', 'date', 'batch', 'barcode', 'sku']);
+      const batchNo = this._getColumn(row, ['batch', 'lot', 'no', 'code'], ['name', 'med', 'price', 'qty', 'expiry', 'date', 'barcode', 'hsn']);
+      const barcode = this._getColumn(row, ['barcode', 'upc', 'ean', 'sku'], ['name', 'med', 'price', 'qty', 'expiry', 'date', 'batch']);
+      const category = this._getColumn(row, ['category', 'cat', 'type', 'group', 'classification'], ['name', 'med', 'price', 'qty', 'expiry', 'date', 'batch', 'barcode', 'generic']);
+      const manufacturer = this._getColumn(row, ['manufacturer', 'mfr', 'maker', 'brand', 'company', 'vendor'], ['name', 'med', 'price', 'qty', 'expiry', 'date', 'batch', 'barcode', 'generic', 'category']);
+      const genericName = this._getColumn(row, ['generic', 'gen', 'salt', 'composition'], ['name', 'med', 'price', 'qty', 'expiry', 'date', 'batch', 'barcode']);
+      const strength = this._getColumn(row, ['strength', 'mg', 'ml', 'dose', 'concentration'], ['name', 'med', 'price', 'qty', 'expiry', 'date', 'batch', 'barcode']);
+      const dosageForm = this._getColumn(row, ['dosage', 'form', 'type', 'drug_form'], ['name', 'med', 'price', 'qty', 'expiry', 'date', 'batch', 'barcode']);
+      const hsnCode = this._getColumn(row, ['hsn', 'hsn_code', 'hsncode', 'sac', 'tariff'], ['name', 'med', 'price', 'qty', 'expiry', 'date', 'batch', 'barcode']);
+      const gstStr = this._getColumn(row, ['gst', 'gst%', 'tax', 'tax_percent', 'gst_percent'], ['name', 'med', 'price', 'qty', 'expiry', 'date', 'batch', 'barcode']);
 
       if (!name) {
+        logger.warn({ rowNum: ctx.importedCount + ctx.newMedicines.length + 1, rawRow: row }, '[CSV-Import] Medicine name is required');
         ctx.errors.push({
           row: ctx.importedCount + ctx.newMedicines.length + 1,
           reason: 'Medicine name is required',
@@ -326,8 +369,9 @@ class CsvImportService {
         continue;
       }
 
-      const qty = parseInt(qtyStr, 10);
+      const qty = this._parseQuantity(qtyStr);
       if (isNaN(qty) || qty <= 0) {
+        logger.warn({ rowNum: ctx.importedCount + ctx.newMedicines.length + 1, name, qtyStr, rawRow: row }, '[CSV-Import] Invalid quantity during import');
         ctx.errors.push({
           row: ctx.importedCount + ctx.newMedicines.length + 1,
           name,
@@ -336,13 +380,14 @@ class CsvImportService {
         continue;
       }
 
-      const price = parseFloat(priceStr);
+      const price = this._parsePrice(priceStr);
       const pricingError = validatePricing({
         purchasePrice: price,
         sellingPrice: price * 1.2,
         mrp: price * 1.2,
       });
       if (pricingError) {
+        logger.warn({ rowNum: ctx.importedCount + ctx.newMedicines.length + 1, name, priceStr, pricingError, rawRow: row }, '[CSV-Import] Pricing validation failed');
         ctx.errors.push({
           row: ctx.importedCount + ctx.newMedicines.length + 1,
           name,

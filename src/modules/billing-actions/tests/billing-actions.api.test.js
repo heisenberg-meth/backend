@@ -1,6 +1,28 @@
 import { jest, describe, beforeEach, it, expect } from '@jest/globals';
 import express from 'express';
 import request from 'supertest';
+import path from 'path';
+import { fileURLToPath } from 'url';
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+
+const prismaPath = path.resolve(__dirname, '../../../config/prisma.js');
+const localEventBusPath = path.resolve(__dirname, '../../../shared/events/local-event-bus.js');
+const loggerPath = path.resolve(__dirname, '../../../shared/utils/logger.js');
+const invoiceTemplatePath = path.resolve(
+  __dirname,
+  '../../settings/invoice-template/invoice-template.service.js',
+);
+const authMiddlewarePath = path.resolve(__dirname, '../../../middleware/auth.middleware.js');
+const roleMiddlewarePath = path.resolve(__dirname, '../../../middleware/role.middleware.js');
+const validateMiddlewarePath = path.resolve(
+  __dirname,
+  '../../../middleware/validate.middleware.js',
+);
+const invoiceDeliveryQueuePath = path.resolve(__dirname, '../queue/invoice-delivery.queue.js');
+const pdfRendererPath = path.resolve(__dirname, '../services/pdf-renderer.service.js');
+const s3StoragePath = path.resolve(__dirname, '../services/s3-storage.service.js');
+const billingActionsRoutesPath = path.resolve(__dirname, '../routes/billing-actions.routes.js');
 
 const mockPrisma = {
   invoice: {
@@ -21,16 +43,16 @@ const mockPrisma = {
   },
 };
 
-jest.unstable_mockModule('../../../config/prisma.js', () => ({
+jest.unstable_mockModule(prismaPath, () => ({
   default: mockPrisma,
 }));
 
-jest.unstable_mockModule('../../../shared/events/local-event-bus.js', () => ({
+jest.unstable_mockModule(localEventBusPath, () => ({
   emitLocalEvent: jest.fn(),
   localEventBus: { emit: jest.fn(), removeAllListeners: jest.fn() },
 }));
 
-jest.unstable_mockModule('../../../shared/utils/logger.js', () => ({
+jest.unstable_mockModule(loggerPath, () => ({
   default: {
     info: jest.fn(),
     error: jest.fn(),
@@ -38,13 +60,13 @@ jest.unstable_mockModule('../../../shared/utils/logger.js', () => ({
   },
 }));
 
-jest.unstable_mockModule('../../settings/invoice-template/invoice-template.service.js', () => ({
+jest.unstable_mockModule(invoiceTemplatePath, () => ({
   default: {
     getTemplate: jest.fn().mockResolvedValue({}),
   },
 }));
 
-jest.unstable_mockModule('../../../middleware/auth.middleware.js', () => ({
+jest.unstable_mockModule(authMiddlewarePath, () => ({
   default: (req, res, next) => {
     req.user = { id: 'user-1', role: 'ADMIN' };
     req.tenantId = 'tenant-1';
@@ -52,15 +74,15 @@ jest.unstable_mockModule('../../../middleware/auth.middleware.js', () => ({
   },
 }));
 
-jest.unstable_mockModule('../../../middleware/role.middleware.js', () => ({
+jest.unstable_mockModule(roleMiddlewarePath, () => ({
   authorize: () => (req, res, next) => next(),
 }));
 
-jest.unstable_mockModule('../../../middleware/validate.middleware.js', () => ({
+jest.unstable_mockModule(validateMiddlewarePath, () => ({
   default: () => (req, res, next) => next(),
 }));
 
-jest.unstable_mockModule('../queue/invoice-delivery.queue.js', () => ({
+jest.unstable_mockModule(invoiceDeliveryQueuePath, () => ({
   invoiceDeliveryQueue: {
     add: jest.fn().mockResolvedValue({ id: 'job-1' }),
   },
@@ -69,14 +91,14 @@ jest.unstable_mockModule('../queue/invoice-delivery.queue.js', () => ({
   },
 }));
 
-jest.unstable_mockModule('../services/pdf-renderer.service.js', () => ({
+jest.unstable_mockModule(pdfRendererPath, () => ({
   default: {
     renderA4: jest.fn().mockResolvedValue(Buffer.from('mock-pdf')),
     renderThermal: jest.fn().mockResolvedValue(Buffer.from('mock-thermal')),
   },
 }));
 
-jest.unstable_mockModule('../services/s3-storage.service.js', () => ({
+jest.unstable_mockModule(s3StoragePath, () => ({
   default: {
     uploadPDF: jest
       .fn()
@@ -86,7 +108,7 @@ jest.unstable_mockModule('../services/s3-storage.service.js', () => ({
   },
 }));
 
-const { default: billingActionsRoutes } = await import('../routes/billing-actions.routes.js');
+const { default: billingActionsRoutes } = await import(billingActionsRoutesPath);
 
 const app = express();
 app.use(express.json());

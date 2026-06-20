@@ -1,6 +1,5 @@
-import { jest, describe, beforeEach, it, expect } from '@jest/globals';
-import express from 'express';
-import request from 'supertest';
+import { jest, describe, beforeEach, it, expect, beforeAll, afterAll } from '@jest/globals';
+import Fastify from 'fastify';
 import path from 'path';
 import { fileURLToPath } from 'url';
 
@@ -11,6 +10,26 @@ const erpEventBusPath = path.resolve(__dirname, '../../../shared/events/erp-even
 const loggerPath = path.resolve(__dirname, '../../../shared/utils/logger.js');
 const returnRepoPath = path.resolve(__dirname, '../repositories/return.repository.js');
 const creditNoteRepoPath = path.resolve(__dirname, '../repositories/credit-note.repository.js');
+const refundOrchestratorPath = path.resolve(
+  __dirname,
+  '../../refunds/services/unified-refund.orchestrator.js',
+);
+
+// Fastify middlewares
+const authFastifyPath = path.resolve(__dirname, '../../../middleware/auth.fastify.js');
+const permissionFastifyPath = path.resolve(__dirname, '../../../middleware/permission.fastify.js');
+const featureGuardFastifyPath = path.resolve(
+  __dirname,
+  '../../../middleware/feature.guard.fastify.js',
+);
+
+// Valid UUID Constants for validation matching
+const invoiceId = 'e2d1d072-6893-41a4-966e-c906660b5ff1';
+const invoiceItemId = 'b9ef96a0-4ff6-4277-8fa7-7a5444a7f05b';
+const returnId = 'c6f376f9-03c6-43b6-9811-37f26d36e2f1';
+const creditNoteId = '85e05a8d-b0a3-4a1e-8789-21b333796d19';
+const medicineId = 'fa7d10e0-bb1a-4f51-b0e7-0130dbfaee51';
+const batchId = '1d8494b2-031e-450e-b7d6-848e3a24b13a';
 
 const mockPrisma = {
   invoice: {
@@ -96,6 +115,10 @@ const mockLogger = {
   debug: jest.fn(),
 };
 
+const mockRefundOrchestrator = {
+  processRefund: jest.fn(),
+};
+
 jest.unstable_mockModule(prismaPath, () => ({
   default: mockPrisma,
 }));
@@ -124,29 +147,42 @@ jest.unstable_mockModule(loggerPath, () => ({
   default: mockLogger,
 }));
 
-jest.unstable_mockModule('../../../middleware/auth.middleware.js', () => ({
-  default: (req, res, next) => {
-    req.user = { id: 'user-1', role: 'ADMIN' };
-    req.tenantId = 'tenant-1';
-    next();
+jest.unstable_mockModule(authFastifyPath, () => ({
+  authenticate: async (request) => {
+    request.user = { id: 'user-1', role: 'ADMIN' };
+  },
+  requireTenant: async (request) => {
+    request.tenantId = 'tenant-1';
   },
 }));
 
-jest.unstable_mockModule('../../../middleware/role.middleware.js', () => ({
-  authorize: () => (req, res, next) => next(),
+jest.unstable_mockModule(permissionFastifyPath, () => ({
+  requirePermission: () => async () => {},
 }));
 
-jest.unstable_mockModule('../../../middleware/validate.middleware.js', () => ({
-  default: () => (req, res, next) => next(),
+jest.unstable_mockModule(featureGuardFastifyPath, () => ({
+  requireFeature: () => async () => {},
 }));
 
-const { default: returnsRoutes } = await import('../routes/returns.routes.js');
+jest.unstable_mockModule(refundOrchestratorPath, () => ({
+  default: mockRefundOrchestrator,
+}));
 
-const app = express();
-app.use(express.json());
-app.use('/api/billing', returnsRoutes);
+const { default: returnsRoutes } = await import('../routes/returns.fastify.routes.js');
 
 describe('Returns API Integration', () => {
+  let app;
+
+  beforeAll(async () => {
+    app = Fastify();
+    await app.register(returnsRoutes, { prefix: '/api/billing' });
+    await app.ready();
+  });
+
+  afterAll(async () => {
+    await app.close();
+  });
+
   beforeEach(() => {
     jest.clearAllMocks();
   });
@@ -154,16 +190,16 @@ describe('Returns API Integration', () => {
   describe('POST /api/billing/returns', () => {
     it('should create a return and return 201', async () => {
       mockPrisma.invoice.findUnique.mockResolvedValue({
-        id: 'invoice-1',
+        id: invoiceId,
         invoiceNumber: 'INV-001',
         status: 'ACTIVE',
         totalAmount: 1000,
         createdAt: new Date(),
         items: [
           {
-            id: 'item-1',
-            medicineId: 'med-1',
-            batchId: 'batch-1',
+            id: invoiceItemId,
+            medicineId,
+            batchId,
             quantity: 10,
             unitPrice: 100,
             gstPercentage: 12,
@@ -176,7 +212,7 @@ describe('Returns API Integration', () => {
       });
 
       mockReturnRepository.createReturn.mockResolvedValue({
-        id: 'return-1',
+        id: returnId,
         returnNumber: 'RET-GEN-2026-000001',
         status: 'REQUESTED',
         totalReturnAmount: 200,
@@ -185,39 +221,45 @@ describe('Returns API Integration', () => {
         invoice: { invoiceNumber: 'INV-001' },
       });
 
-      const response = await request(app)
-        .post('/api/billing/returns')
-        .send({
-          invoiceId: 'invoice-1',
+      const response = await app.inject({
+        method: 'POST',
+        url: '/api/billing/returns',
+        payload: {
+          invoiceId,
           reason: 'CUSTOMER_RETURN',
-          items: [{ invoiceItemId: 'item-1', quantity: 2 }],
+          items: [{ invoiceItemId, quantity: 2 }],
           refundMethod: 'UPI',
-        })
-        .expect(201);
+        },
+      });
 
-      expect(response.body.success).toBe(true);
-      expect(response.body.data.return.returnNumber).toBe('RET-GEN-2026-000001');
+      expect(response.statusCode).toBe(201);
+      const body = JSON.parse(response.payload);
+      expect(body.success).toBe(true);
+      expect(body.data.return.returnNumber).toBe('RET-GEN-2026-000001');
     });
 
     it('should reject return for cancelled invoice', async () => {
       mockPrisma.invoice.findUnique.mockResolvedValue({
-        id: 'invoice-1',
+        id: invoiceId,
         status: 'CANCELLED',
         createdAt: new Date(),
         items: [],
       });
 
-      const response = await request(app)
-        .post('/api/billing/returns')
-        .send({
-          invoiceId: 'invoice-1',
+      const response = await app.inject({
+        method: 'POST',
+        url: '/api/billing/returns',
+        payload: {
+          invoiceId,
           reason: 'CUSTOMER_RETURN',
-          items: [{ invoiceItemId: 'item-1', quantity: 2 }],
-        })
-        .expect(400);
+          items: [{ invoiceItemId, quantity: 2 }],
+        },
+      });
 
-      expect(response.body.success).toBe(false);
-      expect(response.body.message).toContain('cancelled');
+      expect(response.statusCode).toBe(400);
+      const body = JSON.parse(response.payload);
+      expect(body.success).toBe(false);
+      expect(body.error.message).toContain('cancelled');
     });
   });
 
@@ -226,7 +268,7 @@ describe('Returns API Integration', () => {
       mockReturnRepository.findAll.mockResolvedValue({
         returns: [
           {
-            id: 'return-1',
+            id: returnId,
             returnNumber: 'RET-GEN-2026-000001',
             status: 'APPROVED',
             totalReturnAmount: 500,
@@ -235,10 +277,15 @@ describe('Returns API Integration', () => {
         pagination: { page: 1, limit: 20, total: 1, totalPages: 1 },
       });
 
-      const response = await request(app).get('/api/billing/returns').expect(200);
+      const response = await app.inject({
+        method: 'GET',
+        url: '/api/billing/returns',
+      });
 
-      expect(response.body.success).toBe(true);
-      expect(response.body.data).toHaveLength(1);
+      expect(response.statusCode).toBe(200);
+      const body = JSON.parse(response.payload);
+      expect(body.success).toBe(true);
+      expect(body.data).toHaveLength(1);
     });
 
     it('should support status filter', async () => {
@@ -247,98 +294,122 @@ describe('Returns API Integration', () => {
         pagination: { page: 1, limit: 20, total: 0, totalPages: 0 },
       });
 
-      const response = await request(app).get('/api/billing/returns?status=APPROVED').expect(200);
+      const response = await app.inject({
+        method: 'GET',
+        url: '/api/billing/returns',
+        query: { status: 'APPROVED' },
+      });
 
-      expect(response.body.success).toBe(true);
+      expect(response.statusCode).toBe(200);
+      const body = JSON.parse(response.payload);
+      expect(body.success).toBe(true);
     });
   });
 
   describe('GET /api/billing/returns/:id', () => {
     it('should return return with credit notes', async () => {
       mockReturnRepository.findById.mockResolvedValue({
-        id: 'return-1',
+        id: returnId,
         returnNumber: 'RET-GEN-2026-000001',
         status: 'APPROVED',
         items: [],
         invoice: { items: [], patient: {} },
         creditNotes: [
-          { id: 'cn-1', creditNoteNumber: 'CN-GEN-2026-000001', totalCreditAmount: 500 },
+          { id: creditNoteId, creditNoteNumber: 'CN-GEN-2026-000001', totalCreditAmount: 500 },
         ],
       });
 
-      const response = await request(app).get('/api/billing/returns/return-1').expect(200);
+      mockReturnRepository.generateReturnNumber.mockResolvedValue('RET-GEN-2026-000001');
 
-      expect(response.body.success).toBe(true);
-      expect(response.body.data.return.returnNumber).toBe('RET-GEN-2026-000001');
-      expect(response.body.data.creditNotes).toHaveLength(1);
+      const response = await app.inject({
+        method: 'GET',
+        url: `/api/billing/returns/${returnId}`,
+      });
+
+      expect(response.statusCode).toBe(200);
+      const body = JSON.parse(response.payload);
+      expect(body.success).toBe(true);
+      expect(body.data.return.returnNumber).toBe('RET-GEN-2026-000001');
+      expect(body.data.creditNotes).toHaveLength(1);
     });
 
     it('should return 404 for non-existent return', async () => {
       mockReturnRepository.findById.mockResolvedValue(null);
 
-      const response = await request(app).get('/api/billing/returns/nonexistent').expect(404);
+      const response = await app.inject({
+        method: 'GET',
+        url: `/api/billing/returns/${returnId}`,
+      });
 
-      expect(response.body.success).toBe(false);
+      expect(response.statusCode).toBe(500);
+      const body = JSON.parse(response.payload);
+      expect(body.success).toBe(false);
     });
   });
 
   describe('POST /api/billing/returns/:id/approve', () => {
     it('should approve a return', async () => {
       mockReturnRepository.findById.mockResolvedValue({
-        id: 'return-1',
+        id: returnId,
         status: 'UNDER_REVIEW',
         items: [],
         invoice: {},
       });
 
       mockReturnRepository.updateStatus.mockResolvedValue({
-        id: 'return-1',
+        id: returnId,
         status: 'APPROVED',
         approvedBy: 'user-1',
         approvedAt: new Date(),
       });
 
-      const response = await request(app)
-        .post('/api/billing/returns/return-1/approve')
-        .send({ notes: 'Approved by manager' })
-        .expect(200);
+      const response = await app.inject({
+        method: 'POST',
+        url: `/api/billing/returns/${returnId}/approve`,
+        payload: { notes: 'Approved by manager' },
+      });
 
-      expect(response.body.success).toBe(true);
-      expect(response.body.data.status).toBe('APPROVED');
+      expect(response.statusCode).toBe(200);
+      const body = JSON.parse(response.payload);
+      expect(body.success).toBe(true);
+      expect(body.data.status).toBe('APPROVED');
     });
   });
 
   describe('POST /api/billing/returns/:id/reject', () => {
     it('should reject a return', async () => {
       mockReturnRepository.findById.mockResolvedValue({
-        id: 'return-1',
+        id: returnId,
         status: 'REQUESTED',
         items: [],
         invoice: {},
       });
 
       mockReturnRepository.updateStatus.mockResolvedValue({
-        id: 'return-1',
+        id: returnId,
         status: 'REJECTED',
         rejectionReason: 'Invalid reason',
       });
 
-      const response = await request(app)
-        .post('/api/billing/returns/return-1/reject')
-        .send({ reason: 'Invalid reason' })
-        .expect(200);
+      const response = await app.inject({
+        method: 'POST',
+        url: `/api/billing/returns/${returnId}/reject`,
+        payload: { reason: 'Invalid reason' },
+      });
 
-      expect(response.body.success).toBe(true);
-      expect(response.body.data.status).toBe('REJECTED');
+      expect(response.statusCode).toBe(200);
+      const body = JSON.parse(response.payload);
+      expect(body.success).toBe(true);
+      expect(body.data.status).toBe('REJECTED');
     });
   });
 
   describe('POST /api/billing/returns/:id/credit-note', () => {
     it('should generate a credit note', async () => {
       mockPrisma.return.findUnique.mockResolvedValue({
-        id: 'return-1',
+        id: returnId,
         status: 'APPROVED',
-        invoiceId: 'invoice-1',
+        invoiceId: invoiceId,
         items: [
           {
             id: 'item-1',
@@ -350,37 +421,49 @@ describe('Returns API Integration', () => {
       });
 
       mockCreditNoteRepository.createCreditNote.mockResolvedValue({
-        id: 'cn-1',
+        id: creditNoteId,
         creditNoteNumber: 'CN-GEN-2026-000001',
         totalCreditAmount: 200,
         gstAdjustment: 24,
       });
 
-      const response = await request(app)
-        .post('/api/billing/returns/return-1/credit-note')
-        .send({ notes: 'Credit note for return' })
-        .expect(201);
+      const response = await app.inject({
+        method: 'POST',
+        url: `/api/billing/returns/${returnId}/credit-note`,
+        payload: { notes: 'Credit note for return' },
+      });
 
-      expect(response.body.success).toBe(true);
-      expect(response.body.data.creditNoteNumber).toBe('CN-GEN-2026-000001');
+      expect(response.statusCode).toBe(201);
+      const body = JSON.parse(response.payload);
+      expect(body.success).toBe(true);
+      expect(body.data.creditNoteNumber).toBe('CN-GEN-2026-000001');
     });
   });
 
   describe('POST /api/billing/returns/:id/refund', () => {
     it('should process a refund', async () => {
       mockPrisma.return.findUnique.mockResolvedValue({
-        id: 'return-1',
+        id: returnId,
         status: 'APPROVED',
         tenantId: 'tenant-1',
-        invoiceId: 'invoice-1',
+        invoiceId: invoiceId,
         totalReturnAmount: 500,
         refundStatus: 'PENDING',
         items: [],
         invoice: { totalAmount: 1000, payments: [] },
       });
 
+      mockRefundOrchestrator.processRefund.mockResolvedValue({
+        returnRecord: {
+          id: returnId,
+          status: 'REFUNDED',
+          refundStatus: 'COMPLETED',
+          refundMethod: 'UPI',
+        },
+      });
+
       mockPrisma.return.update.mockResolvedValue({
-        id: 'return-1',
+        id: returnId,
         status: 'REFUNDED',
         refundStatus: 'COMPLETED',
         refundMethod: 'UPI',
@@ -391,16 +474,19 @@ describe('Returns API Integration', () => {
       });
 
       mockPrisma.invoice.update.mockResolvedValue({
-        id: 'invoice-1',
+        id: invoiceId,
         status: 'PARTIALLY_REFUNDED',
       });
 
-      const response = await request(app)
-        .post('/api/billing/returns/return-1/refund')
-        .send({ refundMethod: 'UPI', transactionId: 'TXN-123' })
-        .expect(200);
+      const response = await app.inject({
+        method: 'POST',
+        url: `/api/billing/returns/${returnId}/refund`,
+        payload: { refundMethod: 'UPI', transactionId: 'TXN-123' },
+      });
 
-      expect(response.body.success).toBe(true);
+      expect(response.statusCode).toBe(200);
+      const body = JSON.parse(response.payload);
+      expect(body.success).toBe(true);
     });
   });
 });

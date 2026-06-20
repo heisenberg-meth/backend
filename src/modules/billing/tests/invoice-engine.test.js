@@ -1,4 +1,17 @@
 import { jest, describe, it, expect } from '@jest/globals';
+import path from 'path';
+import { fileURLToPath } from 'url';
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+
+const prismaPath = path.resolve(__dirname, '../../../config/prisma.js');
+const redisPath = path.resolve(__dirname, '../../../config/redis.js');
+const movementServicePath = path.resolve(__dirname, '../../stock/service/movement.service.js');
+const erpEventBusPath = path.resolve(__dirname, '../../../shared/events/erp-event-bus.js');
+const localEventBusPath = path.resolve(__dirname, '../../../shared/events/local-event-bus.js');
+const eventsConstantsPath = path.resolve(__dirname, '../../../shared/constants/events.js');
+const invoiceRepositoryPath = path.resolve(__dirname, '../repositories/invoice.repository.js');
+const invoiceEnginePath = path.resolve(__dirname, '../invoice-engine/invoice.engine.js');
 
 const mockPrisma = {
   $transaction: jest.fn((cb) =>
@@ -14,16 +27,22 @@ const mockPrisma = {
   ),
 };
 
-jest.unstable_mockModule('../../../config/prisma.js', () => ({
+jest.unstable_mockModule(prismaPath, () => ({
   default: mockPrisma,
   __esModule: true,
 }));
 
-jest.unstable_mockModule('../../../config/redis.js', () => ({
+jest.unstable_mockModule(redisPath, () => ({
   default: { get: jest.fn(), set: jest.fn(), del: jest.fn(), keys: jest.fn() },
+  initRedis: jest.fn(),
+  getBullRedis: jest
+    .fn()
+    .mockReturnValue({ get: jest.fn(), set: jest.fn(), del: jest.fn(), keys: jest.fn() }),
+  connectRedis: jest.fn(),
+  quitRedis: jest.fn(),
 }));
 
-jest.unstable_mockModule('../../stock/service/movement.service.js', () => ({
+jest.unstable_mockModule(movementServicePath, () => ({
   default: {
     stockOut: jest.fn().mockResolvedValue({
       totalDeducted: 2,
@@ -34,31 +53,34 @@ jest.unstable_mockModule('../../stock/service/movement.service.js', () => ({
   __esModule: true,
 }));
 
-jest.unstable_mockModule('../../../shared/events/erp-event-bus.js', () => ({
+jest.unstable_mockModule(erpEventBusPath, () => ({
   emitEvent: jest.fn().mockResolvedValue(undefined),
   erpEventBus: { add: jest.fn(), close: jest.fn() },
 }));
 
-jest.unstable_mockModule('../../../shared/events/local-event-bus.js', () => ({
+jest.unstable_mockModule(localEventBusPath, () => ({
   emitLocalEvent: jest.fn(),
   localEventBus: { removeAllListeners: jest.fn() },
 }));
 
-jest.unstable_mockModule('../../../shared/constants/events.js', () => ({
+jest.unstable_mockModule(eventsConstantsPath, () => ({
   DOMAIN_EVENTS: {
+    INVOICE_CREATED: 'invoice.created',
+  },
+  EVENTS: {
     INVOICE_CREATED: 'invoice.created',
   },
 }));
 
-jest.unstable_mockModule('../repositories/invoice.repository.js', () => ({
+jest.unstable_mockModule(invoiceRepositoryPath, () => ({
   default: {
     getNextInvoiceNumber: jest.fn().mockResolvedValue('INV-2026-001'),
   },
   __esModule: true,
 }));
 
-const { default: invoiceEngine } = await import('../invoice-engine/invoice.engine.js');
-const { default: prisma } = await import('../../../config/prisma.js');
+const { default: invoiceEngine } = await import(invoiceEnginePath);
+const { default: prisma } = await import(prismaPath);
 
 describe('InvoiceEngine', () => {
   const tenantId = 'tenant-1';
@@ -108,8 +130,9 @@ describe('InvoiceEngine', () => {
         findUnique: jest
           .fn()
           .mockResolvedValue({ id: 'batch-1', batchNumber: 'B1', availableQuantity: 100 }),
+        findMany: jest.fn().mockResolvedValue([{ id: 'batch-1' }]),
       },
-      invoiceItem: { create: jest.fn() },
+      invoiceItem: { createMany: jest.fn() },
       invoicePayment: { create: jest.fn() },
       invoiceAuditLog: { create: jest.fn() },
     };
@@ -169,8 +192,9 @@ describe('InvoiceEngine', () => {
         findUnique: jest
           .fn()
           .mockResolvedValue({ id: 'batch-1', batchNumber: 'B1', availableQuantity: 100 }),
+        findMany: jest.fn().mockResolvedValue([{ id: 'batch-1' }]),
       },
-      invoiceItem: { create: jest.fn() },
+      invoiceItem: { createMany: jest.fn() },
       invoicePayment: { create: jest.fn() },
       invoiceAuditLog: { create: jest.fn() },
     };

@@ -1,4 +1,27 @@
 import { jest, describe, beforeEach, it, expect } from '@jest/globals';
+import path from 'path';
+import { fileURLToPath } from 'url';
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+
+const redisPath = path.resolve(__dirname, '../../../config/redis.js');
+const prismaPath = path.resolve(__dirname, '../../../config/prisma.js');
+const queueServicePath = path.resolve(__dirname, '../queues/queue.service.js');
+const localEventBusPath = path.resolve(__dirname, '../../../shared/events/local-event-bus.js');
+const loggerPath = path.resolve(__dirname, '../../../shared/utils/logger.js');
+
+const patientPreferenceServicePath = path.resolve(
+  __dirname,
+  '../services/patient-preference.service.js',
+);
+const channelFallbackServicePath = path.resolve(
+  __dirname,
+  '../services/channel-fallback.service.js',
+);
+const throttlingServicePath = path.resolve(__dirname, '../services/throttling.service.js');
+const orchestratorServicePath = path.resolve(__dirname, '../services/orchestrator.service.js');
+const deduplicationServicePath = path.resolve(__dirname, '../services/deduplication.service.js');
+const rateLimitServicePath = path.resolve(__dirname, '../services/rate-limit.service.js');
 
 const mockRedis = {
   get: jest.fn(),
@@ -35,34 +58,39 @@ const mockPrisma = {
     upsert: jest.fn(),
     findMany: jest.fn(),
   },
+  notificationSettings: {
+    findFirst: jest.fn(),
+  },
 };
 
-const mockNotificationQueue = { add: jest.fn() };
+const mockQueueService = {
+  enqueue: jest.fn().mockResolvedValue({ id: 'job-1' }),
+  getMetrics: jest.fn().mockResolvedValue({}),
+};
 const mockEmitLocalEvent = jest.fn();
 
-jest.unstable_mockModule('../../../config/redis.js', () => ({
+jest.unstable_mockModule(redisPath, () => ({
   getBullRedis: jest.fn().mockReturnValue({}),
   default: mockRedis,
 }));
-jest.unstable_mockModule('../../../config/prisma.js', () => ({ default: mockPrisma }));
-jest.unstable_mockModule('../queue/notification.queue.js', () => ({
-  notificationQueue: mockNotificationQueue,
+jest.unstable_mockModule(prismaPath, () => ({ default: mockPrisma }));
+jest.unstable_mockModule(queueServicePath, () => ({
+  default: mockQueueService,
 }));
-jest.unstable_mockModule('../../../shared/events/local-event-bus.js', () => ({
+jest.unstable_mockModule(localEventBusPath, () => ({
   emitLocalEvent: mockEmitLocalEvent,
   localEventBus: { removeAllListeners: jest.fn() },
 }));
-jest.unstable_mockModule('../../../shared/utils/logger.js', () => ({
+jest.unstable_mockModule(loggerPath, () => ({
   default: { info: jest.fn(), error: jest.fn(), warn: jest.fn(), debug: jest.fn() },
 }));
 
-const patientPreferenceService = (await import('../services/patient-preference.service.js'))
-  .default;
-const channelFallbackService = (await import('../services/channel-fallback.service.js')).default;
-const throttlingService = (await import('../services/throttling.service.js')).default;
-const orchestratorService = (await import('../services/orchestrator.service.js')).default;
-const deduplicationService = (await import('../services/deduplication.service.js')).default;
-const rateLimitService = (await import('../services/rate-limit.service.js')).default;
+const patientPreferenceService = (await import(patientPreferenceServicePath)).default;
+const channelFallbackService = (await import(channelFallbackServicePath)).default;
+const throttlingService = (await import(throttlingServicePath)).default;
+const orchestratorService = (await import(orchestratorServicePath)).default;
+const deduplicationService = (await import(deduplicationServicePath)).default;
+const rateLimitService = (await import(rateLimitServicePath)).default;
 
 describe('PatientCommunicationPreferenceService', () => {
   beforeEach(() => {

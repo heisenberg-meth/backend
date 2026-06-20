@@ -149,6 +149,143 @@ class PurchaseOrderFastifyController {
       return reply.code(400).send({ success: false, error: error.message });
     }
   }
+
+  async createReorder(request, reply) {
+    const tenantId = request.tenantId;
+    const userId = request.user.id;
+    const { medicineId, quantity } = request.body;
+    try {
+      const result = await purchaseOrderService.createReorder(tenantId, userId, { medicineId, quantity });
+      return reply.code(201).send({ success: true, data: result });
+    } catch (error) {
+      logger.error({ error, tenantId }, 'Failed to create reorder');
+      return reply.code(400).send({ success: false, error: error.message });
+    }
+  }
+
+  async generatePdf(request, reply) {
+    const { id } = request.params;
+    const tenantId = request.tenantId;
+    try {
+      const order = await purchaseOrderService.getOrderById(tenantId, id);
+      if (!order) return reply.code(404).send({ success: false, error: 'Order not found' });
+
+      const supplier = order.supplier?.name ?? 'Unknown Supplier';
+      const poNumber = order.orderNumber;
+      const createdAt = new Date(order.createdAt).toLocaleDateString('en-IN');
+      const items = order.items ?? [];
+
+      const rows = items
+        .map(
+          (item, i) => `
+          <tr>
+            <td>${i + 1}</td>
+            <td>${item.medicineName ?? 'Unknown'}</td>
+            <td>${item.quantity}</td>
+            <td>&#8377;${Number(item.unitPrice ?? 0).toFixed(2)}</td>
+            <td>${Number(item.gstPercentage ?? 0)}%</td>
+            <td>&#8377;${Number(item.totalAmount ?? 0).toFixed(2)}</td>
+          </tr>`,
+        )
+        .join('');
+
+      const html = `<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>Purchase Order ${poNumber}</title>
+<style>
+  body { font-family: Arial, sans-serif; margin: 40px; color: #1a1a2e; font-size: 14px; }
+  .header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 32px; }
+  .logo-area h1 { color: #6c63ff; font-size: 28px; margin: 0; }
+  .logo-area p { margin: 4px 0 0; color: #6b7280; font-size: 13px; }
+  .po-meta { text-align: right; }
+  .po-meta .po-number { font-size: 20px; font-weight: 700; color: #1a1a2e; }
+  .po-meta p { margin: 4px 0; color: #6b7280; }
+  .divider { border: none; border-top: 2px solid #e5e7eb; margin: 20px 0; }
+  .info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; margin-bottom: 28px; }
+  .info-box label { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: #9ca3af; }
+  .info-box p { margin: 4px 0 0; font-weight: 600; }
+  table { width: 100%; border-collapse: collapse; margin-bottom: 24px; }
+  th { background: #6c63ff; color: #fff; padding: 12px 16px; text-align: left; font-size: 12px; text-transform: uppercase; }
+  td { padding: 12px 16px; border-bottom: 1px solid #f3f4f6; }
+  tr:nth-child(even) td { background: #fafafa; }
+  .totals { display: flex; justify-content: flex-end; }
+  .totals-table { width: 300px; }
+  .totals-table td { border: none; padding: 6px 16px; }
+  .totals-table .total-row td { font-weight: 700; font-size: 16px; background: #f5f3ff; color: #6c63ff; }
+  .footer { margin-top: 40px; text-align: center; color: #9ca3af; font-size: 12px; }
+  .status-badge { display: inline-block; background: #fef3c7; color: #d97706; padding: 4px 12px; border-radius: 20px; font-size: 12px; font-weight: 700; }
+</style>
+</head>
+<body>
+<div class="header">
+  <div class="logo-area">
+    <h1>ViyanMedAssist</h1>
+    <p>Pharmacy Management System</p>
+  </div>
+  <div class="po-meta">
+    <div class="po-number">PURCHASE ORDER</div>
+    <p><strong>#${poNumber}</strong></p>
+    <p>Date: ${createdAt}</p>
+    <span class="status-badge">${order.status}</span>
+  </div>
+</div>
+<hr class="divider">
+<div class="info-grid">
+  <div class="info-box">
+    <label>Supplier</label>
+    <p>${supplier}</p>
+  </div>
+  <div class="info-box">
+    <label>Purchase Order Number</label>
+    <p>${poNumber}</p>
+  </div>
+  <div class="info-box">
+    <label>Order Date</label>
+    <p>${createdAt}</p>
+  </div>
+  <div class="info-box">
+    <label>Status</label>
+    <p>${order.status}</p>
+  </div>
+</div>
+<table>
+  <thead>
+    <tr>
+      <th>#</th>
+      <th>Medicine</th>
+      <th>Qty</th>
+      <th>Unit Price</th>
+      <th>GST</th>
+      <th>Total</th>
+    </tr>
+  </thead>
+  <tbody>${rows}</tbody>
+</table>
+<div class="totals">
+  <table class="totals-table">
+    <tr><td>Subtotal</td><td>&#8377;${Number(order.subtotal ?? 0).toFixed(2)}</td></tr>
+    <tr><td>GST</td><td>&#8377;${Number(order.gstAmount ?? 0).toFixed(2)}</td></tr>
+    <tr class="total-row"><td>Total Amount</td><td>&#8377;${Number(order.totalAmount ?? 0).toFixed(2)}</td></tr>
+  </table>
+</div>
+${order.notes ? `<p style="color:#6b7280;font-size:12px;margin-top:24px;"><strong>Notes:</strong> ${order.notes}</p>` : ''}
+<div class="footer">
+  <p>Generated by ViyanMedAssist &bull; Purchase Order ${poNumber}</p>
+</div>
+</body>
+</html>`;
+
+      return reply
+        .header('Content-Type', 'text/html; charset=utf-8')
+        .header('Content-Disposition', `inline; filename="${poNumber}.html"`)
+        .send(html);
+    } catch (error) {
+      logger.error({ error, id, tenantId }, 'Failed to generate PO PDF');
+      return reply.code(500).send({ success: false, error: 'Failed to generate purchase order PDF' });
+    }
+  }
 }
 
 export default new PurchaseOrderFastifyController();

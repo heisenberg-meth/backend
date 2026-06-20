@@ -98,10 +98,10 @@ class BulkImportService {
 
       const name = rawRow.name ? String(rawRow.name).trim() : '';
       const qtyStr =
-        rawRow.qty !== undefined && rawRow.qty !== null ? String(rawRow.qty).trim() : '0';
+        rawRow.qty !== undefined && rawRow.qty !== null ? String(rawRow.qty).trim() : '';
       const expiryStr = rawRow.expiry ? String(rawRow.expiry).trim() : '';
       const priceStr =
-        rawRow.price !== undefined && rawRow.price !== null ? String(rawRow.price).trim() : '0';
+        rawRow.price !== undefined && rawRow.price !== null ? String(rawRow.price).trim() : '';
       const batch = rawRow.batch ? String(rawRow.batch).trim() : '';
       const barcode = rawRow.barcode ? String(rawRow.barcode).trim() : '';
       const category = rawRow.category ? String(rawRow.category).trim() : '';
@@ -116,7 +116,7 @@ class BulkImportService {
 
       const hsnCode = rawRow.hsnCode ? String(rawRow.hsnCode).trim() : '';
 
-      const gstPercentage = rawRow.gstPercentage ? parseFloat(rawRow.gstPercentage) : 0;
+      const gstPercentage = this._parseGst(rawRow.gstPercentage);
 
       const validationErrors = [];
       const validationWarnings = [];
@@ -125,7 +125,7 @@ class BulkImportService {
         validationErrors.push('Medicine name is required');
       }
 
-      const qty = parseInt(qtyStr, 10);
+      const qty = this._parseQuantity(qtyStr);
       if (isNaN(qty) || qty <= 0) {
         validationErrors.push('Invalid quantity (must be greater than zero)');
       }
@@ -144,7 +144,7 @@ class BulkImportService {
         }
       }
 
-      const price = parseFloat(priceStr);
+      const price = this._parsePrice(priceStr);
       const pricingError = validatePricing({
         purchasePrice: price,
         sellingPrice: price * 1.2,
@@ -648,6 +648,30 @@ class BulkImportService {
       data: { tenantId, name: manufacturerName },
     });
     return created.id;
+  }
+
+  _parseQuantity(val) {
+    if (val === undefined || val === null) return NaN;
+    const clean = String(val).trim().replace(/,/g, '').replace(/[^0-9.-]/g, '');
+    if (clean === '') return NaN;
+    const num = parseFloat(clean);
+    return isNaN(num) ? NaN : Math.round(num);
+  }
+
+  _parsePrice(val) {
+    if (val === undefined || val === null) return NaN;
+    const clean = String(val).trim().replace(/,/g, '').replace(/[^0-9.-]/g, '');
+    if (clean === '') return NaN;
+    const num = parseFloat(clean);
+    return isNaN(num) ? NaN : num;
+  }
+
+  _parseGst(val) {
+    if (val === undefined || val === null) return 0;
+    const clean = String(val).trim().replace(/%/g, '').replace(/,/g, '').replace(/[^0-9.-]/g, '');
+    if (clean === '') return 0;
+    const num = parseFloat(clean);
+    return isNaN(num) ? 0 : num;
   }
 
   parseExpiryDate(dateStr) {

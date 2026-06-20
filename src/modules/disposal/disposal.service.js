@@ -244,10 +244,6 @@ class DisposalService {
     const [disposals, total] = await Promise.all([
       prisma.inventoryDisposal.findMany({
         where,
-        include: {
-          medicine: { select: { id: true, name: true } },
-          disposer: { select: { id: true, fullName: true } },
-        },
         orderBy: { disposedAt: 'desc' },
         skip,
         take: limit,
@@ -255,7 +251,43 @@ class DisposalService {
       prisma.inventoryDisposal.count({ where }),
     ]);
 
-    return { items: disposals, total, page, limit };
+    // Gather unique medicineIds and disposedBy userIds for batch lookup
+    const medicineIds = [...new Set(disposals.map((d) => d.medicineId).filter(Boolean))];
+    const userIds = [...new Set(disposals.map((d) => d.disposedBy).filter(Boolean))];
+
+    const [medicines, users] = await Promise.all([
+      medicineIds.length > 0
+        ? prisma.medicine.findMany({
+            where: { id: { in: medicineIds } },
+            select: { id: true, name: true },
+          })
+        : [],
+      userIds.length > 0
+        ? prisma.user.findMany({
+            where: { id: { in: userIds } },
+            select: { id: true, fullName: true },
+          })
+        : [],
+    ]);
+
+    const medicineMap = new Map(medicines.map((m) => [m.id, m]));
+    const userMap = new Map(users.map((u) => [u.id, u]));
+
+    const items = disposals.map((d) => ({
+      id: d.id,
+      tenantId: d.tenantId,
+      branchId: d.branchId,
+      medicineId: d.medicineId,
+      medicineName: medicineMap.get(d.medicineId)?.name ?? null,
+      batchId: d.batchId,
+      quantity: d.quantity,
+      reason: d.reason,
+      disposedBy: d.disposedBy,
+      disposedByName: userMap.get(d.disposedBy)?.fullName ?? null,
+      disposedAt: d.disposedAt,
+    }));
+
+    return { items, total, page, limit };
   }
 }
 

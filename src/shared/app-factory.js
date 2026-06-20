@@ -50,10 +50,10 @@ const createServiceApp = async (options = {}) => {
       directives: {
         defaultSrc: ["'self'"],
         baseUri: ["'self'"],
-        fontSrc: ["'self'", 'https:', 'data:'],
+        fontSrc: ["'self'", 'https://fonts.gstatic.com', 'https:', 'data:'],
         formAction: ["'self'"],
         frameAncestors: ["'self'"],
-        imgSrc: ["'self'", 'data:', 'validator.swagger.io', 'https://*.razorpay.com'],
+        imgSrc: ["'self'", 'data:', 'https:', 'validator.swagger.io', 'https://*.razorpay.com'],
         objectSrc: ["'none'"],
         scriptSrc: [
           "'self'",
@@ -70,7 +70,7 @@ const createServiceApp = async (options = {}) => {
           'https://*.razorpay.com',
         ],
         scriptSrcAttr: ["'none'"],
-        styleSrc: ["'self'", 'https:', "'unsafe-inline'"],
+        styleSrc: ["'self'", 'https:', 'https://fonts.googleapis.com', "'unsafe-inline'", 'https://*.razorpay.com'],
         frameSrc: [
           "'self'",
           'https://api.razorpay.com',
@@ -82,6 +82,7 @@ const createServiceApp = async (options = {}) => {
           'https://api.razorpay.com',
           'https://checkout.razorpay.com',
           'https://*.razorpay.com',
+          'wss://*.razorpay.com',
         ],
         upgradeInsecureRequests: [],
       },

@@ -1,4 +1,15 @@
 import { jest, describe, afterEach, it, expect } from '@jest/globals';
+import path from 'path';
+import { fileURLToPath } from 'url';
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+
+const prismaPath = path.resolve(__dirname, '../../../../config/prisma.js');
+const ledgerServicePath = path.resolve(__dirname, '../ledger/ledger.service.js');
+const erpEventBusPath = path.resolve(__dirname, '../../../../shared/events/erp-event-bus.js');
+const localEventBusPath = path.resolve(__dirname, '../../../../shared/events/local-event-bus.js');
+const eventsConstantsPath = path.resolve(__dirname, '../../../../shared/constants/events.js');
+const settlementServicePath = path.resolve(__dirname, '../reconciliation/settlement.service.js');
 
 // Define mocks first
 const mockPrisma = {
@@ -17,27 +28,27 @@ const mockLedgerService = {
   createEntry: jest.fn(),
 };
 
-jest.unstable_mockModule('../../../../config/prisma.js', () => ({
+jest.unstable_mockModule(prismaPath, () => ({
   default: mockPrisma,
   __esModule: true,
 }));
 
-jest.unstable_mockModule('../ledger/ledger.service.js', () => ({
+jest.unstable_mockModule(ledgerServicePath, () => ({
   default: mockLedgerService,
   __esModule: true,
 }));
 
-jest.unstable_mockModule('../../../../shared/events/erp-event-bus.js', () => ({
+jest.unstable_mockModule(erpEventBusPath, () => ({
   emitEvent: jest.fn().mockResolvedValue(undefined),
   erpEventBus: { add: jest.fn(), close: jest.fn() },
 }));
 
-jest.unstable_mockModule('../../../../shared/events/local-event-bus.js', () => ({
+jest.unstable_mockModule(localEventBusPath, () => ({
   emitLocalEvent: jest.fn(),
   localEventBus: { removeAllListeners: jest.fn() },
 }));
 
-jest.unstable_mockModule('../../../../shared/constants/events.js', () => ({
+jest.unstable_mockModule(eventsConstantsPath, () => ({
   DOMAIN_EVENTS: {
     SUPPLIER_INVOICE_RECONCILED: 'supplier.invoice.reconciled',
     SUPPLIER_PAYMENT_MADE: 'supplier.payment.made',
@@ -54,8 +65,8 @@ jest.unstable_mockModule('../../../../shared/constants/events.js', () => ({
 }));
 
 // Dynamic Imports
-const { default: settlementService } = await import('../reconciliation/settlement.service.js');
-const { default: prisma } = await import('../../../../config/prisma.js');
+const { default: settlementService } = await import(settlementServicePath);
+const { default: prisma } = await import(prismaPath);
 
 describe('SettlementService', () => {
   const tenantId = 'test-tenant';
