@@ -149,6 +149,7 @@ class MedicinePrismaRepository {
                 id: true,
                 batchNumber: true,
                 quantity: true,
+                availableQuantity: true,
                 reservedQuantity: true,
                 expiryDate: true,
                 sellingPrice: true,
@@ -194,7 +195,7 @@ class MedicinePrismaRepository {
       // ── FEFO: first non-empty, non-expired, active batch (ground truth)
       const now = new Date();
       const activeBatches = (m.inventoryBatches || []).filter(
-        (b) => b.quantity > 0 && b.status === 'ACTIVE' && new Date(b.expiryDate) > now,
+        (b) => b.availableQuantity > 0 && b.status === 'ACTIVE' && new Date(b.expiryDate) > now,
       );
       const fefo = activeBatches[0] || null;
 
@@ -204,7 +205,7 @@ class MedicinePrismaRepository {
         0,
       );
       const batchAvailableStock = activeBatches.reduce(
-        (sum, b) => sum + (b.quantity || 0) - (b.reservedQuantity || 0),
+        (sum, b) => sum + (b.availableQuantity || 0),
         0,
       );
 
@@ -286,7 +287,7 @@ class MedicinePrismaRepository {
 
     const now = new Date();
     const activeBatches = (medicine.inventoryBatches || []).filter(
-      (b) => b.quantity > 0 && b.status === 'ACTIVE' && new Date(b.expiryDate) > now,
+      (b) => b.availableQuantity > 0 && b.status === 'ACTIVE' && new Date(b.expiryDate) > now,
     );
     const fefo = activeBatches[0] || null;
 
@@ -296,7 +297,7 @@ class MedicinePrismaRepository {
       0,
     );
     const batchAvailableStock = activeBatches.reduce(
-      (sum, b) => sum + (b.quantity || 0) - (b.reservedQuantity || 0),
+      (sum, b) => sum + (b.availableQuantity || 0),
       0,
     );
 

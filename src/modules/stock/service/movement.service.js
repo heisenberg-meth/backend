@@ -33,13 +33,17 @@ class MovementService {
         const take = Math.min(remaining, batch.availableQuantity);
         remaining -= take;
 
-        await tx.inventoryBatch.update({
+        const updatedBatch = await tx.inventoryBatch.update({
           where: { id: batch.id },
           data: {
             quantity: batch.quantity - take,
             availableQuantity: batch.availableQuantity - take,
           },
         });
+
+        if (updatedBatch.availableQuantity < 0) {
+          throw new Error('Inventory corruption detected');
+        }
 
         deductions.push({ batchId: batch.id, quantity: take });
       }
@@ -213,6 +217,10 @@ class MovementService {
           availableQuantity: { increment: quantity },
         },
       });
+
+      if (updatedBatch.availableQuantity < 0) {
+        throw new Error('Inventory corruption detected');
+      }
 
       await ledgerRepository.createTransaction(
         {
