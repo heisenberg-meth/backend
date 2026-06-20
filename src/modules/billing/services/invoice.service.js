@@ -14,8 +14,8 @@ class InvoiceService {
     return normalizeInvoice(invoice);
   }
 
-  async finalize(id, tenantId, userId, tx = null) {
-    const invoice = await invoiceEngine.finalize(id, tenantId, userId, tx);
+  async finalize(id, tenantId, userId, tx = null, paymentMode = null) {
+    const invoice = await invoiceEngine.finalize(id, tenantId, userId, tx, paymentMode);
     return normalizeInvoice(invoice);
   }
 

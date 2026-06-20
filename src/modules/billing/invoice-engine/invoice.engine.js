@@ -11,6 +11,16 @@ import creditService from '../../loyalty/credits/credit.service.js';
 import cacheInvalidatorService from '../../inventory/service/cache-invalidator.service.js';
 import logger from '../../../shared/utils/logger.js';
 
+/**
+ * Resolve the Sale paymentStatus from a payment mode string.
+ * CASH / UPI / CARD → PAID  (immediate settlement)
+ * CREDIT / unknown  → PENDING (on-account / deferred)
+ */
+function resolvePaymentStatus(paymentMode) {
+  const immediate = ['CASH', 'UPI', 'CARD'];
+  return immediate.includes((paymentMode || '').toUpperCase()) ? 'PAID' : 'PENDING';
+}
+
 class InvoiceEngine {
   _safeNumber(value) {
     const num = Number(value);
@@ -336,7 +346,7 @@ class InvoiceEngine {
     return tx ? execute(tx) : prisma.$transaction(execute);
   }
 
-  async finalize(invoiceId, tenantId, userId, tx = null) {
+  async finalize(invoiceId, tenantId, userId, tx = null, paymentMode = null) {
     const execute = async (t) => {
       const invoice = await t.invoice.findFirst({
         where: { id: invoiceId, tenantId, status: 'DRAFT' },
@@ -392,7 +402,8 @@ class InvoiceEngine {
           totalAmount: invoice.totalAmount,
           soldBy: userId,
           patientId: invoice.patientId,
-          paymentStatus: invoice.paymentStatus === 'PAID' ? 'PAID' : 'PENDING',
+          paymentMethod: paymentMode || null,
+          paymentStatus: paymentMode ? resolvePaymentStatus(paymentMode) : 'PENDING',
           status: 'COMPLETED',
         },
       });
@@ -489,6 +500,25 @@ class InvoiceEngine {
           status: isFullyPaid && invoice.status === 'FINALIZED' ? 'PAID' : invoice.status,
         },
       });
+
+      // Sync with corresponding Sale record
+      const sale = await t.sale.findUnique({
+        where: { invoiceId },
+      });
+
+      if (sale) {
+        let salePaymentStatus = 'PARTIAL';
+        if (isFullyPaid) {
+          salePaymentStatus = paymentData.paymentMode === 'CREDIT' ? 'PENDING' : 'PAID';
+        }
+        await t.sale.update({
+          where: { id: sale.id },
+          data: {
+            paymentStatus: salePaymentStatus,
+            paymentMethod: paymentData.paymentMode || sale.paymentMethod,
+          },
+        });
+      }
 
       if (paymentData.paymentMode === 'CREDIT' && invoice.patientId) {
         await creditService.issueCredit(

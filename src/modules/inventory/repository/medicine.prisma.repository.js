@@ -145,6 +145,18 @@ class MedicinePrismaRepository {
             inventoryBatches: {
               where: { ...(targetBranchId ? { branchId: targetBranchId } : {}), deletedAt: null },
               orderBy: { expiryDate: 'asc' },
+              select: {
+                id: true,
+                batchNumber: true,
+                quantity: true,
+                reservedQuantity: true,
+                expiryDate: true,
+                sellingPrice: true,
+                mrp: true,
+                purchasePrice: true,
+                status: true,
+                branchId: true,
+              },
             },
           },
         });
@@ -179,12 +191,25 @@ class MedicinePrismaRepository {
     }
 
     const formattedMedicines = medicines.map((m) => {
-      const latestBatch = m.inventoryBatches?.[0] || null;
+      // ── FEFO: first non-empty, non-expired, active batch (ground truth)
+      const now = new Date();
+      const activeBatches = (m.inventoryBatches || []).filter(
+        (b) => b.quantity > 0 && b.status === 'ACTIVE' && new Date(b.expiryDate) > now,
+      );
+      const fefo = activeBatches[0] || null;
 
-      // Helper to safely convert Decimal to Number
-      const toNum = (val) => (val ? Number(val) : 0);
+      // ── Compute available stock from InventoryBatch (authoritative source)
+      const batchTotalStock = (m.inventoryBatches || []).reduce(
+        (sum, b) => sum + (b.quantity || 0),
+        0,
+      );
+      const batchAvailableStock = activeBatches.reduce(
+        (sum, b) => sum + (b.quantity || 0) - (b.reservedQuantity || 0),
+        0,
+      );
 
-      let stock = 0;
+      // Fall back to Inventory table if batches missing (legacy)
+      let stock = batchTotalStock || 0;
       let reservedStock = 0;
       let reorderLevel = m.reorderLevel ?? 10;
       let rackLocation = null;
@@ -192,13 +217,11 @@ class MedicinePrismaRepository {
 
       if (targetBranchId) {
         const inv = m.inventory?.[0] || null;
-        stock = inv?.currentStock ?? 0;
         reservedStock = inv?.reservedStock ?? 0;
         reorderLevel = inv?.reorderPoint ?? m.reorderLevel ?? 10;
         rackLocation = inv?.rackLocation ?? null;
         status = inv?.status ?? 'HEALTHY';
       } else {
-        stock = m.inventory?.reduce((sum, inv) => sum + (inv.currentStock ?? 0), 0) ?? 0;
         reservedStock = m.inventory?.reduce((sum, inv) => sum + (inv.reservedStock ?? 0), 0) ?? 0;
         reorderLevel =
           m.inventory && m.inventory.length > 0
@@ -212,22 +235,25 @@ class MedicinePrismaRepository {
         status = m.inventory?.some((inv) => inv.status === 'CRITICAL') ? 'CRITICAL' : 'HEALTHY';
       }
 
+      const availableStock = batchAvailableStock;
+      const toNum = (val) => (val ? Number(val) : 0);
+
       return {
         ...m,
-        // Flat standard fields
         stock,
-        availableStock: stock - reservedStock,
+        availableStock,
         reservedStock,
         reorderLevel,
         rackLocation,
         status,
+        isOutOfStock: availableStock <= 0,
 
-        // Batch info - convert Decimal to Number for JSON serialization
-        batchId: latestBatch?.id ?? null,
-        batchNumber: latestBatch?.batchNumber ?? null,
-        expiryDate: latestBatch?.expiryDate ?? null,
-        mrp: toNum(latestBatch?.mrp),
-        purchasePrice: toNum(latestBatch?.purchasePrice),
+        // FEFO batch fields — only from a batch with actual stock
+        batchId: fefo?.id ?? null,
+        batchNumber: fefo?.batchNumber ?? null,
+        expiryDate: fefo?.expiryDate ?? null,
+        mrp: toNum(fefo?.mrp),
+        purchasePrice: toNum(fefo?.purchasePrice),
 
         // Backward compatibility
         currentStock: stock,
@@ -258,7 +284,23 @@ class MedicinePrismaRepository {
 
     if (!medicine) return null;
 
-    let stock = 0;
+    const now = new Date();
+    const activeBatches = (medicine.inventoryBatches || []).filter(
+      (b) => b.quantity > 0 && b.status === 'ACTIVE' && new Date(b.expiryDate) > now,
+    );
+    const fefo = activeBatches[0] || null;
+
+    // Compute from batches (ground truth)
+    const batchTotalStock = (medicine.inventoryBatches || []).reduce(
+      (sum, b) => sum + (b.quantity || 0),
+      0,
+    );
+    const batchAvailableStock = activeBatches.reduce(
+      (sum, b) => sum + (b.quantity || 0) - (b.reservedQuantity || 0),
+      0,
+    );
+
+    let stock = batchTotalStock || 0;
     let reservedStock = 0;
     let reorderLevel = medicine.reorderLevel ?? 10;
     let rackLocation = null;
@@ -266,13 +308,11 @@ class MedicinePrismaRepository {
 
     if (targetBranchId) {
       const inv = medicine.inventory?.[0] || null;
-      stock = inv?.currentStock ?? 0;
       reservedStock = inv?.reservedStock ?? 0;
       reorderLevel = inv?.reorderPoint ?? medicine.reorderLevel ?? 10;
       rackLocation = inv?.rackLocation ?? null;
       status = inv?.status ?? 'HEALTHY';
     } else {
-      stock = medicine.inventory?.reduce((sum, inv) => sum + (inv.currentStock ?? 0), 0) ?? 0;
       reservedStock =
         medicine.inventory?.reduce((sum, inv) => sum + (inv.reservedStock ?? 0), 0) ?? 0;
       reorderLevel =
@@ -292,23 +332,22 @@ class MedicinePrismaRepository {
         : 'HEALTHY';
     }
 
-    const latestBatch = medicine.inventoryBatches[0];
     return {
       ...medicine,
-      // Flat standard fields for frontend
       stock,
-      availableStock: stock - reservedStock,
+      availableStock: batchAvailableStock,
       reservedStock,
       reorderLevel,
       rackLocation,
       status,
+      isOutOfStock: batchAvailableStock <= 0,
 
-      // Latest batch info flattened
-      batchId: latestBatch?.id || null,
-      batchNumber: latestBatch?.batchNumber || null,
-      expiryDate: latestBatch?.expiryDate || null,
-      mrp: latestBatch?.mrp || 0,
-      purchasePrice: latestBatch?.purchasePrice || 0,
+      // FEFO batch (only a batch with actual stock)
+      batchId: fefo?.id || null,
+      batchNumber: fefo?.batchNumber || null,
+      expiryDate: fefo?.expiryDate || null,
+      mrp: fefo?.mrp || 0,
+      purchasePrice: fefo?.purchasePrice || 0,
 
       // Legacy compatibility
       currentStock: stock,

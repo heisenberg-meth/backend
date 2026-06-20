@@ -105,6 +105,27 @@ class SettlementService {
         },
       });
 
+      // Sync with corresponding Sale record
+      const sale = await tx.sale.findUnique({
+        where: { invoiceId: invoice.id },
+      });
+
+      if (sale) {
+        let salePaymentStatus = 'PARTIAL';
+        if (newBalanceAmount <= 0.01) {
+          const isCredit = payments.some((p) => p.method === 'CREDIT');
+          salePaymentStatus = isCredit ? 'PENDING' : 'PAID';
+        }
+        const lastPaymentMethod = payments[payments.length - 1]?.method || sale.paymentMethod;
+        await tx.sale.update({
+          where: { id: sale.id },
+          data: {
+            paymentStatus: salePaymentStatus,
+            paymentMethod: lastPaymentMethod,
+          },
+        });
+      }
+
       // 6. Record Idempotency
       const result = {
         success: true,

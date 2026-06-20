@@ -40,7 +40,18 @@ class BillingService {
     return await prisma.$transaction(async (tx) => {
       const draft = await invoiceService.createDraft(tenantId, userId, data, tx);
 
-      const finalized = await invoiceService.finalize(draft.id, tenantId, userId, tx);
+      // Resolve the primary paymentMode from data (supports single-mode or split payments)
+      const primaryPaymentMode =
+        data.paymentMode ||
+        (data.payments && data.payments.length > 0 ? data.payments[0].paymentMode : null);
+
+      const finalized = await invoiceService.finalize(
+        draft.id,
+        tenantId,
+        userId,
+        tx,
+        primaryPaymentMode,
+      );
 
       const payments = data.payments || [];
       if (payments.length === 0 && data.paymentMode) {
