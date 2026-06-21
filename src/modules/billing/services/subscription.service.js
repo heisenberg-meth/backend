@@ -7,10 +7,11 @@ class SubscriptionService {
       const payment = await tx.payment.create({
         data: {
           tenantId,
-          providerName: details.provider,
-          providerPaymentId,
+          transactionId: providerPaymentId,
+          razorpayPaymentId: providerPaymentId,
           amount: details.amount,
-          paymentStatus: 'SUCCESS',
+          status: 'SUCCESS',
+          paymentProvider: details.provider || 'RAZORPAY',
         },
       });
 

@@ -75,7 +75,7 @@ class AlertService {
       const cached = await redisClient.get(cacheKey);
       if (cached) return JSON.parse(cached);
     } catch (err) {
-      logger.error('[REDIS ERROR]', err);
+      logger.warn('[REDIS ERROR]', err);
     }
 
     const alerts = await alertRepository.findActiveAlerts(tenantId);
@@ -83,7 +83,7 @@ class AlertService {
     try {
       await redisClient.set(cacheKey, JSON.stringify(alerts), 'EX', 300);
     } catch (err) {
-      logger.error('[REDIS ERROR]', err);
+      logger.warn('[REDIS ERROR]', err);
     }
 
     return alerts;
@@ -99,7 +99,7 @@ class AlertService {
     try {
       await redisClient.del(`stock:alerts:${tenantId}`);
     } catch (err) {
-      logger.error('[REDIS ERROR]', err);
+      logger.warn('[REDIS ERROR]', err);
     }
   }
 }

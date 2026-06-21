@@ -5,11 +5,11 @@ import logger from '../../../shared/utils/logger.js';
 import unifiedInventorySummaryService from '../../inventory/service/unified-inventory-summary.service.js';
 import analyticsRepository from '../../analytics/repository/analytics.repository.js';
 
-const safeMetric = async (fn, fallback = 0) => {
+const safeMetric = async (fn, fallback = 0, metricName = 'unknown') => {
   try {
     return await fn();
   } catch (error) {
-    logger.error({ err: error }, 'Dashboard metric query failed');
+    logger.error({ err: error, metric: metricName }, `Dashboard metric "${metricName}" query failed — returning fallback ${fallback}`);
     return fallback;
   }
 };

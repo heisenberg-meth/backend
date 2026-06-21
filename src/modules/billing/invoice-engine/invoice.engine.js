@@ -739,18 +739,19 @@ class InvoiceEngine {
         batchNumber: batch.batchNumber,
       });
     } else {
-      const availableBatches = await tx.inventoryBatch.findMany({
-        where: {
-          tenantId,
-          branchId: invoice.branchId,
-          medicineId: item.medicineId,
-          availableQuantity: { gt: 0 },
-          deletedAt: null,
-          expiryDate: { gt: new Date() },
-          status: 'ACTIVE',
-        },
-        orderBy: { expiryDate: 'asc' },
-      });
+      const availableBatches = await tx.$queryRaw`
+        SELECT ib."id", ib."batchNumber", ib."availableQuantity"
+        FROM "InventoryBatch" ib
+        WHERE ib."tenantId" = ${tenantId}
+          AND ib."branchId" = ${invoice.branchId}
+          AND ib."medicineId" = ${item.medicineId}
+          AND ib."availableQuantity" > 0
+          AND ib."deletedAt" IS NULL
+          AND ib."expiryDate" > NOW()
+          AND ib."status" = 'ACTIVE'
+        ORDER BY ib."expiryDate" ASC
+        FOR UPDATE
+      `;
 
       let remaining = item.quantity;
       for (const b of availableBatches) {

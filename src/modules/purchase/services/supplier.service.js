@@ -9,7 +9,7 @@ class SupplierService {
       const cached = await redisClient.get(cacheKey);
       if (cached) return JSON.parse(cached);
     } catch (err) {
-      logger.error('[REDIS ERROR]', err);
+      logger.warn('[REDIS ERROR]', err);
     }
 
     const suppliers = await supplierRepository.findAll(tenantId);
@@ -17,7 +17,7 @@ class SupplierService {
     try {
       await redisClient.set(cacheKey, JSON.stringify(suppliers), 'EX', 3600); // 1 hour
     } catch (err) {
-      logger.error('[REDIS ERROR]', err);
+      logger.warn('[REDIS ERROR]', err);
     }
 
     return suppliers;
@@ -27,7 +27,7 @@ class SupplierService {
     try {
       await redisClient.del(`suppliers:${tenantId}`);
     } catch (err) {
-      logger.error('[REDIS ERROR]', err);
+      logger.warn('[REDIS ERROR]', err);
     }
   }
 

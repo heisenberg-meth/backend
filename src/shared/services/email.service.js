@@ -17,9 +17,9 @@ const EMAIL_FROM = process.env.EMAIL_FROM || 'noreply@medassist.viyaninfo.com';
  * Send email via Resend API directly (preferred)
  */
 const sendViaResend = async (to, subject, html) => {
-  if (!RESEND_API_KEY) return null;
+  if (!RESEND_API_KEY) throw new Error('RESEND_API_KEY not configured');
 
-  return new Promise((resolve) => {
+  return new Promise((resolve, reject) => {
     const data = JSON.stringify({
       from: EMAIL_FROM,
 
@@ -46,16 +46,14 @@ const sendViaResend = async (to, subject, html) => {
           if (res.statusCode === 200) {
             resolve(body);
           } else {
-            logger.error(`[RESEND_ERROR] ${res.statusCode}: ${body}`);
-            resolve(null);
+            reject(new Error(`Resend API error ${res.statusCode}: ${body}`));
           }
         });
       },
     );
 
     req.on('error', (err) => {
-      logger.error('[RESEND_ERROR]', err.message);
-      resolve(null);
+      reject(new Error(`Resend request failed: ${err.message}`));
     });
 
     req.write(data);
@@ -67,7 +65,7 @@ const sendViaResend = async (to, subject, html) => {
  * Send email via Nodemailer (Gmail SMTP fallback)
  */
 const sendViaNodemailer = async (to, subject, html) => {
-  if (!process.env.EMAIL_USER) return null;
+  if (!process.env.EMAIL_USER) throw new Error('EMAIL_USER not configured');
 
   const transporter = nodemailer.createTransport({
     service: process.env.EMAIL_SERVICE || 'gmail',
@@ -77,18 +75,13 @@ const sendViaNodemailer = async (to, subject, html) => {
     },
   });
 
-  try {
-    await transporter.sendMail({
-      from: `"Viyan MedAssist" <${process.env.EMAIL_USER}>`,
-      to,
-      subject,
-      html,
-    });
-    return true;
-  } catch (err) {
-    logger.error('[EMAIL_ERROR]', err.message);
-    return null;
-  }
+  await transporter.sendMail({
+    from: `"Viyan MedAssist" <${process.env.EMAIL_USER}>`,
+    to,
+    subject,
+    html,
+  });
+  return true;
 };
 
 /**
@@ -99,11 +92,25 @@ export const queueEmail = async (to, subject, html) => {
 };
 
 export const sendEmail = async (to, subject, html) => {
-  const resent = await sendViaResend(to, subject, html);
-  if (resent) return;
+  const errors = [];
 
-  const nodemailer = await sendViaNodemailer(to, subject, html);
-  if (nodemailer) return;
+  try {
+    await sendViaResend(to, subject, html);
+    return;
+  } catch (err) {
+    errors.push(`Resend: ${err.message}`);
+    logger.warn({ to, error: err.message }, 'Resend failed, trying Nodemailer fallback');
+  }
+
+  try {
+    await sendViaNodemailer(to, subject, html);
+    return;
+  } catch (err) {
+    errors.push(`Nodemailer: ${err.message}`);
+    logger.error({ to, error: err.message }, 'Nodemailer fallback also failed');
+  }
+
+  throw new Error(`All email providers failed: ${errors.join('; ')}`);
 };
 
 export const sendOtpEmail = async (to, otp) => {

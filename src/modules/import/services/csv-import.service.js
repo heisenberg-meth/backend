@@ -692,7 +692,8 @@ class CsvImportService {
       const redis = getBullRedis();
       const data = await redis.get(progressKey(jobId));
       return data ? JSON.parse(data) : null;
-    } catch {
+    } catch (err) {
+      logger.error({ jobId, error: err.message }, 'Failed to get import progress from Redis');
       return null;
     }
   }

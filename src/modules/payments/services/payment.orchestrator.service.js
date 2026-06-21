@@ -7,6 +7,7 @@ import paymentIdempotencyService from './payment.idempotency.service.js';
 import paymentLockService from './payment.lock.service.js';
 import subscriptionService from '../../subscriptions/subscription.service.js';
 import { getConfig } from '../../../config/payment.config.js';
+import { mainQueue } from '../../../queue/index.js';
 
 class PaymentOrchestratorService {
   async createPaymentOrder(tenantId, userId, amount, options = {}) {
@@ -104,8 +105,33 @@ class PaymentOrchestratorService {
           },
         });
       } catch (prismaTxErr) {
-        console.error('[PRISMA TRANSACTION ERROR]', prismaTxErr);
-        // Payment is created, so we don't strictly need to fail the whole flow if transaction log fails
+        logger.error(
+          { event: 'PAYMENT_TRANSACTION_RECORD_FAILED', tenantId, razorpayOrderId: razorpayOrder.id, error: prismaTxErr.message },
+          'Payment transaction record creation failed — payment order exists but transaction record missing',
+        );
+        // Queue retry to create the missing transaction record
+        try {
+          await mainQueue.add(
+            'create-transaction-record-retry',
+            {
+              paymentId: payment.id,
+              tenantId,
+              userId,
+              amount,
+              currency,
+              razorpayOrderId: razorpayOrder.id,
+              receipt: razorpayOrder.receipt,
+              notes,
+              attempt: 1,
+            },
+            { attempts: 5, backoff: { type: 'exponential', delay: 10000 } },
+          );
+        } catch (queueErr) {
+          logger.error(
+            { event: 'TRANSACTION_RECORD_RETRY_QUEUE_FAILURE', tenantId, error: queueErr.message },
+            'Failed to queue transaction record retry',
+          );
+        }
       }
     }
 

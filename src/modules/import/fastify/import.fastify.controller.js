@@ -187,8 +187,8 @@ class ImportFastifyController {
   }
 
   async getImportStatus(request, reply) {
+    const { jobId } = request.params;
     try {
-      const { jobId } = request.params;
       const progress = await csvImportService.getProgress(jobId);
       if (!progress) {
         const job = await importService.getImportById(jobId, request.tenantId).catch(() => null);
@@ -206,8 +206,9 @@ class ImportFastifyController {
         return reply.send({ success: true, data: { processed: 0, total: 0, status: 'not_found' } });
       }
       return reply.send({ success: true, data: progress });
-    } catch {
-      return reply.send({ success: true, data: { processed: 0, total: 0, status: 'unknown' } });
+    } catch (err) {
+      request.log.error({ err, jobId }, 'Import status lookup failed');
+      return reply.code(500).send({ success: false, error: { message: 'Failed to retrieve import status', code: 'IMPORT_STATUS_FAILED' } });
     }
   }
 }

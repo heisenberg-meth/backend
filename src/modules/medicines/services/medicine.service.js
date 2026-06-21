@@ -1,6 +1,7 @@
 import medicineRepository from '../repositories/medicine.repository.js';
 import prisma from '../../../config/prisma.js';
 import redisClient from '../../../config/redis.js';
+import logger from '../../../shared/utils/logger.js';
 import auditService from '../../audit/service/audit.prisma.service.js';
 import eventBus from '../../../shared/services/eventbus.service.js';
 import { scanKeys } from '../../../shared/utils/scan-keys.js';
@@ -24,7 +25,7 @@ class MedicineIntelligenceService {
         return JSON.parse(cachedData);
       }
     } catch (err) {
-      console.error('[REDIS CACHE ERROR]', err);
+      logger.warn('[REDIS CACHE ERROR]', err);
     }
 
     const { q, search, categoryId, manufacturerId, isActive, lowStock, sortBy, order, schedule } =
@@ -50,7 +51,7 @@ class MedicineIntelligenceService {
     try {
       await redisClient.set(cacheKey, JSON.stringify(result), 'EX', 300);
     } catch (err) {
-      console.error('[REDIS CACHE ERROR]', err);
+      logger.warn('[REDIS CACHE ERROR]', err);
     }
 
     return result;
@@ -63,7 +64,7 @@ class MedicineIntelligenceService {
         await redisClient.del(...keys);
       }
     } catch (err) {
-      console.error('[REDIS CACHE ERROR]', err);
+      logger.warn('[REDIS CACHE ERROR]', err);
     }
   }
 

@@ -6,6 +6,7 @@ import prisma from '../../../config/prisma.js';
 import movementService from '../../stock/service/movement.service.js';
 import redisClient from '../../../config/redis.js';
 import { scanKeys } from '../../../shared/utils/scan-keys.js';
+import logger from '../../../shared/utils/logger.js';
 
 class BatchService {
   async getBatches(params) {
@@ -147,7 +148,7 @@ class BatchService {
         await redisClient.del(...keys);
       }
     } catch (err) {
-      console.error('[REDIS CACHE ERROR]', err);
+      logger.warn('[REDIS CACHE ERROR]', err);
     }
 
     return updated;

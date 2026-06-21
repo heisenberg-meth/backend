@@ -4,11 +4,15 @@ import logger from '../../../shared/utils/logger.js';
 
 class PaymentService {
   verifySignature(payload, signature, secret) {
+    if (!signature || !secret) return false;
     const expectedSignature = crypto
       .createHmac('sha256', secret)
       .update(JSON.stringify(payload))
       .digest('hex');
-    return crypto.timingSafeEqual(Buffer.from(signature), Buffer.from(expectedSignature));
+    const sigBuf = Buffer.from(signature, 'utf8');
+    const expectedBuf = Buffer.from(expectedSignature, 'utf8');
+    if (sigBuf.length !== expectedBuf.length) return false;
+    return crypto.timingSafeEqual(sigBuf, expectedBuf);
   }
 
   async handleWebhook(payload, signature, secret) {

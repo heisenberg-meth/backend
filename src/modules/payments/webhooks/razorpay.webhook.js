@@ -6,6 +6,7 @@ import { getConfig } from '../../../config/payment.config.js';
 import { VALID_STATES } from '../services/payment.state-machine.js';
 import paymentLockService from '../services/payment.lock.service.js';
 import subscriptionService from '../../subscriptions/subscription.service.js';
+import { mainQueue } from '../../../queue/index.js';
 
 class RazorpayWebhookHandler {
   verifySignature(body, signature) {
@@ -173,6 +174,25 @@ class RazorpayWebhookHandler {
           },
           'Subscription activation failed during webhook processing',
         );
+        // Queue retry so customer gets access after payment
+        try {
+          await mainQueue.add(
+            'activate-subscription-retry',
+            {
+              tenantId: payment.tenantId,
+              planId: notes.planId || 'pro',
+              billingCycle: notes.billingCycle || 'monthly',
+              paymentId: payment.id,
+              attempt: 1,
+            },
+            { attempts: 5, backoff: { type: 'exponential', delay: 30000 } },
+          );
+        } catch (queueErr) {
+          logger.error(
+            { event: 'SUBSCRIPTION_RETRY_QUEUE_FAILURE', tenantId: payment.tenantId, error: queueErr.message },
+            'Failed to queue subscription activation retry',
+          );
+        }
       }
     }
 

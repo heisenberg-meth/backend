@@ -1,5 +1,6 @@
 import prisma from '../../../config/prisma.js';
 import { scanKeys } from '../../../shared/utils/scan-keys.js';
+import logger from '../../../shared/utils/logger.js';
 
 class QueueMetricsService {
   async getQueueMetrics(tenantId) {
@@ -55,8 +56,9 @@ class QueueMetricsService {
       const waiting = keys.filter((k) => k.includes('wait')).length;
       const active = keys.filter((k) => k.includes('active')).length;
       return { waiting, active, total: waiting + active };
-    } catch {
-      return { waiting: 0, active: 0, total: 0 };
+    } catch (err) {
+      logger.error({ error: err.message }, 'Failed to get queue depth from Redis — returning null to indicate unavailable');
+      return null;
     }
   }
 }

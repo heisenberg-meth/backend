@@ -30,7 +30,17 @@ class RefundEngine {
       });
       await emitEvent(DOMAIN_EVENTS.REFUND_PROCESSED, { invoiceId: result.invoiceId, tenantId });
     } catch (err) {
-      logger.info(err);
+      logger.error({ err, invoiceId: result.invoiceId, tenantId }, 'Failed to publish refund events — scheduling retry');
+      try {
+        const { mainQueue } = await import('../../../queue/index.js');
+        await mainQueue.add(
+          'retry-refund-events',
+          { invoiceId: result.invoiceId, tenantId, attempt: 1 },
+          { attempts: 5, backoff: { type: 'exponential', delay: 15000 } },
+        );
+      } catch (queueErr) {
+        logger.error({ err: queueErr, invoiceId: result.invoiceId }, 'CRITICAL: Failed to queue refund event retry');
+      }
     }
 
     return { salesReturn: result.salesReturn, isFullRefund: result.isFullRefund };

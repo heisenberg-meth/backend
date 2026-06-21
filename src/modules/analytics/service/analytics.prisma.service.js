@@ -3,6 +3,7 @@ import { initRedis } from '../../../config/redis.js';
 import { emitEvent } from '../../../shared/events/erp-event-bus.js';
 import { DOMAIN_EVENTS } from '../../../shared/constants/events.js';
 import kpiService from './analytics.service.js';
+import logger from '@/shared/utils/logger.js';
 
 const redisClient = initRedis();
 
@@ -151,7 +152,9 @@ class AnalyticsPrismaService {
           supplierId: suppliers[0].supplierId,
           supplierName: suppliers[0].supplierName,
           share: topSupplierShare,
-        }).catch(() => {});
+        }).catch((err) =>
+          logger.warn({ err, tenantId }, 'Failed to emit supplier concentration risk event'),
+        );
       } else if (topSupplierShare > 50) {
         concentrationRisk = {
           riskLevel: 'WARNING',
@@ -432,7 +435,7 @@ class AnalyticsPrismaService {
           medicineName: i.medicineName,
           margin: i.margin,
         })),
-      }).catch(() => {});
+      }).catch((err) => logger.warn({ err, tenantId }, 'Failed to emit profit margin alert event'));
     }
 
     return {
@@ -707,7 +710,7 @@ class AnalyticsPrismaService {
         tenantId,
         signalCount: totalSignals,
         summary: result,
-      }).catch(() => {});
+      }).catch((err) => logger.warn({ err, tenantId }, 'Failed to emit fraud signal event'));
     }
 
     await redisClient.set(cacheKey, JSON.stringify(result), 'EX', 1800);

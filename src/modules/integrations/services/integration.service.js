@@ -122,8 +122,10 @@ class IntegrationService {
       if (decrypted[key]) {
         try {
           decrypted[key] = decrypt(decrypted[key]);
-        } catch {
-          logger.error({ key }, '[INTEGRATIONS] Decryption failed');
+        } catch (err) {
+          logger.error({ key, error: err.message }, '[INTEGRATIONS] Decryption failed — integration will not work with encrypted credentials');
+          // Set to null so callers know the credential is unusable rather than silently passing encrypted garbage
+          decrypted[key] = null;
         }
       }
     });

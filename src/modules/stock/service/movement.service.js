@@ -1,4 +1,5 @@
 import prisma from '../../../config/prisma.js';
+import { Prisma } from '@prisma/client';
 import logger from '../../../shared/utils/logger.js';
 import stockRepository from '../repositories/stock.repository.js';
 import ledgerRepository from '../repositories/ledger.repository.js';
@@ -19,10 +20,17 @@ class MovementService {
         whereClause.status = 'ACTIVE';
       }
 
-      const batches = await tx.inventoryBatch.findMany({
-        where: whereClause,
-        orderBy: { expiryDate: 'asc' },
-      });
+      const batches = await tx.$queryRaw`
+        SELECT ib."id", ib."batchNumber", ib."quantity", ib."availableQuantity", ib."branchId"
+        FROM "InventoryBatch" ib
+        WHERE ib."tenantId" = ${tenantId}
+          ${branchId ? Prisma.sql`AND ib."branchId" = ${branchId}` : Prisma.sql``}
+          AND ib."medicineId" = ${medicineId}
+          AND ib."deletedAt" IS NULL
+          ${whereClause.status ? Prisma.sql`AND ib."status" = ${whereClause.status}` : Prisma.sql``}
+        ORDER BY ib."expiryDate" ASC
+        FOR UPDATE
+      `;
 
       let remaining = quantity;
       const deductions = [];

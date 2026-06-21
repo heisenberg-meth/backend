@@ -15,7 +15,7 @@ class UnifiedInventorySummaryService {
           return JSON.parse(cached);
         }
       } catch (err) {
-        logger.error({ err }, '[UNIFIED_INVENTORY] Redis cache error');
+        logger.warn({ err }, '[UNIFIED_INVENTORY] Redis cache error');
       }
     }
 
@@ -109,7 +109,7 @@ class UnifiedInventorySummaryService {
     try {
       await redisClient.set(cacheKey, JSON.stringify(result), 'EX', 300);
     } catch (err) {
-      logger.error({ err }, '[UNIFIED_INVENTORY] Redis cache error');
+      logger.warn({ err }, '[UNIFIED_INVENTORY] Redis cache error');
     }
 
     return result;
@@ -122,7 +122,7 @@ class UnifiedInventorySummaryService {
         await redisClient.del(...keys);
       }
     } catch (err) {
-      logger.error({ err }, '[UNIFIED_INVENTORY] Cache invalidation error');
+      logger.warn({ err }, '[UNIFIED_INVENTORY] Cache invalidation error');
     }
   }
 

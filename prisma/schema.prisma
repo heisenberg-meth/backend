@@ -3762,23 +3762,6 @@ model SequenceCounter {
   @@index([tenantId])
 }
 
-model InventoryDisposal {
-  id         String   @id @default(uuid())
-  tenantId   String
-  branchId   String?
-  medicineId String
-  batchId    String
-  quantity   Int
-  reason     String   @default("Expired Stock")
-  disposedBy String?
-  disposedAt DateTime @default(now())
-
-  @@index([tenantId])
-  @@index([tenantId, disposedAt])
-  @@index([medicineId])
-  @@index([batchId])
-}
-
 model AdminUser {
   id           String    @id @default(uuid())
   email        String    @unique

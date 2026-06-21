@@ -304,8 +304,18 @@ class PurchaseOrderService {
     } catch (eventError) {
       logger.error(
         { message: eventError.message, orderId: id },
-        'EVENT_PUBLISH_FAILED_AFTER_APPROVE',
+        'EVENT_PUBLISH_FAILED_AFTER_APPROVE — scheduling retry',
       );
+      try {
+        const { mainQueue } = await import('../../../queue/index.js');
+        await mainQueue.add(
+          'retry-po-approved-events',
+          { orderId: id, tenantId, attempt: 1 },
+          { attempts: 5, backoff: { type: 'exponential', delay: 15000 } },
+        );
+      } catch (queueErr) {
+        logger.error({ err: queueErr, orderId: id }, 'CRITICAL: Failed to queue PO approved event retry');
+      }
     }
 
     return updated;
@@ -781,15 +791,24 @@ class PurchaseOrderService {
         await emitEvent(DOMAIN_EVENTS.PURCHASE_ORDER_RECEIVED, { orderId: id, tenantId });
         await emitEvent(DOMAIN_EVENTS.STOCK_UPDATED, { tenantId });
       } catch (eventError) {
-        // Event publishing failure should NOT fail the request
         logger.error(
           {
             message: eventError.message,
             stack: eventError.stack,
             orderId: id,
           },
-          'EVENT_PUBLISH_FAILED_AFTER_RECEIVE',
+          'EVENT_PUBLISH_FAILED_AFTER_RECEIVE — scheduling retry',
         );
+        try {
+          const { mainQueue } = await import('../../../queue/index.js');
+          await mainQueue.add(
+            'retry-po-received-events',
+            { orderId: id, tenantId, attempt: 1 },
+            { attempts: 5, backoff: { type: 'exponential', delay: 15000 } },
+          );
+        } catch (queueErr) {
+          logger.error({ err: queueErr, orderId: id }, 'CRITICAL: Failed to queue PO received event retry');
+        }
       }
 
       logger.info(

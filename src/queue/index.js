@@ -420,6 +420,73 @@ const handlers = {
       await sendWelcomeEmail(tenant.users[0].email, tenant.users[0].fullName);
     }
   },
+
+  // ── Retry handlers for critical failures ───────────────────────────────────
+
+  'activate-subscription-retry': async (data) => {
+    const { tenantId, planId, billingCycle, attempt } = data;
+    logger.info({ tenantId, attempt }, 'Retrying subscription activation');
+    const { default: subscriptionService } = await import('../modules/subscriptions/subscription.service.js');
+    await prisma.$transaction(async (tx) => {
+      await subscriptionService.createSubscription(tenantId, planId, billingCycle, tx);
+    });
+    logger.info({ tenantId }, 'Subscription activation retry succeeded');
+  },
+
+  'create-transaction-record-retry': async (data) => {
+    const { paymentId, tenantId, userId, amount, currency, razorpayOrderId, receipt, notes, attempt } = data;
+    logger.info({ paymentId, attempt }, 'Retrying transaction record creation');
+    await prisma.transaction.create({
+      data: {
+        tenantId,
+        userId,
+        amount,
+        currency,
+        razorpayOrderId,
+        receipt,
+        status: 'CREATED',
+        gatewayResponse: notes,
+      },
+    });
+    logger.info({ paymentId }, 'Transaction record creation retry succeeded');
+  },
+
+  'retry-refund-events': async (data) => {
+    const { invoiceId, tenantId, attempt } = data;
+    logger.info({ invoiceId, attempt }, 'Retrying refund events');
+    const { emitEvent } = await import('../shared/events/erp-event-bus.js');
+    const { DOMAIN_EVENTS } = await import('../shared/constants/events.js');
+    await emitEvent(DOMAIN_EVENTS.REFUND_PROCESSED, { invoiceId, tenantId });
+    logger.info({ invoiceId }, 'Refund events retry succeeded');
+  },
+
+  'retry-supplier-payment-events': async (data) => {
+    const { paymentId, tenantId, attempt } = data;
+    logger.info({ paymentId, attempt }, 'Retrying supplier payment events');
+    const { emitEvent } = await import('../shared/events/erp-event-bus.js');
+    const { DOMAIN_EVENTS } = await import('../shared/constants/events.js');
+    await emitEvent(DOMAIN_EVENTS.SUPPLIER_PAYMENT_MADE, { paymentId, tenantId });
+    logger.info({ paymentId }, 'Supplier payment events retry succeeded');
+  },
+
+  'retry-po-approved-events': async (data) => {
+    const { orderId, tenantId, attempt } = data;
+    logger.info({ orderId, attempt }, 'Retrying PO approved events');
+    const { emitEvent } = await import('../shared/events/erp-event-bus.js');
+    const { DOMAIN_EVENTS } = await import('../shared/constants/events.js');
+    await emitEvent(DOMAIN_EVENTS.PURCHASE_ORDER_APPROVED, { orderId, tenantId });
+    logger.info({ orderId }, 'PO approved events retry succeeded');
+  },
+
+  'retry-po-received-events': async (data) => {
+    const { orderId, tenantId, attempt } = data;
+    logger.info({ orderId, attempt }, 'Retrying PO received events');
+    const { emitEvent } = await import('../shared/events/erp-event-bus.js');
+    const { DOMAIN_EVENTS } = await import('../shared/constants/events.js');
+    await emitEvent(DOMAIN_EVENTS.PURCHASE_ORDER_RECEIVED, { orderId, tenantId });
+    await emitEvent(DOMAIN_EVENTS.STOCK_UPDATED, { tenantId });
+    logger.info({ orderId }, 'PO received events retry succeeded');
+  },
 };
 
 if (!isTest) {

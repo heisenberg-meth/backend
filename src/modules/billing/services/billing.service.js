@@ -6,6 +6,7 @@ import patientService from '../../patients/services/patient.service.js';
 import notificationService from '../../patients/services/notification.service.js';
 import prisma from '../../../config/prisma.js';
 import anomalyService from '../../fraud-detection/services/anomaly.service.js';
+import logger from '../../../shared/utils/logger.js';
 
 class BillingService {
   /**
@@ -72,7 +73,7 @@ class BillingService {
       try {
         await anomalyService.detectSalesAnomaly(tenantId, finalized);
       } catch (anomalyErr) {
-        console.error('[ANOMALY] Detection failed:', anomalyErr.message);
+        logger.error({ err: anomalyErr, tenantId, invoiceId: finalized.id }, 'Sales anomaly detection failed after invoice finalization');
       }
 
       return completeInvoice;
@@ -162,7 +163,7 @@ class BillingService {
         });
       }
     } catch (err) {
-      console.error('[SMS] Failed to send notification:', err.message);
+      logger.warn({ err, invoiceId: invoice?.id, tenantId }, 'Failed to send invoice SMS notification');
     }
   }
 }

@@ -1,6 +1,7 @@
 import prisma from '../../../config/prisma.js';
 import movementService from '../../stock/service/movement.service.js';
 import cacheInvalidator from '../../inventory/service/cache-invalidator.service.js';
+import logger from '../../../shared/utils/logger.js';
 
 class UnifiedRefundOrchestrator {
   /**
@@ -92,6 +93,7 @@ class UnifiedRefundOrchestrator {
 
           resolvedItems.push({
             invoiceItemId: invItem.id,
+            batchId: invItem.batchId,
             quantity: item.quantity,
             amount: itemRefund,
           });
@@ -209,7 +211,7 @@ class UnifiedRefundOrchestrator {
       }
     } catch (err) {
       // Non-critical, log but don't fail
-      console.error('[REFUND] Cache invalidation failed:', err.message);
+      logger.warn('[REFUND] Cache invalidation failed:', err.message);
     }
 
     return result;

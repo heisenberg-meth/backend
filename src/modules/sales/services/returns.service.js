@@ -2,6 +2,7 @@ import prisma from '../../../config/prisma.js';
 import salesReturnRepository from '../repositories/sales_return.repository.js';
 import auditService from '../../audit/service/audit.prisma.service.js';
 import cacheInvalidator from '../../inventory/service/cache-invalidator.service.js';
+import logger from '../../../shared/utils/logger.js';
 
 class ReturnsService {
   /**
@@ -11,16 +12,19 @@ class ReturnsService {
     const { saleItemId, quantity, reason, condition = 'sealed' } = data;
 
     const salesReturn = await prisma.$transaction(async (tx) => {
-      // 1. Validate Sale Item
-      const saleItem = await tx.saleItem.findUnique({
-        where: { id: saleItemId },
-        include: {
-          sale: true,
-          returns: true,
-          medicine: true,
-          batch: true,
-        },
-      });
+      // 1. Validate Sale Item (with row lock to prevent concurrent returns)
+      const saleItems = await tx.$queryRaw`
+        SELECT si.*, s."tenantId", s."id" as "saleId"
+        FROM "SaleItem" si
+        JOIN "Sale" s ON s."id" = si."saleId"
+        WHERE si."id" = ${saleItemId}
+        FOR UPDATE
+      `;
+      const saleItem = saleItems[0] ? {
+        ...saleItems[0],
+        sale: { tenantId: saleItems[0].tenantId, id: saleItems[0].saleId },
+        returns: await tx.salesReturn.findMany({ where: { saleItemId } }),
+      } : null;
 
       if (!saleItem || saleItem.sale.tenantId !== tenantId) {
         throw new Error('Sale item not found');
@@ -148,7 +152,7 @@ class ReturnsService {
       await cacheInvalidator.invalidateInventoryCaches(tenantId, salesReturn.medicineId);
     } catch (err) {
       // Non-critical, log but don't fail
-      console.error('[RETURN] Cache invalidation failed:', err.message);
+      logger.warn('[RETURN] Cache invalidation failed:', err.message);
     }
 
     // 9. Audit Log (outside transaction)

@@ -25,14 +25,14 @@ class PricingService {
 
   calculateInvoiceTotals(items, invoiceDiscountAmount = 0, sourceGst = '', targetGst = '') {
     let subtotal = 0;
-    let totalDiscount = invoiceDiscountAmount;
+    let totalItemDiscount = 0;
     let gstAmount = 0;
     let grandTotal = 0;
 
     const processedItems = items.map((item) => {
       const pricing = this.calculateItemPricing(item, sourceGst, targetGst);
       subtotal += pricing.subtotal;
-      totalDiscount += pricing.discountAmount;
+      totalItemDiscount += pricing.discountAmount;
       gstAmount += pricing.gstAmount;
       grandTotal += pricing.totalPrice;
 
@@ -48,7 +48,7 @@ class PricingService {
       items: processedItems,
       totals: {
         subtotal: parseFloat(subtotal.toFixed(2)),
-        discountAmount: parseFloat(totalDiscount.toFixed(2)),
+        discountAmount: parseFloat((totalItemDiscount + invoiceDiscountAmount).toFixed(2)),
         gstAmount: parseFloat(gstAmount.toFixed(2)),
         totalAmount: parseFloat(grandTotal.toFixed(2)),
       },

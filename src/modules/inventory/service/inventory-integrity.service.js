@@ -31,7 +31,7 @@ class InventoryIntegrityService {
         logger.info('Inventory Integrity Audit passed. No corruption found.');
       }
     } catch (error) {
-      logger.error({ error: error.message }, 'Failed to run Inventory Integrity Audit');
+      logger.error({ error: error.message, stack: error.stack }, 'CRITICAL: Inventory Integrity Audit FAILED — corruption detection disabled');
     }
   }
 

@@ -93,9 +93,13 @@ class PrescriptionService {
     return result;
   }
 
-  async convertToInvoice(prescriptionId) {
+  async convertToInvoice(prescriptionId, tenantId) {
     const prescription = await prescriptionRepository.findPrescriptionById(prescriptionId);
     if (!prescription) throw new Error('Prescription not found');
+
+    if (tenantId && prescription.tenantId !== tenantId) {
+      throw new Error('Prescription not found');
+    }
 
     if (prescription.verificationStatus !== 'VERIFIED') {
       throw new Error('Prescription must be verified before conversion');

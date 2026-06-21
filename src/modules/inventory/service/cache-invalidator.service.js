@@ -38,7 +38,7 @@ class CacheInvalidatorService {
         '[CACHE_INVALIDATOR] Inventory caches invalidated successfully',
       );
     } catch (err) {
-      logger.error(
+      logger.warn(
         { err, tenantId, medicineIds },
         '[CACHE_INVALIDATOR] Failed to invalidate inventory caches',
       );

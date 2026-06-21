@@ -180,12 +180,14 @@ class ReportFastifyController {
 
       let current = new Date(fromDate);
       const results = [];
+      const failed = [];
       while (current <= toDate) {
         try {
           await aggregationService.runDailyAggregation(request.tenantId, current);
           results.push(current.toISOString().split('T')[0]);
         } catch (err) {
           logger.error({ err, date: current, tenantId: request.tenantId }, 'Reaggregate date failed');
+          failed.push({ date: current.toISOString().split('T')[0], error: err.message });
         }
         current.setDate(current.getDate() + 1);
       }
@@ -194,6 +196,7 @@ class ReportFastifyController {
       return reply.send(success({
         message: `Reaggregation complete for ${results.length} days`,
         dates: results,
+        failedDays: failed.length > 0 ? failed : undefined,
       }));
     } catch (err) {
       logger.error(

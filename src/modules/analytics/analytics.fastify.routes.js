@@ -3,6 +3,7 @@ import { authenticate, requireTenant } from '../../middleware/auth.fastify.js';
 import { requirePermission } from '../../middleware/permission.fastify.js';
 import auditService from '../audit/service/audit.prisma.service.js';
 import { requireFeature } from '../../middleware/feature.guard.fastify.js';
+import logger from '../../shared/utils/logger.js';
 
 /**
  * Simple audit logging hook for analytics endpoints
@@ -19,7 +20,7 @@ const auditAnalytics = async (request, reply, payload) => {
         type: 'SYSTEM',
         username: user.fullName,
       })
-      .catch(() => {});
+      .catch((err) => logger.warn({ err, userId: user?.id }, 'Analytics audit log failed'));
   }
   return payload;
 };

@@ -80,12 +80,46 @@ class SalesFastifyController {
   async deleteSale(request, reply) {
     try {
       const { id } = request.params;
-      await salesService.getSaleById(id, request.tenantId);
-      await prisma.sale.update({
-        where: { id },
-        data: { status: 'CANCELLED', cancelledAt: new Date(), cancelledBy: request.user.id },
+      const sale = await salesService.getSaleById(id, request.tenantId);
+
+      await prisma.$transaction(async (tx) => {
+        // Restore inventory for each sale item
+        const saleItems = await tx.saleItem.findMany({
+          where: { saleId: id },
+        });
+
+        for (const item of saleItems) {
+          if (item.batchId) {
+            await tx.inventoryBatch.update({
+              where: { id: item.batchId },
+              data: {
+                quantity: { increment: item.quantity },
+                availableQuantity: { increment: item.quantity },
+              },
+            });
+          }
+          // Update inventory aggregate
+          if (item.medicineId) {
+            await tx.inventory.updateMany({
+              where: {
+                tenantId: request.tenantId,
+                medicineId: item.medicineId,
+                branchId: sale.branchId || null,
+              },
+              data: {
+                currentStock: { increment: item.quantity },
+              },
+            });
+          }
+        }
+
+        await tx.sale.update({
+          where: { id },
+          data: { status: 'CANCELLED', cancelledAt: new Date(), cancelledBy: request.user.id },
+        });
       });
-      return reply.send(success({ message: 'Sale cancelled successfully' }));
+
+      return reply.send(success({ message: 'Sale cancelled and inventory restored' }));
     } catch (error) {
       request.log.error({ err: error, endpoint: 'sales-delete' }, 'Sales error');
       return reply.code(500).send({ success: false, message: error.message });

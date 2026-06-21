@@ -37,7 +37,6 @@ class PurchaseService {
       status: 'DRAFT',
       items: items.map((item) => ({
         ...item,
-        lineTotal: item.purchasePrice * item.quantity,
       })),
       notes: data.notes,
       expectedDelivery: data.expectedDelivery,

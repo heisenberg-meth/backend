@@ -1,6 +1,11 @@
 import prisma from '../../../config/prisma.js';
 import { Prisma } from '@prisma/client';
 
+const ALLOWED_SORT_COLUMNS = new Set([
+  'name', 'genericName', 'createdAt', 'updatedAt', 'reorderLevel',
+  'hsnCode', 'category', 'manufacturer', 'mrp', 'sellingPrice',
+]);
+
 class MedicinePrismaRepository {
   async findAll({
     tenantId,
@@ -79,7 +84,7 @@ class MedicinePrismaRepository {
           ${upperStatus === 'OUT_OF_STOCK' ? Prisma.sql`AND COALESCE(ba.current_stock, 0) <= 0` : Prisma.sql``}
           ${upperStatus === 'EXPIRING_SOON' ? Prisma.sql`AND ba.next_expiry > NOW() AND ba.next_expiry <= (NOW() + INTERVAL '30 days')` : Prisma.sql``}
           ${upperStatus === 'EXPIRED' ? Prisma.sql`AND ba.next_expiry <= NOW()` : Prisma.sql``}
-        ORDER BY m.${Prisma.raw(`"${sortBy || 'name'}"`)} ${order === 'desc' ? Prisma.sql`DESC` : Prisma.sql`ASC`}
+        ORDER BY m.${Prisma.raw(`"${ALLOWED_SORT_COLUMNS.has(sortBy) ? sortBy : 'name'}"`)} ${order === 'desc' ? Prisma.sql`DESC` : Prisma.sql`ASC`}
       `;
 
       const countQuery = Prisma.sql`

@@ -63,7 +63,7 @@ class StockService {
       const cached = await redisClient.get(cacheKey);
       if (cached) return JSON.parse(cached);
     } catch (err) {
-      logger.error('[REDIS ERROR]', err);
+      logger.warn('[REDIS ERROR]', err);
     }
 
     const stock = await stockRepository.getCurrentStock(tenantId, medicineId);
@@ -71,7 +71,7 @@ class StockService {
     try {
       await redisClient.set(cacheKey, JSON.stringify(stock), 'EX', 300);
     } catch (err) {
-      logger.error('[REDIS ERROR]', err);
+      logger.warn('[REDIS ERROR]', err);
     }
 
     return stock;
@@ -81,7 +81,7 @@ class StockService {
     try {
       await redisClient.del(`stock:current:${tenantId}:${medicineId}`);
     } catch (err) {
-      logger.error('[REDIS ERROR]', err);
+      logger.warn('[REDIS ERROR]', err);
     }
   }
 

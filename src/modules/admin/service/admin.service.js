@@ -3,6 +3,7 @@ import jwt from 'jsonwebtoken';
 import prisma from '../../../config/prisma.js';
 import { adminRepository } from '../repository/admin.repository.js';
 import env from '../../../config/env.js';
+import logger from '../../../shared/utils/logger.js';
 
 const ACCESS_TOKEN_EXPIRY = '15m';
 const REFRESH_TOKEN_EXPIRY = '30d';
@@ -41,7 +42,7 @@ async function logAdminAction({
       userAgent,
     });
   } catch (error) {
-    console.error('[ADMIN AUDIT] Failed to log:', error.message);
+    logger.error({ err: error, action, targetId }, 'Admin audit log failed — action may have no audit trail');
   }
 }
 
