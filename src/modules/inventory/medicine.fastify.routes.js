@@ -4,6 +4,7 @@ import manufacturerController from '../manufacturers/fastify/manufacturer.fastif
 import batchController from '../batches/fastify/batch.fastify.controller.js';
 import expiryMetricsController from './controller/expiry-metrics.controller.js';
 import inventoryReconciliationController from './controller/inventory-reconciliation.controller.js';
+import disposeController from './controller/dispose.controller.js';
 import { authenticate, requireTenant } from '../../middleware/auth.fastify.js';
 import { requireBranch } from '../../middleware/requireBranch.js';
 import { requirePermission } from '../../middleware/permission.fastify.js';
@@ -411,6 +412,50 @@ async function medicineRoutes(fastify) {
       },
     },
     medicineController.getBarcode,
+  );
+  // ═══════════════════════════════════════════════════════════════
+  // EXPIRED DISPOSAL
+  // ═══════════════════════════════════════════════════════════════
+  fastify.post(
+    '/dispose',
+    {
+      schema: {
+        tags: ['Inventory', 'Disposal'],
+        summary: 'Dispose expired inventory batches',
+        body: {
+          type: 'object',
+          required: ['batchIds'],
+          properties: {
+            batchIds: { type: 'array', items: { type: 'string' } },
+            reason: { type: 'string' },
+            notes: { type: 'string' },
+          },
+        },
+      },
+      preHandler: [requirePermission('MANAGE_INVENTORY')],
+    },
+    disposeController.disposeInventory,
+  );
+
+  fastify.get(
+    '/disposal-history',
+    {
+      schema: {
+        tags: ['Inventory', 'Disposal'],
+        summary: 'Get inventory disposal history',
+        querystring: {
+          type: 'object',
+          properties: {
+            startDate: { type: 'string' },
+            endDate: { type: 'string' },
+            limit: { type: 'integer' },
+            skip: { type: 'integer' },
+          },
+        },
+      },
+      preHandler: [requirePermission('VIEW_INVENTORY')],
+    },
+    disposeController.getDisposalHistory,
   );
 }
 
