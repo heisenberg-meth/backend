@@ -919,4 +919,84 @@ export const adminService = {
   async getSecurityAlerts() {
     return adminRepository.getSecurityAlerts();
   },
+
+  async listPaymentSessions(query) {
+    return adminRepository.listPaymentSessions(query);
+  },
+
+  async getPaymentSessionDetail(id) {
+    const session = await adminRepository.getPaymentSessionDetail(id);
+    if (!session) throw new Error('Payment session not found');
+    return session;
+  },
+
+  async retryVerification(paymentSessionId, adminId, ipAddress, userAgent) {
+    const session = await adminRepository.getPaymentSessionByPaymentSessionId(paymentSessionId);
+    if (!session) throw new Error('Payment session not found');
+
+    if (session.status !== 'PAYMENT_FAILED' && session.status !== 'PENDING') {
+      throw new Error(`Cannot retry verification for session in status: ${session.status}`);
+    }
+
+    const updated = await adminRepository.updatePaymentSession(session.id, {
+      status: 'PENDING',
+    });
+
+    await adminAuditLog(adminId, {
+      action: 'PAYMENT_SESSION_RETRY',
+      targetType: 'PAYMENT_SESSION',
+      targetId: session.id,
+      metadata: { paymentSessionId, previousStatus: session.status },
+      ipAddress,
+      userAgent,
+    });
+
+    return updated;
+  },
+
+  async reconcilePaymentSession(paymentSessionId, adminId, ipAddress, userAgent) {
+    const session = await adminRepository.getPaymentSessionByPaymentSessionId(paymentSessionId);
+    if (!session) throw new Error('Payment session not found');
+
+    const { default: razorpay } = await import('../../../config/razorpay.js');
+
+    let razorpayOrder;
+    try {
+      razorpayOrder = await razorpay.orders.fetch(session.razorpayOrderId);
+    } catch (error) {
+      throw new Error(`Failed to fetch Razorpay order: ${error.message}`);
+    }
+
+    let newStatus = session.status;
+    if (razorpayOrder.status === 'paid' || razorpayOrder.status === 'captured') {
+      newStatus = 'WEBHOOK_VERIFIED';
+    } else if (razorpayOrder.status === 'failed') {
+      newStatus = 'PAYMENT_FAILED';
+    }
+
+    const updated = await adminRepository.updatePaymentSession(session.id, {
+      status: newStatus,
+      razorpayPaymentId: razorpayOrder.payments?.[0]?.id || session.razorpayPaymentId,
+    });
+
+    await adminAuditLog(adminId, {
+      action: 'PAYMENT_SESSION_RECONCILED',
+      targetType: 'PAYMENT_SESSION',
+      targetId: session.id,
+      metadata: {
+        paymentSessionId,
+        previousStatus: session.status,
+        newStatus,
+        razorpayStatus: razorpayOrder.status,
+      },
+      ipAddress,
+      userAgent,
+    });
+
+    return updated;
+  },
+
+  async getPaymentSessionStats() {
+    return adminRepository.getPaymentSessionStats();
+  },
 };

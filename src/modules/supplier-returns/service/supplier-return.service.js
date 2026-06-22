@@ -231,7 +231,7 @@ class SupplierReturnService {
 
     if (dispatchStatus === 'CREDIT_NOTE_RECEIVED' && returnRecord.returnAmount > 0) {
       const existingCreditNotes = await prisma.supplierCreditNote.findFirst({
-        where: { supplierReturnId: id },
+        where: { returnId: id },
       });
       if (!existingCreditNotes) {
         const creditNote = await supplierReturnRepository.createCreditNote(id, {

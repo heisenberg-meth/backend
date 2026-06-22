@@ -1463,6 +1463,7 @@ model PurchaseInvoice {
   updatedAt        DateTime                    @updatedAt
   balanceAmount    Decimal                     @default(0) @db.Decimal(12, 2)
   paidAmount       Decimal                     @default(0) @db.Decimal(12, 2)
+  paidAt           DateTime?
   paymentStatus    PurchasePaymentStatus       @default(PENDING)
   inventoryBatches InventoryBatch[]
   purchaseOrder    PurchaseOrder?              @relation(fields: [purchaseOrderId], references: [id])

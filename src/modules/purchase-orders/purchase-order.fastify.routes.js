@@ -206,6 +206,28 @@ async function purchaseOrderRoutes(fastify) {
     purchaseOrderController.updateStatus,
   );
 
+  fastify.patch(
+    '/invoices/:id/payment-status',
+    {
+      schema: {
+        tags: ['Purchase Orders', 'Invoices'],
+        summary: 'Update purchase invoice payment status',
+        params: { type: 'object', properties: { id: { type: 'string', format: 'uuid' } } },
+        body: {
+          type: 'object',
+          required: ['paymentStatus'],
+          properties: {
+            paymentStatus: { type: 'string', enum: ['PENDING', 'PAID', 'PARTIAL'] },
+            paidAmount: { type: 'number', minimum: 0 },
+            notes: { type: 'string' },
+          },
+        },
+      },
+      preHandler: [requirePermission('purchase-orders.update')],
+    },
+    purchaseOrderController.updateInvoicePaymentStatus,
+  );
+
   // ── Smart Reorder ──────────────────────────────────────────────
   fastify.post(
     '/reorder',

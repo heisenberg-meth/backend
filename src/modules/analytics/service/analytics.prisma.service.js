@@ -16,11 +16,22 @@ class AnalyticsPrismaService {
       return JSON.parse(cachedStats);
     }
 
-    const [kpis, transactions] = await Promise.all([
+    const [kpis, transactions, outstandingPayables, paidPurchases, pendingPayments] = await Promise.all([
       kpiService.getTenantKPIs(tenantId),
       prisma.transaction.aggregate({
         where: { tenantId, status: 'SUCCESS' },
         _sum: { amount: true },
+      }),
+      prisma.purchaseInvoice.aggregate({
+        where: { tenantId, paymentStatus: { not: 'PAID' } },
+        _sum: { balanceAmount: true },
+      }),
+      prisma.purchaseInvoice.aggregate({
+        where: { tenantId, paymentStatus: 'PAID' },
+        _sum: { totalAmount: true },
+      }),
+      prisma.purchaseInvoice.count({
+        where: { tenantId, paymentStatus: 'PENDING' },
       }),
     ]);
 
@@ -29,6 +40,9 @@ class AnalyticsPrismaService {
       lowStockCount: kpis.lowStock,
       outOfStockCount: 0,
       totalRevenue: transactions._sum.amount || 0,
+      outstandingSupplierPayables: Number(outstandingPayables._sum.balanceAmount) || 0,
+      paidPurchasesThisMonth: Number(paidPurchases._sum.totalAmount) || 0,
+      pendingSupplierPayments: pendingPayments,
       timestamp: new Date(),
     };
 

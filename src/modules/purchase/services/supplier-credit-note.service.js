@@ -46,7 +46,7 @@ class SupplierCreditNoteService {
               select: { invoiceNumber: true, invoiceDate: true },
             },
             user: {
-              select: { id: true, firstName: true, lastName: true },
+              select: { id: true, fullName: true },
             },
           },
         },
@@ -65,7 +65,7 @@ class SupplierCreditNoteService {
       where: {
         tenantId,
         supplierId,
-        status: { in: ['ISSUED', 'PARTIAL'] },
+        status: { in: ['ISSUED', 'APPLIED'] },
       },
       _sum: {
         remainingAmount: true,

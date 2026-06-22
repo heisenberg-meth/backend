@@ -920,6 +920,61 @@ class PurchaseOrderService {
   async updateStatus(id, tenantId, status) {
     return purchaseOrderRepository.updateStatus(id, tenantId, status);
   }
+
+  async updatePaymentStatus(tenantId, invoiceId, { paymentStatus, paidAmount, notes }, userId) {
+    const invoice = await prisma.purchaseInvoice.findFirst({
+      where: { id: invoiceId, tenantId },
+    });
+    if (!invoice) throw new Error('Purchase invoice not found');
+
+    const validStatuses = ['PENDING', 'PAID', 'PARTIAL'];
+    if (!validStatuses.includes(paymentStatus)) {
+      throw new Error('Invalid payment status');
+    }
+
+    const totalAmount = Number(invoice.totalAmount);
+    let newPaidAmount = Number(invoice.paidAmount);
+    let newBalanceAmount = Number(invoice.balanceAmount);
+    let newPaidAt = invoice.paidAt;
+
+    if (paymentStatus === 'PAID') {
+      newPaidAmount = totalAmount;
+      newBalanceAmount = 0;
+      newPaidAt = new Date();
+    } else if (paymentStatus === 'PENDING') {
+      newPaidAmount = 0;
+      newBalanceAmount = totalAmount;
+      newPaidAt = null;
+    } else if (paymentStatus === 'PARTIAL') {
+      if (paidAmount !== undefined && paidAmount !== null) {
+        newPaidAmount = Math.min(Math.max(Number(paidAmount), 0), totalAmount);
+      }
+      newBalanceAmount = totalAmount - newPaidAmount;
+      newPaidAt = newPaidAmount > 0 ? (invoice.paidAt || new Date()) : null;
+    }
+
+    const updated = await prisma.purchaseInvoice.update({
+      where: { id: invoiceId },
+      data: {
+        paymentStatus,
+        paidAmount: newPaidAmount,
+        balanceAmount: newBalanceAmount,
+        paidAt: newPaidAt,
+      },
+    });
+
+    await prisma.auditLog.create({
+      data: {
+        tenantId,
+        userId,
+        action: 'PAYMENT_STATUS_UPDATED',
+        target: `PurchaseInvoice:${invoiceId}`,
+        type: 'PAYMENT',
+      },
+    });
+
+    return updated;
+  }
 }
 
 export default new PurchaseOrderService();

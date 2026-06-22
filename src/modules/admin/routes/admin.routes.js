@@ -308,6 +308,37 @@ async function adminRoutes(fastify) {
     adminController.updatePaymentStatus,
   );
 
+  // ---- Payment Session Management ----
+  fastify.get(
+    '/payment-sessions',
+    { preHandler: [authenticateAdmin] },
+    adminController.listPaymentSessions,
+  );
+
+  fastify.get(
+    '/payment-sessions/stats',
+    { preHandler: [authenticateAdmin] },
+    adminController.getPaymentSessionStats,
+  );
+
+  fastify.get(
+    '/payment-sessions/:id',
+    { preHandler: [authenticateAdmin] },
+    adminController.getPaymentSessionDetail,
+  );
+
+  fastify.post(
+    '/payment-sessions/:paymentSessionId/retry',
+    { preHandler: [authenticateAdmin, requireAdminRole('ROOT_ADMIN', 'ADMIN')] },
+    adminController.retryPaymentSessionVerification,
+  );
+
+  fastify.post(
+    '/payment-sessions/:paymentSessionId/reconcile',
+    { preHandler: [authenticateAdmin, requireAdminRole('ROOT_ADMIN', 'ADMIN')] },
+    adminController.reconcilePaymentSession,
+  );
+
   // ---- Security Center ----
   fastify.get(
     '/security/overview',

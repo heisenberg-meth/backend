@@ -927,6 +927,79 @@ class AdminController {
       return reply.code(400).send(errorResponse(error.message, 'SECURITY_ALERTS_FAILED'));
     }
   }
+
+  async listPaymentSessions(request, reply) {
+    try {
+      const query = {
+        page: parseInt(request.query.page) || 1,
+        limit: parseInt(request.query.limit) || 20,
+        search: request.query.search,
+        status: request.query.status,
+        tenantId: request.query.tenantId,
+        from: request.query.from,
+        to: request.query.to,
+      };
+      const result = await adminService.listPaymentSessions(query);
+      return reply.send(
+        success(result.sessions, {
+          pagination: {
+            total: result.total,
+            page: result.page,
+            limit: result.limit,
+            totalPages: result.totalPages,
+          },
+        }),
+      );
+    } catch (error) {
+      return reply.code(400).send(errorResponse(error.message, 'PAYMENT_SESSIONS_LIST_FAILED'));
+    }
+  }
+
+  async getPaymentSessionDetail(request, reply) {
+    try {
+      const session = await adminService.getPaymentSessionDetail(request.params.id);
+      return reply.send(success(session));
+    } catch (error) {
+      return reply.code(404).send(errorResponse(error.message, 'PAYMENT_SESSION_NOT_FOUND'));
+    }
+  }
+
+  async retryPaymentSessionVerification(request, reply) {
+    try {
+      const session = await adminService.retryVerification(
+        request.params.paymentSessionId,
+        request.admin.id,
+        request.ip,
+        request.headers['user-agent'],
+      );
+      return reply.send(success(session));
+    } catch (error) {
+      return reply.code(400).send(errorResponse(error.message, 'PAYMENT_SESSION_RETRY_FAILED'));
+    }
+  }
+
+  async reconcilePaymentSession(request, reply) {
+    try {
+      const session = await adminService.reconcilePaymentSession(
+        request.params.paymentSessionId,
+        request.admin.id,
+        request.ip,
+        request.headers['user-agent'],
+      );
+      return reply.send(success(session));
+    } catch (error) {
+      return reply.code(400).send(errorResponse(error.message, 'PAYMENT_SESSION_RECONCILE_FAILED'));
+    }
+  }
+
+  async getPaymentSessionStats(request, reply) {
+    try {
+      const stats = await adminService.getPaymentSessionStats();
+      return reply.send(success(stats));
+    } catch (error) {
+      return reply.code(500).send(errorResponse(error.message, 'PAYMENT_SESSION_STATS_FAILED'));
+    }
+  }
 }
 
 export default new AdminController();

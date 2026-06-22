@@ -1030,4 +1030,118 @@ export const adminRepository = {
       sharedFingerprints: multipleAccountDevices.map((d) => d.fingerprintHash).filter(Boolean),
     };
   },
+
+  async listPaymentSessions({ page, limit, search, status, tenantId, from, to }) {
+    const pageNum = parseInt(page) || 1;
+    const limitNum = parseInt(limit) || 20;
+    const where = {};
+
+    if (search) {
+      where.OR = [
+        { paymentSessionId: { contains: search } },
+        { razorpayOrderId: { contains: search } },
+        { razorpayPaymentId: { contains: search } },
+        { tenant: { name: { contains: search, mode: 'insensitive' } } },
+        { user: { email: { contains: search, mode: 'insensitive' } } },
+      ];
+    }
+
+    if (status) where.status = status;
+    if (tenantId) where.tenantId = tenantId;
+
+    if (from || to) {
+      where.createdAt = {};
+      if (from) where.createdAt.gte = new Date(from);
+      if (to) where.createdAt.lte = new Date(to);
+    }
+
+    const [sessions, total] = await Promise.all([
+      prisma.paymentSession.findMany({
+        where,
+        skip: (pageNum - 1) * limitNum,
+        take: limitNum,
+        orderBy: { createdAt: 'desc' },
+        include: {
+          tenant: { select: { id: true, name: true, email: true } },
+          user: { select: { id: true, email: true, fullName: true } },
+          subscriptionPlan: { select: { id: true, name: true } },
+        },
+      }),
+      prisma.paymentSession.count({ where }),
+    ]);
+
+    return {
+      sessions,
+      total,
+      page: pageNum,
+      limit: limitNum,
+      totalPages: Math.ceil(total / limitNum),
+    };
+  },
+
+  async getPaymentSessionDetail(id) {
+    return prisma.paymentSession.findUnique({
+      where: { id },
+      include: {
+        tenant: { select: { id: true, name: true, email: true, phone: true } },
+        user: { select: { id: true, email: true, fullName: true, phone: true } },
+        subscriptionPlan: { select: { id: true, name: true, price: true, billingCycle: true } },
+      },
+    });
+  },
+
+  async getPaymentSessionByPaymentSessionId(paymentSessionId) {
+    return prisma.paymentSession.findUnique({
+      where: { paymentSessionId },
+      include: {
+        tenant: { select: { id: true, name: true, email: true } },
+        user: { select: { id: true, email: true, fullName: true } },
+        subscriptionPlan: { select: { id: true, name: true, price: true } },
+      },
+    });
+  },
+
+  async updatePaymentSession(id, data) {
+    return prisma.paymentSession.update({ where: { id }, data });
+  },
+
+  async getPaymentSessionStats() {
+    const now = new Date();
+    const todayStart = new Date(now.setHours(0, 0, 0, 0));
+    const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+
+    const [
+      totalSessions,
+      pendingSessions,
+      successSessions,
+      failedSessions,
+      expiredSessions,
+      sessionsToday,
+      sessionsThisWeek,
+      totalAmount,
+    ] = await Promise.all([
+      prisma.paymentSession.count(),
+      prisma.paymentSession.count({ where: { status: 'PENDING' } }),
+      prisma.paymentSession.count({ where: { status: 'SUBSCRIPTION_ACTIVATED' } }),
+      prisma.paymentSession.count({ where: { status: 'PAYMENT_FAILED' } }),
+      prisma.paymentSession.count({ where: { status: 'PAYMENT_EXPIRED' } }),
+      prisma.paymentSession.count({ where: { createdAt: { gte: todayStart } } }),
+      prisma.paymentSession.count({ where: { createdAt: { gte: weekAgo } } }),
+      prisma.paymentSession.aggregate({
+        _sum: { amount: true },
+        where: { status: 'SUBSCRIPTION_ACTIVATED' },
+      }),
+    ]);
+
+    return {
+      totalSessions,
+      pendingSessions,
+      successSessions,
+      failedSessions,
+      expiredSessions,
+      sessionsToday,
+      sessionsThisWeek,
+      totalRevenue: totalAmount._sum.amount || 0,
+    };
+  },
 };

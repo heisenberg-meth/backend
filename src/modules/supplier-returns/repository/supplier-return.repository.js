@@ -221,7 +221,7 @@ class SupplierReturnRepository {
     const pageNum = Number(page) || 1;
     const limitNum = Number(limit) || 20;
     const isUuid = (val) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(val);
-    const validStatuses = ['DRAFT', 'PENDING', 'APPROVED', 'PICKED_UP', 'COMPLETED', 'REJECTED'];
+    const validStatuses = ['ISSUED', 'APPLIED', 'VOIDED', 'EXPIRED'];
     const statusVal = status && validStatuses.includes(status.toUpperCase()) ? status.toUpperCase() : undefined;
     const supplierIdVal = supplierId && isUuid(supplierId) ? String(supplierId) : undefined;
 

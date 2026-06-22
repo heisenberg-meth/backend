@@ -108,7 +108,7 @@ class DisposeService {
         include: {
           medicine: { select: { name: true, genericName: true } },
           batch: { select: { batchNumber: true } },
-          user: { select: { firstName: true, lastName: true, fullName: true, email: true } },
+          user: { select: { id: true, fullName: true, email: true } },
         },
         orderBy: { disposedAt: 'desc' },
         take: limit,

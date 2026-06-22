@@ -163,6 +163,19 @@ class PurchaseOrderFastifyController {
     }
   }
 
+  async updateInvoicePaymentStatus(request, reply) {
+    const { id } = request.params;
+    const tenantId = request.tenantId;
+    const userId = request.user.id;
+    try {
+      const result = await purchaseOrderService.updatePaymentStatus(tenantId, id, request.body, userId);
+      return reply.send({ success: true, data: result, message: 'Payment status updated' });
+    } catch (error) {
+      logger.error({ error, id, tenantId }, 'Failed to update payment status');
+      return reply.code(400).send({ success: false, error: error.message });
+    }
+  }
+
   async generatePdf(request, reply) {
     const { id } = request.params;
     const tenantId = request.tenantId;
