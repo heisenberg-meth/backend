@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import logger from "@/shared/utils/logger.js";
+import logger from '../../src/shared/utils/logger.js';
 const API_URL = process.env.API_URL || 'http://localhost:5000';
 
 interface RegisterResponse {
@@ -47,19 +47,19 @@ test.describe('Auth API (E2E)', () => {
 
   test('should login successfully with registered user', async ({ request }) => {
     // Small delay to avoid rate limiting
-    await new Promise(r => setTimeout(r, 1000));
-    
+    await new Promise((r) => setTimeout(r, 1000));
+
     const response = await request.post(`${API_URL}/api/auth/login`, {
       data: {
         email: testEmail,
-        password: testPassword
-      }
+        password: testPassword,
+      },
     });
 
     if (!response.ok()) {
       console.error('Login failed with response:', await response.text());
     }
-    
+
     expect(response.ok()).toBeTruthy();
     const body = (await response.json()) as LoginResponse;
     expect(body.data).toHaveProperty('token');
@@ -69,13 +69,13 @@ test.describe('Auth API (E2E)', () => {
 
   test('should block login with invalid password', async ({ request }) => {
     // Small delay to avoid rate limiting
-    await new Promise(r => setTimeout(r, 1000));
-    
+    await new Promise((r) => setTimeout(r, 1000));
+
     const response = await request.post(`${API_URL}/api/auth/login`, {
       data: {
         email: testEmail,
-        password: 'WrongPassword!'
-      }
+        password: 'WrongPassword!',
+      },
     });
 
     expect(response.status()).toBe(401);

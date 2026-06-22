@@ -3,7 +3,7 @@ import { initRedis } from '../../../config/redis.js';
 import { emitEvent } from '../../../shared/events/erp-event-bus.js';
 import { DOMAIN_EVENTS } from '../../../shared/constants/events.js';
 import kpiService from './analytics.service.js';
-import logger from '@/shared/utils/logger.js';
+import logger from '../../../shared/utils/logger.js';
 
 const redisClient = initRedis();
 
