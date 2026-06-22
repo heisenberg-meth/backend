@@ -6,6 +6,7 @@ import { getConfig } from '../../../config/payment.config.js';
 import { VALID_STATES } from '../services/payment.state-machine.js';
 import paymentLockService from '../services/payment.lock.service.js';
 import subscriptionService from '../../subscriptions/subscription.service.js';
+import paymentSessionService from '../../subscriptions/payment-session.service.js';
 import { mainQueue } from '../../../queue/index.js';
 
 class RazorpayWebhookHandler {
@@ -195,6 +196,8 @@ class RazorpayWebhookHandler {
         }
       }
     }
+
+    await paymentSessionService.handleWebhook(orderId, paymentId, 'payment.captured');
 
     logger.info({ orderId, paymentId }, '[WEBHOOK] Payment captured');
   }

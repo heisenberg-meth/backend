@@ -1,8 +1,10 @@
 import prisma from '../../../config/prisma.js';
+import redisClient from '../../../config/redis.js';
 import supplierReturnRepository from '../repository/supplier-return.repository.js';
 import movementService from '../../stock/service/movement.service.js';
 import logger from '../../../shared/utils/logger.js';
 import expiryService from '../../inventory/service/expiry.service.js';
+import auditService from '../../audit/service/audit.prisma.service.js';
 
 class SupplierReturnService {
   async getExpiredGroupedBySupplier(tenantId) {
@@ -65,6 +67,8 @@ class SupplierReturnService {
     );
 
     logger.info(`[SupplierReturn] Created return ${returnNumber} by user ${userId}`);
+
+    redisClient.del(`supplier-return:dashboard:${tenantId}`).catch(() => {});
 
     return returnRecord;
   }
@@ -167,6 +171,23 @@ class SupplierReturnService {
       logger.info(
         `[SupplierReturn] ${returnRecord.returnNumber} status: ${returnRecord.status} -> ${status}`,
       );
+
+      auditService.log({
+        tenantId,
+        userId,
+        action: 'SUPPLIER_RETURN_STATUS_CHANGED',
+        target: returnRecord.returnNumber,
+        targetType: 'SUPPLIER_RETURN',
+        details: {
+          returnId: id,
+          from: returnRecord.status,
+          to: status,
+          returnAmount: returnRecord.returnAmount,
+        },
+      }).catch(() => {});
+
+      redisClient.del(`supplier-return:dashboard:${tenantId}`).catch(() => {});
+
       return updated;
     });
   }
@@ -181,6 +202,58 @@ class SupplierReturnService {
 
   async listCreditNotes(tenantId, query) {
     return supplierReturnRepository.findCreditNotes(tenantId, query);
+  }
+
+  async updateDispatchStatus(id, tenantId, dispatchStatus) {
+    const validStatuses = ['PENDING', 'READY_TO_SEND', 'SENT_TO_SUPPLIER', 'RECEIVED_BY_SUPPLIER', 'CREDIT_NOTE_RECEIVED'];
+    if (!validStatuses.includes(dispatchStatus)) {
+      throw new Error(`Invalid dispatch status: ${dispatchStatus}`);
+    }
+
+    const returnRecord = await supplierReturnRepository.findReturnById(id, tenantId);
+    if (!returnRecord) throw new Error('Return not found');
+
+    const updated = await supplierReturnRepository.updateDispatchStatus(id, tenantId, dispatchStatus);
+
+    auditService.log({
+      tenantId,
+      action: 'SUPPLIER_RETURN_DISPATCH_STATUS_CHANGED',
+      target: returnRecord.returnNumber,
+      targetType: 'SUPPLIER_RETURN',
+      details: {
+        returnId: id,
+        from: returnRecord.dispatchStatus,
+        to: dispatchStatus,
+      },
+    }).catch(() => {});
+
+    redisClient.del(`supplier-return:dashboard:${tenantId}`).catch(() => {});
+
+    if (dispatchStatus === 'CREDIT_NOTE_RECEIVED' && returnRecord.returnAmount > 0) {
+      const existingCreditNotes = await prisma.supplierCreditNote.findFirst({
+        where: { supplierReturnId: id },
+      });
+      if (!existingCreditNotes) {
+        const creditNote = await supplierReturnRepository.createCreditNote(id, {
+          amount: returnRecord.returnAmount,
+          notes: 'Auto-generated on credit note received from supplier',
+        });
+
+        auditService.log({
+          tenantId,
+          action: 'SUPPLIER_RETURN_CREDIT_NOTE_AUTO_GENERATED',
+          target: returnRecord.returnNumber,
+          targetType: 'SUPPLIER_RETURN',
+          details: {
+            returnId: id,
+            creditNoteId: creditNote.id,
+            amount: returnRecord.returnAmount,
+          },
+        }).catch(() => {});
+      }
+    }
+
+    return updated;
   }
 
   async getInwardTransactions(supplierId, tenantId, query) {
@@ -214,6 +287,48 @@ class SupplierReturnService {
       suppliersInvolved: supplierIds.size,
       items: expired,
     };
+  }
+
+  async getDashboardMetrics(tenantId) {
+    const cacheKey = `supplier-return:dashboard:${tenantId}`;
+    const cached = await redisClient.get(cacheKey);
+    if (cached) return JSON.parse(cached);
+
+    const [pending, readyToSend, sent, received, creditReceived, totalReturns, totalCreditNotes] =
+      await Promise.all([
+        prisma.supplierReturn.count({ where: { tenantId, dispatchStatus: 'PENDING' } }),
+        prisma.supplierReturn.count({ where: { tenantId, dispatchStatus: 'READY_TO_SEND' } }),
+        prisma.supplierReturn.count({ where: { tenantId, dispatchStatus: 'SENT_TO_SUPPLIER' } }),
+        prisma.supplierReturn.count({ where: { tenantId, dispatchStatus: 'RECEIVED_BY_SUPPLIER' } }),
+        prisma.supplierReturn.count({ where: { tenantId, dispatchStatus: 'CREDIT_NOTE_RECEIVED' } }),
+        prisma.supplierReturn.count({ where: { tenantId } }),
+        prisma.supplierCreditNote.count({ where: { tenantId } }),
+      ]);
+
+    const totalReturnValue = await prisma.supplierReturn.aggregate({
+      where: { tenantId },
+      _sum: { returnAmount: true },
+    });
+
+    const totalCreditNoteAmount = await prisma.supplierCreditNote.aggregate({
+      where: { tenantId },
+      _sum: { amount: true },
+    });
+
+    const result = {
+      pending,
+      readyToSend,
+      sent,
+      received,
+      creditReceived,
+      totalReturns,
+      totalReturnValue: Number(totalReturnValue._sum.returnAmount || 0),
+      totalCreditNotes,
+      totalCreditNoteAmount: Number(totalCreditNoteAmount._sum.amount || 0),
+    };
+
+    await redisClient.set(cacheKey, JSON.stringify(result), 'EX', 300);
+    return result;
   }
 }
 

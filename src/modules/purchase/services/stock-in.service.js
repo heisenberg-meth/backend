@@ -36,6 +36,7 @@ class StockInService {
             purchasePrice: item.purchasePrice,
             sellingPrice: item.sellingPrice,
             branchId: data.branchId,
+            supplierId: data.supplierId,
             referenceType: 'PURCHASE',
             referenceId: invoice.id,
           },

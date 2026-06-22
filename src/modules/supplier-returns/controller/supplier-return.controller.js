@@ -1,4 +1,5 @@
 import supplierReturnService from '../service/supplier-return.service.js';
+import creditNotePdfService from '../service/credit-note-pdf.service.js';
 
 class SupplierReturnController {
   async getExpiredGroupedBySupplier(request, reply) {
@@ -173,12 +174,53 @@ class SupplierReturnController {
     }
   }
 
+  async updateDispatchStatus(request, reply) {
+    try {
+      const { dispatchStatus } = request.body;
+      if (!dispatchStatus) {
+        return reply.code(400).send({ success: false, message: 'dispatchStatus is required' });
+      }
+      const updated = await supplierReturnService.updateDispatchStatus(
+        request.params.id,
+        request.tenantId,
+        dispatchStatus,
+      );
+      return reply.send({ success: true, data: updated });
+    } catch (error) {
+      request.log.error({ err: error, endpoint: 'supplier-return-dispatch-status' }, 'Supplier return error');
+      return reply.code(500).send({ success: false, message: error.message });
+    }
+  }
+
   async getExpiredInventorySummary(request, reply) {
     try {
       const summary = await supplierReturnService.getExpiredInventorySummary(request.tenantId);
       return reply.send({ success: true, data: summary });
     } catch (error) {
       request.log.error({ err: error, endpoint: 'supplier-return-expired-summary' }, 'Supplier return error');
+      return reply.code(500).send({ success: false, message: error.message });
+    }
+  }
+
+  async getDashboardMetrics(request, reply) {
+    try {
+      const metrics = await supplierReturnService.getDashboardMetrics(request.tenantId);
+      return reply.send({ success: true, data: metrics });
+    } catch (error) {
+      request.log.error({ err: error, endpoint: 'supplier-return-dashboard-metrics' }, 'Supplier return error');
+      return reply.code(500).send({ success: false, message: error.message });
+    }
+  }
+
+  async generateCreditNotePdf(request, reply) {
+    try {
+      const pdfUrl = await creditNotePdfService.generateCreditNotePdf(
+        request.params.id,
+        request.tenantId,
+      );
+      return reply.send({ success: true, data: { pdfUrl } });
+    } catch (error) {
+      request.log.error({ err: error, endpoint: 'credit-note-pdf' }, 'Credit note PDF error');
       return reply.code(500).send({ success: false, message: error.message });
     }
   }

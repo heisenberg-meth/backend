@@ -8,6 +8,18 @@ async function supplierReturnsRoutes(fastify) {
   fastify.addHook('preHandler', requireTenant);
 
   fastify.get(
+    '/dashboard/metrics',
+    {
+      schema: {
+        tags: ['Supplier Returns'],
+        summary: 'Dashboard metrics for supplier returns',
+      },
+      preHandler: [requirePermission('purchases.read')],
+    },
+    supplierReturnController.getDashboardMetrics,
+  );
+
+  fastify.get(
     '/expired/grouped',
     {
       schema: {
@@ -130,10 +142,40 @@ async function supplierReturnsRoutes(fastify) {
         tags: ['Supplier Returns'],
         summary: 'Update return status',
         params: idParam,
+        body: {
+          type: 'object',
+          properties: {
+            status: { type: 'string' },
+          },
+          required: ['status'],
+        },
       },
       preHandler: [requirePermission('purchases.update')],
     },
     supplierReturnController.updateReturnStatus,
+  );
+
+  fastify.patch(
+    '/:id/dispatch-status',
+    {
+      schema: {
+        tags: ['Supplier Returns'],
+        summary: 'Update dispatch status',
+        params: idParam,
+        body: {
+          type: 'object',
+          properties: {
+            dispatchStatus: {
+              type: 'string',
+              enum: ['PENDING', 'READY_TO_SEND', 'SENT_TO_SUPPLIER', 'RECEIVED_BY_SUPPLIER', 'CREDIT_NOTE_RECEIVED'],
+            },
+          },
+          required: ['dispatchStatus'],
+        },
+      },
+      preHandler: [requirePermission('purchases.update')],
+    },
+    supplierReturnController.updateDispatchStatus,
   );
 
   fastify.post(
@@ -147,6 +189,23 @@ async function supplierReturnsRoutes(fastify) {
       preHandler: [requirePermission('purchases.create'), requireFeature('CREDIT_NOTES')],
     },
     supplierReturnController.generateCreditNote,
+  );
+
+  fastify.post(
+    '/credit-notes/:id/pdf',
+    {
+      schema: {
+        tags: ['Supplier Returns'],
+        summary: 'Generate credit note PDF',
+        params: {
+          type: 'object',
+          properties: { id: { type: 'string', format: 'uuid' } },
+          required: ['id'],
+        },
+      },
+      preHandler: [requirePermission('purchases.create'), requireFeature('CREDIT_NOTES')],
+    },
+    supplierReturnController.generateCreditNotePdf,
   );
 
   fastify.get(

@@ -82,6 +82,14 @@ const cronManager = {
         repeat: { pattern: '0 4 * * *' },
       },
     );
+
+    await mainQueue.add(
+      'cleanup-expired-payment-sessions',
+      {},
+      {
+        repeat: { pattern: '0 * * * *' },
+      },
+    );
   },
 };
 

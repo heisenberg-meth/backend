@@ -145,6 +145,22 @@ class SupplierReturnRepository {
     });
   }
 
+  async updateDispatchStatus(id, tenantId, dispatchStatus) {
+    const updateData = { dispatchStatus };
+    if (dispatchStatus === 'SENT_TO_SUPPLIER') updateData.dispatchedAt = new Date();
+    if (dispatchStatus === 'RECEIVED_BY_SUPPLIER') updateData.receivedAt = new Date();
+    if (dispatchStatus === 'CREDIT_NOTE_RECEIVED') updateData.creditReceivedAt = new Date();
+
+    return prisma.supplierReturn.update({
+      where: { id },
+      data: updateData,
+      include: {
+        items: true,
+        supplier: { select: { id: true, name: true } },
+      },
+    });
+  }
+
   async generateReturnNumber(tenantId) {
     const date = new Date();
     const year = date.getFullYear();

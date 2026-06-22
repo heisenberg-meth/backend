@@ -304,6 +304,71 @@ async function medicineRoutes(fastify) {
     handler: batchController.getBatches,
   });
 
+  fastify.post('/batches/backfill-supplier', {
+    schema: {
+      tags: ['Inventory'],
+      summary: 'Backfill supplier IDs from medicine supplier history',
+    },
+    preHandler: [requirePermission('VIEW_INVENTORY')],
+    handler: batchController.backfillSupplierFromMedicine,
+  });
+
+  fastify.get('/batches/export-no-supplier', {
+    schema: {
+      tags: ['Inventory'],
+      summary: 'Export batches without supplier for CSV editing',
+    },
+    preHandler: [requirePermission('VIEW_INVENTORY')],
+    handler: batchController.exportBatchesWithoutSupplier,
+  });
+
+  fastify.post('/batches/import-supplier-assignments', {
+    schema: {
+      tags: ['Inventory'],
+      summary: 'Import supplier assignments from CSV data',
+    },
+    preHandler: [requirePermission('VIEW_INVENTORY')],
+    handler: batchController.importSupplierAssignments,
+  });
+
+  fastify.post('/batches/bulk-assign-supplier', {
+    schema: {
+      tags: ['Inventory'],
+      summary: 'Bulk assign supplier to batches',
+      body: {
+        type: 'object',
+        properties: {
+          batchIds: { type: 'array', items: { type: 'string', format: 'uuid' } },
+          supplierId: { type: 'string', format: 'uuid' },
+        },
+        required: ['batchIds'],
+      },
+    },
+    preHandler: [requirePermission('VIEW_INVENTORY')],
+    handler: batchController.bulkAssignSupplier,
+  });
+
+  fastify.patch('/batches/:id/supplier', {
+    schema: {
+      tags: ['Inventory'],
+      summary: 'Assign supplier to a batch',
+      params: {
+        type: 'object',
+        properties: { id: { type: 'string', format: 'uuid' } },
+        required: ['id'],
+      },
+      body: {
+        type: 'object',
+        properties: {
+          supplierId: { type: ['string', 'null'], format: 'uuid' },
+        },
+        required: ['supplierId'],
+      },
+    },
+    preHandler: [requirePermission('VIEW_INVENTORY')],
+    handler: batchController.assignSupplier,
+  });
+
   fastify.post('/batches', {
     schema: { tags: ['Inventory'], summary: 'Add a batch' },
     preHandler: [requirePermission('VIEW_INVENTORY')],

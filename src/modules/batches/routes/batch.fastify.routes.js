@@ -59,6 +59,102 @@ async function batchFastifyRoutes(fastify) {
     batchController.getBatches,
   );
 
+  fastify.post(
+    '/bulk-assign-supplier',
+    {
+      schema: {
+        tags: ['Batches'],
+        summary: 'Bulk assign supplier to batches',
+        body: {
+          type: 'object',
+          properties: {
+            batchIds: { type: 'array', items: { type: 'string', format: 'uuid' } },
+            supplierId: { type: 'string', format: 'uuid' },
+          },
+          required: ['batchIds'],
+        },
+      },
+      preHandler: [requirePermission('VIEW_INVENTORY')],
+    },
+    batchController.bulkAssignSupplier,
+  );
+
+  fastify.post(
+    '/backfill-supplier',
+    {
+      schema: {
+        tags: ['Batches'],
+        summary: 'Backfill supplier IDs from medicine supplier history',
+      },
+      preHandler: [requirePermission('VIEW_INVENTORY')],
+    },
+    batchController.backfillSupplierFromMedicine,
+  );
+
+  fastify.get(
+    '/export-no-supplier',
+    {
+      schema: {
+        tags: ['Batches'],
+        summary: 'Export batches without supplier for CSV editing',
+      },
+      preHandler: [requirePermission('VIEW_INVENTORY')],
+    },
+    batchController.exportBatchesWithoutSupplier,
+  );
+
+  fastify.post(
+    '/import-supplier-assignments',
+    {
+      schema: {
+        tags: ['Batches'],
+        summary: 'Import supplier assignments from CSV data',
+        body: {
+          type: 'object',
+          properties: {
+            assignments: {
+              type: 'array',
+              items: {
+                type: 'object',
+                properties: {
+                  batchId: { type: 'string' },
+                  supplierName: { type: 'string' },
+                },
+              },
+            },
+          },
+          required: ['assignments'],
+        },
+      },
+      preHandler: [requirePermission('VIEW_INVENTORY')],
+    },
+    batchController.importSupplierAssignments,
+  );
+
+  fastify.patch(
+    '/:id/supplier',
+    {
+      schema: {
+        tags: ['Batches'],
+        summary: 'Assign supplier to a batch',
+        params: {
+          type: 'object',
+          properties: { id: { type: 'string', format: 'uuid' } },
+          required: ['id'],
+        },
+        body: {
+          type: 'object',
+          properties: {
+            supplierId: { type: ['string', 'null'], format: 'uuid' },
+          },
+          required: ['supplierId'],
+        },
+      },
+      preHandler: [requirePermission('VIEW_INVENTORY')],
+    },
+    batchController.assignSupplier,
+  );
+
   fastify.get(
     '/:id',
     {

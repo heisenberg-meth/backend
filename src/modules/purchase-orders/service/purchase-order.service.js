@@ -588,6 +588,10 @@ class PurchaseOrderService {
               updateData.status = 'ACTIVE';
             }
 
+            if (!existingBatch.supplierId && order.supplierId) {
+              updateData.supplierId = order.supplierId;
+            }
+
             batch = await tx.inventoryBatch.update({
               where: { id: existingBatch.id },
               data: updateData,

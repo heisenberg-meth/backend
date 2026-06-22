@@ -487,6 +487,13 @@ const handlers = {
     await emitEvent(DOMAIN_EVENTS.STOCK_UPDATED, { tenantId });
     logger.info({ orderId }, 'PO received events retry succeeded');
   },
+
+  'cleanup-expired-payment-sessions': async () => {
+    const { default: paymentSessionCleanupWorker } = await import(
+      '../modules/payments/workers/payment-session-cleanup.worker.js'
+    );
+    await paymentSessionCleanupWorker.handle();
+  },
 };
 
 if (!isTest) {

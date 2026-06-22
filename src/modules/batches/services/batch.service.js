@@ -320,6 +320,153 @@ class BatchService {
 
     return report;
   }
+
+  async assignSupplier(batchId, supplierId, tenantId) {
+    const batch = await batchRepository.findById(batchId);
+    if (!batch) throw new Error('Batch not found');
+    if (batch.tenantId !== tenantId) throw new Error('Access denied');
+
+    if (supplierId) {
+      const supplier = await prisma.supplier.findFirst({
+        where: { id: supplierId, tenantId, deletedAt: null },
+      });
+      if (!supplier) throw new Error('Supplier not found');
+    }
+
+    return batchRepository.update(batchId, { supplierId: supplierId || null });
+  }
+
+  async bulkAssignSupplier(batchIds, supplierId, tenantId) {
+    if (!Array.isArray(batchIds) || batchIds.length === 0) {
+      throw new Error('At least one batch ID is required');
+    }
+
+    if (supplierId) {
+      const supplier = await prisma.supplier.findFirst({
+        where: { id: supplierId, tenantId, deletedAt: null },
+      });
+      if (!supplier) throw new Error('Supplier not found');
+    }
+
+    const result = await prisma.inventoryBatch.updateMany({
+      where: {
+        id: { in: batchIds },
+        tenantId,
+        deletedAt: null,
+      },
+      data: { supplierId: supplierId || null },
+    });
+
+    return { updated: result.count };
+  }
+
+  async backfillSupplierFromMedicine(tenantId) {
+    const medicinesWithBoth = await prisma.$queryRawUnsafe(`
+      WITH with_supplier AS (
+        SELECT DISTINCT "medicineId" 
+        FROM "InventoryBatch" 
+        WHERE "supplierId" IS NOT NULL AND "deletedAt" IS NULL AND "tenantId" = $1
+      ),
+      without_supplier AS (
+        SELECT DISTINCT "medicineId" 
+        FROM "InventoryBatch" 
+        WHERE "supplierId" IS NULL AND "deletedAt" IS NULL AND "tenantId" = $1
+      )
+      SELECT ws."medicineId"
+      FROM with_supplier ws
+      INNER JOIN without_supplier wsu ON ws."medicineId" = wsu."medicineId"
+    `, tenantId);
+
+    let totalUpdated = 0;
+    for (const { medicineId } of medicinesWithBoth) {
+      const bestSupplier = await prisma.$queryRawUnsafe(`
+        SELECT ib."supplierId", COUNT(*) as cnt
+        FROM "InventoryBatch" ib
+        WHERE ib."medicineId" = $1
+          AND ib."supplierId" IS NOT NULL AND ib."deletedAt" IS NULL
+        GROUP BY ib."supplierId"
+        ORDER BY cnt DESC
+        LIMIT 1
+      `, medicineId);
+
+      if (bestSupplier.length === 0) continue;
+
+      const result = await prisma.inventoryBatch.updateMany({
+        where: { medicineId, supplierId: null, deletedAt: null, tenantId },
+        data: { supplierId: bestSupplier[0].supplierId },
+      });
+
+      totalUpdated += result.count;
+    }
+
+    return { medicinesProcessed: medicinesWithBoth.length, batchesUpdated: totalUpdated };
+  }
+
+  async exportBatchesWithoutSupplier(tenantId) {
+    const batches = await prisma.inventoryBatch.findMany({
+      where: { tenantId, supplierId: null, deletedAt: null },
+      include: {
+        medicine: { select: { id: true, name: true } },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    const suppliers = await prisma.supplier.findMany({
+      where: { tenantId, deletedAt: null },
+      select: { id: true, name: true },
+    });
+
+    return { batches, suppliers };
+  }
+
+  async importSupplierAssignments(tenantId, assignments) {
+    if (!Array.isArray(assignments) || assignments.length === 0) {
+      throw new Error('No assignments provided');
+    }
+
+    const suppliers = await prisma.supplier.findMany({
+      where: { tenantId, deletedAt: null },
+      select: { id: true, name: true },
+    });
+    const supplierMap = {};
+    for (const s of suppliers) {
+      supplierMap[s.name.toLowerCase().trim()] = s.id;
+    }
+
+    let updated = 0;
+    let skipped = 0;
+    const errors = [];
+
+    for (const row of assignments) {
+      const batchId = row.batchId || row.batch_id;
+      const supplierName = row.supplierName || row.supplier_name || row.supplier;
+
+      if (!batchId || !supplierName) {
+        skipped++;
+        continue;
+      }
+
+      const supplierId = supplierMap[supplierName.toLowerCase().trim()];
+      if (!supplierId) {
+        errors.push({ batchId, reason: `Supplier "${supplierName}" not found` });
+        skipped++;
+        continue;
+      }
+
+      const result = await prisma.inventoryBatch.updateMany({
+        where: { id: batchId, tenantId, deletedAt: null },
+        data: { supplierId },
+      });
+
+      if (result.count > 0) updated++;
+      else {
+        errors.push({ batchId, reason: 'Batch not found' });
+        skipped++;
+      }
+    }
+
+    return { updated, skipped, errors: errors.slice(0, 50) };
+  }
 }
 
 export default new BatchService();

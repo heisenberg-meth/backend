@@ -1,5 +1,6 @@
 import controller from './fastify/subscription.fastify.controller.js';
 import trialController from './fastify/subscription-trial.fastify.controller.js';
+import checkoutRoutes from './checkout.fastify.routes.js';
 import { authenticate, requireTenant } from '../../middleware/auth.fastify.js';
 import { requirePermission } from '../../middleware/permission.fastify.js';
 
@@ -58,4 +59,6 @@ export default async function (fastify) {
     preHandler: [requirePermission('MANAGE_SETTINGS')],
     handler: controller.cancelSubscription,
   });
+
+  fastify.register(checkoutRoutes, { prefix: '/checkout' });
 }

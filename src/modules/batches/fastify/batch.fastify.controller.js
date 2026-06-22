@@ -144,6 +144,62 @@ class BatchFastifyController {
       return reply.code(500).send({ success: false, message: error.message });
     }
   }
+
+  async assignSupplier(request, reply) {
+    try {
+      const batch = await batchService.assignSupplier(
+        request.params.id,
+        request.body.supplierId,
+        request.tenantId,
+      );
+      return reply.send({ success: true, data: batch });
+    } catch (error) {
+      request.log.error({ err: error, endpoint: 'batch-assign-supplier' }, 'Batch error');
+      return reply.code(500).send({ success: false, message: error.message });
+    }
+  }
+
+  async bulkAssignSupplier(request, reply) {
+    try {
+      const { batchIds, supplierId } = request.body;
+      const result = await batchService.bulkAssignSupplier(batchIds, supplierId, request.tenantId);
+      return reply.send({ success: true, data: result });
+    } catch (error) {
+      request.log.error({ err: error, endpoint: 'batch-bulk-assign-supplier' }, 'Batch error');
+      return reply.code(500).send({ success: false, message: error.message });
+    }
+  }
+
+  async backfillSupplierFromMedicine(request, reply) {
+    try {
+      const result = await batchService.backfillSupplierFromMedicine(request.tenantId);
+      return reply.send({ success: true, data: result });
+    } catch (error) {
+      request.log.error({ err: error, endpoint: 'batch-backfill-supplier' }, 'Batch error');
+      return reply.code(500).send({ success: false, message: error.message });
+    }
+  }
+
+  async exportBatchesWithoutSupplier(request, reply) {
+    try {
+      const result = await batchService.exportBatchesWithoutSupplier(request.tenantId);
+      return reply.send({ success: true, data: result });
+    } catch (error) {
+      request.log.error({ err: error, endpoint: 'batch-export-no-supplier' }, 'Batch error');
+      return reply.code(500).send({ success: false, message: error.message });
+    }
+  }
+
+  async importSupplierAssignments(request, reply) {
+    try {
+      const { assignments } = request.body;
+      const result = await batchService.importSupplierAssignments(request.tenantId, assignments);
+      return reply.send({ success: true, data: result });
+    } catch (error) {
+      request.log.error({ err: error, endpoint: 'batch-import-supplier' }, 'Batch error');
+      return reply.code(500).send({ success: false, message: error.message });
+    }
+  }
 }
 
 export default new BatchFastifyController();
