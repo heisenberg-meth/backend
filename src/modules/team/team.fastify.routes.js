@@ -1,5 +1,6 @@
 import { authenticate, requireTenant } from '../../middleware/auth.fastify.js';
 import teamService from '../hr/services/team.service.js';
+import MediaService from '../../shared/services/media.service.js';
 
 async function teamRoutes(fastify) {
   // Apply authentication and tenant verification hooks to all routes in this plugin
@@ -423,7 +424,8 @@ async function teamRoutes(fastify) {
         return reply.code(400).send({ success: false, error: { message: 'No file uploaded' } });
       }
       const avatarUrl = `/avatars/${id}_${Date.now()}`;
-      return reply.send({ success: true, data: { avatarUrl } });
+      const publicUrl = MediaService.generatePublicUrl(avatarUrl);
+      return reply.send({ success: true, data: { avatarUrl: publicUrl } });
     },
   });
 

@@ -3,6 +3,21 @@ import barcodeService from '../service/barcode.service.js';
 import unifiedInventorySummaryService from '../service/unified-inventory-summary.service.js';
 import { success, error as errorResponse } from '../../../shared/helpers/response.js';
 import expiryService from '../service/expiry.service.js';
+import MediaService from '../../../shared/services/media.service.js';
+
+function sanitizeMedicine(item) {
+  if (!item || typeof item !== 'object') return item;
+  const result = { ...item };
+  if (result.imageUrl) {
+    result.imageUrl = MediaService.generatePublicUrl(result.imageUrl);
+  }
+  return result;
+}
+
+function sanitizeMedicineList(items) {
+  if (!Array.isArray(items)) return items;
+  return items.map(sanitizeMedicine);
+}
 
 class MedicineFastifyController {
   async getMedicines(request) {
@@ -46,7 +61,7 @@ class MedicineFastifyController {
     const p = parseInt(page) || 1;
     const lmt = parseInt(limit) || 20;
     return success({
-      items: dataArray,
+      items: sanitizeMedicineList(dataArray),
       total,
       page: p,
       limit: lmt,

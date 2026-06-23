@@ -9,6 +9,15 @@ class SettingsFastifyController {
     if (settings?.invoiceTemplate?.logoUrl) {
       settings.invoiceTemplate.logoUrl = MediaService.enforceHttps(settings.invoiceTemplate.logoUrl);
     }
+    if (settings?.storeProfile?.logoUrl) {
+      settings.storeProfile.logoUrl = MediaService.enforceHttps(settings.storeProfile.logoUrl);
+    }
+    if (settings?.storeProfile?.invoiceLogoUrl) {
+      settings.storeProfile.invoiceLogoUrl = MediaService.enforceHttps(settings.storeProfile.invoiceLogoUrl);
+    }
+    if (settings?.storeProfile?.whatsappLogoUrl) {
+      settings.storeProfile.whatsappLogoUrl = MediaService.enforceHttps(settings.storeProfile.whatsappLogoUrl);
+    }
     return reply.send(settings);
   }
 

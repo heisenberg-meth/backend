@@ -8,6 +8,7 @@ import eventBus from '../../../shared/services/eventbus.service.js';
 import movementService from '../../stock/service/movement.service.js';
 import { scanKeys } from '../../../shared/utils/scan-keys.js';
 import inventoryBatchRepository from '../repository/inventory_batch.repository.js';
+import MediaService from '../../../shared/services/media.service.js';
 import unifiedInventorySummaryService from './unified-inventory-summary.service.js';
 import {
   mapDosageFormToPackaging,

@@ -10,6 +10,7 @@ import logger from '../../../shared/utils/logger.js';
 import { TRIAL_DAYS } from '../../subscriptions/subscription.constants.js';
 import { queueEmail } from '../../../shared/services/email.service.js';
 import otpAuditService from '../../../shared/services/otp-audit.service.js';
+import MediaService from '../../../shared/services/media.service.js';
 
 class AuthPrismaService {
   async register(userData) {
@@ -403,7 +404,7 @@ class AuthPrismaService {
         role: user.role,
         tenantId: user.tenantId,
         branchId: user.branchId,
-        avatar: user.avatar,
+        avatar: MediaService.generatePublicUrl(user.avatar),
         subscriptionStatus,
         currentPeriodEnd: subscription?.endDate,
       },
@@ -536,7 +537,7 @@ class AuthPrismaService {
         role: user.role,
         tenantId: user.tenantId,
         branchId: user.branchId,
-        avatar: user.avatar,
+        avatar: MediaService.generatePublicUrl(user.avatar),
         subscriptionStatus: subscription?.status || 'PENDING',
         currentPeriodEnd: subscription?.endDate,
       },
@@ -626,7 +627,7 @@ class AuthPrismaService {
         role: user.role,
         tenantId: user.tenantId,
         branchId: user.branchId,
-        avatar: user.avatar,
+        avatar: MediaService.generatePublicUrl(user.avatar),
         subscriptionStatus: subscription?.status || 'PENDING',
         currentPeriodEnd: subscription?.endDate,
       },

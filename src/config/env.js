@@ -39,7 +39,7 @@ const env = {
   nodeEnv: validatedEnv.NODE_ENV,
   port: validatedEnv.PORT,
   frontendUrl: validatedEnv.FRONTEND_URL,
-  mediaBaseUrl: validatedEnv.MEDIA_BASE_URL || 'https://medassist-backend-hryu.onrender.com',
+  mediaBaseUrl: validatedEnv.MEDIA_BASE_URL || 'https://api.medassist.viyaninfo.com',
   cors: {
     origin: validatedEnv.CORS_ORIGIN?.split(',') || [
       'http://localhost:5173',
