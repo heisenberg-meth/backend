@@ -915,9 +915,13 @@ class PurchaseOrderService {
           }
 
           // 6. Update PO Item received quantity
+          const newReceived = poItem.receivedQuantity + item.receivedQuantity;
           await tx.purchaseOrderItem.update({
             where: { id: poItem.id },
-            data: { receivedQuantity: { increment: item.receivedQuantity } },
+            data: {
+              receivedQuantity: newReceived,
+              remainingQuantity: poItem.quantity - newReceived,
+            },
           });
         }
 

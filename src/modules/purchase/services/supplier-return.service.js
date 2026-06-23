@@ -84,6 +84,9 @@ class SupplierReturnService {
         throw new Error(`Cannot approve return in ${returnRecord.status} status`);
 
       for (const item of returnRecord.items) {
+        const batch = await tx.inventoryBatch.findUnique({ where: { id: item.batchId } });
+        if (!batch) throw new Error(`Batch ${item.batchId} not found`);
+
         await tx.inventoryBatch.update({
           where: { id: item.batchId },
           data: { quantity: { decrement: item.quantity } },
@@ -94,8 +97,7 @@ class SupplierReturnService {
             tenantId_branchId_medicineId: {
               tenantId,
               medicineId: item.medicineId,
-              branchId: (await tx.inventoryBatch.findUnique({ where: { id: item.batchId } }))
-                ?.branchId,
+              branchId: batch.branchId,
             },
           },
           data: { currentStock: { decrement: item.quantity } },
@@ -104,8 +106,7 @@ class SupplierReturnService {
         await tx.stockMovement.create({
           data: {
             tenantId,
-            branchId: (await tx.inventoryBatch.findUnique({ where: { id: item.batchId } }))
-              ?.branchId,
+            branchId: batch.branchId,
             medicineId: item.medicineId,
             batchId: item.batchId,
             movementType: 'SUPPLIER_RETURN',
@@ -138,8 +139,10 @@ class SupplierReturnService {
   }
 
   async dispatchReturn(tenantId, returnId, userId) {
-    const returnRecord = await prisma.supplierReturn.findUnique({ where: { id: returnId } });
-    if (!returnRecord || returnRecord.tenantId !== tenantId) throw new Error('Return not found');
+    const returnRecord = await prisma.supplierReturn.findFirst({
+      where: { id: returnId, tenantId },
+    });
+    if (!returnRecord) throw new Error('Return not found');
     if (returnRecord.status !== 'APPROVED')
       throw new Error(`Cannot dispatch return in ${returnRecord.status} status`);
 
@@ -162,8 +165,10 @@ class SupplierReturnService {
   }
 
   async receiveReturn(tenantId, returnId) {
-    const returnRecord = await prisma.supplierReturn.findUnique({ where: { id: returnId } });
-    if (!returnRecord || returnRecord.tenantId !== tenantId) throw new Error('Return not found');
+    const returnRecord = await prisma.supplierReturn.findFirst({
+      where: { id: returnId, tenantId },
+    });
+    if (!returnRecord) throw new Error('Return not found');
     if (returnRecord.status !== 'DISPATCHED')
       throw new Error(`Cannot mark received for return in ${returnRecord.status} status`);
 
@@ -199,7 +204,7 @@ class SupplierReturnService {
         tx,
       );
 
-      const creditNoteNumber = `CN-${Date.now()}`;
+      const creditNoteNumber = `CN-${returnRecord.returnNumber.replace('RET-', '')}`;
       await tx.supplierCreditNote.create({
         data: {
           tenantId,
@@ -234,9 +239,10 @@ class SupplierReturnService {
 
   async processReturn(tenantId, data, userId) {
     const result = await this.createReturn(tenantId, data, userId);
-    return this.approveReturn(tenantId, result.id, userId).then(() =>
-      this.completeReturn(tenantId, result.id, userId),
-    );
+    await this.approveReturn(tenantId, result.id, userId);
+    await this.dispatchReturn(tenantId, result.id, userId);
+    await this.receiveReturn(tenantId, result.id);
+    return this.completeReturn(tenantId, result.id, userId);
   }
 
   async getReturns(tenantId, page = 1, limit = 20) {
