@@ -760,16 +760,23 @@ export const adminService = {
     return adminRepository.createSupportReply(ticketId, message, adminId);
   },
 
-  async updateSupportTicketStatus(ticketId, status, performedBy) {
-    const valid = ['OPEN', 'IN_PROGRESS', 'WAITING_FOR_STAFF', 'RESOLVED', 'CLOSED'];
+  async updateSupportTicketStatus(ticketId, status) {
+    const valid = [
+      'OPEN',
+      'IN_PROGRESS',
+      'WAITING_ON_CUSTOMER',
+      'WAITING_FOR_STAFF',
+      'RESOLVED',
+      'CLOSED',
+    ];
     if (!valid.includes(status)) throw new Error('Invalid status');
-    return adminRepository.updateSupportTicketStatus(ticketId, status, performedBy);
+    return adminRepository.updateSupportTicketStatus(ticketId, status);
   },
 
-  async assignTicket(ticketId, assignedToId, performedBy) {
+  async assignTicket(ticketId, assignedTo) {
     const ticket = await adminRepository.getSupportTicket(ticketId);
     if (!ticket) throw new Error('Ticket not found');
-    return adminRepository.assignTicket(ticketId, assignedToId, performedBy);
+    return adminRepository.assignTicket(ticketId, assignedTo);
   },
 
   async getExpiryOverview() {

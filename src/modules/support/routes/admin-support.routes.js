@@ -26,23 +26,18 @@ export default async function (fastify) {
           limit: { type: 'integer', default: 20 },
           status: {
             type: 'string',
-            enum: ['OPEN', 'IN_PROGRESS', 'WAITING_FOR_STAFF', 'RESOLVED', 'CLOSED'],
-          },
-          priority: { type: 'string', enum: ['LOW', 'MEDIUM', 'HIGH', 'CRITICAL'] },
-          category: {
-            type: 'string',
             enum: [
-              'INVENTORY',
-              'BILLING',
-              'PURCHASE',
-              'SUPPLIER',
-              'SALES',
-              'REPORTS',
-              'IMPORT',
-              'ACCOUNT',
-              'TECHNICAL',
-              'OTHER',
+              'OPEN',
+              'IN_PROGRESS',
+              'WAITING_ON_CUSTOMER',
+              'WAITING_FOR_STAFF',
+              'RESOLVED',
+              'CLOSED',
             ],
+          },
+          priority: {
+            type: 'string',
+            enum: ['LOW', 'MEDIUM', 'HIGH', 'URGENT', 'CRITICAL'],
           },
           search: { type: 'string' },
         },
@@ -134,7 +129,14 @@ export default async function (fastify) {
         properties: {
           status: {
             type: 'string',
-            enum: ['OPEN', 'IN_PROGRESS', 'WAITING_FOR_STAFF', 'RESOLVED', 'CLOSED'],
+            enum: [
+              'OPEN',
+              'IN_PROGRESS',
+              'WAITING_ON_CUSTOMER',
+              'WAITING_FOR_STAFF',
+              'RESOLVED',
+              'CLOSED',
+            ],
           },
         },
       },
@@ -175,16 +177,11 @@ export default async function (fastify) {
   fastify.put('/tickets/:ticketId/resolve', {
     schema: {
       tags: ['Admin Support'],
-      summary: 'Resolve ticket with resolution summary',
+      summary: 'Resolve ticket',
       params: {
         type: 'object',
         required: ['ticketId'],
         properties: { ticketId: { type: 'string', format: 'uuid' } },
-      },
-      body: {
-        type: 'object',
-        required: ['resolution'],
-        properties: { resolution: { type: 'string', minLength: 5 } },
       },
     },
     handler: controller.resolveTicket,

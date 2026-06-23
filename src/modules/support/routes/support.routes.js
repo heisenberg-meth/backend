@@ -11,12 +11,11 @@ export default async function (fastify) {
       summary: 'Create a support ticket',
       body: {
         type: 'object',
-        required: ['title', 'description', 'category'],
+        required: ['subject', 'message'],
         properties: {
-          title: { type: 'string' },
-          description: { type: 'string' },
-          category: { type: 'string', enum: ['INVENTORY', 'BILLING', 'PURCHASE', 'SUPPLIER', 'SALES', 'REPORTS', 'IMPORT', 'ACCOUNT', 'TECHNICAL', 'OTHER'] },
-          priority: { type: 'string', enum: ['LOW', 'MEDIUM', 'HIGH', 'CRITICAL'] },
+          subject: { type: 'string' },
+          message: { type: 'string' },
+          priority: { type: 'string', enum: ['LOW', 'MEDIUM', 'HIGH', 'URGENT', 'CRITICAL'] },
         },
       },
     },
@@ -30,8 +29,18 @@ export default async function (fastify) {
       querystring: {
         type: 'object',
         properties: {
-          status: { type: 'string' },
-          priority: { type: 'string' },
+          status: {
+            type: 'string',
+            enum: [
+              'OPEN',
+              'IN_PROGRESS',
+              'WAITING_ON_CUSTOMER',
+              'WAITING_FOR_STAFF',
+              'RESOLVED',
+              'CLOSED',
+            ],
+          },
+          priority: { type: 'string', enum: ['LOW', 'MEDIUM', 'HIGH', 'URGENT', 'CRITICAL'] },
           page: { type: 'integer', default: 1 },
           limit: { type: 'integer', default: 20 },
         },
@@ -77,19 +86,6 @@ export default async function (fastify) {
       },
     },
     handler: controller.addReply,
-  });
-
-  fastify.post('/:ticketId/attachments', {
-    schema: {
-      tags: ['Support'],
-      summary: 'Upload attachment to ticket',
-      params: {
-        type: 'object',
-        required: ['ticketId'],
-        properties: { ticketId: { type: 'string' } },
-      },
-    },
-    handler: controller.uploadAttachment,
   });
 
   fastify.put('/:ticketId/close', {

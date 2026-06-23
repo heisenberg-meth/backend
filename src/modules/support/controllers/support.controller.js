@@ -4,20 +4,20 @@ import logger from '../../../shared/utils/logger.js';
 class SupportController {
   async createTicket(request, reply) {
     try {
-      const { title, description, category, priority } = request.body;
+      const { subject, message, priority } = request.body;
 
-      if (!title || !description || !category) {
+      if (!subject || !message) {
         return reply.code(400).send({
           success: false,
-          error: 'Title, description, and category are required',
+          error: 'Subject and message are required',
         });
       }
 
-      const ticket = await supportService.createTicket(
-        request.tenantId,
-        request.user.id,
-        { title, description, category, priority },
-      );
+      const ticket = await supportService.createTicket(request.tenantId, request.user.id, {
+        subject,
+        message,
+        priority,
+      });
 
       return reply.code(201).send({ success: true, data: ticket });
     } catch (error) {
@@ -73,61 +73,20 @@ class SupportController {
       return reply.send({ success: true, message: 'Reply added' });
     } catch (error) {
       logger.error({ error }, '[SUPPORT] Add reply failed');
-      return reply.code(500).send({ success: false, error: error.message || 'Failed to add reply' });
-    }
-  }
-
-  async uploadAttachment(request, reply) {
-    try {
-      const { ticketId } = request.params;
-      const data = await request.file();
-
-      if (!data) {
-        return reply.code(400).send({ success: false, error: 'No file uploaded' });
-      }
-
-      const chunks = [];
-      for await (const chunk of data.file) {
-        chunks.push(chunk);
-      }
-      const buffer = Buffer.concat(chunks);
-
-      if (buffer.length > 10 * 1024 * 1024) {
-        return reply.code(400).send({ success: false, error: 'File must be under 10MB' });
-      }
-
-      const attachment = await supportService.uploadAttachment(
-        request.tenantId,
-        ticketId,
-        request.user.id,
-        {
-          fileName: data.filename,
-          fileUrl: `/uploads/support/${ticketId}/${data.filename}`,
-          fileSize: buffer.length,
-        },
-      );
-
-      return reply.send({ success: true, data: attachment });
-    } catch (error) {
-      logger.error({ error }, '[SUPPORT] Upload attachment failed');
-      return reply.code(500).send({ success: false, error: 'Failed to upload attachment' });
+      return reply
+        .code(500)
+        .send({ success: false, error: error.message || 'Failed to add reply' });
     }
   }
 
   async resolveTicket(request, reply) {
     try {
       const { ticketId } = request.params;
-      const { resolution } = request.body;
-
-      if (!resolution) {
-        return reply.code(400).send({ success: false, error: 'Resolution summary is required' });
-      }
 
       const ticket = await supportService.resolveTicket(
         request.tenantId,
         ticketId,
         request.user.id,
-        resolution,
       );
 
       return reply.send({ success: true, status: ticket.status });
@@ -140,11 +99,7 @@ class SupportController {
   async closeTicket(request, reply) {
     try {
       const { ticketId } = request.params;
-      const ticket = await supportService.closeTicket(
-        request.tenantId,
-        ticketId,
-        request.user.id,
-      );
+      const ticket = await supportService.closeTicket(request.tenantId, ticketId, request.user.id);
 
       return reply.send({ success: true, status: ticket.status });
     } catch (error) {
@@ -178,10 +133,7 @@ class SupportController {
 
   async getStaffDashboard(request, reply) {
     try {
-      const dashboard = await supportService.getStaffDashboard(
-        request.tenantId,
-        request.user.id,
-      );
+      const dashboard = await supportService.getStaffDashboard(request.tenantId, request.user.id);
       return reply.send({ success: true, data: dashboard });
     } catch (error) {
       logger.error({ error }, '[SUPPORT] Staff dashboard failed');

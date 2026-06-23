@@ -295,9 +295,7 @@ model User {
   paymentSessions              PaymentSession[]
   createdTickets               SupportTicket[]            @relation("TicketCreator")
   assignedTickets              SupportTicket[]            @relation("TicketAssignee")
-  ticketMessages               SupportMessage[]
-  ticketAttachments            SupportAttachment[]
-  ticketAuditLogs              SupportAuditLog[]
+  ticketReplies                SupportTicketReply[]
 
   @@index([tenantId])
 }
@@ -3935,81 +3933,42 @@ model AdminFeatureFlag {
 }
 
 model SupportTicket {
-  id                String         @id @default(uuid())
-  ticketNumber      String         @unique
-  tenantId          String
-  title             String
-  description       String
-  category          TicketCategory
-  priority          TicketPriority @default(MEDIUM)
-  status            TicketStatus   @default(OPEN)
-  createdById       String
-  assignedToId      String?
-  resolutionSummary String?
-  resolvedAt        DateTime?
-  closedAt          DateTime?
-  createdAt         DateTime       @default(now())
-  updatedAt         DateTime       @updatedAt
+  id         String                @id @default(uuid())
+  tenantId   String
+  subject    String
+  message    String
+  priority   SupportTicketPriority @default(MEDIUM)
+  status     SupportTicketStatus   @default(OPEN)
+  assignedTo String?
+  createdBy  String
+  resolvedAt DateTime?
+  createdAt  DateTime              @default(now())
+  updatedAt  DateTime              @updatedAt
 
-  createdBy   User                @relation("TicketCreator", fields: [createdById], references: [id])
-  assignedTo  User?               @relation("TicketAssignee", fields: [assignedToId], references: [id])
-  tenant      Tenant              @relation(fields: [tenantId], references: [id])
-  messages    SupportMessage[]
-  attachments SupportAttachment[]
-  auditLogs   SupportAuditLog[]
+  creator    User                  @relation("TicketCreator", fields: [createdBy], references: [id])
+  assignee   User?                 @relation("TicketAssignee", fields: [assignedTo], references: [id])
+  tenant     Tenant                @relation(fields: [tenantId], references: [id])
+  replies    SupportTicketReply[]
 
   @@index([tenantId])
-  @@index([createdById])
-  @@index([assignedToId])
   @@index([status])
+  @@index([priority])
+  @@index([assignedTo])
   @@index([tenantId, status])
 }
 
-model SupportMessage {
-  id         String   @id @default(uuid())
+model SupportTicketReply {
+  id         String        @id @default(uuid())
   ticketId   String
-  senderId   String
-  senderRole String
   message    String
-  createdAt  DateTime @default(now())
+  authorId   String
+  authorRole String
+  createdAt  DateTime      @default(now())
 
-  ticket SupportTicket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
-  sender User          @relation(fields: [senderId], references: [id])
-
-  @@index([ticketId])
-  @@index([senderId])
-}
-
-model SupportAttachment {
-  id         String   @id @default(uuid())
-  ticketId   String
-  fileName   String
-  fileUrl    String
-  fileSize   Int
-  uploadedBy String
-  createdAt  DateTime @default(now())
-
-  ticket   SupportTicket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
-  uploader User          @relation(fields: [uploadedBy], references: [id])
+  ticket     SupportTicket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  author     User          @relation(fields: [authorId], references: [id])
 
   @@index([ticketId])
-  @@index([uploadedBy])
-}
-
-model SupportAuditLog {
-  id          String   @id @default(uuid())
-  ticketId    String
-  action      String
-  oldValue    String?
-  newValue    String?
-  performedBy String
-  createdAt   DateTime @default(now())
-
-  ticket    SupportTicket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
-  performer User          @relation(fields: [performedBy], references: [id])
-
-  @@index([ticketId])
-  @@index([performedBy])
 }
 
 enum PaymentMode {
@@ -4644,29 +4603,18 @@ model InventoryDisposal {
   @@index([tenantId, branchId])
 }
 
-enum TicketCategory {
-  INVENTORY
-  BILLING
-  PURCHASE
-  SUPPLIER
-  SALES
-  REPORTS
-  IMPORT
-  ACCOUNT
-  TECHNICAL
-  OTHER
-}
-
-enum TicketPriority {
+enum SupportTicketPriority {
   LOW
   MEDIUM
   HIGH
+  URGENT
   CRITICAL
 }
 
-enum TicketStatus {
+enum SupportTicketStatus {
   OPEN
   IN_PROGRESS
+  WAITING_ON_CUSTOMER
   WAITING_FOR_STAFF
   RESOLVED
   CLOSED
