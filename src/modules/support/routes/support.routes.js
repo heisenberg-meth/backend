@@ -1,5 +1,6 @@
 import controller from '../controllers/support.controller.js';
 import { authenticate, requireTenant } from '../../../middleware/auth.fastify.js';
+import { SUPPORT_TICKET_STATUS, SUPPORT_TICKET_PRIORITY } from '../constants.js';
 
 export default async function (fastify) {
   fastify.addHook('preHandler', authenticate);
@@ -15,7 +16,7 @@ export default async function (fastify) {
         properties: {
           subject: { type: 'string' },
           message: { type: 'string' },
-          priority: { type: 'string', enum: ['LOW', 'MEDIUM', 'HIGH', 'CRITICAL'] },
+          priority: { type: 'string', enum: Object.values(SUPPORT_TICKET_PRIORITY) },
         },
       },
     },
@@ -31,15 +32,9 @@ export default async function (fastify) {
         properties: {
           status: {
             type: 'string',
-            enum: [
-              'OPEN',
-              'IN_PROGRESS',
-              'WAITING_FOR_STAFF',
-              'RESOLVED',
-              'CLOSED',
-            ],
+            enum: Object.values(SUPPORT_TICKET_STATUS),
           },
-          priority: { type: 'string', enum: ['LOW', 'MEDIUM', 'HIGH', 'CRITICAL'] },
+          priority: { type: 'string', enum: Object.values(SUPPORT_TICKET_PRIORITY) },
           page: { type: 'integer', default: 1 },
           limit: { type: 'integer', default: 20 },
         },

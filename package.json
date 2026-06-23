@@ -3,6 +3,9 @@
   "version": "1.0.0",
   "description": "",
   "type": "module",
+  "engines": {
+    "node": ">=20.0.0"
+  },
   "main": "src/fastify-server.js",
   "scripts": {
     "start": "npx prisma migrate deploy && node src/fastify-server.js",
