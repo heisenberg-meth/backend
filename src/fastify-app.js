@@ -534,6 +534,18 @@ const setupFastify = async () => {
   await fastify.register(supplierReturnsRoutes, { prefix: '/api/supplier-returns' });
   await fastify.register(adminRoutes, { prefix: '/api/admin' });
 
+  // ── Serve uploaded media files ──
+  const uploadsDir = new URL('../uploads', import.meta.url).pathname;
+  const isUploadsDir = fs.existsSync(uploadsDir);
+
+  if (isUploadsDir) {
+    await fastify.register(fastifyStatic, {
+      root: uploadsDir,
+      prefix: '/uploads/',
+      decorateReply: false,
+    });
+  }
+
   // ── Serve frontend static files (SPA) ──
   const frontendDist = new URL('../../frontend/dist', import.meta.url).pathname;
   const isFrontendBuilt = fs.existsSync(frontendDist);

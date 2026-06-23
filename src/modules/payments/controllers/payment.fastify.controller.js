@@ -129,6 +129,26 @@ class PaymentFastifyController {
     }
   }
 
+  async getPaymentStatusByOrderId(request, reply) {
+    const tenantId = request.tenantId;
+    const { orderId } = request.params;
+
+    try {
+      const status = await paymentOrchestratorService.getPaymentStatus(tenantId, orderId);
+      if (!status) {
+        return reply.code(404).send({
+          success: false,
+          error: 'Payment not found',
+          code: 'PAYMENT_NOT_FOUND',
+        });
+      }
+      return reply.send({ success: true, data: status });
+    } catch (error) {
+      logger.error({ error, orderId, tenantId }, '[PAYMENT] Status by orderId failed');
+      return reply.code(500).send({ success: false, error: 'Failed to get payment status' });
+    }
+  }
+
   async recoverPayment(request, reply) {
     const tenantId = request.tenantId;
     const { orderId } = request.params;

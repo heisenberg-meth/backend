@@ -78,11 +78,27 @@ async function paymentRoutes(fastify) {
 
   // ── Payment Recovery & Status ──
   fastify.get(
+    '/status/:orderId',
+    {
+      schema: {
+        tags: ['Payments'],
+        summary: 'Get payment status by order ID (path param)',
+        params: {
+          type: 'object',
+          required: ['orderId'],
+          properties: { orderId: { type: 'string' } },
+        },
+      },
+    },
+    paymentController.getPaymentStatusByOrderId,
+  );
+
+  fastify.get(
     '/status',
     {
       schema: {
         tags: ['Payments'],
-        summary: 'Get payment status',
+        summary: 'Get payment status by order ID (query param)',
         querystring: {
           type: 'object',
           required: ['orderId'],

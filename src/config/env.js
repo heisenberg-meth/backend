@@ -5,6 +5,7 @@ const envSchema = z.object({
   NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
   PORT: z.string().transform(Number).default('5000'),
   FRONTEND_URL: z.string().url().default('https://medassist.viyaninfo.com/'),
+  MEDIA_BASE_URL: z.string().url().optional(),
   CORS_ORIGIN: z.string().optional(),
   LOG_LEVEL: z.string().default('info'),
   LOG_OTP: z.string().optional(),
@@ -38,6 +39,7 @@ const env = {
   nodeEnv: validatedEnv.NODE_ENV,
   port: validatedEnv.PORT,
   frontendUrl: validatedEnv.FRONTEND_URL,
+  mediaBaseUrl: validatedEnv.MEDIA_BASE_URL || 'https://medassist-backend-hryu.onrender.com',
   cors: {
     origin: validatedEnv.CORS_ORIGIN?.split(',') || [
       'http://localhost:5173',

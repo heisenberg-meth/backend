@@ -1,10 +1,14 @@
 import settingsService from '../service/settings.prisma.service.js';
 import invoiceTemplateService from '../invoice-template/invoice-template.service.js';
 import gstService from '../gst/gst.service.js';
+import MediaService from '../../../shared/services/media.service.js';
 
 class SettingsFastifyController {
   async getSettings(request, reply) {
     const settings = await settingsService.getSettings(request.tenantId);
+    if (settings?.invoiceTemplate?.logoUrl) {
+      settings.invoiceTemplate.logoUrl = MediaService.enforceHttps(settings.invoiceTemplate.logoUrl);
+    }
     return reply.send(settings);
   }
 
@@ -32,11 +36,17 @@ class SettingsFastifyController {
 
   async getInvoiceTemplate(request, reply) {
     const result = await invoiceTemplateService.getTemplate(request.tenantId);
+    if (result?.logoUrl) {
+      result.logoUrl = MediaService.enforceHttps(result.logoUrl);
+    }
     return reply.send({ success: true, data: result });
   }
 
   async updateInvoiceTemplate(request, reply) {
     const data = request.body.data || request.body;
+    if (data.logoUrl) {
+      data.logoUrl = MediaService.enforceHttps(data.logoUrl);
+    }
     const result = await invoiceTemplateService.updateTemplate(
       request.tenantId,
       data,

@@ -1,5 +1,6 @@
 import prisma from '../../config/prisma.js';
 import { authenticate } from '../../middleware/auth.fastify.js';
+import MediaService from '../../shared/services/media.service.js';
 
 async function uploadsRoutes(fastify) {
   fastify.addHook('preHandler', authenticate);
@@ -46,19 +47,23 @@ async function uploadsRoutes(fastify) {
             },
           });
         }
+
+        const relativePath = `/avatars/${request.user.id}`;
         await prisma.user.update({
           where: { id: request.user.id },
           data: {
-            avatar: `/avatars/${request.user.id}`,
+            avatar: relativePath,
             avatarData: buffer,
             avatarMimeType: data.mimetype,
           },
         });
 
+        const publicUrl = MediaService.generatePublicUrl(relativePath);
+
         return reply.send({
           success: true,
           data: {
-            avatarUrl: `/avatars/${request.user.id}`,
+            avatarUrl: publicUrl,
           },
         });
       } catch (error) {
