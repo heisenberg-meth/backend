@@ -1,5 +1,6 @@
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
+import crypto from 'crypto';
 import { ZodError } from 'zod';
 import prisma from '../../../config/prisma.js';
 import authService from '../service/auth.prisma.service.js';
@@ -28,7 +29,7 @@ import {
 const COOKIE_OPTIONS = {
   path: '/',
   httpOnly: true,
-  sameSite: 'none',
+  sameSite: 'strict',
   secure: true,
   maxAge: 30 * 24 * 60 * 60,
   domain: '.viyaninfo.com',
@@ -37,7 +38,7 @@ const COOKIE_OPTIONS = {
 const ACCESS_COOKIE_OPTIONS = {
   path: '/',
   httpOnly: true,
-  sameSite: 'none',
+  sameSite: 'strict',
   secure: true,
   maxAge: 15 * 60,
   domain: '.viyaninfo.com',
@@ -66,7 +67,7 @@ class AuthFastifyController {
           .send(errorResponse(firstIssue?.message || 'Validation failed', 'VALIDATION_ERROR'));
       }
       if (error?.message === 'User already exists') {
-        return reply.code(409).send(errorResponse(error.message, 'USER_EXISTS'));
+        return reply.code(409).send(errorResponse('An account with this email already exists', 'USER_EXISTS'));
       }
       return reply
         .code(400)
@@ -306,7 +307,7 @@ class AuthFastifyController {
 
       if (user) {
         const otp = Math.floor(100000 + Math.random() * 900000).toString();
-        const hashedOtp = await bcrypt.hash(otp, 10);
+        const hashedOtp = await bcrypt.hash(otp, 12);
         const expiresAt = new Date(Date.now() + OTP_EXPIRY_MS);
 
         await prisma.user.update({
@@ -410,11 +411,13 @@ class AuthFastifyController {
         { expiresIn: '5m', algorithm: 'HS256' },
       );
 
+      const hashedResetToken = crypto.createHash('sha256').update(resetToken).digest('hex');
+
       await prisma.user.update({
         where: { email },
         data: {
           resetOtpVerified: true,
-          resetToken,
+          resetToken: hashedResetToken,
           resetTokenExpiry: new Date(Date.now() + RESET_TOKEN_EXPIRY_MS),
         },
       });
@@ -477,7 +480,15 @@ class AuthFastifyController {
           );
       }
 
-      const hashedPassword = await bcrypt.hash(newPassword, 10);
+      // Verify hashed reset token
+      const hashedToken = crypto.createHash('sha256').update(resetToken).digest('hex');
+      if (user.resetToken !== hashedToken) {
+        return reply
+          .code(400)
+          .send(errorResponse('Invalid reset token.', 'INVALID_RESET_TOKEN'));
+      }
+
+      const hashedPassword = await bcrypt.hash(newPassword, 12);
 
       await prisma.user.update({
         where: { id: user.id },
@@ -533,7 +544,7 @@ class AuthFastifyController {
         }
 
         const otp = Math.floor(100000 + Math.random() * 900000).toString();
-        const hashedOtp = await bcrypt.hash(otp, 10);
+        const hashedOtp = await bcrypt.hash(otp, 12);
 
         await prisma.user.update({
           where: { email },
@@ -605,7 +616,12 @@ class AuthFastifyController {
       if (newPassword.length < 6) {
         return reply
           .code(400)
-          .send(errorResponse('Password must be at least 6 characters', 'VALIDATION_ERROR'));
+          .send(errorResponse('Password must be at least 8 characters', 'VALIDATION_ERROR'));
+      }
+      if (!/[A-Z]/.test(newPassword) || !/[a-z]/.test(newPassword) || !/[0-9]/.test(newPassword) || !/[^A-Za-z0-9]/.test(newPassword)) {
+        return reply
+          .code(400)
+          .send(errorResponse('Password must contain uppercase, lowercase, number, and special character', 'VALIDATION_ERROR'));
       }
       const result = await authService.changePassword(
         request.user.id,

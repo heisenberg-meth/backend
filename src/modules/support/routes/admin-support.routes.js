@@ -29,7 +29,7 @@ export default async function (fastify) {
             enum: [
               'OPEN',
               'IN_PROGRESS',
-              'WAITING_ON_CUSTOMER',
+              'WAITING_FOR_STAFF',
               'WAITING_FOR_STAFF',
               'RESOLVED',
               'CLOSED',
@@ -37,7 +37,7 @@ export default async function (fastify) {
           },
           priority: {
             type: 'string',
-            enum: ['LOW', 'MEDIUM', 'HIGH', 'URGENT', 'CRITICAL'],
+            enum: ['LOW', 'MEDIUM', 'HIGH', 'CRITICAL'],
           },
           search: { type: 'string' },
         },
@@ -132,7 +132,7 @@ export default async function (fastify) {
             enum: [
               'OPEN',
               'IN_PROGRESS',
-              'WAITING_ON_CUSTOMER',
+              'WAITING_FOR_STAFF',
               'WAITING_FOR_STAFF',
               'RESOLVED',
               'CLOSED',

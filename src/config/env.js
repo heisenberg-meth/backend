@@ -10,7 +10,7 @@ const envSchema = z.object({
   LOG_LEVEL: z.string().default('info'),
   LOG_OTP: z.string().optional(),
   COOKIE_SECRET: z.string().min(10),
-  JWT_SECRET: z.string().min(10),
+  JWT_SECRET: z.string().min(64, 'JWT_SECRET must be at least 64 characters'),
   AWS_BUCKET_NAME: z.string().optional(),
   AWS_REGION: z.string().default('us-east-1'),
   AWS_ACCESS_KEY_ID: z.string().optional(),

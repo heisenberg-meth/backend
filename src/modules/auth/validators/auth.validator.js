@@ -10,7 +10,11 @@ export const registerSchema = z
     password: z
       .string({ required_error: 'Password is required' })
       .trim()
-      .min(8, 'Password must be at least 8 characters'),
+      .min(8, 'Password must be at least 8 characters')
+      .regex(/[A-Z]/, 'Password must contain at least 1 uppercase letter')
+      .regex(/[a-z]/, 'Password must contain at least 1 lowercase letter')
+      .regex(/[0-9]/, 'Password must contain at least 1 number')
+      .regex(/[^A-Za-z0-9]/, 'Password must contain at least 1 special character'),
     confirmPassword: z.string({ required_error: 'Password confirmation is required' }).trim(),
     fullName: z.string({ required_error: 'Full name is required' }).trim(),
     role: z.enum(['owner', 'staff']).default('owner'),

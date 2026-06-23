@@ -98,7 +98,7 @@ async function authRoutes(fastify) {
     {
       config: {
         rateLimit: {
-          max: 20,
+          max: 5,
           timeWindow: '15 minutes',
         },
       },
@@ -194,7 +194,11 @@ async function authRoutes(fastify) {
           required: ['currentPassword', 'newPassword'],
           properties: {
             currentPassword: { type: 'string' },
-            newPassword: { type: 'string', minLength: 6 },
+            newPassword: {
+              type: 'string',
+              minLength: 8,
+              pattern: '^(?=.*[a-z])(?=.*[A-Z])(?=.*\\d)(?=.*[^A-Za-z\\d]).{8,}$',
+            },
           },
         },
       },

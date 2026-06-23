@@ -3196,17 +3196,18 @@ model ColdStorageLog {
 }
 
 model UserSession {
-  id              String   @id @default(uuid())
+  id              String    @id @default(uuid())
   userId          String
   ipAddress       String?
   expiresAt       DateTime
-  revoked         Boolean  @default(false)
-  createdAt       DateTime @default(now())
+  revoked         Boolean   @default(false)
+  createdAt       DateTime  @default(now())
+  lastActivity    DateTime?
   deviceName      String?
   fingerprintHash String?
-  refreshToken    String   @unique
+  refreshToken    String    @unique
   userAgent       String?
-  user            User     @relation(fields: [userId], references: [id])
+  user            User      @relation(fields: [userId], references: [id])
 
   @@index([userId, revoked])
 }

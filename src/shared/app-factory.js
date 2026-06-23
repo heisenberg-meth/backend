@@ -102,7 +102,7 @@ const createServiceApp = async (options = {}) => {
   });
 
   await fastify.register(cookie, {
-    secret: env.cookieSecret || 'super-secret-cookie-key',
+    secret: env.cookieSecret,
   });
 
   await fastify.register(csrf, {

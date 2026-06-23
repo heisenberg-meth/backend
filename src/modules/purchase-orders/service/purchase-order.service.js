@@ -38,10 +38,8 @@ class PurchaseOrderService {
     const receiptOnlyFields = [
       'batchNumber',
       'expiryDate',
-      'supplierInvoiceNumber',
-      'invoiceDate',
+      'manufacturingDate',
       'mrp',
-      'purchasePrice',
       'sellingPrice',
     ];
     const invalidHeaderField = receiptOnlyFields.find((field) => data[field] !== undefined);
@@ -109,7 +107,7 @@ class PurchaseOrderService {
 
       const currentStock = med.inventory?.[0]?.currentStock || 0;
       const reorderQty = med.reorderLevel || 0;
-      const unitPrice = Number(item.unitPrice);
+      const unitPrice = Number(item.unitPrice ?? item.purchasePrice);
       const gstPercentage = Number(item.gstPercentage ?? med.gstPercentage ?? 0);
       const qty = Number(item.quantity);
 

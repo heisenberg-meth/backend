@@ -2,6 +2,7 @@ import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import crypto from 'crypto';
 import prisma from '../../../config/prisma.js';
+import redis from '../../../config/redis.js';
 import authRepository from '../repository/auth.prisma.repository.js';
 import sessionService from './session.service.js';
 import secretManager from '../../../config/secrets.js';
@@ -11,6 +12,9 @@ import { TRIAL_DAYS } from '../../subscriptions/subscription.constants.js';
 import { queueEmail } from '../../../shared/services/email.service.js';
 import otpAuditService from '../../../shared/services/otp-audit.service.js';
 import MediaService from '../../../shared/services/media.service.js';
+
+const MAX_FAILED_LOGINS = 10;
+const LOCKOUT_DURATION_SECONDS = 30 * 60; // 30 minutes
 
 class AuthPrismaService {
   async register(userData) {
@@ -34,7 +38,7 @@ class AuthPrismaService {
       throw new Error('User already exists');
     }
 
-    const hashedPassword = await bcrypt.hash(password, 10);
+    const hashedPassword = await bcrypt.hash(password, 12);
 
     const trialStart = new Date();
     const trialEnd = new Date(trialStart);
@@ -159,6 +163,17 @@ class AuthPrismaService {
       throw new Error('Invalid credentials');
     }
 
+    // Account lockout check (Redis-based)
+    const lockoutKey = `auth:lockout:${user.id}`;
+    const lockoutTtl = await redis.ttl(lockoutKey);
+    if (lockoutTtl > 0) {
+      logger.warn({ email: normalizedEmail, lockoutRemaining: lockoutTtl }, 'Login blocked: Account locked');
+      throw new Error(`Account locked due to too many failed attempts. Try again in ${Math.ceil(lockoutTtl / 60)} minutes.`);
+    }
+
+    // Failed login attempt tracking
+    const attemptsKey = `auth:attempts:${user.id}`;
+
     if (user.status === 'BLOCKED') {
       logger.warn({ email: normalizedEmail }, 'Login failed: User is blocked');
       throw new Error('Your account has been blocked. Contact support.');
@@ -200,9 +215,23 @@ class AuthPrismaService {
     const isMatch = await bcrypt.compare(password, user.password);
 
     if (!isMatch) {
-      logger.warn({ email: normalizedEmail }, 'Login failed: Password mismatch');
+      // Track failed login attempt
+      const attempts = await redis.incr(attemptsKey);
+      await redis.expire(attemptsKey, LOCKOUT_DURATION_SECONDS);
+
+      if (attempts >= MAX_FAILED_LOGINS) {
+        await redis.set(lockoutKey, 'locked', 'EX', LOCKOUT_DURATION_SECONDS);
+        await redis.del(attemptsKey);
+        logger.warn({ email: normalizedEmail, attempts }, 'Login failed: Account locked after max attempts');
+        throw new Error('Account locked due to too many failed attempts. Try again in 30 minutes.');
+      }
+
+      logger.warn({ email: normalizedEmail, attempts }, 'Login failed: Password mismatch');
       throw new Error('Invalid credentials');
     }
+
+    // Successful login — clear failed attempts
+    await redis.del(attemptsKey);
 
     // --- 2FA VALIDATION ---
     if (user.twoFactorEnabled) {
@@ -247,7 +276,7 @@ class AuthPrismaService {
           // If a new device is attempting to log in, require OTP verification
           if (!otp) {
             const deviceOtp = Math.floor(100000 + Math.random() * 900000).toString();
-            const hashedOtp = await bcrypt.hash(deviceOtp, 10);
+            const hashedOtp = await bcrypt.hash(deviceOtp, 12);
 
             await prisma.user.update({
               where: { id: user.id },
@@ -570,8 +599,18 @@ class AuthPrismaService {
   async updateProfile(userId, data) {
     const { fullName, phone, shopName } = data;
     const updateData = {};
-    if (fullName !== undefined) updateData.fullName = fullName;
-    if (phone !== undefined) updateData.phone = phone;
+
+    if (fullName !== undefined) {
+      const sanitized = fullName.replace(/[<>"'&]/g, '').trim();
+      if (sanitized.length < 1 || sanitized.length > 100) {
+        throw new Error('Full name must be 1-100 characters');
+      }
+      updateData.fullName = sanitized;
+    }
+    if (phone !== undefined) {
+      const sanitized = phone.replace(/[^0-9+\-() ]/g, '').trim();
+      updateData.phone = sanitized || null;
+    }
 
     const user = await prisma.user.update({
       where: { id: userId },
@@ -579,10 +618,13 @@ class AuthPrismaService {
     });
 
     if (shopName !== undefined && user.tenantId) {
-      await prisma.tenant.update({
-        where: { id: user.tenantId },
-        data: { name: shopName },
-      });
+      const sanitized = shopName.replace(/[<>"'&]/g, '').trim();
+      if (sanitized.length > 0) {
+        await prisma.tenant.update({
+          where: { id: user.tenantId },
+          data: { name: sanitized },
+        });
+      }
     }
 
     const { invalidateUserCache } = await import('./auth.cache.js');

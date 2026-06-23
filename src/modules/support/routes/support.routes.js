@@ -15,7 +15,7 @@ export default async function (fastify) {
         properties: {
           subject: { type: 'string' },
           message: { type: 'string' },
-          priority: { type: 'string', enum: ['LOW', 'MEDIUM', 'HIGH', 'URGENT', 'CRITICAL'] },
+          priority: { type: 'string', enum: ['LOW', 'MEDIUM', 'HIGH', 'CRITICAL'] },
         },
       },
     },
@@ -34,13 +34,12 @@ export default async function (fastify) {
             enum: [
               'OPEN',
               'IN_PROGRESS',
-              'WAITING_ON_CUSTOMER',
               'WAITING_FOR_STAFF',
               'RESOLVED',
               'CLOSED',
             ],
           },
-          priority: { type: 'string', enum: ['LOW', 'MEDIUM', 'HIGH', 'URGENT', 'CRITICAL'] },
+          priority: { type: 'string', enum: ['LOW', 'MEDIUM', 'HIGH', 'CRITICAL'] },
           page: { type: 'integer', default: 1 },
           limit: { type: 'integer', default: 20 },
         },

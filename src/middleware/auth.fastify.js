@@ -1,11 +1,13 @@
 import prisma from '../config/prisma.js';
 import logger from '../shared/utils/logger.js';
 import { sessionCache, userCache } from '../modules/auth/service/auth.cache.js';
+import sessionService from '../modules/auth/service/session.service.js';
 
 const SESSION_CACHE_TTL_MS = 30_000;
 const USER_CACHE_TTL_MS = 60_000;
 const SESSION_CACHE_MAX = 500;
 const USER_CACHE_MAX = 500;
+const TOUCH_INTERVAL_MS = 5 * 60 * 1000; // Update lastActivity at most every 5 minutes
 
 async function verifySession(sessionId) {
   const session = await prisma.userSession.findUnique({
@@ -111,6 +113,14 @@ export const authenticate = async (request, reply) => {
       sessionCache.delete(oldest);
     }
     sessionCache.set(sessionId, { valid: true, expiresAt: Date.now() + SESSION_CACHE_TTL_MS });
+  }
+
+  // Track lastActivity (throttled to every 5 minutes)
+  const lastTouchKey = `lastTouch:${sessionId}`;
+  const lastTouch = sessionCache.get(lastTouchKey);
+  if (!lastTouch || Date.now() - lastTouch > TOUCH_INTERVAL_MS) {
+    sessionCache.set(lastTouchKey, Date.now());
+    sessionService.touchSession(sessionId).catch(() => {});
   }
 
   const user = await fetchAndCacheUser(request.user.userId);
