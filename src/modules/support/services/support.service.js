@@ -276,16 +276,40 @@ class SupportService {
   }
 
   async getAdminDashboard(tenantId) {
-    const [total, open, inProgress, waitingForStaff, resolved, closed] = await Promise.all([
+    const [total, open, inProgress, waitingForStaff, resolved, closed, critical] = await Promise.all([
       prisma.supportTicket.count({ where: { tenantId } }),
       prisma.supportTicket.count({ where: { tenantId, status: 'OPEN' } }),
       prisma.supportTicket.count({ where: { tenantId, status: 'IN_PROGRESS' } }),
       prisma.supportTicket.count({ where: { tenantId, status: 'WAITING_FOR_STAFF' } }),
       prisma.supportTicket.count({ where: { tenantId, status: 'RESOLVED' } }),
       prisma.supportTicket.count({ where: { tenantId, status: 'CLOSED' } }),
+      prisma.supportTicket.count({ where: { tenantId, priority: 'CRITICAL', status: { notIn: ['RESOLVED', 'CLOSED'] } } }),
     ]);
 
-    return { totalTickets: total, open, inProgress, waitingForStaff, resolved, closed };
+    // Average resolution time
+    const resolvedTickets = await prisma.supportTicket.findMany({
+      where: { tenantId, status: { in: ['RESOLVED', 'CLOSED'] }, resolvedAt: { not: null } },
+      select: { createdAt: true, resolvedAt: true },
+    });
+
+    let avgResolutionHours = 0;
+    if (resolvedTickets.length > 0) {
+      const totalHours = resolvedTickets.reduce((sum, t) => {
+        return sum + (new Date(t.resolvedAt).getTime() - new Date(t.createdAt).getTime()) / (1000 * 60 * 60);
+      }, 0);
+      avgResolutionHours = Math.round(totalHours / resolvedTickets.length);
+    }
+
+    return {
+      totalTickets: total,
+      open,
+      inProgress,
+      waitingForStaff,
+      resolved,
+      closed,
+      critical,
+      avgResolutionHours,
+    };
   }
 }
 

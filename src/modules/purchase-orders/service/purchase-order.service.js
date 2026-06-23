@@ -8,6 +8,22 @@ import logger from '../../../shared/utils/logger.js';
 import { BadRequestError, NotFoundError } from '../../../shared/utils/errors.js';
 
 class PurchaseOrderService {
+  async logAudit(txOrPrisma, tenantId, userId, action, target) {
+    try {
+      await txOrPrisma.auditLog.create({
+        data: {
+          tenantId,
+          userId,
+          action,
+          target,
+          type: 'FINANCIAL',
+        },
+      });
+    } catch (error) {
+      logger.warn({ err: error, action, target }, 'PURCHASE_AUDIT_LOG_FAILED');
+    }
+  }
+
   async getOrders(tenantId, filters = {}) {
     return purchaseOrderRepository.findAll(tenantId, filters);
   }
@@ -19,6 +35,26 @@ class PurchaseOrderService {
   }
 
   async createOrder(tenantId, userId, data) {
+    const receiptOnlyFields = [
+      'batchNumber',
+      'expiryDate',
+      'supplierInvoiceNumber',
+      'invoiceDate',
+      'mrp',
+      'purchasePrice',
+      'sellingPrice',
+    ];
+    const invalidHeaderField = receiptOnlyFields.find((field) => data[field] !== undefined);
+    if (invalidHeaderField) {
+      throw new BadRequestError(`${invalidHeaderField} belongs to GRN receiving, not PO creation`);
+    }
+    const invalidItem = data.items?.find((item) =>
+      receiptOnlyFields.some((field) => item[field] !== undefined),
+    );
+    if (invalidItem) {
+      throw new BadRequestError('Batch, invoice, MRP, and actual purchase fields belong to GRN receiving');
+    }
+
     // 1. Validate supplier exists
     const supplier = await prisma.supplier.findFirst({
       where: { id: data.supplierId, tenantId, deletedAt: null },
@@ -93,6 +129,7 @@ class PurchaseOrderService {
         unitPrice,
         gstPercentage,
         totalAmount: itemTotal,
+        remainingQuantity: qty,
       });
     }
 
@@ -264,6 +301,7 @@ class PurchaseOrderService {
               unitPrice: purchasePrice,
               gstPercentage,
               totalAmount: subtotal,
+              remainingQuantity: quantity,
             },
           },
         },
@@ -312,14 +350,229 @@ class PurchaseOrderService {
   }
 
 
-  async submitOrder(tenantId, id) {
+  async updateDraftOrder(tenantId, id, userId, data) {
+    const order = await this.getOrderById(tenantId, id);
+    if (order.status !== PROCUREMENT_STATUS.DRAFT) {
+      throw new BadRequestError('Only DRAFT purchase orders can be updated');
+    }
+
+    return prisma.$transaction(async (tx) => {
+      const updateData = {
+        expectedDeliveryDate: data.expectedDeliveryDate ? new Date(data.expectedDeliveryDate) : order.expectedDeliveryDate,
+        paymentTermsDays: data.paymentTermsDays ?? order.paymentTermsDays,
+        notes: data.notes ?? order.notes,
+      };
+
+      if (Array.isArray(data.items)) {
+        await tx.purchaseOrderItem.deleteMany({ where: { purchaseOrderId: id } });
+
+        let subtotal = 0;
+        let gstAmount = 0;
+        const medicineIds = data.items.map((item) => item.medicineId);
+        const medicines = await tx.medicine.findMany({
+          where: { id: { in: medicineIds }, tenantId, deletedAt: null },
+          include: { inventory: { where: { tenantId }, take: 1 } },
+        });
+        const medicineMap = new Map(medicines.map((medicine) => [medicine.id, medicine]));
+
+        const mappedItems = data.items.map((item) => {
+          const medicine = medicineMap.get(item.medicineId);
+          if (!medicine) throw new BadRequestError(`Medicine with ID ${item.medicineId} not found`);
+          const quantity = Number(item.quantity);
+          const unitPrice = Number(item.unitPrice);
+          const gstPercentage = Number(item.gstPercentage ?? medicine.gstPercentage ?? 0);
+          const totalAmount = Number((quantity * unitPrice).toFixed(2));
+          subtotal += totalAmount;
+          gstAmount += Number((totalAmount * gstPercentage / 100).toFixed(2));
+          return {
+            medicineId: item.medicineId,
+            medicineName: medicine.name,
+            currentStock: medicine.inventory?.[0]?.currentStock || 0,
+            reorderQty: medicine.reorderLevel || 0,
+            quantity,
+            unitPrice,
+            gstPercentage,
+            totalAmount,
+            remainingQuantity: quantity,
+          };
+        });
+
+        updateData.subtotal = Number(subtotal.toFixed(2));
+        updateData.gstAmount = Number(gstAmount.toFixed(2));
+        updateData.totalAmount = Number((updateData.subtotal + updateData.gstAmount).toFixed(2));
+        updateData.balanceAmount = updateData.totalAmount;
+        await tx.purchaseOrderItem.createMany({
+          data: mappedItems.map((item) => ({ ...item, purchaseOrderId: id })),
+        });
+      }
+
+      const updated = await tx.purchaseOrder.update({
+        where: { id, tenantId },
+        data: updateData,
+        include: { items: true },
+      });
+      await this.logAudit(tx, tenantId, userId, 'PURCHASE_ORDER_UPDATED', `PurchaseOrder:${id}`);
+      return updated;
+    });
+  }
+
+  async deleteDraftOrder(tenantId, id, userId) {
+    const order = await this.getOrderById(tenantId, id);
+    if (order.status !== PROCUREMENT_STATUS.DRAFT) {
+      throw new BadRequestError('Only DRAFT purchase orders can be deleted');
+    }
+    const deleted = await prisma.purchaseOrder.update({
+      where: { id, tenantId },
+      data: { deletedAt: new Date() },
+    });
+    await this.logAudit(prisma, tenantId, userId, 'PURCHASE_ORDER_DELETED', `PurchaseOrder:${id}`);
+    return deleted;
+  }
+
+  async submitOrder(tenantId, id, userId) {
     const order = await this.getOrderById(tenantId, id);
     const nextStatus = procurementStateMachine.transition(order.status, 'SUBMIT');
 
-    return prisma.purchaseOrder.update({
-      where: { id, tenantId },
-      data: { status: nextStatus },
-      include: { items: true },
+    return prisma.$transaction(async (tx) => {
+      const updated = await tx.purchaseOrder.update({
+        where: { id, tenantId },
+        data: { status: nextStatus },
+        include: { items: true },
+      });
+      await this.logAudit(tx, tenantId, userId, 'PURCHASE_ORDER_SUBMITTED', `PurchaseOrder:${id}`);
+      return updated;
+    });
+  }
+
+  async requestApproval(tenantId, id, userId) {
+    const order = await this.getOrderById(tenantId, id);
+    if (order.status !== PROCUREMENT_STATUS.DRAFT) {
+      throw new BadRequestError('Only DRAFT purchase orders can be submitted for approval');
+    }
+    const totalAmount = Number(order.totalAmount || 0);
+    if (totalAmount < 10000) {
+      return this.approveOrder(tenantId, id, userId, 'Auto-approved below threshold');
+    }
+    return this.submitOrder(tenantId, id, userId);
+  }
+
+  async rejectOrder(tenantId, id, userId, reason) {
+    if (!reason) throw new BadRequestError('Rejection reason is required');
+    const order = await this.getOrderById(tenantId, id);
+    const nextStatus = procurementStateMachine.transition(order.status, 'REJECT');
+    return prisma.$transaction(async (tx) => {
+      const updated = await tx.purchaseOrder.update({
+        where: { id, tenantId },
+        data: {
+          status: nextStatus,
+          notes: `${order.notes || ''}\nRejection Reason: ${reason}`,
+        },
+        include: { items: true },
+      });
+      await this.logAudit(tx, tenantId, userId, 'PURCHASE_ORDER_REJECTED', `PurchaseOrder:${id}`);
+      return updated;
+    });
+  }
+
+  async sendOrder(tenantId, id, userId) {
+    const order = await this.getOrderById(tenantId, id);
+    const nextStatus = procurementStateMachine.transition(order.status, 'PLACE_ORDER');
+    return prisma.$transaction(async (tx) => {
+      const updated = await tx.purchaseOrder.update({
+        where: { id, tenantId },
+        data: { status: nextStatus, sentAt: new Date() },
+        include: { items: true },
+      });
+      await this.logAudit(tx, tenantId, userId, 'PURCHASE_ORDER_SENT_TO_SUPPLIER', `PurchaseOrder:${id}`);
+      return updated;
+    });
+  }
+
+  async acknowledgeOrder(tenantId, id, userId) {
+    const order = await this.getOrderById(tenantId, id);
+    const nextStatus = procurementStateMachine.transition(order.status, 'ACKNOWLEDGE');
+    return prisma.$transaction(async (tx) => {
+      const updated = await tx.purchaseOrder.update({
+        where: { id, tenantId },
+        data: { status: nextStatus, acknowledgedAt: new Date() },
+        include: { items: true },
+      });
+      await this.logAudit(tx, tenantId, userId, 'PURCHASE_ORDER_ACKNOWLEDGED', `PurchaseOrder:${id}`);
+      return updated;
+    });
+  }
+
+  async reviseOrder(tenantId, id, userId, payload) {
+    const order = await this.getOrderById(tenantId, id);
+    if (!['APPROVED', 'SENT', 'SENT_TO_SUPPLIER', 'ACKNOWLEDGED'].includes(order.status)) {
+      throw new BadRequestError('Only approved or supplier-facing purchase orders can be revised');
+    }
+    if (!Array.isArray(payload.items) || payload.items.length === 0) {
+      throw new BadRequestError('Revision items are required');
+    }
+    if (!payload.reason) throw new BadRequestError('Revision reason is required');
+
+    return prisma.$transaction(async (tx) => {
+      const revisionCount = await tx.purchaseOrderRevision.count({ where: { purchaseOrderId: id } });
+      const changes = [];
+      for (const item of payload.items) {
+        const existing = order.items.find((poItem) => poItem.id === item.purchaseOrderItemId);
+        if (!existing) throw new BadRequestError(`PO item ${item.purchaseOrderItemId} not found`);
+        const quantity = Number(item.quantity);
+        if (quantity < existing.receivedQuantity) {
+          throw new BadRequestError('Revised quantity cannot be lower than already received quantity');
+        }
+        changes.push({ purchaseOrderItemId: existing.id, from: existing.quantity, to: quantity });
+        await tx.purchaseOrderItem.update({
+          where: { id: existing.id },
+          data: {
+            quantity,
+            totalAmount: Number((quantity * Number(existing.unitPrice)).toFixed(2)),
+          },
+        });
+      }
+
+      const items = await tx.purchaseOrderItem.findMany({ where: { purchaseOrderId: id } });
+      const subtotal = items.reduce((sum, item) => sum + Number(item.totalAmount), 0);
+      const gstAmount = items.reduce(
+        (sum, item) => sum + Number(item.totalAmount) * (Number(item.gstPercentage) / 100),
+        0,
+      );
+
+      await tx.purchaseOrderRevision.create({
+        data: {
+          purchaseOrderId: id,
+          revisionNumber: revisionCount + 1,
+          reason: payload.reason,
+          changes,
+          revisedBy: userId,
+        },
+      });
+
+      const updated = await tx.purchaseOrder.update({
+        where: { id, tenantId },
+        data: {
+          subtotal: Number(subtotal.toFixed(2)),
+          gstAmount: Number(gstAmount.toFixed(2)),
+          totalAmount: Number((subtotal + gstAmount).toFixed(2)),
+        },
+        include: { items: true, revisions: true },
+      });
+      await this.logAudit(tx, tenantId, userId, 'PURCHASE_ORDER_REVISED', `PurchaseOrder:${id}`);
+      return updated;
+    });
+  }
+
+  async getAudit(tenantId, id) {
+    return prisma.auditLog.findMany({
+      where: {
+        tenantId,
+        OR: [
+          { target: `PurchaseOrder:${id}` },
+          { target: id },
+        ],
+      },
+      orderBy: { date: 'desc' },
     });
   }
 
@@ -432,6 +685,8 @@ class PurchaseOrderService {
       const allowedReceiveStatuses = [
         PROCUREMENT_STATUS.APPROVED,
         PROCUREMENT_STATUS.ORDERED,
+        PROCUREMENT_STATUS.SENT_TO_SUPPLIER,
+        PROCUREMENT_STATUS.ACKNOWLEDGED,
         PROCUREMENT_STATUS.PARTIALLY_RECEIVED,
       ];
       if (!allowedReceiveStatuses.includes(order.status)) {
@@ -687,8 +942,6 @@ class PurchaseOrderService {
           where: { id },
           data: {
             status: nextStatus,
-            supplierInvoiceNumber,
-            invoiceDate: new Date(invoiceDate),
             receivedAt: now,
           },
         });

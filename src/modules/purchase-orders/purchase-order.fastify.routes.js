@@ -73,6 +73,32 @@ async function purchaseOrderRoutes(fastify) {
     purchaseOrderController.getOrder,
   );
 
+  fastify.put(
+    '/:id',
+    {
+      schema: {
+        tags: ['Purchase Orders'],
+        summary: 'Update a draft purchase order',
+        params: { type: 'object', properties: { id: { type: 'string', format: 'uuid' } } },
+      },
+      preHandler: [requirePermission('purchase-orders.update')],
+    },
+    purchaseOrderController.updateDraftOrder,
+  );
+
+  fastify.delete(
+    '/:id',
+    {
+      schema: {
+        tags: ['Purchase Orders'],
+        summary: 'Soft-delete a draft purchase order',
+        params: { type: 'object', properties: { id: { type: 'string', format: 'uuid' } } },
+      },
+      preHandler: [requirePermission('purchase-orders.update')],
+    },
+    purchaseOrderController.deleteDraftOrder,
+  );
+
   fastify.post(
     '/',
     {
@@ -160,6 +186,32 @@ async function purchaseOrderRoutes(fastify) {
 
   // ── Workflow Actions ───────────────────────────────────────────
   fastify.post(
+    '/:id/submit',
+    {
+      schema: {
+        tags: ['Purchase Orders'],
+        summary: 'Submit a purchase order for approval',
+        params: { type: 'object', properties: { id: { type: 'string', format: 'uuid' } } },
+      },
+      preHandler: [requirePermission('purchase-orders.update')],
+    },
+    purchaseOrderController.submitOrder,
+  );
+
+  fastify.post(
+    '/:id/request-approval',
+    {
+      schema: {
+        tags: ['Purchase Orders'],
+        summary: 'Route a purchase order to the correct approval tier',
+        params: { type: 'object', properties: { id: { type: 'string', format: 'uuid' } } },
+      },
+      preHandler: [requirePermission('purchase-orders.update')],
+    },
+    purchaseOrderController.requestApproval,
+  );
+
+  fastify.post(
     '/:id/approve',
     {
       schema: {
@@ -174,6 +226,63 @@ async function purchaseOrderRoutes(fastify) {
       preHandler: [requirePermission('purchase-orders.approve')],
     },
     purchaseOrderController.approveOrder,
+  );
+
+  fastify.post(
+    '/:id/reject',
+    {
+      schema: {
+        tags: ['Purchase Orders'],
+        summary: 'Reject a purchase order',
+        params: { type: 'object', properties: { id: { type: 'string', format: 'uuid' } } },
+        body: {
+          type: 'object',
+          required: ['reason'],
+          properties: { reason: { type: 'string', minLength: 3 } },
+        },
+      },
+      preHandler: [requirePermission('purchase-orders.approve')],
+    },
+    purchaseOrderController.rejectOrder,
+  );
+
+  fastify.post(
+    '/:id/send',
+    {
+      schema: {
+        tags: ['Purchase Orders'],
+        summary: 'Send an approved purchase order to the supplier',
+        params: { type: 'object', properties: { id: { type: 'string', format: 'uuid' } } },
+      },
+      preHandler: [requirePermission('purchase-orders.update')],
+    },
+    purchaseOrderController.sendOrder,
+  );
+
+  fastify.post(
+    '/:id/acknowledge',
+    {
+      schema: {
+        tags: ['Purchase Orders'],
+        summary: 'Record supplier acknowledgement',
+        params: { type: 'object', properties: { id: { type: 'string', format: 'uuid' } } },
+      },
+      preHandler: [requirePermission('purchase-orders.update')],
+    },
+    purchaseOrderController.acknowledgeOrder,
+  );
+
+  fastify.post(
+    '/:id/revise',
+    {
+      schema: {
+        tags: ['Purchase Orders'],
+        summary: 'Revise supplier-facing PO quantities',
+        params: { type: 'object', properties: { id: { type: 'string', format: 'uuid' } } },
+      },
+      preHandler: [requirePermission('purchase-orders.update')],
+    },
+    purchaseOrderController.reviseOrder,
   );
 
   fastify.post(
@@ -318,7 +427,19 @@ async function purchaseOrderRoutes(fastify) {
     },
     purchaseOrderController.generatePdf,
   );
+
+  fastify.get(
+    '/:id/audit',
+    {
+      schema: {
+        tags: ['Purchase Orders'],
+        summary: 'Get purchase order audit trail',
+        params: { type: 'object', properties: { id: { type: 'string', format: 'uuid' } } },
+      },
+      preHandler: [requirePermission('purchase-orders.read')],
+    },
+    purchaseOrderController.getAudit,
+  );
 }
 
 export default purchaseOrderRoutes;
-

@@ -747,7 +747,7 @@ class AdminController {
     try {
       const { id } = request.params;
       const { status } = request.body;
-      const result = await adminService.updateSupportTicketStatus(id, status);
+      const result = await adminService.updateSupportTicketStatus(id, status, request.admin?.id || request.user?.id);
       return reply.send(success(result));
     } catch (error) {
       return reply.code(400).send(errorResponse(error.message, 'TICKET_UPDATE_FAILED'));

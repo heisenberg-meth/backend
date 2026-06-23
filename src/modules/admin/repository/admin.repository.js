@@ -510,25 +510,27 @@ export const adminRepository = {
     return { tenants, users, subscriptions, payments, devices, openTickets: tickets };
   },
 
-  async listSupportTickets({ status, priority, search, page = 1, limit = 20 }) {
+  async listSupportTickets({ status, priority, category, search, page = 1, limit = 20 }) {
     const pageNum = parseInt(page) || 1;
     const limitNum = parseInt(limit) || 20;
     const where = {};
     if (status) where.status = status;
     if (priority) where.priority = priority;
+    if (category) where.category = category;
     if (search) {
       where.OR = [
-        { subject: { contains: search, mode: 'insensitive' } },
-        { message: { contains: search, mode: 'insensitive' } },
-        { tenant: { shopName: { contains: search, mode: 'insensitive' } } },
+        { title: { contains: search, mode: 'insensitive' } },
+        { description: { contains: search, mode: 'insensitive' } },
+        { ticketNumber: { contains: search, mode: 'insensitive' } },
       ];
     }
     const [tickets, total] = await Promise.all([
       prisma.supportTicket.findMany({
         where,
         include: {
-          tenant: { select: { id: true, shopName: true, email: true, phone: true } },
-          replies: { orderBy: { createdAt: 'desc' }, take: 3 },
+          createdBy: { select: { id: true, fullName: true, email: true } },
+          assignedTo: { select: { id: true, fullName: true, email: true } },
+          _count: { select: { messages: true } },
         },
         orderBy: { createdAt: 'desc' },
         skip: (pageNum - 1) * limitNum,
@@ -543,27 +545,80 @@ export const adminRepository = {
     return prisma.supportTicket.findUnique({
       where: { id },
       include: {
-        tenant: { select: { id: true, shopName: true, email: true, phone: true } },
-        replies: { orderBy: { createdAt: 'asc' } },
+        createdBy: { select: { id: true, fullName: true, email: true, role: true } },
+        assignedTo: { select: { id: true, fullName: true, email: true } },
+        messages: {
+          include: { sender: { select: { id: true, fullName: true, role: true } } },
+          orderBy: { createdAt: 'asc' },
+        },
+        attachments: true,
       },
     });
   },
 
   async createSupportReply(ticketId, message, authorId) {
-    const reply = await prisma.supportTicketReply.create({
-      data: { ticketId, message, authorId, authorRole: 'ADMIN' },
+    const reply = await prisma.supportMessage.create({
+      data: { ticketId, senderId: authorId, senderRole: 'ADMIN', message },
     });
     await prisma.supportTicket.update({
       where: { id: ticketId },
-      data: { status: 'IN_PROGRESS', updatedAt: new Date() },
+      data: { status: 'WAITING_FOR_STAFF', updatedAt: new Date() },
     });
+
+    await prisma.supportAuditLog.create({
+      data: {
+        ticketId,
+        action: 'REPLY_ADDED',
+        newValue: 'ADMIN',
+        performedBy: authorId,
+      },
+    });
+
     return reply;
   },
 
-  async updateSupportTicketStatus(ticketId, status) {
+  async updateSupportTicketStatus(ticketId, status, performedBy) {
+    const ticket = await prisma.supportTicket.findUnique({ where: { id: ticketId } });
     const data = { status };
-    if (status === 'RESOLVED' || status === 'CLOSED') data.resolvedAt = new Date();
-    return prisma.supportTicket.update({ where: { id: ticketId }, data });
+    if (status === 'RESOLVED') data.resolvedAt = new Date();
+    if (status === 'CLOSED') data.closedAt = new Date();
+
+    const updated = await prisma.supportTicket.update({ where: { id: ticketId }, data });
+
+    await prisma.supportAuditLog.create({
+      data: {
+        ticketId,
+        action: 'STATUS_CHANGED',
+        oldValue: ticket?.status,
+        newValue: status,
+        performedBy: performedBy || 'system',
+      },
+    });
+
+    return updated;
+  },
+
+  async assignTicket(ticketId, assignedToId, performedBy) {
+    const ticket = await prisma.supportTicket.findUnique({ where: { id: ticketId } });
+    const updated = await prisma.supportTicket.update({
+      where: { id: ticketId },
+      data: {
+        assignedToId,
+        status: ticket?.status === 'OPEN' ? 'IN_PROGRESS' : ticket?.status,
+      },
+    });
+
+    await prisma.supportAuditLog.create({
+      data: {
+        ticketId,
+        action: 'ASSIGNED',
+        oldValue: ticket?.assignedToId,
+        newValue: assignedToId,
+        performedBy,
+      },
+    });
+
+    return updated;
   },
 
   async getSubscriptionsExpiringBetween(start, end) {

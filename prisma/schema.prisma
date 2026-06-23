@@ -141,6 +141,7 @@ model Tenant {
   storeProfileDocuments      StoreProfileDocument[]
   storeProfileLocalizations  StoreProfileLocalization[]
   storeProfileVersions       StoreProfileVersion[]
+  supportTickets             SupportTicket[]
   subscription               Subscription?
   paymentSessions            PaymentSession[]
   suppliers                  Supplier[]
@@ -292,6 +293,11 @@ model User {
   tenant                       Tenant                     @relation(fields: [tenantId], references: [id])
   userSessions                 UserSession[]
   paymentSessions              PaymentSession[]
+  createdTickets               SupportTicket[]            @relation("TicketCreator")
+  assignedTickets              SupportTicket[]            @relation("TicketAssignee")
+  ticketMessages               SupportMessage[]
+  ticketAttachments            SupportAttachment[]
+  ticketAuditLogs              SupportAuditLog[]
 
   @@index([tenantId])
 }
@@ -1364,6 +1370,8 @@ model PurchaseOrder {
   invoiceDate           DateTime?
   paymentMode           PaymentMode?
   receivedAt            DateTime?
+  sentAt                DateTime?
+  acknowledgedAt        DateTime?
   paymentTermsDays      Int?
   supplierInvoiceNumber String?
   goodsReceiptNotes     GoodsReceiptNote[]
@@ -1376,6 +1384,7 @@ model PurchaseOrder {
   user                  User?                   @relation(fields: [userId], references: [id])
   approvals             PurchaseOrderApproval[]
   items                 PurchaseOrderItem[]
+  revisions             PurchaseOrderRevision[]
   stockAlerts           StockAlert[]
 
   @@unique([tenantId, orderNumber])
@@ -1395,39 +1404,56 @@ model PurchaseOrderApproval {
   @@index([purchaseOrderId])
 }
 
+model PurchaseOrderRevision {
+  id              String        @id @default(uuid())
+  purchaseOrderId String
+  revisionNumber  Int
+  reason          String
+  changes         Json
+  revisedBy       String?
+  revisedAt       DateTime      @default(now())
+  purchaseOrder   PurchaseOrder @relation(fields: [purchaseOrderId], references: [id])
+
+  @@index([purchaseOrderId])
+}
+
 model PurchaseOrderItem {
-  id               String           @id @default(uuid())
-  purchaseOrderId  String
-  medicineId       String
-  medicineName     String
-  currentStock     Int
-  reorderQty       Int
-  quantity         Int              @default(0)
-  unitPrice        Decimal          @db.Decimal(12, 2)
-  gstPercentage    Float            @default(0)
-  totalAmount      Decimal          @db.Decimal(12, 2)
-  receivedQuantity Int              @default(0)
-  batchNumber      String?
-  expiryDate       DateTime?        @db.Date
-  inventoryBatches InventoryBatch[]
-  medicine         Medicine         @relation(fields: [medicineId], references: [id])
-  purchaseOrder    PurchaseOrder    @relation(fields: [purchaseOrderId], references: [id])
+  id                String           @id @default(uuid())
+  purchaseOrderId   String
+  medicineId        String
+  medicineName      String
+  currentStock      Int
+  reorderQty        Int
+  quantity          Int              @default(0)
+  unitPrice         Decimal          @db.Decimal(12, 2)
+  gstPercentage     Float            @default(0)
+  totalAmount       Decimal          @db.Decimal(12, 2)
+  receivedQuantity  Int              @default(0)
+  remainingQuantity Int              @default(0)
+  inventoryBatches  InventoryBatch[]
+  medicine          Medicine         @relation(fields: [medicineId], references: [id])
+  purchaseOrder     PurchaseOrder    @relation(fields: [purchaseOrderId], references: [id])
 }
 
 model GoodsReceiptNote {
-  id              String                 @id @default(uuid())
-  tenantId        String
-  purchaseOrderId String
-  grnNumber       String
-  receivedDate    DateTime               @default(now())
-  receivedBy      String?
-  notes           String?
-  createdAt       DateTime               @default(now())
-  updatedAt       DateTime               @updatedAt
-  purchaseOrder   PurchaseOrder          @relation(fields: [purchaseOrderId], references: [id])
-  receiver        User?                  @relation(fields: [receivedBy], references: [id])
-  tenant          Tenant                 @relation(fields: [tenantId], references: [id])
-  items           GoodsReceiptNoteItem[]
+  id                    String                 @id @default(uuid())
+  tenantId              String
+  purchaseOrderId       String
+  grnNumber             String
+  supplierInvoiceNumber String?
+  invoiceDate           DateTime?
+  receivedDate          DateTime               @default(now())
+  receivedBy            String?
+  notes                 String?
+  reversedAt            DateTime?
+  reversedBy            String?
+  reversalReason        String?
+  createdAt             DateTime               @default(now())
+  updatedAt             DateTime               @updatedAt
+  purchaseOrder         PurchaseOrder          @relation(fields: [purchaseOrderId], references: [id])
+  receiver              User?                  @relation(fields: [receivedBy], references: [id])
+  tenant                Tenant                 @relation(fields: [tenantId], references: [id])
+  items                 GoodsReceiptNoteItem[]
 
   @@unique([tenantId, grnNumber])
   @@index([tenantId, purchaseOrderId])
@@ -1441,8 +1467,10 @@ model GoodsReceiptNoteItem {
   medicineId          String
   receivedQuantity    Int
   batchNumber         String?
+  manufacturingDate   DateTime?
   expiryDate          DateTime?
   purchasePrice       Decimal?         @db.Decimal(12, 2)
+  mrp                 Decimal?         @db.Decimal(12, 2)
   sellingPrice        Decimal?         @db.Decimal(12, 2)
   grn                 GoodsReceiptNote @relation(fields: [grnId], references: [id])
   medicine            Medicine         @relation(fields: [medicineId], references: [id])
@@ -1482,6 +1510,37 @@ model PurchaseInvoice {
   @@index([tenantId, createdAt])
   @@index([tenantId, dueDate])
   @@index([tenantId, supplierId, invoiceDate], map: "idx_purchase_invoice_tenant_supplier_date")
+}
+
+model ProcurementAttachment {
+  id         String   @id @default(uuid())
+  tenantId   String
+  entityType String
+  entityId   String
+  fileName   String
+  storageUrl String
+  mimeType   String?
+  uploadedBy String?
+  createdAt  DateTime @default(now())
+
+  @@index([tenantId, entityType, entityId])
+}
+
+model DebitNote {
+  id                String   @id @default(uuid())
+  tenantId          String
+  supplierId        String
+  purchaseInvoiceId String?
+  debitNoteNumber   String
+  amount            Decimal  @db.Decimal(12, 2)
+  reason            String
+  status            String   @default("ISSUED")
+  createdBy         String?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@unique([tenantId, debitNoteNumber])
+  @@index([tenantId, supplierId])
 }
 
 model Patient {
@@ -3876,33 +3935,81 @@ model AdminFeatureFlag {
 }
 
 model SupportTicket {
-  id         String                @id @default(uuid())
-  tenantId   String
-  subject    String
-  message    String
-  priority   SupportTicketPriority @default(MEDIUM)
-  status     SupportTicketStatus   @default(OPEN)
-  assignedTo String?
-  createdBy  String
-  resolvedAt DateTime?
-  createdAt  DateTime              @default(now())
-  updatedAt  DateTime              @updatedAt
+  id                String         @id @default(uuid())
+  ticketNumber      String         @unique
+  tenantId          String
+  title             String
+  description       String
+  category          TicketCategory
+  priority          TicketPriority @default(MEDIUM)
+  status            TicketStatus   @default(OPEN)
+  createdById       String
+  assignedToId      String?
+  resolutionSummary String?
+  resolvedAt        DateTime?
+  closedAt          DateTime?
+  createdAt         DateTime       @default(now())
+  updatedAt         DateTime       @updatedAt
+
+  createdBy   User                @relation("TicketCreator", fields: [createdById], references: [id])
+  assignedTo  User?               @relation("TicketAssignee", fields: [assignedToId], references: [id])
+  tenant      Tenant              @relation(fields: [tenantId], references: [id])
+  messages    SupportMessage[]
+  attachments SupportAttachment[]
+  auditLogs   SupportAuditLog[]
 
   @@index([tenantId])
+  @@index([createdById])
+  @@index([assignedToId])
   @@index([status])
-  @@index([priority])
-  @@index([assignedTo])
+  @@index([tenantId, status])
 }
 
-model SupportTicketReply {
+model SupportMessage {
   id         String   @id @default(uuid())
   ticketId   String
+  senderId   String
+  senderRole String
   message    String
-  authorId   String
-  authorRole String
   createdAt  DateTime @default(now())
 
+  ticket SupportTicket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  sender User          @relation(fields: [senderId], references: [id])
+
   @@index([ticketId])
+  @@index([senderId])
+}
+
+model SupportAttachment {
+  id         String   @id @default(uuid())
+  ticketId   String
+  fileName   String
+  fileUrl    String
+  fileSize   Int
+  uploadedBy String
+  createdAt  DateTime @default(now())
+
+  ticket   SupportTicket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  uploader User          @relation(fields: [uploadedBy], references: [id])
+
+  @@index([ticketId])
+  @@index([uploadedBy])
+}
+
+model SupportAuditLog {
+  id          String   @id @default(uuid())
+  ticketId    String
+  action      String
+  oldValue    String?
+  newValue    String?
+  performedBy String
+  createdAt   DateTime @default(now())
+
+  ticket    SupportTicket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  performer User          @relation(fields: [performedBy], references: [id])
+
+  @@index([ticketId])
+  @@index([performedBy])
 }
 
 enum PaymentMode {
@@ -3988,9 +4095,13 @@ enum TransactionStatus {
 enum PurchaseOrderStatus {
   DRAFT
   SENT
+  SENT_TO_SUPPLIER
+  ACKNOWLEDGED
   PARTIALLY_RECEIVED
   RECEIVED
   CANCELLED
+  REJECTED
+  CLOSED
   PENDING_APPROVAL
   APPROVED
   RECONCILED
@@ -4227,7 +4338,9 @@ enum PurchasePaymentStatus {
   PENDING
   PAID
   PARTIAL
+  PARTIALLY_PAID
   OVERDUE
+  CANCELLED
 }
 
 enum CreditNoteStatus {
@@ -4266,6 +4379,8 @@ enum SupplierReturnStatus {
   COMPLETED
   DRAFT
   PICKED_UP
+  DISPATCHED
+  RECEIVED
 }
 
 enum DispatchStatus {
@@ -4455,21 +4570,6 @@ enum VerificationStatus {
   EXPIRED
 }
 
-enum SupportTicketPriority {
-  LOW
-  MEDIUM
-  HIGH
-  URGENT
-}
-
-enum SupportTicketStatus {
-  OPEN
-  IN_PROGRESS
-  WAITING_ON_CUSTOMER
-  RESOLVED
-  CLOSED
-}
-
 enum AdminRole {
   ROOT_ADMIN
   ADMIN
@@ -4571,5 +4671,3 @@ enum TicketStatus {
   RESOLVED
   CLOSED
 }
-
-

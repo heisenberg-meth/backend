@@ -119,6 +119,114 @@ class PurchaseOrderFastifyController {
     }
   }
 
+  async updateDraftOrder(request, reply) {
+    const { id } = request.params;
+    const tenantId = request.tenantId;
+    const userId = request.user.id;
+    try {
+      const order = await purchaseOrderService.updateDraftOrder(tenantId, id, userId, request.body);
+      return reply.send({ success: true, data: order, message: 'Purchase order updated' });
+    } catch (error) {
+      return reply.code(400).send({ success: false, error: error.message });
+    }
+  }
+
+  async deleteDraftOrder(request, reply) {
+    const { id } = request.params;
+    const tenantId = request.tenantId;
+    const userId = request.user.id;
+    try {
+      const order = await purchaseOrderService.deleteDraftOrder(tenantId, id, userId);
+      return reply.send({ success: true, data: order, message: 'Purchase order deleted' });
+    } catch (error) {
+      return reply.code(400).send({ success: false, error: error.message });
+    }
+  }
+
+  async submitOrder(request, reply) {
+    const { id } = request.params;
+    const tenantId = request.tenantId;
+    const userId = request.user.id;
+    try {
+      const order = await purchaseOrderService.submitOrder(tenantId, id, userId);
+      return reply.send({ success: true, data: order, message: 'Purchase order submitted for approval' });
+    } catch (error) {
+      return reply.code(400).send({ success: false, error: error.message });
+    }
+  }
+
+  async requestApproval(request, reply) {
+    const { id } = request.params;
+    const tenantId = request.tenantId;
+    const userId = request.user.id;
+    try {
+      const order = await purchaseOrderService.requestApproval(tenantId, id, userId);
+      return reply.send({ success: true, data: order, message: 'Purchase order routed for approval' });
+    } catch (error) {
+      return reply.code(400).send({ success: false, error: error.message });
+    }
+  }
+
+  async rejectOrder(request, reply) {
+    const { id } = request.params;
+    const { reason } = request.body;
+    const tenantId = request.tenantId;
+    const userId = request.user.id;
+    try {
+      const order = await purchaseOrderService.rejectOrder(tenantId, id, userId, reason);
+      return reply.send({ success: true, data: order, message: 'Purchase order rejected' });
+    } catch (error) {
+      return reply.code(400).send({ success: false, error: error.message });
+    }
+  }
+
+  async sendOrder(request, reply) {
+    const { id } = request.params;
+    const tenantId = request.tenantId;
+    const userId = request.user.id;
+    try {
+      const order = await purchaseOrderService.sendOrder(tenantId, id, userId);
+      return reply.send({ success: true, data: order, message: 'Purchase order sent to supplier' });
+    } catch (error) {
+      return reply.code(400).send({ success: false, error: error.message });
+    }
+  }
+
+  async acknowledgeOrder(request, reply) {
+    const { id } = request.params;
+    const tenantId = request.tenantId;
+    const userId = request.user.id;
+    try {
+      const order = await purchaseOrderService.acknowledgeOrder(tenantId, id, userId);
+      return reply.send({ success: true, data: order, message: 'Purchase order acknowledged' });
+    } catch (error) {
+      return reply.code(400).send({ success: false, error: error.message });
+    }
+  }
+
+  async reviseOrder(request, reply) {
+    const { id } = request.params;
+    const tenantId = request.tenantId;
+    const userId = request.user.id;
+    try {
+      const order = await purchaseOrderService.reviseOrder(tenantId, id, userId, request.body);
+      return reply.send({ success: true, data: order, message: 'Purchase order revised' });
+    } catch (error) {
+      return reply.code(400).send({ success: false, error: error.message });
+    }
+  }
+
+  async getAudit(request, reply) {
+    const { id } = request.params;
+    const tenantId = request.tenantId;
+    try {
+      const audit = await purchaseOrderService.getAudit(tenantId, id);
+      return reply.send({ success: true, data: audit });
+    } catch (error) {
+      return reply.code(500).send({ success: false, error: error.message });
+    }
+  }
+
   async receiveOrder(request, reply) {
     const { id } = request.params;
     const tenantId = request.tenantId;

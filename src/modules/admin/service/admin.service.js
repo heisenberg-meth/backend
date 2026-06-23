@@ -8,6 +8,24 @@ import logger from '../../../shared/utils/logger.js';
 const ACCESS_TOKEN_EXPIRY = '15m';
 const REFRESH_TOKEN_EXPIRY = '30d';
 
+async function adminAuditLog(adminId, { action, targetType, targetId, metadata, ipAddress, userAgent }) {
+  try {
+    await prisma.adminAuditLog.create({
+      data: {
+        adminId,
+        action,
+        targetType,
+        targetId,
+        metadata: metadata || {},
+        ipAddress: ipAddress || null,
+        userAgent: userAgent || null,
+      },
+    });
+  } catch (error) {
+    logger.error({ err: error, action, targetType, targetId }, 'Failed to create admin audit log');
+  }
+}
+
 function generateTokens(admin) {
   const accessToken = jwt.sign({ adminId: admin.id, role: admin.role }, env.jwtSecrets[0], {
     expiresIn: ACCESS_TOKEN_EXPIRY,
@@ -736,10 +754,16 @@ export const adminService = {
     return adminRepository.createSupportReply(ticketId, message, adminId);
   },
 
-  async updateSupportTicketStatus(ticketId, status) {
-    const valid = ['OPEN', 'IN_PROGRESS', 'WAITING_ON_CUSTOMER', 'RESOLVED', 'CLOSED'];
+  async updateSupportTicketStatus(ticketId, status, performedBy) {
+    const valid = ['OPEN', 'IN_PROGRESS', 'WAITING_FOR_STAFF', 'RESOLVED', 'CLOSED'];
     if (!valid.includes(status)) throw new Error('Invalid status');
-    return adminRepository.updateSupportTicketStatus(ticketId, status);
+    return adminRepository.updateSupportTicketStatus(ticketId, status, performedBy);
+  },
+
+  async assignTicket(ticketId, assignedToId, performedBy) {
+    const ticket = await adminRepository.getSupportTicket(ticketId);
+    if (!ticket) throw new Error('Ticket not found');
+    return adminRepository.assignTicket(ticketId, assignedToId, performedBy);
   },
 
   async getExpiryOverview() {

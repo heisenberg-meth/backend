@@ -1,10 +1,8 @@
 import ledgerService from '../../vendors/services/ledger.service.js';
 import prisma from '../../../config/prisma.js';
-import logger from '../../../shared/utils/logger.js';
-import { SUBSCRIPTION_PLANS } from '../../subscriptions/subscription.constants.js';
 
 class SupplierReturnService {
-  async processReturn(tenantId, data, userId) {
+  async createReturn(tenantId, data, userId) {
     const { items, supplierId, purchaseInvoiceId, reason } = data;
 
     if (!purchaseInvoiceId) throw new Error('Purchase Invoice ID is required');
@@ -12,135 +10,41 @@ class SupplierReturnService {
     if (!items || !items.length) throw new Error('Return items are required');
 
     return await prisma.$transaction(async (tx) => {
-      // Validate Purchase Invoice Status
       const invoice = await tx.purchaseInvoice.findUnique({
         where: { id: purchaseInvoiceId },
-        include: {
-          purchaseOrder: true,
-        },
       });
 
       if (!invoice || invoice.tenantId !== tenantId) {
         throw new Error('Purchase invoice not found');
       }
 
-      const batches = await tx.inventoryBatch.findMany({
-        where: {
-          OR: [{ purchaseInvoiceId }, { id: { in: items.map((x) => x.batchId) } }],
-        },
-      });
-      invoice.inventoryBatches = batches;
-
-      const invoiceStatus = invoice.purchaseOrder?.status || 'RECEIVED';
-      if (invoiceStatus !== 'RECEIVED' && invoiceStatus !== 'PARTIALLY_RECEIVED') {
-        throw new Error(
-          `Invoice status is ${invoiceStatus}. Only RECEIVED invoices can be returned`,
-        );
-      }
-
-      if (!invoice.inventoryBatches || invoice.inventoryBatches.length === 0) {
-        console.error({
-          invoiceId: purchaseInvoiceId,
-          batchCount: batches ? batches.length : 0,
-          purchaseInvoiceId,
-        });
-        throw new Error(
-          'This invoice has no linked inventory batches.\nPlease contact administrator.',
-        );
-      }
-
-      // Validate Supplier Existence
-      const supplier = await tx.supplier.findUnique({
-        where: { id: supplierId },
-      });
-
-      if (!supplier || supplier.tenantId !== tenantId) {
-        throw new Error('Supplier not found');
-      }
-
       let totalReturnAmount = 0;
-      let totalGstAmount = 0;
       const returnItemsData = [];
 
       for (const item of items) {
-        // Validate Batch Mapping
-        const batch = await tx.inventoryBatch.findUnique({
-          where: { id: item.batchId },
-        });
-
+        const batch = await tx.inventoryBatch.findUnique({ where: { id: item.batchId } });
         if (!batch) throw new Error(`Batch ${item.batchId} not found`);
-        if (batch.quantity <= 0) throw new Error(`Batch ${item.batchId} is empty`);
 
-        // Get original invoice batch to check received qty
-        const invBatch = invoice.inventoryBatches.find((i) => i.id === batch.id);
-        if (!invBatch) throw new Error(`Batch ${batch.id} not found in invoice`);
-
-        // Validate Previously Returned Quantity for THIS batch
         const previousReturns = await tx.supplierReturnItem.aggregate({
-          where: {
-            return: { purchaseInvoiceId },
-            batchId: batch.id,
-          },
+          where: { return: { purchaseInvoiceId }, batchId: item.batchId },
           _sum: { quantity: true },
         });
-
-        const alreadyReturnedQty = previousReturns._sum.quantity || 0;
-        const availableQty = invBatch.receivedQuantity - alreadyReturnedQty;
-
-        // Validate Return Quantities
-        if (item.quantity > availableQty) {
-          throw new Error(
-            `Return quantity (${item.quantity}) exceeds available quantity (${availableQty}) for medicine ${batch.medicineId}`,
-          );
+        const alreadyReturned = previousReturns._sum.quantity || 0;
+        const available = batch.quantity + alreadyReturned - (batch.quantity);
+        if (item.quantity > batch.quantity) {
+          throw new Error(`Return quantity exceeds available stock for batch ${batch.batchNumber}`);
         }
 
-        // Amount Calculations
-        const itemAmount = item.quantity * Number(invBatch.purchasePrice || 0);
-        // GST Reversal (Defaulting to 0 since InventoryBatch has no gstPercentage)
-        const itemGst = (itemAmount * Number(invBatch.gstPercentage || 0)) / 100;
-
+        const itemAmount = item.quantity * Number(batch.purchasePrice || 0);
         totalReturnAmount += itemAmount;
-        totalGstAmount += itemGst;
 
         returnItemsData.push({
           medicineId: batch.medicineId,
           batchId: item.batchId,
           quantity: item.quantity,
-          purchasePrice: invBatch.purchasePrice,
+          purchasePrice: batch.purchasePrice,
           lossAmount: 0,
           reason,
-        });
-
-        // Inventory Rollback
-        await tx.inventoryBatch.update({
-          where: { id: item.batchId },
-          data: { quantity: { decrement: item.quantity } },
-        });
-
-        await tx.inventory.update({
-          where: {
-            tenantId_branchId_medicineId: {
-              tenantId,
-              medicineId: batch.medicineId,
-              branchId: batch.branchId,
-            },
-          },
-          data: { currentStock: { decrement: item.quantity } },
-        });
-
-        await tx.stockMovement.create({
-          data: {
-            tenantId,
-            branchId: batch.branchId,
-            medicineId: batch.medicineId,
-            batchId: item.batchId,
-            movementType: 'SUPPLIER_RETURN',
-            quantity: item.quantity,
-            referenceType: 'PURCHASE_INVOICE',
-            referenceId: purchaseInvoiceId,
-            performedBy: userId,
-            notes: reason || 'SUPPLIER_RETURN',
-          },
         });
       }
 
@@ -152,79 +56,187 @@ class SupplierReturnService {
           supplierId,
           purchaseInvoiceId,
           returnNumber,
-          returnAmount: totalReturnAmount + totalGstAmount,
-          status: 'COMPLETED',
+          returnAmount: totalReturnAmount,
+          status: 'DRAFT',
           reason,
           createdBy: userId,
-          items: {
-            create: returnItemsData,
-          },
+          items: { create: returnItemsData },
         },
       });
 
-      // Check Subscription Feature for Credit Note Generation
-      const subscription = await tx.subscription.findUnique({
-        where: { tenantId },
-      });
-      const planId = subscription?.planId || 'free';
-      const planConfig = SUBSCRIPTION_PLANS[planId] || SUBSCRIPTION_PLANS['free'];
-      const hasCreditNoteFeature = planConfig.features?.includes('CREDIT_NOTES');
-
-      let creditNoteRecord = null;
-      if (hasCreditNoteFeature) {
-        const creditNoteNumber = `CN-${Date.now()}`;
-        const returnTotal = totalReturnAmount + totalGstAmount;
-
-        creditNoteRecord = await tx.supplierCreditNote.create({
-          data: {
-            tenantId,
-            supplierId,
-            returnId: returnRecord.id,
-            creditNoteNumber,
-            amount: returnTotal,
-            remainingAmount: returnTotal,
-            status: 'ISSUED',
-            createdBy: userId,
-          },
-        });
-
-        logger.info(
-          `[SupplierReturn] Auto-generated Credit Note ${creditNoteRecord.creditNoteNumber} for return ${returnRecord.id}`,
-        );
-      }
-
-      // Supplier Ledger Adjustment
-      await ledgerService.recordEntry(
-        tenantId,
-        {
-          supplierId,
-          type: 'RETURN',
-          creditAmount: totalReturnAmount + totalGstAmount,
-          debitAmount: 0,
-          referenceType: 'SUPPLIER_RETURN',
-          referenceId: returnRecord.id,
-          notes: `Return for invoice ${invoice.invoiceNumber}`,
-          createdBy: userId,
-        },
-        tx,
-      );
-
-      // Audit Trail
       await tx.auditLog.create({
         data: {
           tenantId,
           userId,
-          action: 'PURCHASE_RETURN_CREATED',
-          target: 'SupplierReturn',
+          action: 'SUPPLIER_RETURN_CREATED',
+          target: `SupplierReturn:${returnRecord.id}`,
           type: 'INVENTORY',
         },
       });
 
-      logger.info(
-        `[SupplierReturn] Processed return ${returnRecord.id} for invoice ${purchaseInvoiceId}`,
-      );
       return returnRecord;
     });
+  }
+
+  async approveReturn(tenantId, returnId, userId) {
+    return await prisma.$transaction(async (tx) => {
+      const returnRecord = await tx.supplierReturn.findUnique({
+        where: { id: returnId },
+        include: { items: true },
+      });
+
+      if (!returnRecord || returnRecord.tenantId !== tenantId) throw new Error('Return not found');
+      if (returnRecord.status !== 'DRAFT') throw new Error(`Cannot approve return in ${returnRecord.status} status`);
+
+      for (const item of returnRecord.items) {
+        await tx.inventoryBatch.update({
+          where: { id: item.batchId },
+          data: { quantity: { decrement: item.quantity } },
+        });
+
+        await tx.inventory.update({
+          where: {
+            tenantId_branchId_medicineId: {
+              tenantId,
+              medicineId: item.medicineId,
+              branchId: (await tx.inventoryBatch.findUnique({ where: { id: item.batchId } }))?.branchId,
+            },
+          },
+          data: { currentStock: { decrement: item.quantity } },
+        });
+
+        await tx.stockMovement.create({
+          data: {
+            tenantId,
+            branchId: (await tx.inventoryBatch.findUnique({ where: { id: item.batchId } }))?.branchId,
+            medicineId: item.medicineId,
+            batchId: item.batchId,
+            movementType: 'SUPPLIER_RETURN',
+            quantity: item.quantity,
+            referenceType: 'SUPPLIER_RETURN',
+            referenceId: returnId,
+            performedBy: userId,
+            notes: returnRecord.reason || 'SUPPLIER_RETURN',
+          },
+        });
+      }
+
+      await tx.supplierReturn.update({
+        where: { id: returnId },
+        data: { status: 'APPROVED' },
+      });
+
+      await tx.auditLog.create({
+        data: {
+          tenantId,
+          userId,
+          action: 'SUPPLIER_RETURN_APPROVED',
+          target: `SupplierReturn:${returnId}`,
+          type: 'INVENTORY',
+        },
+      });
+
+      return returnRecord;
+    });
+  }
+
+  async dispatchReturn(tenantId, returnId, userId) {
+    const returnRecord = await prisma.supplierReturn.findUnique({ where: { id: returnId } });
+    if (!returnRecord || returnRecord.tenantId !== tenantId) throw new Error('Return not found');
+    if (returnRecord.status !== 'APPROVED') throw new Error(`Cannot dispatch return in ${returnRecord.status} status`);
+
+    await prisma.supplierReturn.update({
+      where: { id: returnId },
+      data: { status: 'DISPATCHED' },
+    });
+
+    await prisma.auditLog.create({
+      data: {
+        tenantId,
+        userId,
+        action: 'SUPPLIER_RETURN_DISPATCHED',
+        target: `SupplierReturn:${returnId}`,
+        type: 'INVENTORY',
+      },
+    });
+
+    return returnRecord;
+  }
+
+  async receiveReturn(tenantId, returnId, userId) {
+    const returnRecord = await prisma.supplierReturn.findUnique({ where: { id: returnId } });
+    if (!returnRecord || returnRecord.tenantId !== tenantId) throw new Error('Return not found');
+    if (returnRecord.status !== 'DISPATCHED') throw new Error(`Cannot mark received for return in ${returnRecord.status} status`);
+
+    await prisma.supplierReturn.update({
+      where: { id: returnId },
+      data: { status: 'RECEIVED' },
+    });
+
+    return returnRecord;
+  }
+
+  async completeReturn(tenantId, returnId, userId) {
+    return await prisma.$transaction(async (tx) => {
+      const returnRecord = await tx.supplierReturn.findUnique({
+        where: { id: returnId },
+        include: { items: true },
+      });
+
+      if (!returnRecord || returnRecord.tenantId !== tenantId) throw new Error('Return not found');
+      if (returnRecord.status !== 'RECEIVED') throw new Error(`Cannot complete return in ${returnRecord.status} status`);
+
+      await ledgerService.recordEntry(
+        tenantId,
+        {
+          supplierId: returnRecord.supplierId,
+          type: 'RETURN',
+          creditAmount: Number(returnRecord.returnAmount),
+          referenceType: 'SUPPLIER_RETURN',
+          referenceId: returnId,
+          notes: `Return ${returnRecord.returnNumber} completed`,
+        },
+        tx,
+      );
+
+      const creditNoteNumber = `CN-${Date.now()}`;
+      await tx.supplierCreditNote.create({
+        data: {
+          tenantId,
+          supplierId: returnRecord.supplierId,
+          returnId: returnRecord.id,
+          creditNoteNumber,
+          amount: Number(returnRecord.returnAmount),
+          remainingAmount: Number(returnRecord.returnAmount),
+          status: 'ISSUED',
+          createdBy: userId,
+        },
+      });
+
+      await tx.supplierReturn.update({
+        where: { id: returnId },
+        data: { status: 'COMPLETED' },
+      });
+
+      await tx.auditLog.create({
+        data: {
+          tenantId,
+          userId,
+          action: 'SUPPLIER_RETURN_COMPLETED',
+          target: `SupplierReturn:${returnId}`,
+          type: 'INVENTORY',
+        },
+      });
+
+      return returnRecord;
+    });
+  }
+
+  async processReturn(tenantId, data, userId) {
+    const result = await this.createReturn(tenantId, data, userId);
+    return this.approveReturn(tenantId, result.id, userId).then(() =>
+      this.completeReturn(tenantId, result.id, userId),
+    );
   }
 
   async getReturns(tenantId, page = 1, limit = 20) {
