@@ -25,12 +25,6 @@ class SupplierReturnService {
         const batch = await tx.inventoryBatch.findUnique({ where: { id: item.batchId } });
         if (!batch) throw new Error(`Batch ${item.batchId} not found`);
 
-        const previousReturns = await tx.supplierReturnItem.aggregate({
-          where: { return: { purchaseInvoiceId }, batchId: item.batchId },
-          _sum: { quantity: true },
-        });
-        const alreadyReturned = previousReturns._sum.quantity || 0;
-        const available = batch.quantity + alreadyReturned - (batch.quantity);
         if (item.quantity > batch.quantity) {
           throw new Error(`Return quantity exceeds available stock for batch ${batch.batchNumber}`);
         }
@@ -86,7 +80,8 @@ class SupplierReturnService {
       });
 
       if (!returnRecord || returnRecord.tenantId !== tenantId) throw new Error('Return not found');
-      if (returnRecord.status !== 'DRAFT') throw new Error(`Cannot approve return in ${returnRecord.status} status`);
+      if (returnRecord.status !== 'DRAFT')
+        throw new Error(`Cannot approve return in ${returnRecord.status} status`);
 
       for (const item of returnRecord.items) {
         await tx.inventoryBatch.update({
@@ -99,7 +94,8 @@ class SupplierReturnService {
             tenantId_branchId_medicineId: {
               tenantId,
               medicineId: item.medicineId,
-              branchId: (await tx.inventoryBatch.findUnique({ where: { id: item.batchId } }))?.branchId,
+              branchId: (await tx.inventoryBatch.findUnique({ where: { id: item.batchId } }))
+                ?.branchId,
             },
           },
           data: { currentStock: { decrement: item.quantity } },
@@ -108,7 +104,8 @@ class SupplierReturnService {
         await tx.stockMovement.create({
           data: {
             tenantId,
-            branchId: (await tx.inventoryBatch.findUnique({ where: { id: item.batchId } }))?.branchId,
+            branchId: (await tx.inventoryBatch.findUnique({ where: { id: item.batchId } }))
+              ?.branchId,
             medicineId: item.medicineId,
             batchId: item.batchId,
             movementType: 'SUPPLIER_RETURN',
@@ -143,7 +140,8 @@ class SupplierReturnService {
   async dispatchReturn(tenantId, returnId, userId) {
     const returnRecord = await prisma.supplierReturn.findUnique({ where: { id: returnId } });
     if (!returnRecord || returnRecord.tenantId !== tenantId) throw new Error('Return not found');
-    if (returnRecord.status !== 'APPROVED') throw new Error(`Cannot dispatch return in ${returnRecord.status} status`);
+    if (returnRecord.status !== 'APPROVED')
+      throw new Error(`Cannot dispatch return in ${returnRecord.status} status`);
 
     await prisma.supplierReturn.update({
       where: { id: returnId },
@@ -163,10 +161,11 @@ class SupplierReturnService {
     return returnRecord;
   }
 
-  async receiveReturn(tenantId, returnId, userId) {
+  async receiveReturn(tenantId, returnId) {
     const returnRecord = await prisma.supplierReturn.findUnique({ where: { id: returnId } });
     if (!returnRecord || returnRecord.tenantId !== tenantId) throw new Error('Return not found');
-    if (returnRecord.status !== 'DISPATCHED') throw new Error(`Cannot mark received for return in ${returnRecord.status} status`);
+    if (returnRecord.status !== 'DISPATCHED')
+      throw new Error(`Cannot mark received for return in ${returnRecord.status} status`);
 
     await prisma.supplierReturn.update({
       where: { id: returnId },
@@ -184,7 +183,8 @@ class SupplierReturnService {
       });
 
       if (!returnRecord || returnRecord.tenantId !== tenantId) throw new Error('Return not found');
-      if (returnRecord.status !== 'RECEIVED') throw new Error(`Cannot complete return in ${returnRecord.status} status`);
+      if (returnRecord.status !== 'RECEIVED')
+        throw new Error(`Cannot complete return in ${returnRecord.status} status`);
 
       await ledgerService.recordEntry(
         tenantId,

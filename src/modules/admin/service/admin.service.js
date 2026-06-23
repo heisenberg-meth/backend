@@ -8,7 +8,10 @@ import logger from '../../../shared/utils/logger.js';
 const ACCESS_TOKEN_EXPIRY = '15m';
 const REFRESH_TOKEN_EXPIRY = '30d';
 
-async function adminAuditLog(adminId, { action, targetType, targetId, metadata, ipAddress, userAgent }) {
+async function adminAuditLog(
+  adminId,
+  { action, targetType, targetId, metadata, ipAddress, userAgent },
+) {
   try {
     await prisma.adminAuditLog.create({
       data: {
@@ -60,7 +63,10 @@ async function logAdminAction({
       userAgent,
     });
   } catch (error) {
-    logger.error({ err: error, action, targetId }, 'Admin audit log failed — action may have no audit trail');
+    logger.error(
+      { err: error, action, targetId },
+      'Admin audit log failed — action may have no audit trail',
+    );
   }
 }
 

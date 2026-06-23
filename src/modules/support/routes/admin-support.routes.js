@@ -24,9 +24,26 @@ export default async function (fastify) {
         properties: {
           page: { type: 'integer', default: 1 },
           limit: { type: 'integer', default: 20 },
-          status: { type: 'string', enum: ['OPEN', 'IN_PROGRESS', 'WAITING_FOR_STAFF', 'RESOLVED', 'CLOSED'] },
+          status: {
+            type: 'string',
+            enum: ['OPEN', 'IN_PROGRESS', 'WAITING_FOR_STAFF', 'RESOLVED', 'CLOSED'],
+          },
           priority: { type: 'string', enum: ['LOW', 'MEDIUM', 'HIGH', 'CRITICAL'] },
-          category: { type: 'string', enum: ['INVENTORY', 'BILLING', 'PURCHASE', 'SUPPLIER', 'SALES', 'REPORTS', 'IMPORT', 'ACCOUNT', 'TECHNICAL', 'OTHER'] },
+          category: {
+            type: 'string',
+            enum: [
+              'INVENTORY',
+              'BILLING',
+              'PURCHASE',
+              'SUPPLIER',
+              'SALES',
+              'REPORTS',
+              'IMPORT',
+              'ACCOUNT',
+              'TECHNICAL',
+              'OTHER',
+            ],
+          },
           search: { type: 'string' },
         },
       },
@@ -34,7 +51,16 @@ export default async function (fastify) {
     handler: async (request, reply) => {
       try {
         const result = await adminService.listSupportTickets(request.query);
-        return reply.send({ success: true, data: result.tickets, pagination: { total: result.total, page: result.page, limit: result.limit, totalPages: Math.ceil(result.total / result.limit) } });
+        return reply.send({
+          success: true,
+          data: result.tickets,
+          pagination: {
+            total: result.total,
+            page: result.page,
+            limit: result.limit,
+            totalPages: Math.ceil(result.total / result.limit),
+          },
+        });
       } catch (error) {
         logger.error({ error }, '[ADMIN SUPPORT] Get tickets failed');
         return reply.code(500).send({ success: false, error: 'Failed to fetch tickets' });
@@ -80,7 +106,11 @@ export default async function (fastify) {
     },
     handler: async (request, reply) => {
       try {
-        await adminService.assignTicket(request.params.ticketId, request.body.assignedTo, request.user.id);
+        await adminService.assignTicket(
+          request.params.ticketId,
+          request.body.assignedTo,
+          request.user.id,
+        );
         return reply.send({ success: true, message: 'Ticket assigned successfully' });
       } catch (error) {
         logger.error({ error }, '[ADMIN SUPPORT] Assign ticket failed');
@@ -101,12 +131,21 @@ export default async function (fastify) {
       body: {
         type: 'object',
         required: ['status'],
-        properties: { status: { type: 'string', enum: ['OPEN', 'IN_PROGRESS', 'WAITING_FOR_STAFF', 'RESOLVED', 'CLOSED'] } },
+        properties: {
+          status: {
+            type: 'string',
+            enum: ['OPEN', 'IN_PROGRESS', 'WAITING_FOR_STAFF', 'RESOLVED', 'CLOSED'],
+          },
+        },
       },
     },
     handler: async (request, reply) => {
       try {
-        await adminService.updateSupportTicketStatus(request.params.ticketId, request.body.status, request.user.id);
+        await adminService.updateSupportTicketStatus(
+          request.params.ticketId,
+          request.body.status,
+          request.user.id,
+        );
         return reply.send({ success: true, message: 'Status updated successfully' });
       } catch (error) {
         logger.error({ error }, '[ADMIN SUPPORT] Update status failed');

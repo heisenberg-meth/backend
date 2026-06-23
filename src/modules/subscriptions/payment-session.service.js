@@ -38,7 +38,7 @@ class PaymentSessionService {
       },
     });
 
-    const paymentSession = await prisma.paymentSession.create({
+    await prisma.paymentSession.create({
       data: {
         paymentSessionId,
         tenantId,
@@ -93,10 +93,7 @@ class PaymentSessionService {
     }
 
     if (session.state !== state) {
-      logger.warn(
-        { paymentSessionId, providedState: state },
-        '[PAYMENT_SESSION] State mismatch',
-      );
+      logger.warn({ paymentSessionId, providedState: state }, '[PAYMENT_SESSION] State mismatch');
       await paymentSessionAuditService.logStateMismatch({
         tenantId: session.tenantId,
         paymentSessionId,
@@ -122,7 +119,13 @@ class PaymentSessionService {
     return session;
   }
 
-  async verifyPayment(paymentSessionId, state, razorpayPaymentId, razorpayOrderId, razorpaySignature) {
+  async verifyPayment(
+    paymentSessionId,
+    state,
+    razorpayPaymentId,
+    razorpayOrderId,
+    razorpaySignature,
+  ) {
     const session = await this.validateSession(paymentSessionId, state);
 
     const config = getConfig();
@@ -265,12 +268,7 @@ class PaymentSessionService {
       const billingCycle = transaction?.gatewayResponse?.billingCycle || 'monthly';
       const planId = session.subscriptionPlanId;
 
-      await subscriptionService.createSubscription(
-        session.tenantId,
-        planId,
-        billingCycle,
-        prisma,
-      );
+      await subscriptionService.createSubscription(session.tenantId, planId, billingCycle, prisma);
 
       await this._updateSessionStatus(session.id, 'SUBSCRIPTION_ACTIVATED');
 
@@ -324,10 +322,7 @@ class PaymentSessionService {
       await this._updateSessionStatus(session.id, 'PAYMENT_EXPIRED');
     }
 
-    logger.info(
-      { count: expiredSessions.length },
-      '[PAYMENT_SESSION] Cleaned up expired sessions',
-    );
+    logger.info({ count: expiredSessions.length }, '[PAYMENT_SESSION] Cleaned up expired sessions');
 
     return expiredSessions.length;
   }
