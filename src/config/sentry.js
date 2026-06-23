@@ -2,7 +2,7 @@ import * as Sentry from '@sentry/node';
 import { nodeProfilingIntegration } from '@sentry/profiling-node';
 import env from './env.js';
 
-const SENTRY_DSN = process.env.SENTRY_DSN;
+const SENTRY_DSN = env.sentry?.dsn || process.env.SENTRY_DSN;
 
 export const initSentry = (app) => {
   if (!SENTRY_DSN) {
