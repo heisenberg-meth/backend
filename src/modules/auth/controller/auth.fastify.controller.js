@@ -29,7 +29,7 @@ import {
 const COOKIE_OPTIONS = {
   path: '/',
   httpOnly: true,
-  sameSite: 'strict',
+  sameSite: 'none',
   secure: true,
   maxAge: 30 * 24 * 60 * 60,
   domain: '.viyaninfo.com',
@@ -38,7 +38,7 @@ const COOKIE_OPTIONS = {
 const ACCESS_COOKIE_OPTIONS = {
   path: '/',
   httpOnly: true,
-  sameSite: 'strict',
+  sameSite: 'none',
   secure: true,
   maxAge: 15 * 60,
   domain: '.viyaninfo.com',
@@ -233,7 +233,7 @@ class AuthFastifyController {
       );
 
       if (isInvalidToken) {
-        reply.clearCookie('refresh_token', { path: '/' });
+        reply.clearCookie('refresh_token', { path: '/', domain: '.viyaninfo.com', sameSite: 'none', secure: true });
         const code =
           error.message === 'Invalid or reused refresh token'
             ? 'REFRESH_TOKEN_REUSED'
@@ -250,8 +250,8 @@ class AuthFastifyController {
     try {
       await authService.logout(request.sessionId);
 
-      reply.clearCookie('refresh_token', { path: '/' });
-      reply.clearCookie('accessToken', { path: '/' });
+      reply.clearCookie('refresh_token', { path: '/', domain: '.viyaninfo.com', sameSite: 'none', secure: true });
+      reply.clearCookie('accessToken', { path: '/', domain: '.viyaninfo.com', sameSite: 'none', secure: true });
       return reply.send(success({ message: 'Logged out successfully' }));
     } catch (error) {
       request.log.error(error);
@@ -263,8 +263,8 @@ class AuthFastifyController {
     try {
       await authService.logoutAll(request.user.id);
 
-      reply.clearCookie('refresh_token', { path: '/' });
-      reply.clearCookie('accessToken', { path: '/' });
+      reply.clearCookie('refresh_token', { path: '/', domain: '.viyaninfo.com', sameSite: 'none', secure: true });
+      reply.clearCookie('accessToken', { path: '/', domain: '.viyaninfo.com', sameSite: 'none', secure: true });
       return reply.send(success({ message: 'All sessions revoked' }));
     } catch (error) {
       request.log.error(error);

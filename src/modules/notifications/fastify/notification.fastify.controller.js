@@ -826,9 +826,16 @@ class NotificationFastifyController {
       const { id } = request.params;
       const { tenantId, id: userId } = request.user;
 
-      const notification = await prisma.notification.findFirst({
+      let notification = await prisma.notification.findFirst({
         where: { id, tenantId, userId },
       });
+
+      if (!notification) {
+        notification = await prisma.notification.findFirst({
+          where: { id, tenantId },
+        });
+      }
+
       if (!notification) {
         return reply.code(404).send({ success: false, message: 'Notification not found' });
       }

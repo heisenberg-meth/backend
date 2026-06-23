@@ -24,6 +24,7 @@ const envSchema = z.object({
   RAZORPAY_KEY_ID: z.string().optional(),
   RAZORPAY_KEY_SECRET: z.string().optional(),
   ENCRYPTION_KEY: z.string().length(64, 'ENCRYPTION_KEY must be 64 hex chars (32 bytes)'),
+  SENTRY_DSN: z.string().url().optional(),
 });
 
 const parsedEnv = envSchema.safeParse(process.env);
@@ -80,6 +81,10 @@ const env = {
   razorpay: {
     keyId: validatedEnv.RAZORPAY_KEY_ID,
     keySecret: validatedEnv.RAZORPAY_KEY_SECRET,
+  },
+
+  sentry: {
+    dsn: validatedEnv.SENTRY_DSN,
   },
 };
 
