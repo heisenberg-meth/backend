@@ -72,6 +72,8 @@ import communicationsRoutes from './modules/communications/routes/communications
 import loyaltyRoutes from './modules/loyalty/routes/loyalty.fastify.routes.js';
 import supplierReturnsRoutes from './modules/supplier-returns/routes/supplier-returns.routes.js';
 import adminRoutes from './modules/admin/routes/admin.routes.js';
+import supportRoutes from './modules/support/routes/support.routes.js';
+import adminSupportRoutes from './modules/support/routes/admin-support.routes.js';
 import logger from './shared/utils/logger.js';
 
 const dbHealthGauge = new client.Gauge({
@@ -220,6 +222,7 @@ const setupFastify = async () => {
       sameSite: 'none',
       secure: true,
       path: '/',
+      domain: '.viyaninfo.com',
     },
   });
 
@@ -539,6 +542,8 @@ const setupFastify = async () => {
   await fastify.register(loyaltyRoutes, { prefix: '/api/loyalty' });
   await fastify.register(supplierReturnsRoutes, { prefix: '/api/supplier-returns' });
   await fastify.register(adminRoutes, { prefix: '/api/admin' });
+  await fastify.register(supportRoutes, { prefix: '/api/support' });
+  await fastify.register(adminSupportRoutes, { prefix: '/api/admin/support' });
 
   // ── Serve uploaded media files ──
   const uploadsDir = new URL('../uploads', import.meta.url).pathname;

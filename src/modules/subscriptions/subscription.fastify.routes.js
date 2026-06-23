@@ -3,6 +3,8 @@ import trialController from './fastify/subscription-trial.fastify.controller.js'
 import checkoutRoutes from './checkout.fastify.routes.js';
 import { authenticate, requireTenant } from '../../middleware/auth.fastify.js';
 import { requirePermission } from '../../middleware/permission.fastify.js';
+import prisma from '../../config/prisma.js';
+import { SUBSCRIPTION_PLANS } from './subscription.constants.js';
 
 export default async function (fastify) {
   fastify.addHook('preHandler', authenticate);
@@ -14,6 +16,64 @@ export default async function (fastify) {
       summary: 'Get subscription status',
     },
     handler: controller.getStatus,
+  });
+
+  fastify.get('/usage', {
+    schema: {
+      tags: ['Subscriptions'],
+      summary: 'Get current plan usage for all limits',
+    },
+    handler: async (request, reply) => {
+      const tenantId = request.tenantId;
+
+      try {
+        const subscription = await prisma.subscription.findUnique({
+          where: { tenantId },
+          include: { plan: true },
+        });
+
+        const planId = subscription?.planId || 'free';
+        const planConfig = SUBSCRIPTION_PLANS[planId] || SUBSCRIPTION_PLANS['free'];
+        const limits = planConfig.limits || {};
+
+        const [medicineCount, userCount, branchCount] = await Promise.all([
+          prisma.medicine.count({ where: { tenantId, deletedAt: null } }),
+          prisma.user.count({ where: { tenantId } }),
+          prisma.branch.count({ where: { tenantId } }),
+        ]);
+
+        const usage = {
+          plan: {
+            id: planId,
+            name: planConfig.name,
+          },
+          limits: {
+            medicines: {
+              current: medicineCount,
+              limit: limits.medicines ?? -1,
+              unlimited: limits.medicines === -1,
+              exceeded: limits.medicines !== -1 && limits.medicines !== undefined && medicineCount > limits.medicines,
+            },
+            users: {
+              current: userCount,
+              limit: limits.users ?? -1,
+              unlimited: limits.users === -1,
+              exceeded: limits.users !== -1 && limits.users !== undefined && userCount > limits.users,
+            },
+            branches: {
+              current: branchCount,
+              limit: limits.branches ?? -1,
+              unlimited: limits.branches === -1,
+              exceeded: limits.branches !== -1 && limits.branches !== undefined && branchCount > limits.branches,
+            },
+          },
+        };
+
+        return reply.send({ success: true, data: usage });
+      } catch {
+        return reply.code(500).send({ success: false, error: 'Failed to fetch usage' });
+      }
+    },
   });
 
   fastify.post('/', {

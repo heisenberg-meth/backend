@@ -1364,6 +1364,7 @@ model PurchaseOrder {
   invoiceDate           DateTime?
   paymentMode           PaymentMode?
   receivedAt            DateTime?
+  paymentTermsDays      Int?
   supplierInvoiceNumber String?
   goodsReceiptNotes     GoodsReceiptNote[]
   importJobs            ImportJob[]
@@ -4542,3 +4543,33 @@ model InventoryDisposal {
   @@index([medicineId])
   @@index([tenantId, branchId])
 }
+
+enum TicketCategory {
+  INVENTORY
+  BILLING
+  PURCHASE
+  SUPPLIER
+  SALES
+  REPORTS
+  IMPORT
+  ACCOUNT
+  TECHNICAL
+  OTHER
+}
+
+enum TicketPriority {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum TicketStatus {
+  OPEN
+  IN_PROGRESS
+  WAITING_FOR_STAFF
+  RESOLVED
+  CLOSED
+}
+
+

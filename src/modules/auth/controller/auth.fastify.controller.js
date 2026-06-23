@@ -31,6 +31,7 @@ const COOKIE_OPTIONS = {
   sameSite: 'none',
   secure: true,
   maxAge: 30 * 24 * 60 * 60,
+  domain: '.viyaninfo.com',
 };
 
 const ACCESS_COOKIE_OPTIONS = {
@@ -39,6 +40,7 @@ const ACCESS_COOKIE_OPTIONS = {
   sameSite: 'none',
   secure: true,
   maxAge: 15 * 60,
+  domain: '.viyaninfo.com',
 };
 
 class AuthFastifyController {

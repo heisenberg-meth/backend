@@ -19,70 +19,72 @@ class PurchaseOrderService {
   }
 
   async createOrder(tenantId, userId, data) {
-    if (!data.orderNumber) {
-      const now = new Date();
-      const dateStr =
-        now.getFullYear() +
-        String(now.getMonth() + 1).padStart(2, '0') +
-        String(now.getDate()).padStart(2, '0');
-      const random = Math.floor(1000 + Math.random() * 9000);
-      data.orderNumber = `PO-${dateStr}-${random}`;
-    }
+    // 1. Validate supplier exists
+    const supplier = await prisma.supplier.findFirst({
+      where: { id: data.supplierId, tenantId, deletedAt: null },
+    });
+    if (!supplier) throw new BadRequestError('Supplier not found');
 
-    const { items, ...details } = data;
-
-    if (details.branchId === null) {
-      delete details.branchId;
-    }
-
-    if (!details.branchId) {
+    // 2. Resolve branchId
+    let branchId = data.branchId || null;
+    if (!branchId) {
       const creator = await prisma.user.findUnique({
         where: { id: userId },
         select: { branchId: true },
       });
-      let resolvedBranchId = creator?.branchId;
-
-      if (!resolvedBranchId) {
+      branchId = creator?.branchId;
+      if (!branchId) {
         const firstBranch = await prisma.branch.findFirst({
           where: { tenantId },
           select: { id: true },
         });
-        resolvedBranchId = firstBranch?.id;
-      }
-
-      if (resolvedBranchId) {
-        details.branchId = resolvedBranchId;
+        branchId = firstBranch?.id;
       }
     }
 
-    if (details.invoiceDate) {
-      details.invoiceDate = new Date(details.invoiceDate);
-    }
+    // 3. Resolve payment terms from supplier if not provided
+    const paymentTermsDays = data.paymentTermsDays ?? supplier.paymentTermsDays ?? 30;
+    const paymentMode = data.paymentMode ?? 'CREDIT';
 
-    // Fetch medicine metadata to populate PurchaseOrderItem fields
-    const medicineIds = items.map((it) => it.medicineId);
+    // 4. Expected delivery date
+    const expectedDeliveryDate = data.expectedDeliveryDate
+      ? new Date(data.expectedDeliveryDate)
+      : null;
+
+    // 5. Fetch medicine metadata — never trust frontend for prices/GST
+    const medicineIds = data.items.map((it) => it.medicineId);
     const medicines = await prisma.medicine.findMany({
-      where: { id: { in: medicineIds } },
+      where: { id: { in: medicineIds }, deletedAt: null },
       include: {
-        inventory: {
-          where: { tenantId },
-        },
+        inventory: { where: { tenantId }, take: 1 },
       },
     });
 
     const medicineMap = new Map(medicines.map((m) => [m.id, m]));
 
-    const mappedItems = items.map((item) => {
+    // 6. Build items with server-side calculations
+    const mappedItems = [];
+    let subtotal = 0;
+    let totalGst = 0;
+
+    for (const item of data.items) {
       const med = medicineMap.get(item.medicineId);
-      if (!med) throw new Error(`Medicine with ID ${item.medicineId} not found`);
+      if (!med) throw new BadRequestError(`Medicine with ID ${item.medicineId} not found`);
 
       const currentStock = med.inventory?.[0]?.currentStock || 0;
       const reorderQty = med.reorderLevel || 0;
-      const unitPrice = Number(item.purchasePrice || item.unitPrice || 0);
-      const gstPercentage = Number(item.gstPercentage || med.gstPercentage || 0);
-      const qty = Number(item.quantity || 0);
+      const unitPrice = Number(item.unitPrice);
+      const gstPercentage = Number(item.gstPercentage ?? med.gstPercentage ?? 0);
+      const qty = Number(item.quantity);
 
-      return {
+      // Server-side calculations
+      const itemTotal = Number((qty * unitPrice).toFixed(2));
+      const itemGst = Number((itemTotal * gstPercentage / 100).toFixed(2));
+
+      subtotal += itemTotal;
+      totalGst += itemGst;
+
+      mappedItems.push({
         medicineId: item.medicineId,
         medicineName: med.name,
         currentStock,
@@ -90,30 +92,88 @@ class PurchaseOrderService {
         quantity: qty,
         unitPrice,
         gstPercentage,
-        totalAmount: qty * unitPrice,
-        batchNumber: item.batchNumber || null,
-        expiryDate: item.expiryDate ? new Date(item.expiryDate) : null,
-      };
+        totalAmount: itemTotal,
+      });
+    }
+
+    // 7. Calculate totals — never trust frontend
+    const subtotalRounded = Number(subtotal.toFixed(2));
+    const discountAmount = Number((data.discountAmount || 0).toFixed(2));
+    const taxableAmount = Number(Math.max(0, subtotalRounded - discountAmount).toFixed(2));
+    const totalGstRounded = Number(totalGst.toFixed(2));
+    const grandTotal = Number((taxableAmount + totalGstRounded).toFixed(2));
+
+    // 8. Generate order number
+    const now = new Date();
+    const dateStr =
+      now.getFullYear() +
+      String(now.getMonth() + 1).padStart(2, '0') +
+      String(now.getDate()).padStart(2, '0');
+    const random = Math.floor(1000 + Math.random() * 9000);
+    const orderNumber = `PO-${dateStr}-${random}`;
+
+    // 9. Create Purchase Order in a transaction
+    const order = await prisma.$transaction(async (tx) => {
+      const po = await tx.purchaseOrder.create({
+        data: {
+          tenantId,
+          userId,
+          supplierId: data.supplierId,
+          branchId,
+          orderNumber,
+          status: 'DRAFT',
+          expectedDeliveryDate,
+          paymentMode,
+          paymentTermsDays,
+          discountAmount,
+          subtotal: subtotalRounded,
+          gstAmount: totalGstRounded,
+          totalAmount: grandTotal,
+          notes: data.notes,
+          advancePaid: 0,
+          balanceAmount: grandTotal,
+          items: { create: mappedItems },
+        },
+        include: {
+          items: true,
+          supplier: { select: { id: true, name: true } },
+        },
+      });
+
+      // Audit log
+      await tx.auditLog.create({
+        data: {
+          tenantId,
+          userId,
+          action: 'PURCHASE_ORDER_CREATED',
+          targetType: 'PURCHASE_ORDER',
+          targetId: po.id,
+          metadata: {
+            orderNumber: po.orderNumber,
+            supplierId: data.supplierId,
+            supplierName: supplier.name,
+            totalAmount: grandTotal,
+            itemCount: mappedItems.length,
+          },
+        },
+      });
+
+      return po;
     });
 
-    const order = await purchaseOrderRepository.create(
-      {
-        ...details,
-        status: PROCUREMENT_STATUS.DRAFT,
-        items: mappedItems,
-      },
-      tenantId,
-      userId,
-    );
-
-    emitLocalEvent(DOMAIN_EVENTS.PURCHASE_ORDER_CREATED, {
-      orderId: order.id,
-      tenantId,
-      userId,
-      supplierId: order.supplierId,
-      totalAmount: order.totalAmount,
-    });
-    await emitEvent(DOMAIN_EVENTS.PURCHASE_ORDER_CREATED, { orderId: order.id, tenantId });
+    // Emit events after commit
+    try {
+      emitLocalEvent(DOMAIN_EVENTS.PURCHASE_ORDER_CREATED, {
+        orderId: order.id,
+        tenantId,
+        userId,
+        supplierId: order.supplierId,
+        totalAmount: order.totalAmount,
+      });
+      await emitEvent(DOMAIN_EVENTS.PURCHASE_ORDER_CREATED, { orderId: order.id, tenantId });
+    } catch (eventError) {
+      logger.error({ err: eventError, orderId: order.id }, 'EVENT_PUBLISH_FAILED_AFTER_PO_CREATE');
+    }
 
     return order;
   }
@@ -349,18 +409,11 @@ class PurchaseOrderService {
 
   async receiveOrder(tenantId, id, userId, payload) {
     try {
-      const { receivedItems, notes } = payload;
+      const { supplierInvoiceNumber, invoiceDate, receivedItems, notes } = payload;
 
-      logger.info(
-        {
-          receivedItems,
-        },
-        'RECEIVED_ITEMS_PAYLOAD',
-      );
-
-      if (!receivedItems?.length) {
-        throw new BadRequestError('No items provided for receipt');
-      }
+      if (!supplierInvoiceNumber) throw new BadRequestError('Supplier invoice number is required');
+      if (!invoiceDate) throw new BadRequestError('Invoice date is required');
+      if (!receivedItems?.length) throw new BadRequestError('No items provided for receipt');
 
       logger.info({ purchaseOrderId: id, payload }, 'RECEIVE_GOODS_STARTED');
 
@@ -369,9 +422,7 @@ class PurchaseOrderService {
 
       logger.info({ purchaseOrderId: id, status: order.status }, 'PURCHASE_ORDER_LOADED');
 
-      if (!order.supplierId) {
-        throw new BadRequestError('Purchase order missing supplierId');
-      }
+      if (!order.supplierId) throw new BadRequestError('Purchase order missing supplierId');
       if (!order.tenantId || order.tenantId !== tenantId) {
         throw new BadRequestError('Purchase order tenantId mismatch or missing');
       }
@@ -394,7 +445,7 @@ class PurchaseOrderService {
 
       logger.info({ receivedItemsCount: receivedItems.length }, 'VALIDATION_PASSED');
 
-      // Resolve branchId if missing (for legacy POs)
+      // Resolve branchId if missing
       let resolvedBranchId = order.branchId;
       if (!resolvedBranchId) {
         const user = await prisma.user.findUnique({
@@ -403,7 +454,6 @@ class PurchaseOrderService {
         });
         resolvedBranchId = user?.branchId;
 
-        // Fallback to first branch in tenant
         if (!resolvedBranchId) {
           const firstBranch = await prisma.branch.findFirst({
             where: { tenantId },
@@ -412,15 +462,9 @@ class PurchaseOrderService {
           resolvedBranchId = firstBranch?.id;
         }
 
-        // If still no branch, create a default branch for this tenant
         if (!resolvedBranchId) {
           const defaultBranch = await prisma.branch.create({
-            data: {
-              tenantId,
-              name: 'Main Branch',
-              code: 'MAIN',
-              isDefault: true,
-            },
+            data: { tenantId, name: 'Main Branch', code: 'MAIN', isDefault: true },
           });
           resolvedBranchId = defaultBranch.id;
           logger.info(
@@ -429,37 +473,28 @@ class PurchaseOrderService {
           );
         }
 
-        // If we found a branch, update the PO
         if (resolvedBranchId) {
           await prisma.purchaseOrder.update({
             where: { id },
             data: { branchId: resolvedBranchId },
           });
-          logger.info(
-            { purchaseOrderId: id, branchId: resolvedBranchId },
-            'Auto-resolved branchId for PO',
-          );
         }
       }
 
       const branchId = resolvedBranchId || order.branchId;
-
       if (!branchId) {
         throw new BadRequestError(
-          `Cannot receive stock for PO ${order.orderNumber}: no branch found. ` +
-            `Please assign a branch to this purchase order or create a branch for this tenant.`,
+          `Cannot receive stock for PO ${order.orderNumber}: no branch found.`,
         );
       }
 
       const result = await prisma.$transaction(async (tx) => {
-        // Lock the Purchase Order to prevent concurrent receive operations
         await tx.$queryRaw`SELECT id FROM "PurchaseOrder" WHERE id = ${id} FOR UPDATE`;
 
         const now = new Date();
         const grnNumber = `GRN-${now.getTime()}`;
 
-        logger.info({ grnNumber }, 'CREATING_GRN');
-        // 1. Create Goods Receipt Note
+        // 1. Create GRN
         const grn = await tx.goodsReceiptNote.create({
           data: {
             tenantId,
@@ -471,11 +506,12 @@ class PurchaseOrderService {
           },
         });
 
-        logger.info({ grnId: grn.id }, 'GRN_CREATED');
-
         for (const item of receivedItems) {
-          const poItem = order.items.find((i) => i.medicineId === item.medicineId);
-          if (!poItem) throw new BadRequestError(`Medicine ${item.medicineId} not found in PO`);
+          // Find PO item by purchaseOrderItemId
+          const poItem = order.items.find((i) => i.id === item.purchaseOrderItemId);
+          if (!poItem) {
+            throw new BadRequestError(`PO item ${item.purchaseOrderItemId} not found in this order`);
+          }
 
           if (item.receivedQuantity < 0) {
             throw new BadRequestError(`Received quantity cannot be negative for ${poItem.medicineName}`);
@@ -488,54 +524,37 @@ class PurchaseOrderService {
             );
           }
 
-          if (!item.batchNumber) {
-            throw new BadRequestError(`Batch number is required for ${poItem.medicineName}`);
-          }
-          if (!item.expiryDate) {
-            throw new BadRequestError(`Expiry date is required for ${poItem.medicineName}`);
-          }
-          const parsedExpiryDate = new Date(item.expiryDate + 'T00:00:00.000Z');
+          if (!item.batchNumber) throw new BadRequestError(`Batch number is required for ${poItem.medicineName}`);
+          if (!item.expiryDate) throw new BadRequestError(`Expiry date is required for ${poItem.medicineName}`);
+
+          const parsedExpiryDate = new Date(item.expiryDate);
           if (isNaN(parsedExpiryDate.getTime())) {
             throw new BadRequestError(`Invalid expiry date format for ${poItem.medicineName}`);
           }
 
-          // Validation: Expiry Date >= Today (date-only comparison)
           const today = new Date();
           const todayUTC = new Date(Date.UTC(today.getFullYear(), today.getMonth(), today.getDate()));
           if (parsedExpiryDate < todayUTC) {
             throw new BadRequestError(`Expiry date cannot be in the past for ${poItem.medicineName}`);
           }
 
-          // Validation: Purchase Price and Selling Price
-          const purchasePrice =
-            item.purchasePrice !== undefined
-              ? Number(item.purchasePrice)
-              : Number(poItem.unitPrice);
-          if (purchasePrice <= 0) {
-            throw new BadRequestError(`Purchase price must be greater than 0 for ${poItem.medicineName}`);
-          }
+          const purchasePrice = Number(item.purchasePrice);
+          if (purchasePrice <= 0) throw new BadRequestError(`Purchase price must be > 0 for ${poItem.medicineName}`);
 
-          const sellingPrice =
-            item.sellingPrice !== undefined
-              ? Number(item.sellingPrice)
-              : item.purchasePrice !== undefined
-                ? Number(item.purchasePrice) * 1.2
-                : Number(poItem.unitPrice) * 1.2;
-          if (sellingPrice <= 0) {
-            throw new BadRequestError(`Selling price must be greater than 0 for ${poItem.medicineName}`);
-          }
+          const sellingPrice = Number(item.sellingPrice);
+          if (sellingPrice <= 0) throw new BadRequestError(`Selling price must be > 0 for ${poItem.medicineName}`);
 
-          const mrp = item.mrp !== undefined ? Number(item.mrp) : sellingPrice;
-          if (mrp <= 0) {
-            throw new BadRequestError(`MRP must be greater than 0 for ${poItem.medicineName}`);
-          }
+          const mrp = Number(item.mrp);
+          if (mrp <= 0) throw new BadRequestError(`MRP must be > 0 for ${poItem.medicineName}`);
+
+          const manufacturingDate = item.manufacturingDate ? new Date(item.manufacturingDate) : null;
 
           // 2. Create GRN Item
           await tx.goodsReceiptNoteItem.create({
             data: {
               grnId: grn.id,
               purchaseOrderItemId: poItem.id,
-              medicineId: item.medicineId,
+              medicineId: poItem.medicineId,
               receivedQuantity: item.receivedQuantity,
               batchNumber: item.batchNumber,
               expiryDate: parsedExpiryDate,
@@ -544,12 +563,11 @@ class PurchaseOrderService {
             },
           });
 
-          // 3. Create/Update Inventory Batch (Primary mutation)
-          // Check if batch already exists for this medicine at this branch
+          // 3. Create/Update InventoryBatch
           const existingBatch = await tx.inventoryBatch.findFirst({
             where: {
               tenantId,
-              medicineId: item.medicineId,
+              medicineId: poItem.medicineId,
               batchNumber: item.batchNumber,
               branchId,
             },
@@ -557,19 +575,7 @@ class PurchaseOrderService {
 
           let batch;
           if (existingBatch) {
-            logger.info(
-              {
-                medicineId: item.medicineId,
-                batchNumber: item.batchNumber,
-                existingBatchId: existingBatch.id,
-              },
-              'UPDATING_EXISTING_BATCH',
-            );
-
-            // Verify that the existing batch has the same expiry date
-            const existingExpiryStr = new Date(existingBatch.expiryDate)
-              .toISOString()
-              .split('T')[0];
+            const existingExpiryStr = new Date(existingBatch.expiryDate).toISOString().split('T')[0];
             const newExpiryStr = parsedExpiryDate.toISOString().split('T')[0];
             if (existingExpiryStr !== newExpiryStr) {
               throw new BadRequestError(
@@ -587,7 +593,6 @@ class PurchaseOrderService {
               updateData.deletedAt = null;
               updateData.status = 'ACTIVE';
             }
-
             if (!existingBatch.supplierId && order.supplierId) {
               updateData.supplierId = order.supplierId;
             }
@@ -597,20 +602,17 @@ class PurchaseOrderService {
               data: updateData,
             });
           } else {
-            logger.info(
-              { medicineId: item.medicineId, batchNumber: item.batchNumber },
-              'CREATING_INVENTORY_BATCH',
-            );
             batch = await tx.inventoryBatch.create({
               data: {
                 tenantId,
-                medicineId: item.medicineId,
+                medicineId: poItem.medicineId,
                 branchId,
                 batchNumber: item.batchNumber,
                 quantity: item.receivedQuantity,
                 availableQuantity: item.receivedQuantity,
                 receivedQuantity: item.receivedQuantity,
                 expiryDate: parsedExpiryDate,
+                manufacturingDate,
                 purchasePrice,
                 sellingPrice,
                 mrp,
@@ -621,14 +623,12 @@ class PurchaseOrderService {
             });
           }
 
-          logger.info({ inventoryBatchId: batch.id }, 'INVENTORY_UPDATED');
-
-          // 5. Record Stock Movement in Immutable Ledger
+          // 4. Stock Movement
           await tx.stockMovement.create({
             data: {
               tenantId,
               branchId,
-              medicineId: item.medicineId,
+              medicineId: poItem.medicineId,
               batchId: batch.id,
               movementType: 'PURCHASE',
               quantity: item.receivedQuantity,
@@ -640,42 +640,35 @@ class PurchaseOrderService {
             },
           });
 
-          logger.info('Updating Inventory');
-          // 6. Upsert Inventory Aggregate Snapshot
+          // 5. Upsert Inventory Aggregate
           const existingInventory = await tx.inventory.findFirst({
-            where: {
-              tenantId,
-              branchId,
-              medicineId: item.medicineId,
-            },
+            where: { tenantId, branchId, medicineId: poItem.medicineId },
           });
 
           if (existingInventory) {
             await tx.inventory.update({
               where: { id: existingInventory.id },
-              data: {
-                currentStock: { increment: item.receivedQuantity },
-              },
+              data: { currentStock: { increment: item.receivedQuantity } },
             });
           } else {
             await tx.inventory.create({
               data: {
                 tenantId,
                 branchId,
-                medicineId: item.medicineId,
+                medicineId: poItem.medicineId,
                 currentStock: item.receivedQuantity,
               },
             });
           }
 
-          // 8. Update PO Item received quantity tracking
+          // 6. Update PO Item received quantity
           await tx.purchaseOrderItem.update({
             where: { id: poItem.id },
             data: { receivedQuantity: { increment: item.receivedQuantity } },
           });
         }
 
-        // 7. Determine next PO status using state machine
+        // 7. Determine next PO status
         const updatedOrder = await tx.purchaseOrder.findUnique({
           where: { id },
           include: { items: true },
@@ -683,7 +676,6 @@ class PurchaseOrderService {
 
         const allReceived = updatedOrder.items.every((i) => i.receivedQuantity >= i.quantity);
 
-        // Determine transition action
         let action = allReceived ? 'RECEIVE_FULL' : 'RECEIVE_PARTIAL';
         if (order.status === PROCUREMENT_STATUS.PARTIALLY_RECEIVED) {
           action = allReceived ? 'RECEIVE_FINAL' : 'RECEIVE_MORE';
@@ -691,20 +683,22 @@ class PurchaseOrderService {
 
         const nextStatus = procurementStateMachine.transition(order.status, action);
 
-        logger.info({ newStatus: nextStatus }, 'PO_STATUS_UPDATED');
         await tx.purchaseOrder.update({
           where: { id },
-          data: { status: nextStatus },
+          data: {
+            status: nextStatus,
+            supplierInvoiceNumber,
+            invoiceDate: new Date(invoiceDate),
+            receivedAt: now,
+          },
         });
 
-        // 8. Generate Purchase Invoice (Goods Received Invoice)
+        // 8. Generate Purchase Invoice
         let invoiceSubtotal = 0;
         let invoiceGstAmount = 0;
 
         for (const item of receivedItems) {
-          const poItem = order.items.find((i) => i.medicineId === item.medicineId);
-          if (!poItem) throw new Error(`Medicine ${item.medicineId} not found in PO`);
-
+          const poItem = order.items.find((i) => i.id === item.purchaseOrderItemId);
           const lineSubtotal = item.receivedQuantity * Number(poItem.unitPrice);
           const lineGst = lineSubtotal * (Number(poItem.gstPercentage) / 100);
           invoiceSubtotal += lineSubtotal;
@@ -715,26 +709,20 @@ class PurchaseOrderService {
         const gstVal = Number(invoiceGstAmount.toFixed(2));
         const totalVal = Number((subtotalVal + gstVal).toFixed(2));
 
-        const supplier = await tx.supplier.findUnique({
-          where: { id: order.supplierId },
-        });
+        const supplier = await tx.supplier.findUnique({ where: { id: order.supplierId } });
         const paymentTermsDays = supplier?.paymentTermsDays ?? 30;
         const dueDate = new Date();
         dueDate.setDate(dueDate.getDate() + paymentTermsDays);
 
         const invoiceNumber = `PINV-GRN-${grn.grnNumber.replace('GRN-', '')}`;
 
-        logger.info(
-          { invoiceNumber, supplierId: order.supplierId, totalAmount: totalVal },
-          'CREATING_PURCHASE_INVOICE',
-        );
         const purchaseInvoice = await tx.purchaseInvoice.create({
           data: {
             tenantId,
             supplierId: order.supplierId,
             purchaseOrderId: id,
             invoiceNumber,
-            invoiceDate: new Date(),
+            invoiceDate: new Date(invoiceDate),
             dueDate,
             subtotal: subtotalVal,
             gstAmount: gstVal,
@@ -745,9 +733,7 @@ class PurchaseOrderService {
           },
         });
 
-        logger.info({ invoiceId: purchaseInvoice.id }, 'PURCHASE_INVOICE_CREATED');
-
-        // 9. Create/Update Supplier Ledger Entry (Financial Responsibility)
+        // 9. Supplier Ledger Entry
         const lastBalance = await tx.supplierLedger.findFirst({
           where: { supplierId: order.supplierId, tenantId },
           orderBy: { createdAt: 'desc' },
@@ -767,7 +753,7 @@ class PurchaseOrderService {
             debitAmount: Number(totalVal),
             creditAmount: 0,
             balanceAfter,
-            notes: `Goods received via GRN ${grnNumber} for PO ${order.orderNumber}. Invoice ${invoiceNumber} created.`,
+            notes: `GRN ${grnNumber} for PO ${order.orderNumber}. Invoice ${invoiceNumber}.`,
           },
         });
 
@@ -780,8 +766,7 @@ class PurchaseOrderService {
         };
       });
 
-      // Publish events AFTER transaction commits — if Redis/BullMQ fails,
-      // the DB changes are already committed and won't roll back.
+      // Emit events after commit
       try {
         emitLocalEvent(DOMAIN_EVENTS.PURCHASE_ORDER_RECEIVED, {
           orderId: id,
@@ -791,18 +776,10 @@ class PurchaseOrderService {
           totalAmount: result.totalAmount,
         });
         emitLocalEvent(DOMAIN_EVENTS.STOCK_UPDATED, { tenantId, type: 'PURCHASE' });
-
         await emitEvent(DOMAIN_EVENTS.PURCHASE_ORDER_RECEIVED, { orderId: id, tenantId });
         await emitEvent(DOMAIN_EVENTS.STOCK_UPDATED, { tenantId });
       } catch (eventError) {
-        logger.error(
-          {
-            message: eventError.message,
-            stack: eventError.stack,
-            orderId: id,
-          },
-          'EVENT_PUBLISH_FAILED_AFTER_RECEIVE — scheduling retry',
-        );
+        logger.error({ err: eventError, orderId: id }, 'EVENT_PUBLISH_FAILED_AFTER_RECEIVE');
         try {
           const { mainQueue } = await import('../../../queue/index.js');
           await mainQueue.add(
@@ -816,25 +793,15 @@ class PurchaseOrderService {
       }
 
       logger.info(
-        {
-          grnId: result.grn.id,
-          invoiceId: result.purchaseInvoice?.id,
-          orderStatus: result.orderStatus,
-        },
+        { grnId: result.grn.id, invoiceId: result.purchaseInvoice?.id, orderStatus: result.orderStatus },
         'RECEIVE_GOODS_COMPLETED',
       );
       return result;
     } catch (error) {
       logger.error(
-        {
-          message: error.message,
-          stack: error.stack,
-          prismaCode: error.code,
-          meta: error.meta,
-        },
+        { message: error.message, stack: error.stack, prismaCode: error.code, meta: error.meta },
         'RECEIVE_GOODS_FAILED',
       );
-
       throw error;
     }
   }
@@ -921,7 +888,7 @@ class PurchaseOrderService {
     return purchaseOrderRepository.updateStatus(id, tenantId, status);
   }
 
-  async updatePaymentStatus(tenantId, invoiceId, { paymentStatus, paidAmount, notes }, userId) {
+  async updatePaymentStatus(tenantId, invoiceId, { paymentStatus, paidAmount }, userId) {
     const invoice = await prisma.purchaseInvoice.findFirst({
       where: { id: invoiceId, tenantId },
     });

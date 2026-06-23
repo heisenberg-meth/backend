@@ -1,54 +1,61 @@
 import { z } from 'zod';
 
+const createPurchaseOrderItemSchema = z.object({
+  medicineId: z.string().uuid('Invalid medicine ID'),
+  quantity: z.number().int().positive('Quantity must be greater than zero'),
+  unitPrice: z.number().positive('Unit price must be greater than zero'),
+  gstPercentage: z.number().min(0).max(100).default(0),
+});
+
 export const createPurchaseOrderSchema = z.object({
-  supplierId: z.string().uuid(),
-  branchId: z.string().uuid().optional(),
+  supplierId: z.string().uuid('Invalid supplier ID'),
+  branchId: z.string().uuid('Invalid branch ID').optional(),
   expectedDeliveryDate: z
     .string()
-    .refine((val) => !isNaN(Date.parse(val)), 'Invalid date')
-    .transform((val) => new Date(val).toISOString())
+    .refine((val) => !isNaN(Date.parse(val)), 'Invalid delivery date')
     .optional(),
-  notes: z.string().optional(),
+  paymentMode: z.enum(['CASH', 'CREDIT', 'UPI', 'BANK_TRANSFER', 'CHEQUE']).optional(),
+  paymentTermsDays: z.number().int().min(0).max(365).optional(),
+  discountAmount: z.number().min(0).default(0),
+  notes: z.string().max(500).optional(),
   items: z
-    .array(
-      z.object({
-        medicineId: z.string().uuid(),
-        medicineName: z.string(),
-        currentStock: z.number().int(),
-        reorderQty: z.number().int(),
-        quantity: z.number().int().positive(),
-        unitPrice: z.number().positive(),
-        gstPercentage: z.number().min(0).default(0),
-        totalAmount: z.number().positive(),
-      }),
-    )
-    .min(1),
-  subtotal: z.number().positive(),
-  gstAmount: z.number().min(0),
-  totalAmount: z.number().positive(),
+    .array(createPurchaseOrderItemSchema)
+    .min(1, 'At least one medicine is required')
+    .max(100, 'Cannot order more than 100 different medicines in a single PO'),
 });
 
 export const receivePurchaseOrderSchema = z.object({
+  supplierInvoiceNumber: z.string().min(1, 'Supplier invoice number is required'),
+  invoiceDate: z
+    .string()
+    .refine((val) => !isNaN(Date.parse(val)), 'Invalid invoice date'),
   receivedItems: z
     .array(
       z.object({
-        medicineId: z.string().uuid(),
-        receivedQuantity: z.number().int().positive(),
-        batchNumber: z.string().min(1),
+        purchaseOrderItemId: z.string().uuid('Invalid PO item ID'),
+        receivedQuantity: z.number().int().positive('Received quantity must be greater than zero'),
+        batchNumber: z.string().min(1, 'Batch number is required'),
         expiryDate: z
           .string()
-          .refine((val) => !isNaN(Date.parse(val)), 'Invalid date')
+          .refine((val) => !isNaN(Date.parse(val)), 'Invalid expiry date')
           .transform((val) => new Date(val).toISOString()),
+        manufacturingDate: z
+          .string()
+          .refine((val) => !isNaN(Date.parse(val)), 'Invalid manufacturing date')
+          .optional(),
+        purchasePrice: z.number().positive('Purchase price must be greater than zero'),
+        mrp: z.number().positive('MRP must be greater than zero'),
+        sellingPrice: z.number().positive('Selling price must be greater than zero'),
       }),
     )
-    .min(1),
-  notes: z.string().optional(),
+    .min(1, 'At least one received item is required'),
+  notes: z.string().max(500).optional(),
 });
 
 export const approvePurchaseOrderSchema = z.object({
-  notes: z.string().optional(),
+  notes: z.string().max(500).optional(),
 });
 
 export const cancelPurchaseOrderSchema = z.object({
-  reason: z.string().min(1),
+  reason: z.string().min(5, 'Cancellation reason must be at least 5 characters'),
 });

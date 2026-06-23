@@ -70,10 +70,39 @@ class PurchaseOrderFastifyController {
     const userId = request.user.id;
     try {
       const order = await purchaseOrderService.createOrder(tenantId, userId, request.body);
-      return reply.code(201).send({ success: true, data: order });
+      return reply.code(201).send({
+        success: true,
+        message: 'Purchase order created successfully',
+        data: {
+          id: order.id,
+          orderNumber: order.orderNumber,
+          status: order.status,
+          supplierId: order.supplierId,
+          branchId: order.branchId,
+          expectedDeliveryDate: order.expectedDeliveryDate,
+          paymentMode: order.paymentMode,
+          paymentTermsDays: order.paymentTermsDays,
+          discountAmount: Number(order.discountAmount),
+          subtotal: Number(order.subtotal),
+          gstAmount: Number(order.gstAmount),
+          totalAmount: Number(order.totalAmount),
+          notes: order.notes,
+          createdAt: order.createdAt,
+          items: order.items.map((item) => ({
+            id: item.id,
+            medicineId: item.medicineId,
+            medicineName: item.medicineName,
+            quantity: item.quantity,
+            unitPrice: Number(item.unitPrice),
+            gstPercentage: item.gstPercentage,
+            totalAmount: Number(item.totalAmount),
+          })),
+        },
+      });
     } catch (error) {
       logger.error({ error, tenantId }, 'Failed to create purchase order');
-      return reply.code(400).send({ success: false, error: error.message });
+      const statusCode = error.message.includes('not found') ? 404 : 400;
+      return reply.code(statusCode).send({ success: false, message: error.message });
     }
   }
 
@@ -98,15 +127,23 @@ class PurchaseOrderFastifyController {
       const result = await purchaseOrderService.receiveOrder(tenantId, id, userId, request.body);
       return reply.send({
         success: true,
-        data: result.grn,
-        orderStatus: result.orderStatus,
-        message: 'Inventory received and batches registered',
+        message: 'Goods received successfully. Inventory, invoice, and supplier ledger updated.',
+        data: {
+          grnId: result.grn.id,
+          grnNumber: result.grn.grnNumber,
+          orderStatus: result.orderStatus,
+          purchaseInvoiceId: result.purchaseInvoice?.id,
+          purchaseInvoiceNumber: result.purchaseInvoice?.invoiceNumber,
+          totalAmount: result.totalAmount,
+          allReceived: result.allReceived,
+          receivedAt: result.grn.receivedDate,
+        },
       });
     } catch (error) {
       logger.error({ err: error, id, tenantId }, 'Failed to receive purchase order');
       return reply.code(400).send({
         success: false,
-        error: error.message,
+        message: error.message,
         code: 'PURCHASE_RECEIPT_FAILED',
       });
     }

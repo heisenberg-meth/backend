@@ -17,6 +17,7 @@ const COOKIE_OPTIONS = {
   secure: true,
   partitioned: true,
   maxAge: 30 * 24 * 60 * 60,
+  domain: '.viyaninfo.com',
 };
 
 const ACCESS_COOKIE_OPTIONS = {
@@ -26,6 +27,7 @@ const ACCESS_COOKIE_OPTIONS = {
   secure: true,
   partitioned: true,
   maxAge: 15 * 60,
+  domain: '.viyaninfo.com',
 };
 
 class AdminController {

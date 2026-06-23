@@ -82,11 +82,21 @@ export const requireLimit = (limitKey, currentCountFn) => {
       const currentCount = await currentCountFn(request);
 
       if (currentCount >= limit) {
+        const isOverLimit = currentCount > limit;
+        const usageMessage = isOverLimit
+          ? `Your account has ${currentCount} ${limitKey}, which exceeds your plan limit of ${limit}.`
+          : `You have reached the maximum allowed ${limitKey} (${limit}) for your current plan.`;
+
         return reply.code(403).send({
           success: false,
           error: {
-            message: `You have reached the maximum allowed ${limitKey} (${limit}) for your current plan (${planConfig.name}). Please upgrade.`,
+            message: `${usageMessage} Please upgrade your plan to create new ${limitKey}.`,
             code: 'PLAN_LIMIT_REACHED',
+            currentUsage: currentCount,
+            allowedLimit: limit,
+            planName: planConfig.name,
+            remaining: Math.max(0, limit - currentCount),
+            upgradeRequired: true,
           },
         });
       }
