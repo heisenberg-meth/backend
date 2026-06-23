@@ -1,6 +1,6 @@
 import controller from '../controllers/support.controller.js';
 import { authenticate, requireTenant } from '../../../middleware/auth.fastify.js';
-import adminService from '../../admin/service/admin.service.js';
+import { adminService } from '../../admin/service/admin.service.js';
 import logger from '../../../shared/utils/logger.js';
 
 export default async function (fastify) {
