@@ -3,9 +3,16 @@ import { z } from 'zod';
 const createPurchaseOrderItemSchema = z.object({
   medicineId: z.string().uuid('Invalid medicine ID'),
   quantity: z.number().int().positive('Quantity must be greater than zero'),
-  unitPrice: z.number().positive('Unit price must be greater than zero'),
+  unitPrice: z.number().positive('Unit price must be greater than zero').optional(),
+  purchasePrice: z.number().positive('Purchase price must be greater than zero').optional(),
   gstPercentage: z.number().min(0).max(100).default(0),
-});
+}).refine(
+  (data) => data.unitPrice !== undefined || data.purchasePrice !== undefined,
+  { message: 'Either unitPrice or purchasePrice is required' },
+).transform((data) => ({
+  ...data,
+  unitPrice: data.unitPrice ?? data.purchasePrice,
+}));
 
 export const createPurchaseOrderSchema = z.object({
   supplierId: z.string().uuid('Invalid supplier ID'),

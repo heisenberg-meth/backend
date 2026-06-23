@@ -118,21 +118,22 @@ async function purchaseOrderRoutes(fastify) {
             paymentTermsDays: { type: 'integer', minimum: 0, maximum: 365 },
             discountAmount: { type: 'number', minimum: 0, default: 0 },
             notes: { type: 'string', maxLength: 500 },
-            items: {
-              type: 'array',
-              minItems: 1,
-              maxItems: 100,
               items: {
-                type: 'object',
-                required: ['medicineId', 'quantity', 'unitPrice'],
-                properties: {
-                  medicineId: { type: 'string', format: 'uuid' },
-                  quantity: { type: 'integer', minimum: 1 },
-                  unitPrice: { type: 'number', exclusiveMinimum: 0 },
-                  gstPercentage: { type: 'number', minimum: 0, maximum: 100, default: 0 },
+                type: 'array',
+                minItems: 1,
+                maxItems: 100,
+                items: {
+                  type: 'object',
+                  required: ['medicineId', 'quantity'],
+                  properties: {
+                    medicineId: { type: 'string', format: 'uuid' },
+                    quantity: { type: 'integer', minimum: 1 },
+                    unitPrice: { type: 'number', exclusiveMinimum: 0 },
+                    purchasePrice: { type: 'number', exclusiveMinimum: 0 },
+                    gstPercentage: { type: 'number', minimum: 0, maximum: 100, default: 0 },
+                  },
                 },
               },
-            },
           },
         },
         response: {

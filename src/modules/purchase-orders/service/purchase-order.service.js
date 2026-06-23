@@ -379,7 +379,7 @@ class PurchaseOrderService {
           const medicine = medicineMap.get(item.medicineId);
           if (!medicine) throw new BadRequestError(`Medicine with ID ${item.medicineId} not found`);
           const quantity = Number(item.quantity);
-          const unitPrice = Number(item.unitPrice);
+      const unitPrice = Number(item.unitPrice ?? item.purchasePrice);
           const gstPercentage = Number(item.gstPercentage ?? medicine.gstPercentage ?? 0);
           const totalAmount = Number((quantity * unitPrice).toFixed(2));
           subtotal += totalAmount;
