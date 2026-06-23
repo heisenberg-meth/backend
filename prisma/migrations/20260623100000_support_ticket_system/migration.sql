@@ -23,9 +23,17 @@ UPDATE "SupportTicket" SET "description" = "message" WHERE "description" IS NULL
 UPDATE "SupportTicket" SET "createdById" = "createdBy" WHERE "createdById" IS NULL;
 UPDATE "SupportTicket" SET "assignedToId" = "assignedTo" WHERE "assignedToId" IS NULL;
 
--- Generate ticket numbers for existing tickets
-UPDATE "SupportTicket" SET "ticketNumber" = 'TKT-' || REPLACE(CAST("createdAt" AS TEXT), '-', '') || '-' || LPAD(CAST(ROW_NUMBER() OVER (PARTITION BY "tenantId" ORDER BY "createdAt") AS TEXT), 4, '0')
-WHERE "ticketNumber" IS NULL;
+-- Generate ticket numbers for existing tickets using CTE (window functions not allowed in UPDATE)
+WITH ticket_numbers AS (
+  SELECT "id",
+    'TKT-' || REPLACE(CAST("createdAt" AS TEXT), '-', '') || '-' ||
+    LPAD(CAST(ROW_NUMBER() OVER (PARTITION BY "tenantId" ORDER BY "createdAt") AS TEXT), 4, '0') AS new_number
+  FROM "SupportTicket"
+  WHERE "ticketNumber" IS NULL
+)
+UPDATE "SupportTicket" SET "ticketNumber" = tn.new_number
+FROM ticket_numbers tn
+WHERE "SupportTicket"."id" = tn."id";
 
 -- Make required columns NOT NULL
 ALTER TABLE "SupportTicket" ALTER COLUMN "ticketNumber" SET NOT NULL;
