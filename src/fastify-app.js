@@ -185,7 +185,13 @@ const setupFastify = async () => {
           'https://*.razorpay.com',
         ],
         scriptSrcAttr: ["'none'"],
-        styleSrc: ["'self'", 'https:', 'https://fonts.googleapis.com', "'unsafe-inline'", 'https://*.razorpay.com'],
+        styleSrc: [
+          "'self'",
+          'https:',
+          'https://fonts.googleapis.com',
+          "'unsafe-inline'",
+          'https://*.razorpay.com',
+        ],
         frameSrc: [
           "'self'",
           'https://api.razorpay.com',
@@ -239,7 +245,7 @@ const setupFastify = async () => {
       'http://localhost:5173',
       'http://localhost:5174',
       'http://localhost:3000',
-      'https://medassist-backend-hryu.onrender.com',
+      'https://api.medassist.viyaninfo.com',
       'https://medassist.viyaninfo.com',
     ],
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],

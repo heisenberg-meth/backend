@@ -45,7 +45,7 @@ const env = {
       'http://localhost:5173',
       'http://localhost:5174',
       'http://localhost:3000',
-      'https://medassist-backend-hryu.onrender.com',
+      'https://api.medassist.viyaninfo.com',
       'https://medassist.viyaninfo.com',
     ],
     credentials: true,

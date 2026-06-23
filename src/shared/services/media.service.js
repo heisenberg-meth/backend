@@ -54,7 +54,7 @@ function fileExists(filePath) {
 
 class MediaService {
   static getMediaBaseUrl() {
-    return env.mediaBaseUrl || 'https://medassist-backend-hryu.onrender.com';
+    return env.mediaBaseUrl || 'https://api.medassist.viyaninfo.com';
   }
 
   static generatePublicUrl(relativePath) {
@@ -96,7 +96,10 @@ class MediaService {
     return this.validateAndGenerateUrl(imagePath);
   }
 
-  static processMediaResponse(data, imageFields = ['image', 'logo', 'photo', 'avatar', 'logoUrl', 'imageUrl']) {
+  static processMediaResponse(
+    data,
+    imageFields = ['image', 'logo', 'photo', 'avatar', 'logoUrl', 'imageUrl'],
+  ) {
     if (!data || typeof data !== 'object') return data;
 
     if (Array.isArray(data)) {
