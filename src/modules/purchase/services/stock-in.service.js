@@ -5,7 +5,10 @@ import logger from '../../../shared/utils/logger.js';
 
 class StockInService {
   async receiveGoods(tenantId, data, userId) {
-    const { purchaseOrderId, supplierId, supplierInvoiceNumber, invoiceDate, receivedItems, notes } = data;
+    const { purchaseOrderId, supplierId, supplierInvoiceNumber, invoiceDate, items, receivedItems, notes } = data;
+    
+    // Support both `items` and `receivedItems` for backward compatibility
+    const itemsToProcess = items || receivedItems;
 
     // 1. Validate PO exists and is in receivable status
     const po = await prisma.purchaseOrder.findFirst({
@@ -39,7 +42,7 @@ class StockInService {
     let totalAmount = 0;
 
     // 3. Process each received item
-    for (const item of receivedItems) {
+    for (const item of itemsToProcess) {
       const poItem = po.items.find((i) => i.id === item.purchaseOrderItemId);
       if (!poItem) throw new Error(`PO Item ${item.purchaseOrderItemId} not found`);
 
@@ -132,7 +135,7 @@ class StockInService {
 
     // 9. Update PO status
     const allFullyReceived = po.items.every((item) => {
-      const receivedItem = receivedItems.find((r) => r.purchaseOrderItemId === item.id);
+      const receivedItem = itemsToProcess.find((r) => r.purchaseOrderItemId === item.id);
       const totalReceived = item.receivedQuantity + (receivedItem?.receivedQuantity || 0);
       return totalReceived >= item.quantity;
     });

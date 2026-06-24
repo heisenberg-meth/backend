@@ -45,14 +45,14 @@ class StockService {
         tenantId,
         medicineId,
         'OUT_OF_STOCK',
-        `Medicine ${medicine.name} is out of stock.`,
+        `Medicine ${medicine.medicineName || medicine.name} is out of stock.`,
       );
     } else if (totalQty <= medicine.reorderLevel) {
       await alertService.triggerAlert(
         tenantId,
         medicineId,
         'LOW_STOCK',
-        `Medicine ${medicine.name} is low on stock (${totalQty} remaining).`,
+        `Medicine ${medicine.medicineName || medicine.name} is low on stock (${totalQty} remaining).`,
       );
     }
   }

@@ -47,8 +47,10 @@ async function fetchAndCacheUser(userId) {
 }
 
 export const authenticate = async (request, reply) => {
+  // Priority: Authorization header > accessToken cookie
+  // Only use cookie if no Authorization header is provided
   const cookieToken = request.cookies?.accessToken;
-  if (cookieToken && !request.headers.authorization) {
+  if (!request.headers.authorization && cookieToken) {
     request.headers.authorization = `Bearer ${cookieToken}`;
   }
 

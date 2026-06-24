@@ -25,6 +25,15 @@ import {
   MAX_OTP_ATTEMPTS,
   RESET_TOKEN_EXPIRY_MS,
 } from '../auth.constants.js';
+import env from '../../../config/env.js';
+
+// Dynamic cookie domain based on environment
+const getCookieDomain = () => {
+  if (env.nodeEnv === 'development') {
+    return 'localhost';
+  }
+  return '.viyaninfo.com';
+};
 
 const COOKIE_OPTIONS = {
   path: '/',
@@ -32,7 +41,7 @@ const COOKIE_OPTIONS = {
   sameSite: 'none',
   secure: true,
   maxAge: 30 * 24 * 60 * 60,
-  domain: '.viyaninfo.com',
+  domain: getCookieDomain(),
 };
 
 const ACCESS_COOKIE_OPTIONS = {
@@ -41,7 +50,7 @@ const ACCESS_COOKIE_OPTIONS = {
   sameSite: 'none',
   secure: true,
   maxAge: 15 * 60,
-  domain: '.viyaninfo.com',
+  domain: getCookieDomain(),
 };
 
 class AuthFastifyController {
@@ -99,11 +108,21 @@ class AuthFastifyController {
         return reply.send(success(result));
       }
 
+      // Set cookies with proper options
       reply.setCookie('refresh_token', result.refreshToken, COOKIE_OPTIONS);
       reply.setCookie('accessToken', result.token, ACCESS_COOKIE_OPTIONS);
 
       const responsePayload = { ...result };
       delete responsePayload.refreshToken;
+
+      request.log.info(
+        {
+          userId: result.user?.id,
+          hasRefreshToken: !!result.refreshToken,
+          hasAccessToken: !!result.token,
+        },
+        'LOGIN SUCCESS',
+      );
 
       return reply.send(success(responsePayload));
     } catch (error) {
@@ -164,6 +183,10 @@ class AuthFastifyController {
         {
           hasCookie: !!request.cookies?.refresh_token,
           cookieNames: Object.keys(request.cookies || {}),
+          url: request.url,
+          method: request.method,
+          origin: request.headers.origin,
+          referer: request.headers.referer,
         },
         'Refresh request received',
       );
@@ -178,8 +201,11 @@ class AuthFastifyController {
             sessionFound: false,
             userFound: false,
             duration: Date.now() - startTime,
+            cookieDomain: COOKIE_OPTIONS.domain,
+            sameSite: COOKIE_OPTIONS.sameSite,
+            secure: COOKIE_OPTIONS.secure,
           },
-          'Token refresh failed: Missing cookie',
+          'Token refresh failed: Missing cookie - check cookie domain and SameSite settings',
         );
         return reply
           .code(401)
@@ -233,7 +259,8 @@ class AuthFastifyController {
       );
 
       if (isInvalidToken) {
-        reply.clearCookie('refresh_token', { path: '/', domain: '.viyaninfo.com', sameSite: 'none', secure: true });
+        reply.clearCookie('refresh_token', { path: '/', domain: getCookieDomain(), sameSite: 'none', secure: true });
+        reply.clearCookie('accessToken', { path: '/', domain: getCookieDomain(), sameSite: 'none', secure: true });
         const code =
           error.message === 'Invalid or reused refresh token'
             ? 'REFRESH_TOKEN_REUSED'
@@ -250,8 +277,17 @@ class AuthFastifyController {
     try {
       await authService.logout(request.sessionId);
 
-      reply.clearCookie('refresh_token', { path: '/', domain: '.viyaninfo.com', sameSite: 'none', secure: true });
-      reply.clearCookie('accessToken', { path: '/', domain: '.viyaninfo.com', sameSite: 'none', secure: true });
+      reply.clearCookie('refresh_token', { path: '/', domain: getCookieDomain(), sameSite: 'none', secure: true });
+      reply.clearCookie('accessToken', { path: '/', domain: getCookieDomain(), sameSite: 'none', secure: true });
+      
+      request.log.info(
+        {
+          userId: request.user?.id,
+          sessionId: request.sessionId,
+        },
+        'LOGOUT SUCCESS',
+      );
+      
       return reply.send(success({ message: 'Logged out successfully' }));
     } catch (error) {
       request.log.error(error);
@@ -263,8 +299,16 @@ class AuthFastifyController {
     try {
       await authService.logoutAll(request.user.id);
 
-      reply.clearCookie('refresh_token', { path: '/', domain: '.viyaninfo.com', sameSite: 'none', secure: true });
-      reply.clearCookie('accessToken', { path: '/', domain: '.viyaninfo.com', sameSite: 'none', secure: true });
+      reply.clearCookie('refresh_token', { path: '/', domain: getCookieDomain(), sameSite: 'none', secure: true });
+      reply.clearCookie('accessToken', { path: '/', domain: getCookieDomain(), sameSite: 'none', secure: true });
+      
+      request.log.info(
+        {
+          userId: request.user?.id,
+        },
+        'LOGOUT ALL SUCCESS',
+      );
+      
       return reply.send(success({ message: 'All sessions revoked' }));
     } catch (error) {
       request.log.error(error);

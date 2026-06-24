@@ -2,6 +2,7 @@ import prisma from '../../../config/prisma.js';
 import salesService from '../services/sales.service.js';
 import analyticsService from '../services/analytics.service.js';
 import refundService from '../../refunds/services/refund-orchestration.service.js';
+import movementService from '../../stock/service/movement.service.js';
 import { success } from '../../../shared/helpers/response.js';
 
 class SalesFastifyController {
@@ -82,40 +83,43 @@ class SalesFastifyController {
       const { id } = request.params;
       const sale = await salesService.getSaleById(id, request.tenantId);
 
+      if (sale.status === 'CANCELLED') {
+        return reply.code(400).send({ success: false, message: 'Sale is already cancelled' });
+      }
+
       await prisma.$transaction(async (tx) => {
-        // Restore inventory for each sale item
+        // Restore inventory for each sale item using movementService for proper audit trail
         const saleItems = await tx.saleItem.findMany({
           where: { saleId: id },
         });
 
         for (const item of saleItems) {
           if (item.batchId) {
-            await tx.inventoryBatch.update({
-              where: { id: item.batchId },
-              data: {
-                quantity: { increment: item.quantity },
-                availableQuantity: { increment: item.quantity },
-              },
-            });
-          }
-          // Update inventory aggregate
-          if (item.medicineId) {
-            await tx.inventory.updateMany({
-              where: {
-                tenantId: request.tenantId,
+            await movementService.recordMovement(
+              request.tenantId,
+              {
                 medicineId: item.medicineId,
+                batchId: item.batchId,
                 branchId: sale.branchId || null,
+                movementType: 'RETURN',
+                quantity: item.quantity,
+                referenceType: 'SALE_CANCEL',
+                referenceId: id,
+                notes: `Stock restored from cancelled sale ${id}`,
               },
-              data: {
-                currentStock: { increment: item.quantity },
-              },
-            });
+              request.user.id,
+              tx,
+            );
           }
         }
 
         await tx.sale.update({
           where: { id },
-          data: { status: 'CANCELLED', cancelledAt: new Date(), cancelledBy: request.user.id },
+          data: { 
+            status: 'CANCELLED', 
+            cancelledAt: new Date(), 
+            cancelledBy: request.user.id 
+          },
         });
       });
 

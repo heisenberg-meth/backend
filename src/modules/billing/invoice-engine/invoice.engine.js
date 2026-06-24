@@ -724,7 +724,7 @@ class InvoiceEngine {
           'Attempted to deduct more stock than available',
         );
         throw new Error(
-          `Medicine "${item.medicine?.name || 'Unknown'}" only has ${batch?.availableQuantity || 0} stock available in batch ${batch?.batchNumber || 'unknown'}`,
+          `Medicine "${item.medicine?.medicineName || item.medicine?.name || 'Unknown'}" only has ${batch?.availableQuantity || 0} stock available in batch ${batch?.batchNumber || 'unknown'}`,
         );
       }
       if (batch.status !== 'ACTIVE') {
@@ -773,7 +773,7 @@ class InvoiceEngine {
           'Insufficient stock across all batches',
         );
         throw new Error(
-          `Medicine "${item.medicine?.name || 'Unknown'}" has insufficient stock available (missing ${remaining})`,
+          `Medicine "${item.medicine?.medicineName || item.medicine?.name || 'Unknown'}" has insufficient stock available (missing ${remaining})`,
         );
       }
     }

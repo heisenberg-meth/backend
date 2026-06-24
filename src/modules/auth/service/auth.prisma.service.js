@@ -522,20 +522,15 @@ class AuthPrismaService {
       throw new Error('Your subscription has expired. Please renew.');
     }
 
-    const newRefreshToken = sessionService.generateDeviceToken();
-    await sessionService.rotateRefreshToken(session.id, newRefreshToken);
-
-    const updated = await prisma.userSession.findUnique({
+    // Extend session expiry on refresh (no token rotation — prevents
+    // multi-tab / race-condition 401s where a second tab still holds the
+    // old cookie that was already overwritten by the first refresh).
+    const newExpiresAt = new Date();
+    newExpiresAt.setDate(newExpiresAt.getDate() + 30);
+    await prisma.userSession.update({
       where: { id: session.id },
+      data: { expiresAt: newExpiresAt, lastActivity: new Date() },
     });
-
-    logger.info(
-      {
-        sessionId: session.id,
-        refreshTokenUpdated: !!updated,
-      },
-      'Refresh token persistence check',
-    );
 
     const accessToken = this._signAccessToken(user, session.id);
     const subscription = user.tenant?.subscription;
@@ -557,7 +552,7 @@ class AuthPrismaService {
 
     return {
       token: accessToken,
-      refreshToken: newRefreshToken,
+      refreshToken: oldRefreshToken,
       sessionId: session.id,
       user: {
         id: user.id,

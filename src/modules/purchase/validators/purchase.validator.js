@@ -53,6 +53,7 @@ export const receiveGoodsSchema = z.object({
           .refine((val) => !isNaN(Date.parse(val)), 'Invalid date')
           .transform((val) => new Date(val).toISOString()),
         purchasePrice: z.number().min(0),
+        mrp: z.number().min(0),
         sellingPrice: z.number().min(0),
       }),
     )

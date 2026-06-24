@@ -4,8 +4,8 @@ export function normalizeInvoice(invoice) {
   const items = (invoice.items || []).map((item) => ({
     id: item.id || item.medicineId,
     medicineId: item.medicineId,
-    medicineName: item.medicine?.name || item.medicineName || item.name || 'Unknown',
-    name: item.medicine?.name || item.medicineName || item.name || 'Unknown',
+    medicineName: item.medicine?.medicineName || item.medicine?.name || item.medicineName || item.name || 'Unknown',
+    name: item.medicine?.medicineName || item.medicine?.name || item.medicineName || item.name || 'Unknown',
     qty: Number(item.quantity || 0),
     quantity: Number(item.quantity || 0),
     price: Number(item.unitPrice || 0),
