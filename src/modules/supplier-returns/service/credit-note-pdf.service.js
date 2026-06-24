@@ -9,7 +9,7 @@ class CreditNotePDFService {
     const creditNote = await prisma.supplierCreditNote.findFirst({
       where: { id: creditNoteId, tenantId },
       include: {
-        supplierReturn: {
+        return: {
           include: {
             supplier: true,
             items: { include: { medicine: true } },
@@ -51,8 +51,8 @@ class CreditNotePDFService {
       doc.on('end', () => resolve(Buffer.concat(buffers)));
 
       const tenant = creditNote.tenant;
-      const supplier = creditNote.supplierReturn?.supplier;
-      const items = creditNote.supplierReturn?.items || [];
+      const supplier = creditNote.return?.supplier;
+      const items = creditNote.return?.items || [];
 
       doc
         .fillColor('#444444')
@@ -77,9 +77,9 @@ class CreditNotePDFService {
       doc.text(`Date: ${formatDate(creditNote.issuedDate || creditNote.createdAt)}`, 50, 162);
       doc.text(`Supplier: ${supplier?.name || 'N/A'}`, 50, 179);
 
-      if (creditNote.supplierReturn) {
-        doc.text(`Return #: ${creditNote.supplierReturn.returnNumber}`, 300, 145);
-        doc.text(`Return Date: ${formatDate(creditNote.supplierReturn.createdAt)}`, 300, 162);
+      if (creditNote.return) {
+        doc.text(`Return #: ${creditNote.return.returnNumber}`, 300, 145);
+        doc.text(`Return Date: ${formatDate(creditNote.return.createdAt)}`, 300, 162);
       }
 
       doc.moveTo(50, 200).lineTo(550, 200).stroke();

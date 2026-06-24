@@ -71,7 +71,7 @@ export const listSupplierQuerySchema = z.object({
   search: z.string().optional(),
   status: z.string().optional(),
   page: z.coerce.number().int().min(1).optional().default(1),
-  limit: z.coerce.number().int().min(1).max(100).optional().default(20),
+  limit: z.coerce.number().int().min(1).max(1000).optional().default(20),
 });
 
 export const createPaymentSchema = z.object({
@@ -103,5 +103,5 @@ export const createSupplierPurchaseOrderSchema = z.object({
 
 export const paginationQuerySchema = z.object({
   page: z.coerce.number().int().min(1).optional().default(1),
-  limit: z.coerce.number().int().min(1).max(100).optional().default(20),
+  limit: z.coerce.number().int().min(1).max(1000).optional().default(20),
 });
