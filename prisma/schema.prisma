@@ -637,19 +637,28 @@ model Medicine {
   id                       String                     @id @default(uuid())
   tenantId                 String
   userId                   String?
-  name                     String
+  name                     String?                    // Legacy field - use medicineName instead
+  medicineName             String?
   genericName              String?
+  brandName                String?
+  manufacturerName         String?
   categoryId               String?
   manufacturerId           String?
-  barcode                  String?
-  sku                      String?                    @unique
-  hsnCode                  String?
+  medicineType             MedicineType?
   dosageForm               String?
   strength                 String?
+  schedule                 ScheduleType?
+  purchaseUnit             PurchaseUnit?
+  sellingUnit              SellingUnit?
+  unitPerPack              Int?
   gstPercentage            Float                      @default(0)
-  reorderLevel             Int                        @default(10)
-  description              String?
-  prescriptionRequired     Boolean                    @default(false)
+  hsnCode                  String?
+  barcode                  String?
+  sku                      String?                    @unique
+  requiresPrescription     Boolean                    @default(false)
+  storageCondition         String?
+  status                   MedicineStatus             @default(ACTIVE)
+  notes                    String?
   isActive                 Boolean                    @default(true)
   createdAt                DateTime                   @default(now())
   updatedAt                DateTime                   @updatedAt
@@ -660,8 +669,9 @@ model Medicine {
   composition              String?
   imageUrl                 String?
   reorderQuantity          Int?
-  status                   MedicineStatus             @default(ACTIVE)
-  storageCondition         String?
+  reorderLevel             Int                        @default(10)
+  description              String?
+  prescriptionRequired     Boolean                    @default(false)
   unit                     String?
   packagingType            String?
   alertThresholdOverrides  AlertThresholdOverride[]
@@ -711,7 +721,7 @@ model Medicine {
   supplierReturnItems      SupplierReturnItem[]
 
   @@unique([tenantId, barcode])
-  @@index([tenantId, name])
+  @@index([tenantId, medicineName])
   @@index([tenantId, barcode])
   @@index([tenantId, genericName])
   @@index([tenantId, sku])
@@ -4125,6 +4135,47 @@ enum MedicineStatus {
   BLOCKED
   RESTRICTED
   RECALLED
+}
+
+enum MedicineType {
+  TABLET
+  CAPSULE
+  SYRUP
+  SUSPENSION
+  INJECTION
+  DROPS
+  CREAM
+  GEL
+  OINTMENT
+  POWDER
+  INHALER
+  SPRAY
+  MEDICAL_DEVICE
+}
+
+enum ScheduleType {
+  OTC
+  SCHEDULE_H
+  SCHEDULE_H1
+  SCHEDULE_X
+}
+
+enum PurchaseUnit {
+  BOX
+  CARTON
+  BOTTLE
+  TUBE
+  PIECE
+}
+
+enum SellingUnit {
+  TABLET
+  CAPSULE
+  STRIP
+  BOTTLE
+  TUBE
+  PIECE
+  VIAL
 }
 
 enum SupplierType {

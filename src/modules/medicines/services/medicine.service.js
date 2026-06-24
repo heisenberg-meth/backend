@@ -6,8 +6,7 @@ import auditService from '../../audit/service/audit.prisma.service.js';
 import eventBus from '../../../shared/services/eventbus.service.js';
 import { scanKeys } from '../../../shared/utils/scan-keys.js';
 import { mainQueue } from '../../../queue/index.js';
-import movementService from '../../stock/service/movement.service.js';
-import { mapDosageFormToPackaging, validatePricing } from '../../../shared/utils/medicine-helpers.js';
+import { mapDosageFormToPackaging } from '../../../shared/utils/medicine-helpers.js';
 
 class MedicineIntelligenceService {
   /**
@@ -74,70 +73,61 @@ class MedicineIntelligenceService {
   async getMedicineDetails(id, tenantId) {
     const medicine = await medicineRepository.findById(id, tenantId);
     if (!medicine) throw new Error('Medicine not found');
-
-    return {
-      medicine,
-      pricing: medicine.pricingMaster[0] || null,
-      inventorySummary: {
-        totalStock: medicine.inventoryBatches.reduce((sum, b) => sum + b.quantity, 0),
-        batches: medicine.inventoryBatches,
-      },
-      alternatives: medicine.alternatives.map((a) => a.alternative),
-      interactions: medicine.interactions.map((i) => ({
-        medicine: i.interactsWith,
-        severity: i.severity,
-        description: i.description,
-      })),
-    };
+    return medicine;
   }
 
   /**
    * Create a new drug master record with governance
+   * Medicine Master only - no stock, no batch, no supplier, no inventory
    */
   async createMedicineMaster(tenantId, userId, data) {
     const {
-      pricing,
-      initialBatch,
-      branchId,
-      reorderPoint,
-      rackLocation,
       category,
       manufacturer,
       ...rawMedicineData
     } = data;
 
-    if (!branchId) {
-      throw new Error('Branch ID is required to create medicine inventory');
+    // Required field validations
+    if (!rawMedicineData.medicineName) {
+      throw new Error('Medicine name is required');
+    }
+    if (!rawMedicineData.genericName) {
+      throw new Error('Generic name is required');
+    }
+    if (!rawMedicineData.manufacturerName && !rawMedicineData.manufacturer && !rawMedicineData.manufacturerId) {
+      throw new Error('Manufacturer is required');
+    }
+    if (!rawMedicineData.categoryId && !category) {
+      throw new Error('Category is required');
+    }
+    if (!rawMedicineData.medicineType) {
+      throw new Error('Medicine type is required');
+    }
+    if (!rawMedicineData.dosageForm) {
+      throw new Error('Dosage form is required');
+    }
+    if (!rawMedicineData.strength) {
+      throw new Error('Strength is required');
     }
 
-    if (pricing && (pricing.purchasePrice || pricing.sellingPrice || pricing.mrp)) {
-      const pricingError = validatePricing({
-        purchasePrice: pricing.purchasePrice || 0,
-        sellingPrice: pricing.sellingPrice || 0,
-        mrp: pricing.mrp || 0
-      });
-      if (pricingError) {
-        throw new Error(pricingError);
-      }
+    // GST validation
+    const validGstPercentages = [0, 5, 12, 18, 28];
+    if (rawMedicineData.gstPercentage !== undefined && 
+        !validGstPercentages.includes(rawMedicineData.gstPercentage)) {
+      throw new Error(`GST percentage must be one of: ${validGstPercentages.join(', ')}`);
     }
 
-    if (initialBatch && (initialBatch.purchasePrice || initialBatch.sellingPrice || initialBatch.mrp)) {
-      const pricingError = validatePricing({
-        purchasePrice: initialBatch.purchasePrice || 0,
-        sellingPrice: initialBatch.sellingPrice || 0,
-        mrp: initialBatch.mrp || 0
-      });
-      if (pricingError) {
-        throw new Error(pricingError);
-      }
+    // unitPerPack validation
+    if (rawMedicineData.unitPerPack !== undefined && rawMedicineData.unitPerPack <= 0) {
+      throw new Error('Unit per pack must be greater than 0');
     }
 
-    // 1. Validation: Barcode & SKU Uniqueness
+    // Barcode & SKU Uniqueness
     if (rawMedicineData.barcode) {
       const existing = await medicineRepository.findByBarcode(rawMedicineData.barcode, tenantId);
       if (existing)
         throw new Error(
-          `Barcode ${rawMedicineData.barcode} is already assigned to ${existing.name}`,
+          `Barcode ${rawMedicineData.barcode} is already assigned to ${existing.medicineName}`,
         );
     }
 
@@ -146,10 +136,10 @@ class MedicineIntelligenceService {
         where: { sku: rawMedicineData.sku, tenantId, deletedAt: null },
       });
       if (existing)
-        throw new Error(`SKU ${rawMedicineData.sku} is already assigned to ${existing.name}`);
+        throw new Error(`SKU ${rawMedicineData.sku} is already assigned to ${existing.medicineName}`);
     }
 
-    // 2. Resolve Category ID from name if not provided
+    // Resolve Category ID from name if not provided
     let categoryId = data.categoryId || null;
     if (!categoryId && category) {
       const catName = category.trim();
@@ -173,7 +163,7 @@ class MedicineIntelligenceService {
       }
     }
 
-    // 3. Resolve Manufacturer ID from name if not provided
+    // Resolve Manufacturer ID from name if not provided
     let manufacturerId = data.manufacturerId || null;
     if (!manufacturerId && manufacturer) {
       const mfgName = manufacturer.trim();
@@ -197,88 +187,77 @@ class MedicineIntelligenceService {
       }
     }
 
-    // 4. Validation: Schedule Drug Rules
+    // Schedule Drug Rules - auto-set prescription required
+    if (['SCHEDULE_H', 'SCHEDULE_H1', 'SCHEDULE_X'].includes(rawMedicineData.schedule)) {
+      rawMedicineData.requiresPrescription = true;
+    }
+    // Also handle legacy scheduleType field
     if (['Schedule H', 'Schedule H1', 'Schedule X'].includes(rawMedicineData.scheduleType)) {
       rawMedicineData.prescriptionRequired = true;
+      rawMedicineData.requiresPrescription = true;
     }
 
-    // Clean up rawMedicineData to avoid passing IDs directly if using connect
-    delete rawMedicineData.categoryId;
-    delete rawMedicineData.manufacturerId;
+    // Clean up data for create
+    const createData = {
+      name: rawMedicineData.medicineName, // Legacy field for backward compatibility
+      medicineName: rawMedicineData.medicineName,
+      genericName: rawMedicineData.genericName,
+      brandName: rawMedicineData.brandName,
+      manufacturerName: rawMedicineData.manufacturerName || rawMedicineData.manufacturer,
+      medicineType: rawMedicineData.medicineType,
+      dosageForm: rawMedicineData.dosageForm,
+      strength: rawMedicineData.strength,
+      schedule: rawMedicineData.schedule,
+      purchaseUnit: rawMedicineData.purchaseUnit,
+      sellingUnit: rawMedicineData.sellingUnit,
+      unitPerPack: rawMedicineData.unitPerPack,
+      gstPercentage: rawMedicineData.gstPercentage ?? 0,
+      hsnCode: rawMedicineData.hsnCode,
+      barcode: rawMedicineData.barcode,
+      sku: rawMedicineData.sku,
+      requiresPrescription: rawMedicineData.requiresPrescription ?? false,
+      prescriptionRequired: rawMedicineData.prescriptionRequired ?? rawMedicineData.requiresPrescription ?? false,
+      storageCondition: rawMedicineData.storageCondition,
+      status: rawMedicineData.status || 'ACTIVE',
+      notes: rawMedicineData.notes,
+      isActive: rawMedicineData.isActive ?? true,
+      packagingType: rawMedicineData.packagingType || mapDosageFormToPackaging(rawMedicineData.dosageForm),
+      scheduleType: rawMedicineData.scheduleType,
+      composition: rawMedicineData.composition,
+      description: rawMedicineData.description,
+    };
 
-    return await prisma.$transaction(async (tx) => {
-      // 5. Create Master Record
+    const medicine = await prisma.$transaction(async (tx) => {
+      // Create Master Record
       const medicine = await tx.medicine.create({
         data: {
-          ...rawMedicineData,
-          packagingType: rawMedicineData.packagingType || mapDosageFormToPackaging(rawMedicineData.dosageForm),
+          ...createData,
           category: categoryId ? { connect: { id: categoryId } } : undefined,
-          manufacturer: manufacturerId ? { connect: { id: manufacturerId } } : undefined,
+          manufacturerRelation: manufacturerId ? { connect: { id: manufacturerId } } : undefined,
           tenant: { connect: { id: tenantId } },
           user: { connect: { id: userId } },
         },
-      });
-
-      // 6. Initialize Pricing Master
-      if (pricing) {
-        await tx.medicinePricing.create({
-          data: {
-            ...pricing,
-            tenant: { connect: { id: tenantId } },
-            medicine: { connect: { id: medicine.id } },
-          },
-        });
-      }
-
-      // 7. Initialize Branch Availability Snapshot
-      await tx.inventory.upsert({
-        where: {
-          tenantId_branchId_medicineId: { tenantId, branchId, medicineId: medicine.id },
-        },
-        update: {
-          reorderPoint: reorderPoint ?? 10,
-          rackLocation: rackLocation || null,
-        },
-        create: {
-          tenantId,
-          branchId,
-          medicineId: medicine.id,
-          reorderPoint: reorderPoint ?? 10,
-          rackLocation: rackLocation || null,
-          currentStock: 0,
+        include: {
+          category: { select: { id: true, name: true } },
         },
       });
-
-      // 8. Create Initial Batch via MovementService (Ledger-driven)
-      if (initialBatch) {
-        await movementService.stockIn(
-          tenantId,
-          {
-            ...initialBatch,
-            medicineId: medicine.id,
-            branchId,
-            referenceType: 'INITIAL_STOCK',
-            notes: 'Initial inventory during medicine creation',
-          },
-          userId,
-          tx,
-        );
-      }
 
       await auditService.log({
         tenantId,
         userId,
         action: 'CREATE_MEDICINE_MASTER',
-        target: medicine.name,
+        target: medicine.medicineName,
         type: 'PHARMACEUTICAL',
       });
 
-      await this.invalidateCache(tenantId);
-      await mainQueue.add('update-analytics', { tenantId });
-      await eventBus.publish('MEDICINE_CREATED', { medicineId: medicine.id, tenantId });
-
       return medicine;
     });
+
+    await this.invalidateCache(tenantId);
+    await mainQueue.add('update-analytics', { tenantId });
+    await eventBus.publish('MEDICINE_CREATED', { medicineId: medicine.id, tenantId });
+
+    return medicine;
   }
 
   /**
@@ -289,7 +268,7 @@ class MedicineIntelligenceService {
     if (!existing) throw new Error('Medicine not found');
 
     // Governance: Restricted Fields
-    const restrictedFields = ['barcode', 'scheduleType', 'gstPercentage'];
+    const restrictedFields = ['barcode', 'schedule', 'scheduleType', 'gstPercentage'];
     const isAttemptingRestrictedUpdate = restrictedFields.some(
       (field) => data[field] !== undefined && data[field] !== existing[field],
     );
@@ -305,7 +284,7 @@ class MedicineIntelligenceService {
       const existingWithBarcode = await medicineRepository.findByBarcode(data.barcode, tenantId);
       if (existingWithBarcode)
         throw new Error(
-          `Barcode ${data.barcode} is already assigned to ${existingWithBarcode.name}`,
+          `Barcode ${data.barcode} is already assigned to ${existingWithBarcode.medicineName}`,
         );
     }
 
@@ -314,7 +293,18 @@ class MedicineIntelligenceService {
         where: { sku: data.sku, tenantId, deletedAt: null },
       });
       if (existingWithSku)
-        throw new Error(`SKU ${data.sku} is already assigned to ${existingWithSku.name}`);
+        throw new Error(`SKU ${data.sku} is already assigned to ${existingWithSku.medicineName}`);
+    }
+
+    // GST validation
+    const validGstPercentages = [0, 5, 12, 18, 28];
+    if (data.gstPercentage !== undefined && !validGstPercentages.includes(data.gstPercentage)) {
+      throw new Error(`GST percentage must be one of: ${validGstPercentages.join(', ')}`);
+    }
+
+    // unitPerPack validation
+    if (data.unitPerPack !== undefined && data.unitPerPack <= 0) {
+      throw new Error('Unit per pack must be greater than 0');
     }
 
     // Resolve Category ID from name if not provided
@@ -365,10 +355,21 @@ class MedicineIntelligenceService {
       }
     }
 
+    // Schedule Drug Rules - auto-set prescription required
+    if (data.schedule && ['SCHEDULE_H', 'SCHEDULE_H1', 'SCHEDULE_X'].includes(data.schedule)) {
+      data.requiresPrescription = true;
+    }
+    if (data.scheduleType && ['Schedule H', 'Schedule H1', 'Schedule X'].includes(data.scheduleType)) {
+      data.prescriptionRequired = true;
+      data.requiresPrescription = true;
+    }
+
     const cleanData = { ...data };
     delete cleanData.category;
     delete cleanData.manufacturer;
     delete cleanData.statusReason;
+    delete cleanData.categoryId;
+    delete cleanData.manufacturerId;
     
     if (cleanData.dosageForm !== undefined) {
       cleanData.packagingType = mapDosageFormToPackaging(cleanData.dosageForm);
@@ -383,8 +384,6 @@ class MedicineIntelligenceService {
         manufacturer: manufacturerId ? { connect: { id: manufacturerId } } : { disconnect: true },
       }),
     };
-    delete updateData.categoryId;
-    delete updateData.manufacturerId;
 
     const statusChanged =
       (data.status && data.status !== existing.status) ||
@@ -412,7 +411,7 @@ class MedicineIntelligenceService {
       tenantId,
       userId,
       action: 'UPDATE_MEDICINE_MASTER',
-      target: updated.name,
+      target: updated.medicineName,
       type: 'PHARMACEUTICAL',
     });
 

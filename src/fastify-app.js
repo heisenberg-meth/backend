@@ -94,7 +94,6 @@ const fastify = Fastify({
   logger: {
     formatters: {
       log(object) {
-        // Flatten PRD required fields into the root log object
         if (object.req) {
           object.tenantId = object.req.tenantId;
           object.userId = object.req.userId;
@@ -159,7 +158,6 @@ const fastify = Fastify({
 const setupFastify = async () => {
   await connectRedis();
 
-  // Initialize Sentry before other plugins
   initSentry(fastify);
 
   await fastify.register(helmet, {
@@ -308,7 +306,6 @@ const setupFastify = async () => {
     maxRetriesPerRequest: null,
   });
 
-  // Global rate limit — 500 requests per minute per IP
   await fastify.register(rateLimit, {
     max: 500,
     timeWindow: '1 minute',
@@ -470,7 +467,6 @@ const setupFastify = async () => {
     return { status: 'healthy' };
   });
 
-  // Uptime monitoring endpoints
   fastify.get('/api/health/uptime', async (request, reply) => {
     const status = await uptimeMonitor.getHealthStatus();
     const allHealthy = status.every((s) => s.status === 'healthy');
@@ -545,7 +541,6 @@ const setupFastify = async () => {
   await fastify.register(supportRoutes, { prefix: '/api/support' });
   await fastify.register(adminSupportRoutes, { prefix: '/api/admin/support' });
 
-  // ── Serve uploaded media files ──
   const uploadsDir = new URL('../uploads', import.meta.url).pathname;
   const isUploadsDir = fs.existsSync(uploadsDir);
 
@@ -557,7 +552,6 @@ const setupFastify = async () => {
     });
   }
 
-  // ── Serve frontend static files (SPA) ──
   const frontendDist = new URL('../../frontend/dist', import.meta.url).pathname;
   const isFrontendBuilt = fs.existsSync(frontendDist);
 
@@ -568,14 +562,12 @@ const setupFastify = async () => {
       wildcard: false,
     });
   } else {
-    // Add a basic root endpoint for health checks when frontend isn't served
     fastify.get('/', async () => ({
       status: 'ok',
       message: 'Viyan MedAssist API Backend is running',
     }));
   }
 
-  // SPA fallback: all non-API, non-file routes → index.html
   fastify.setNotFoundHandler(async (request, reply) => {
     if (
       request.url.startsWith('/api/') ||
@@ -600,7 +592,6 @@ const setupFastify = async () => {
     }
   });
 
-  // Start uptime monitor
   uptimeMonitor.start();
 
   return fastify;

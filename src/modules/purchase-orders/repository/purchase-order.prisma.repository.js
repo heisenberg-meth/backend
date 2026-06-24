@@ -69,6 +69,17 @@ class PurchaseOrderPrismaRepository {
             items: true,
           },
         },
+        supplier: {
+          select: {
+            id: true,
+            name: true,
+          },
+        },
+        user: {
+          select: {
+            fullName: true,
+          },
+        },
       },
     });
   }

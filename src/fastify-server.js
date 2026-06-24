@@ -90,7 +90,6 @@ async function validateDatabaseHealth() {
 
     logger.info('[BOOT] Relational schema consistency check passed');
 
-    // Repair legacy PurchaseOrders with null branchId (Fix 3)
     try {
       const nullPOs = await prisma.purchaseOrder.findMany({
         where: { branchId: null },

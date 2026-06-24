@@ -1,5 +1,3 @@
-// Run with: node prisma/seed-subscriptions.js
-// Seeds subscription plans and ensures all tenants have subscriptions
 import prisma from '../src/config/prisma.js';
 import logger from '../src/shared/utils/logger.js';
 
@@ -35,7 +33,6 @@ const PLANS = [
 async function main() {
   logger.info('Seeding subscription plans...');
 
-  // Upsert plans
   for (const plan of PLANS) {
     await prisma.subscriptionPlan.upsert({
       where: { id: plan.id },
@@ -50,7 +47,6 @@ async function main() {
     logger.info(`  Plan "${plan.name}" (${plan.id}) ready`);
   }
 
-  // Ensure all tenants have a subscription
   const tenants = await prisma.tenant.findMany({
     where: { deletedAt: null },
     include: { subscription: true },
@@ -79,7 +75,6 @@ async function main() {
   logger.info(`\nSubscriptions created: ${created}`);
   logger.info(`Subscriptions verified: ${tenants.length}`);
 
-  // Show subscription distribution
   const dist = await prisma.subscription.groupBy({
     by: ['status'],
     _count: true,
@@ -90,7 +85,6 @@ async function main() {
     logger.info(`  ${d.status}: ${d._count}`);
   }
 
-  // Show active subscriptions count
   const activeSubs = await prisma.subscription.count({ where: { status: 'ACTIVE' } });
   const totalSubs = await prisma.subscription.count();
   logger.info(`\nTotal subscriptions: ${totalSubs}`);

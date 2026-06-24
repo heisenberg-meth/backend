@@ -50,43 +50,50 @@ async function medicineIntelligenceRoutes(fastify) {
         tags: ['Medicines'],
         body: {
           type: 'object',
-          required: ['name'],
+          required: ['medicineName', 'genericName', 'manufacturer', 'categoryId', 'medicineType', 'dosageForm', 'strength'],
           properties: {
-            name: { type: 'string' },
-            genericName: { type: 'string' },
-            composition: { type: 'string' },
+            medicineName: { type: 'string', minLength: 1 },
+            genericName: { type: 'string', minLength: 1 },
+            brandName: { type: 'string' },
+            manufacturer: { type: 'string', minLength: 1 },
             categoryId: { type: 'string', format: 'uuid' },
             category: { type: 'string' },
-            manufacturerId: { type: 'string', format: 'uuid' },
-            manufacturer: { type: 'string' },
-            scheduleType: { type: 'string' },
-            gstPercentage: { type: 'number' },
-            storageCondition: { type: 'string' },
-            barcode: { type: 'string' },
+            medicineType: { 
+              type: 'string',
+              enum: ['TABLET', 'CAPSULE', 'SYRUP', 'SUSPENSION', 'INJECTION', 'DROPS', 'CREAM', 'GEL', 'OINTMENT', 'POWDER', 'INHALER', 'SPRAY', 'MEDICAL_DEVICE']
+            },
             dosageForm: { type: 'string' },
-            strength: { type: 'string' },
-            reorderPoint: { type: 'number' },
-            reorderLevel: { type: 'number' },
+            strength: { type: 'string', minLength: 1 },
+            schedule: { 
+              type: 'string',
+              enum: ['OTC', 'SCHEDULE_H', 'SCHEDULE_H1', 'SCHEDULE_X']
+            },
+            purchaseUnit: { 
+              type: 'string',
+              enum: ['BOX', 'CARTON', 'BOTTLE', 'TUBE', 'PIECE']
+            },
+            sellingUnit: { 
+              type: 'string',
+              enum: ['TABLET', 'CAPSULE', 'STRIP', 'BOTTLE', 'TUBE', 'PIECE', 'VIAL']
+            },
+            unitPerPack: { type: 'integer', minimum: 1 },
+            gstPercentage: { type: 'number', enum: [0, 5, 12, 18, 28] },
+            hsnCode: { type: 'string' },
+            barcode: { type: 'string' },
+            sku: { type: 'string' },
+            requiresPrescription: { type: 'boolean', default: false },
+            storageCondition: { type: 'string' },
+            status: { 
+              type: 'string',
+              enum: ['ACTIVE', 'INACTIVE', 'DISCONTINUED'],
+              default: 'ACTIVE'
+            },
+            notes: { type: 'string' },
+            // Legacy fields for backward compatibility
+            name: { type: 'string' },
+            scheduleType: { type: 'string' },
+            composition: { type: 'string' },
             description: { type: 'string' },
-            branchId: { type: 'string', format: 'uuid' },
-            pricing: {
-              type: 'object',
-              properties: {
-                mrp: { type: 'number' },
-                purchasePrice: { type: 'number' },
-                sellingPrice: { type: 'number' },
-              },
-            },
-            initialBatch: {
-              type: 'object',
-              properties: {
-                batchNumber: { type: 'string' },
-                quantity: { type: 'number' },
-                expiryDate: { type: 'string' },
-                mrp: { type: 'number' },
-                purchasePrice: { type: 'number' },
-              },
-            },
           },
         },
       },

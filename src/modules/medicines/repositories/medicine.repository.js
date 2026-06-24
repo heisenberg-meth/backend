@@ -65,25 +65,36 @@ class MedicineRepository {
       prisma.medicine.count({ where }),
     ]);
 
-    // Flatten for compatibility with legacy UI
+    // Format medicines with stock summary
     const formattedMedicines = medicines.map((m) => {
       const inv = m.inventory?.[0] || {};
-      const latestBatch = m.inventoryBatches?.[0] || {};
+      const batches = m.inventoryBatches || [];
+      const totalStock = batches.reduce((sum, b) => sum + (b.quantity || 0), 0);
+      const availableStock = batches.reduce((sum, b) => sum + (b.availableQuantity || b.quantity || 0), 0);
+      
       return {
-        ...m,
-        stock: inv.currentStock || 0,
-        availableStock: (inv.currentStock || 0) - (inv.reservedStock || 0),
-        reorderLevel: inv.reorderPoint || m.reorderLevel || 10,
-        rackLocation: inv.rackLocation || null,
-        batchNumber: latestBatch.batchNumber || null,
-        expiryDate: latestBatch.expiryDate || null,
-        mrp: latestBatch.mrp || 0,
-        purchasePrice: latestBatch.purchasePrice || 0,
+        id: m.id,
+        name: m.medicineName || m.name, // Legacy field for backward compatibility
+        medicineName: m.medicineName || m.name,
+        genericName: m.genericName,
+        brandName: m.brandName,
+        manufacturer: m.manufacturerName,
+        medicineType: m.medicineType,
+        dosageForm: m.dosageForm,
+        strength: m.strength,
+        gstPercentage: m.gstPercentage,
+        status: m.status,
+        isActive: m.isActive,
+        totalStock,
+        availableStock,
+        batchCount: batches.length,
+        category: m.category,
+        createdAt: m.createdAt,
       };
     });
 
     return {
-      medicines: formattedMedicines,
+      items: formattedMedicines,
       pagination: {
         total,
         page,
@@ -97,8 +108,8 @@ class MedicineRepository {
     const medicine = await prisma.medicine.findFirst({
       where: { id, tenantId, deletedAt: null },
       include: {
-        category: true,
-        manufacturer: true,
+        category: { select: { id: true, name: true } },
+        manufacturer: { select: { id: true, name: true } },
         pricingMaster: {
           where: { isActive: true },
           orderBy: { effectiveFrom: 'desc' },
@@ -107,43 +118,88 @@ class MedicineRepository {
         interactions: {
           include: {
             interactsWith: {
-              select: { id: true, name: true, genericName: true },
+              select: { id: true, medicineName: true, genericName: true },
             },
           },
         },
         alternatives: {
           include: {
             alternative: {
-              select: { id: true, name: true, genericName: true, strength: true },
+              select: { id: true, medicineName: true, genericName: true, strength: true },
             },
           },
           orderBy: { matchScore: 'desc' },
         },
         inventory: {
-          where: { branchId },
+          where: branchId ? { branchId } : undefined,
         },
         inventoryBatches: {
-          where: { branchId, deletedAt: null, quantity: { gt: 0 } },
+          where: { deletedAt: null, quantity: { gt: 0 } },
           orderBy: { expiryDate: 'asc' },
+          include: {
+            supplier: { select: { id: true, name: true } },
+          },
         },
       },
     });
 
     if (!medicine) return null;
 
-    const inv = medicine.inventory?.[0] || {};
-    const latestBatch = medicine.inventoryBatches?.[0] || {};
+    const batches = medicine.inventoryBatches || [];
+    const totalStock = batches.reduce((sum, b) => sum + (b.quantity || 0), 0);
+    const availableStock = batches.reduce((sum, b) => sum + (b.availableQuantity || b.quantity || 0), 0);
 
     return {
-      ...medicine,
-      stock: inv.currentStock || 0,
-      availableStock: (inv.currentStock || 0) - (inv.reservedStock || 0),
-      reorderLevel: inv.reorderPoint || medicine.reorderLevel || 10,
-      rackLocation: inv.rackLocation || null,
-      batchNumber: latestBatch.batchNumber || null,
-      expiryDate: latestBatch.expiryDate || null,
-      mrp: latestBatch.mrp || 0,
-      purchasePrice: latestBatch.purchasePrice || 0,
+      id: medicine.id,
+      name: medicine.medicineName || medicine.name, // Legacy field for backward compatibility
+      medicineName: medicine.medicineName || medicine.name,
+      genericName: medicine.genericName,
+      brandName: medicine.brandName,
+      manufacturer: medicine.manufacturerName,
+      medicineType: medicine.medicineType,
+      dosageForm: medicine.dosageForm,
+      strength: medicine.strength,
+      schedule: medicine.schedule,
+      purchaseUnit: medicine.purchaseUnit,
+      sellingUnit: medicine.sellingUnit,
+      unitPerPack: medicine.unitPerPack,
+      gstPercentage: medicine.gstPercentage,
+      hsnCode: medicine.hsnCode,
+      barcode: medicine.barcode,
+      sku: medicine.sku,
+      requiresPrescription: medicine.requiresPrescription,
+      storageCondition: medicine.storageCondition,
+      status: medicine.status,
+      notes: medicine.notes,
+      isActive: medicine.isActive,
+      category: medicine.category,
+      manufacturerData: medicine.manufacturer,
+      createdAt: medicine.createdAt,
+      updatedAt: medicine.updatedAt,
+      batches: batches.map(b => ({
+        id: b.id,
+        batchNumber: b.batchNumber,
+        expiryDate: b.expiryDate,
+        purchasePrice: Number(b.purchasePrice),
+        mrp: Number(b.mrp),
+        sellingPrice: Number(b.sellingPrice),
+        availableQuantity: b.availableQuantity || b.quantity,
+        quantity: b.quantity,
+        rackLocation: b.rackLocation,
+        supplier: b.supplier,
+      })),
+      inventorySummary: {
+        totalStock,
+        availableStock,
+        batchCount: batches.length,
+      },
+      pricing: medicine.pricingMaster?.[0] || null,
+      alternatives: medicine.alternatives?.map((a) => a.alternative) || [],
+      interactions: medicine.interactions?.map((i) => ({
+        medicine: i.interactsWith,
+        severity: i.severity,
+        description: i.description,
+      })) || [],
     };
   }
 
@@ -197,11 +253,12 @@ class MedicineRepository {
     const medicine = await prisma.medicine.findFirst({
       where: { barcode, tenantId, deletedAt: null },
       include: {
+        category: { select: { id: true, name: true } },
         inventory: {
-          where: { branchId },
+          where: branchId ? { branchId } : undefined,
         },
         inventoryBatches: {
-          where: { branchId, deletedAt: null, quantity: { gt: 0 }, expiryDate: { gt: new Date() } },
+          where: { deletedAt: null, quantity: { gt: 0 }, expiryDate: { gt: new Date() } },
           orderBy: { expiryDate: 'asc' },
         },
       },
@@ -210,10 +267,26 @@ class MedicineRepository {
     if (!medicine) return null;
 
     const inv = medicine.inventory?.[0] || {};
+    const batches = medicine.inventoryBatches || [];
+    const totalStock = batches.reduce((sum, b) => sum + (b.quantity || 0), 0);
+    const availableStock = batches.reduce((sum, b) => sum + (b.availableQuantity || b.quantity || 0), 0);
+
     return {
-      ...medicine,
-      currentStock: inv.currentStock || 0,
-      availableStock: (inv.currentStock || 0) - (inv.reservedStock || 0),
+      id: medicine.id,
+      name: medicine.medicineName || medicine.name, // Legacy field for backward compatibility
+      medicineName: medicine.medicineName || medicine.name,
+      genericName: medicine.genericName,
+      brandName: medicine.brandName,
+      manufacturer: medicine.manufacturerName,
+      medicineType: medicine.medicineType,
+      dosageForm: medicine.dosageForm,
+      strength: medicine.strength,
+      gstPercentage: medicine.gstPercentage,
+      status: medicine.status,
+      category: medicine.category,
+      totalStock,
+      availableStock,
+      batchCount: batches.length,
     };
   }
 

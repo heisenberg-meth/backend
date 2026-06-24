@@ -9,8 +9,11 @@ class PurchaseOrderFastifyController {
       const orders = await purchaseOrderService.getOrders(tenantId, filters);
       return reply.send({ success: true, data: orders });
     } catch (error) {
-      logger.error({ error, tenantId }, 'Failed to get purchase orders');
-      return reply.code(500).send({ success: false, error: 'Failed to retrieve purchase orders' });
+      logger.error({ err: error, tenantId, stack: error.stack }, 'Failed to get purchase orders');
+      return reply.code(500).send({
+        success: false,
+        error: error.message || 'Failed to retrieve purchase orders',
+      });
     }
   }
 
@@ -263,10 +266,11 @@ class PurchaseOrderFastifyController {
       const invoices = await purchaseOrderService.getPurchaseInvoices(tenantId);
       return reply.send({ success: true, data: invoices });
     } catch (error) {
-      logger.error({ error, tenantId }, 'Failed to get purchase invoices');
-      return reply
-        .code(500)
-        .send({ success: false, error: 'Failed to retrieve purchase invoices' });
+      logger.error({ err: error, tenantId, stack: error.stack }, 'Failed to get purchase invoices');
+      return reply.code(500).send({
+        success: false,
+        error: error.message || 'Failed to retrieve purchase invoices',
+      });
     }
   }
 

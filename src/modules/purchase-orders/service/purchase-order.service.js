@@ -181,15 +181,8 @@ class PurchaseOrderService {
           tenantId,
           userId,
           action: 'PURCHASE_ORDER_CREATED',
-          targetType: 'PURCHASE_ORDER',
-          targetId: po.id,
-          metadata: {
-            orderNumber: po.orderNumber,
-            supplierId: data.supplierId,
-            supplierName: supplier.name,
-            totalAmount: grandTotal,
-            itemCount: mappedItems.length,
-          },
+          target: `PurchaseOrder:${po.id}`,
+          type: 'FINANCIAL',
         },
       });
 
@@ -287,9 +280,9 @@ class PurchaseOrderService {
           subtotal,
           gstAmount,
           totalAmount,
-          notes: `Auto-generated reorder from Inventory. Medicine: ${medicine.name}, Current Stock: ${currentStock}, Reorder Level: ${reorderLevel}`,
-          createdBy: userId,
-          items: {
+            notes: `Auto-generated reorder from Inventory. Medicine: ${medicine.name}, Current Stock: ${currentStock}, Reorder Level: ${reorderLevel}`,
+            userId,
+            items: {
             create: {
               medicineId,
               medicineName: medicine.name,
@@ -315,15 +308,8 @@ class PurchaseOrderService {
           tenantId,
           userId,
           action: 'REORDER_CREATED',
-          targetType: 'PURCHASE_ORDER',
-          targetId: po.id,
-          metadata: {
-            medicineId,
-            medicineName: medicine.name,
-            purchaseOrderId: po.id,
-            quantity,
-            supplierId,
-          },
+          target: `PurchaseOrder:${po.id}`,
+          type: 'FINANCIAL',
         },
       });
 
@@ -717,7 +703,7 @@ class PurchaseOrderService {
 
         if (!resolvedBranchId) {
           const defaultBranch = await prisma.branch.create({
-            data: { tenantId, name: 'Main Branch', code: 'MAIN', isDefault: true },
+            data: { tenantId, name: 'Main Branch', code: 'MAIN' },
           });
           resolvedBranchId = defaultBranch.id;
           logger.info(
@@ -812,6 +798,7 @@ class PurchaseOrderService {
               batchNumber: item.batchNumber,
               expiryDate: parsedExpiryDate,
               purchasePrice,
+              mrp,
               sellingPrice,
             },
           });
@@ -1099,26 +1086,35 @@ class PurchaseOrderService {
       orderBy: { createdAt: 'desc' },
     });
 
-    const grnNumbers = invoices.map((inv) => inv.invoiceNumber.replace('PINV-GRN-', 'GRN-'));
+    const grnNumbers = invoices
+      .map((inv) => inv.invoiceNumber?.replace('PINV-GRN-', 'GRN-'))
+      .filter(Boolean);
 
-    const grns = await prisma.goodsReceiptNote.findMany({
-      where: {
-        tenantId,
-        grnNumber: { in: grnNumbers },
-      },
-      include: {
-        items: {
-          include: {
-            medicine: { select: { name: true } },
+    let grns = [];
+    if (grnNumbers.length > 0) {
+      try {
+        grns = await prisma.goodsReceiptNote.findMany({
+          where: {
+            tenantId,
+            grnNumber: { in: grnNumbers },
           },
-        },
-      },
-    });
+          include: {
+            items: {
+              include: {
+                medicine: { select: { name: true } },
+              },
+            },
+          },
+        });
+      } catch (grnError) {
+        logger.warn({ err: grnError, tenantId }, 'PURCHASE_INVOICE_GRN_LOOKUP_FAILED');
+      }
+    }
 
     const grnMap = new Map(grns.map((g) => [g.grnNumber, g]));
 
     return invoices.map((inv) => {
-      const grnNumber = inv.invoiceNumber.replace('PINV-GRN-', 'GRN-');
+      const grnNumber = inv.invoiceNumber?.replace('PINV-GRN-', 'GRN-');
       const grn = grnMap.get(grnNumber);
       const items = grn
         ? grn.items.map((item) => ({

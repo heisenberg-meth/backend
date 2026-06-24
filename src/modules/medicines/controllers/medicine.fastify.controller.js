@@ -6,19 +6,17 @@ class MedicineFastifyController {
    * GET /api/medicines
    */
   async getMedicines(request, reply) {
-    const { tenantId } = request.user;
+    const { tenantId, branchId } = request.user;
     const { q, categoryId, schedule, page, limit } = request.query;
 
     try {
       const result = await medicineService.getMedicines({
         tenantId,
-        q,
-        categoryId,
-        schedule,
-        page: parseInt(page),
-        limit: parseInt(limit),
+        branchId,
+        query: { q, categoryId, schedule },
+        pagination: { page: parseInt(page) || 1, limit: parseInt(limit) || 50 },
       });
-      return result;
+      return { success: true, data: result };
     } catch (error) {
       logger.error({ error, tenantId }, 'Failed to fetch medicines');
       return reply.code(500).send({ success: false, message: 'Internal server error' });
@@ -34,7 +32,7 @@ class MedicineFastifyController {
 
     try {
       const details = await medicineService.getMedicineDetails(id, tenantId);
-      return details;
+      return { success: true, data: details };
     } catch (error) {
       logger.error({ error, id, tenantId }, 'Failed to fetch medicine details');
       return reply.code(404).send({ success: false, message: error.message });
@@ -46,11 +44,41 @@ class MedicineFastifyController {
    */
   async createMedicine(request, reply) {
     const { tenantId, id: userId } = request.user;
-    const body = { ...request.body, branchId: request.body.branchId || request.user.branchId };
+    const body = { ...request.body };
+
+    // Map legacy field names to new field names
+    if (body.name && !body.medicineName) {
+      body.medicineName = body.name;
+    }
+    if (body.manufacturerId && !body.manufacturer) {
+      // Keep manufacturerId for resolution in service
+    }
+    if (body.scheduleType && !body.schedule) {
+      // Map scheduleType to schedule enum
+      const scheduleMap = {
+        'OTC': 'OTC',
+        'Schedule H': 'SCHEDULE_H',
+        'Schedule H1': 'SCHEDULE_H1',
+        'Schedule X': 'SCHEDULE_X',
+      };
+      body.schedule = scheduleMap[body.scheduleType] || body.scheduleType;
+    }
 
     try {
       const medicine = await medicineService.createMedicineMaster(tenantId, userId, body);
-      return reply.code(201).send({ success: true, data: medicine });
+      return reply.code(201).send({ 
+        success: true, 
+        message: 'Medicine created successfully',
+        data: {
+          id: medicine.id,
+          medicineName: medicine.medicineName,
+          genericName: medicine.genericName,
+          brandName: medicine.brandName,
+          manufacturer: medicine.manufacturerName,
+          status: medicine.status,
+          createdAt: medicine.createdAt,
+        }
+      });
     } catch (error) {
       logger.error({ error, tenantId }, 'Failed to create medicine master');
       return reply.code(400).send({ success: false, message: error.message });

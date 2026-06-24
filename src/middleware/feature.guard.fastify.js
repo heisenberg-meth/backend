@@ -22,7 +22,6 @@ export const requireFeature = (featureName) => {
         include: { plan: true },
       });
 
-      // If no subscription, assume FREE plan restrictions
       const planId = subscription?.planId || 'free';
       const planConfig = SUBSCRIPTION_PLANS[planId] || SUBSCRIPTION_PLANS['free'];
 
@@ -73,10 +72,10 @@ export const requireLimit = (limitKey, currentCountFn) => {
       const limit = planConfig.limits ? planConfig.limits[limitKey] : undefined;
 
       if (limit === undefined) {
-        return; // No limit defined for this key
+        return;
       }
       if (limit === -1) {
-        return; // Unlimited
+        return;
       }
 
       const currentCount = await currentCountFn(request);
