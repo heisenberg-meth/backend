@@ -92,11 +92,6 @@ class AuthFastifyController {
         headers: request.headers,
       });
 
-      if (result.deviceVerificationRequired || result.twoFactorVerificationRequired) {
-        return reply.send(success(result));
-      }
-
-      // Set cookies with proper options
       cookieManager.setAuthCookies(reply, {
         refreshToken: result.refreshToken,
         accessToken: result.token,
@@ -674,41 +669,6 @@ class AuthFastifyController {
       return reply
         .code(status)
         .send(errorResponse(error?.message || 'Password change failed', code));
-    }
-  }
-
-  async verifyEmail(request, reply) {
-    try {
-      const { token } = request.body || {};
-      const result = await emailVerificationService.verifyEmail(token);
-      return reply.send(success(result));
-    } catch (error) {
-      request.log.error(error);
-      const code = error.code || AUTH_ERRORS.INVALID_VERIFICATION_TOKEN;
-      return reply
-        .code(400)
-        .send(errorResponse(error?.message || 'Email verification failed', code));
-    }
-  }
-
-  async resendVerification(request, reply) {
-    try {
-      const { email } = request.body || {};
-      if (!email) {
-        return reply
-          .code(400)
-          .send(errorResponse('Email is required', AUTH_ERRORS.VALIDATION_ERROR));
-      }
-      const origin = request.headers.origin || 'http://localhost:5173';
-      const result = await emailVerificationService.resendVerification(email, origin);
-      return reply.send(success(result));
-    } catch (error) {
-      request.log.error(error);
-      const code = error.code || AUTH_ERRORS.INTERNAL_ERROR;
-      const status = code === AUTH_ERRORS.EMAIL_ALREADY_VERIFIED ? 400 : 500;
-      return reply
-        .code(status)
-        .send(errorResponse(error?.message || 'Failed to resend verification', code));
     }
   }
 

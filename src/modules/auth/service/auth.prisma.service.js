@@ -13,7 +13,6 @@ import otpAuditService from '../../../shared/services/otp-audit.service.js';
 import MediaService from '../../../shared/services/media.service.js';
 import { CURRENT_AUTH_VERSION } from '../auth.constants.js';
 import tokenService from './token.service.js';
-import emailVerificationService from './email-verification.service.js';
 import loginHistoryService from './login-history.service.js';
 import securityEngineService from './security-engine.service.js';
 import secretManager from '../../../config/secrets.js';
@@ -74,7 +73,8 @@ class AuthPrismaService {
           password: hashedPassword,
           fullName,
           role: 'OWNER',
-          status: 'UNVERIFIED',
+          status: 'ACTIVE',
+          emailVerifiedAt: new Date(),
           tenantId: tenant.id,
           branchId: branch.id,
         },
@@ -128,9 +128,6 @@ class AuthPrismaService {
     });
 
     try {
-      emailVerificationService.sendVerificationEmail(user.id, user.email).catch((err) => {
-        logger.warn({ err: err?.message }, '[AUTH] Failed to trigger verification email');
-      });
       await eventBus.publish('USER_REGISTERED', {
         userId: user.id,
         email: user.email,
@@ -162,7 +159,6 @@ class AuthPrismaService {
     userAgent,
     ipAddress,
     deviceToken,
-    otp,
     headers = {},
   }) {
     const normalizedEmail = email.toLowerCase().trim();
@@ -186,13 +182,6 @@ class AuthPrismaService {
     if (user.status === 'BLOCKED') {
       logger.warn({ email: normalizedEmail }, 'Login failed: User is blocked');
       throw new Error('Your account has been blocked. Contact support.');
-    }
-
-    if (user.status === 'UNVERIFIED') {
-      logger.warn({ email: normalizedEmail }, 'Login failed: User email not verified');
-      const err = new Error('Please verify your email address before logging in.');
-      err.code = AUTH_ERRORS.AUTH_EMAIL_NOT_VERIFIED;
-      throw err;
     }
 
     if (user.status === 'SUSPENDED') {
@@ -275,87 +264,13 @@ class AuthPrismaService {
       );
 
       if (!matchingDevice) {
-        // If a new device is attempting to log in, require OTP verification
-        if (!otp) {
-          const deviceOtp = Math.floor(100000 + Math.random() * 900000).toString();
-          const hashedOtp = await bcrypt.hash(deviceOtp, 12);
-
-          await prisma.user.update({
-            where: { id: user.id },
-            data: {
-              resetOtp: hashedOtp,
-              resetOtpExpiry: new Date(Date.now() + 10 * 60 * 1000), // 10 minutes
-              resetOtpVerified: false,
-            },
-          });
-
-          await queueEmail(
-            user.email,
-            'New Device Login Verification',
-            `We detected a login attempt from a new device. Please use the following code to approve this device: ${deviceOtp}`,
-          );
-
-          otpAuditService.logOtpGenerated({
-            userId: user.id,
-            email: user.email,
-            otp: deviceOtp,
-            purpose: 'DEVICE_VERIFICATION',
-            channel: 'EMAIL',
-            expiresAt: new Date(Date.now() + 10 * 60 * 1000),
-          });
-
-          return {
-            deviceVerificationRequired: true,
-            message: 'Verification code sent to your email to approve this new device.',
-          };
-        } else {
-          // Verify OTP
-          if (!user.resetOtp || !user.resetOtpExpiry || new Date() > user.resetOtpExpiry) {
-            otpAuditService.logOtpExpired({
-              email: user.email,
-              userId: user.id,
-              purpose: 'DEVICE_VERIFICATION',
-            });
-            throw new Error('Verification code has expired or is invalid');
-          }
-
-          const isOtpMatch = await bcrypt.compare(otp, user.resetOtp);
-          if (!isOtpMatch) {
-            otpAuditService.logOtpFailed({
-              email: user.email,
-              enteredOtp: otp,
-              reason: 'INVALID_OTP',
-              userId: user.id,
-              purpose: 'DEVICE_VERIFICATION',
-            });
-            throw new Error('Invalid verification code');
-          }
-
-          otpAuditService.logOtpVerified({
-            email: user.email,
-            otp,
-            userId: user.id,
-            channel: 'EMAIL',
-          });
-
-          // Clear OTP fields
-          await prisma.user.update({
-            where: { id: user.id },
-            data: {
-              resetOtp: null,
-              resetOtpExpiry: null,
-              resetOtpVerified: false,
-            },
-          });
-
-          // Clean/release old devices and old browser locks for this user to enforce "One active device/browser"
-          await prisma.device.deleteMany({
-            where: { userId: user.id },
-          });
-          await prisma.browserLock.deleteMany({
-            where: { userId: user.id },
-          });
-        }
+        // Clean/release old devices and old browser locks for this user to enforce "One active device/browser"
+        await prisma.device.deleteMany({
+          where: { userId: user.id },
+        });
+        await prisma.browserLock.deleteMany({
+          where: { userId: user.id },
+        });
       }
     }
 

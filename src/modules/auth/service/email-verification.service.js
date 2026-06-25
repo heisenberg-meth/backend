@@ -4,104 +4,13 @@ import prisma from '../../../config/prisma.js';
 import authRepository from '../repository/auth.prisma.repository.js';
 import sessionService from './session.service.js';
 import { queueEmail } from '../../../shared/services/email.service.js';
-import {
-  VERIFY_EMAIL_TEMPLATE,
-  CHANGE_EMAIL_TEMPLATE,
-} from '../../notifications/templates/email.templates.js';
+import { CHANGE_EMAIL_TEMPLATE } from '../../notifications/templates/email.templates.js';
 import AUTH_ERRORS from '../../../config/auth.errors.js';
-import { EMAIL_VERIFICATION_EXPIRY_MS, EMAIL_CHANGE_EXPIRY_MS } from '../auth.constants.js';
+import { EMAIL_CHANGE_EXPIRY_MS } from '../auth.constants.js';
 import eventBus from '../../../shared/services/eventbus.service.js';
 import logger from '../../../shared/utils/logger.js';
 
 class EmailVerificationService {
-  /**
-   * Generates a secure verification token and sends verification email.
-   */
-  async sendVerificationEmail(userId, email, frontendUrl = 'http://localhost:5173') {
-    const rawToken = crypto.randomBytes(32).toString('hex');
-    const hashedToken = crypto.createHash('sha256').update(rawToken).digest('hex');
-    const expiresAt = new Date(Date.now() + EMAIL_VERIFICATION_EXPIRY_MS);
-
-    await prisma.user.update({
-      where: { id: userId },
-      data: {
-        emailVerificationToken: hashedToken,
-        emailVerificationExpiry: expiresAt,
-      },
-    });
-
-    const verifyUrl = `${frontendUrl}/verify-email?token=${rawToken}`;
-    await queueEmail(email, 'Verify Your Email Address', VERIFY_EMAIL_TEMPLATE(verifyUrl));
-
-    logger.info({ userId, email }, 'Verification email queued');
-    return { message: 'Verification email sent successfully.' };
-  }
-
-  /**
-   * Verifies an email token.
-   */
-  async verifyEmail(rawToken) {
-    if (!rawToken) {
-      const err = new Error('Verification token is required');
-      err.code = AUTH_ERRORS.VALIDATION_ERROR;
-      throw err;
-    }
-
-    const hashedToken = crypto.createHash('sha256').update(rawToken).digest('hex');
-    const user = await prisma.user.findFirst({
-      where: { emailVerificationToken: hashedToken },
-    });
-
-    if (!user) {
-      const err = new Error('Invalid verification token');
-      err.code = AUTH_ERRORS.INVALID_VERIFICATION_TOKEN;
-      throw err;
-    }
-
-    if (!user.emailVerificationExpiry || new Date() > user.emailVerificationExpiry) {
-      const err = new Error('Verification token has expired');
-      err.code = AUTH_ERRORS.VERIFICATION_TOKEN_EXPIRED;
-      throw err;
-    }
-
-    await prisma.user.update({
-      where: { id: user.id },
-      data: {
-        emailVerifiedAt: new Date(),
-        emailVerificationToken: null,
-        emailVerificationExpiry: null,
-        status: user.status === 'UNVERIFIED' ? 'ACTIVE' : user.status,
-      },
-    });
-
-    eventBus.publish('EmailVerified', {
-      userId: user.id,
-      email: user.email,
-      timestamp: new Date(),
-    });
-    logger.info({ userId: user.id }, 'Email verified successfully');
-
-    return { message: 'Email verified successfully.' };
-  }
-
-  /**
-   * Resends verification email.
-   */
-  async resendVerification(email, frontendUrl = 'http://localhost:5173') {
-    const user = await authRepository.findUserByEmail(email);
-    if (!user) {
-      return { message: 'If your account is unverified, a confirmation email has been sent.' };
-    }
-
-    if (user.emailVerifiedAt) {
-      const err = new Error('Email is already verified');
-      err.code = AUTH_ERRORS.EMAIL_ALREADY_VERIFIED;
-      throw err;
-    }
-
-    return this.sendVerificationEmail(user.id, user.email, frontendUrl);
-  }
-
   /**
    * Initiates an email change challenge.
    */

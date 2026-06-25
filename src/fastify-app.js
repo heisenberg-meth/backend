@@ -5,7 +5,7 @@ import helmet from '@fastify/helmet';
 import swagger from '@fastify/swagger';
 import swaggerUi from '@fastify/swagger-ui';
 import cookie from '@fastify/cookie';
-import csrf from '@fastify/csrf-protection';
+
 import metrics from 'fastify-metrics';
 import redis from '@fastify/redis';
 import fastifyJwt from '@fastify/jwt';
@@ -21,14 +21,10 @@ import env from './config/env.js';
 import { COOKIE_PARSE_OPTIONS } from './config/cookie.config.js';
 import { CORS_CONFIG } from './config/cors.config.js';
 import { JWT_CONFIG } from './config/jwt.config.js';
-import {
-  HELMET_CONFIG,
-  CSRF_CONFIG,
-  CSRF_EXEMPT_PATHS,
-  getRateLimitConfig,
-} from './config/security.config.js';
+import { HELMET_CONFIG, getRateLimitConfig } from './config/security.config.js';
 import { initSentry } from './config/sentry.js';
 import uptimeMonitor from './shared/services/uptime-monitor.js';
+import csrfMiddleware from './modules/auth/middleware/csrf.middleware.js';
 import authRoutes from './modules/auth/routes/auth.fastify.routes.js';
 import usersRoutes from './modules/users/users.fastify.routes.js';
 import uploadsRoutes from './modules/uploads/uploads.fastify.routes.js';
@@ -189,27 +185,19 @@ const setupFastify = async () => {
 
   await fastify.register(cors, CORS_CONFIG);
 
-  await fastify.register(csrf, CSRF_CONFIG);
-
   fastify.get('/api/csrf-token', async (request, reply) => {
-    const token = await reply.generateCsrf();
+    let token = request.cookies?.csrf_token;
+    if (!token) {
+      token = csrfMiddleware.generateToken();
+      csrfMiddleware.setCsrfCookie(reply, token);
+    }
     return {
       success: true,
       csrfToken: token,
     };
   });
 
-  fastify.addHook('preHandler', async (request, reply) => {
-    const safeMethods = ['GET', 'HEAD', 'OPTIONS'];
-    if (safeMethods.includes(request.method)) return;
-
-    const isExempt = CSRF_EXEMPT_PATHS.some((p) => request.url.startsWith(p));
-    if (isExempt) return;
-
-    if (process.env.NODE_ENV === 'production') {
-      await fastify.csrfProtection(request, reply);
-    }
-  });
+  fastify.addHook('preHandler', csrfMiddleware.verifyCsrf.bind(csrfMiddleware));
 
   await fastify.register(redis, {
     url: env.redis.url,

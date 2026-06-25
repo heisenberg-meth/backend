@@ -311,6 +311,71 @@ class BulkImportService {
       mergedCount: 0,
     };
 
+    const uniqueCategories = new Set();
+    const uniqueManufacturers = new Set();
+    for (const row of validatedRows) {
+      if (row.category) uniqueCategories.add(row.category.trim());
+      if (row.manufacturer) uniqueManufacturers.add(row.manufacturer.trim());
+    }
+
+    const categoryMap = new Map();
+    if (uniqueCategories.size > 0) {
+      const existingCats = await prisma.medicineCategory.findMany({
+        where: {
+          tenantId,
+          name: { in: Array.from(uniqueCategories), mode: 'insensitive' },
+          deletedAt: null,
+        },
+      });
+      for (const cat of existingCats) {
+        categoryMap.set(cat.name.toLowerCase(), cat.id);
+      }
+      const missingCats = Array.from(uniqueCategories).filter(
+        (c) => !categoryMap.has(c.toLowerCase()),
+      );
+      if (missingCats.length > 0) {
+        await prisma.medicineCategory.createMany({
+          data: missingCats.map((c) => ({ tenantId, name: c })),
+          skipDuplicates: true,
+        });
+        const newlyCreatedCats = await prisma.medicineCategory.findMany({
+          where: { tenantId, name: { in: missingCats, mode: 'insensitive' }, deletedAt: null },
+        });
+        for (const cat of newlyCreatedCats) {
+          categoryMap.set(cat.name.toLowerCase(), cat.id);
+        }
+      }
+    }
+
+    const manufacturerMap = new Map();
+    if (uniqueManufacturers.size > 0) {
+      const existingMfrs = await prisma.manufacturer.findMany({
+        where: {
+          tenantId,
+          name: { in: Array.from(uniqueManufacturers), mode: 'insensitive' },
+          deletedAt: null,
+        },
+      });
+      for (const mfr of existingMfrs) {
+        manufacturerMap.set(mfr.name.toLowerCase(), mfr.id);
+      }
+      const missingMfrs = Array.from(uniqueManufacturers).filter(
+        (m) => !manufacturerMap.has(m.toLowerCase()),
+      );
+      if (missingMfrs.length > 0) {
+        await prisma.manufacturer.createMany({
+          data: missingMfrs.map((m) => ({ tenantId, name: m })),
+          skipDuplicates: true,
+        });
+        const newlyCreatedMfrs = await prisma.manufacturer.findMany({
+          where: { tenantId, name: { in: missingMfrs, mode: 'insensitive' }, deletedAt: null },
+        });
+        for (const mfr of newlyCreatedMfrs) {
+          manufacturerMap.set(mfr.name.toLowerCase(), mfr.id);
+        }
+      }
+    }
+
     const CHUNK_SIZE = 500;
 
     for (let i = 0; i < validatedRows.length; i += CHUNK_SIZE) {
@@ -360,21 +425,15 @@ class BulkImportService {
                     medicineMapByBarcode.set(row.barcode.trim(), currentMatch);
                   }
                   if (row.category) {
-                    const resolvedCatId = await this._resolveCategory(
-                      tx,
-                      tenantId,
-                      row.category.trim(),
-                    );
+                    const resolvedCatId = categoryMap.get(row.category.trim().toLowerCase());
                     if (resolvedCatId) {
                       updatePayload.categoryId = resolvedCatId;
                       currentMatch.categoryId = resolvedCatId;
                     }
                   }
                   if (row.manufacturer) {
-                    const resolvedMfrId = await this._resolveManufacturer(
-                      tx,
-                      tenantId,
-                      row.manufacturer.trim(),
+                    const resolvedMfrId = manufacturerMap.get(
+                      row.manufacturer.trim().toLowerCase(),
                     );
                     if (resolvedMfrId) {
                       updatePayload.manufacturerId = resolvedMfrId;
@@ -396,21 +455,15 @@ class BulkImportService {
                     medicineMapByBarcode.set(row.barcode.trim(), currentMatch);
                   }
                   if (row.category && !currentMatch.categoryId) {
-                    const resolvedCatId = await this._resolveCategory(
-                      tx,
-                      tenantId,
-                      row.category.trim(),
-                    );
+                    const resolvedCatId = categoryMap.get(row.category.trim().toLowerCase());
                     if (resolvedCatId) {
                       updatePayload.categoryId = resolvedCatId;
                       currentMatch.categoryId = resolvedCatId;
                     }
                   }
                   if (row.manufacturer && !currentMatch.manufacturerId) {
-                    const resolvedMfrId = await this._resolveManufacturer(
-                      tx,
-                      tenantId,
-                      row.manufacturer.trim(),
+                    const resolvedMfrId = manufacturerMap.get(
+                      row.manufacturer.trim().toLowerCase(),
                     );
                     if (resolvedMfrId) {
                       updatePayload.manufacturerId = resolvedMfrId;
@@ -427,32 +480,12 @@ class BulkImportService {
               }
             } else {
               let categoryId = row.category
-                ? await this._resolveCategory(tx, tenantId, row.category.trim())
+                ? categoryMap.get(row.category.trim().toLowerCase()) || null
                 : null;
 
               let manufacturerId = row.manufacturer
-                ? await this._resolveManufacturer(tx, tenantId, row.manufacturer.trim())
+                ? manufacturerMap.get(row.manufacturer.trim().toLowerCase()) || null
                 : null;
-
-              const existing = await tx.medicine.findFirst({
-                where: {
-                  tenantId,
-                  OR: [{ name: row.name }, { barcode: row.barcode || undefined }],
-                },
-              });
-
-              if (existing) {
-                medicineId = existing.id;
-                logger.info(
-                  {
-                    medicineId,
-                    barcode: row.barcode,
-                    name: row.name,
-                  },
-                  'DUPLICATE Medicine detected during import',
-                );
-                continue;
-              }
 
               const newMed = await tx.medicine.create({
                 data: {
@@ -618,41 +651,12 @@ class BulkImportService {
     };
   }
 
-  async _resolveCategory(tx, tenantId, categoryName) {
-    if (!categoryName) return null;
-    const existing = await tx.medicineCategory.findFirst({
-      where: {
-        tenantId,
-        name: { equals: categoryName, mode: 'insensitive' },
-        deletedAt: null,
-      },
-    });
-    if (existing) return existing.id;
-    const created = await tx.medicineCategory.create({
-      data: { tenantId, name: categoryName },
-    });
-    return created.id;
-  }
-
-  async _resolveManufacturer(tx, tenantId, manufacturerName) {
-    if (!manufacturerName) return null;
-    const existing = await tx.manufacturer.findFirst({
-      where: {
-        tenantId,
-        name: { equals: manufacturerName, mode: 'insensitive' },
-        deletedAt: null,
-      },
-    });
-    if (existing) return existing.id;
-    const created = await tx.manufacturer.create({
-      data: { tenantId, name: manufacturerName },
-    });
-    return created.id;
-  }
-
   _parseQuantity(val) {
     if (val === undefined || val === null) return NaN;
-    const clean = String(val).trim().replace(/,/g, '').replace(/[^0-9.-]/g, '');
+    const clean = String(val)
+      .trim()
+      .replace(/,/g, '')
+      .replace(/[^0-9.-]/g, '');
     if (clean === '') return NaN;
     const num = parseFloat(clean);
     return isNaN(num) ? NaN : Math.round(num);
@@ -660,7 +664,10 @@ class BulkImportService {
 
   _parsePrice(val) {
     if (val === undefined || val === null) return NaN;
-    const clean = String(val).trim().replace(/,/g, '').replace(/[^0-9.-]/g, '');
+    const clean = String(val)
+      .trim()
+      .replace(/,/g, '')
+      .replace(/[^0-9.-]/g, '');
     if (clean === '') return NaN;
     const num = parseFloat(clean);
     return isNaN(num) ? NaN : num;
@@ -668,7 +675,11 @@ class BulkImportService {
 
   _parseGst(val) {
     if (val === undefined || val === null) return 0;
-    const clean = String(val).trim().replace(/%/g, '').replace(/,/g, '').replace(/[^0-9.-]/g, '');
+    const clean = String(val)
+      .trim()
+      .replace(/%/g, '')
+      .replace(/,/g, '')
+      .replace(/[^0-9.-]/g, '');
     if (clean === '') return 0;
     const num = parseFloat(clean);
     return isNaN(num) ? 0 : num;

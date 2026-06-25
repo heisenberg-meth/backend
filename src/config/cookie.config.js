@@ -13,15 +13,29 @@ const resolveCookieDomain = () => {
 
 const cookieDomain = resolveCookieDomain();
 
+const isNgrok = env.frontendUrl?.includes('ngrok') || false;
+const isLocalhost =
+  env.frontendUrl?.includes('localhost') || env.frontendUrl?.includes('127.0.0.1') || false;
+
 // ─── Base Options ───────────────────────────────────────────────────────────
 const getBaseCookieOptions = () => {
-  if (env.nodeEnv === 'development') {
+  if (isLocalhost && !isNgrok) {
     return {
       path: '/',
       httpOnly: true,
       sameSite: 'lax',
       secure: false,
-      // Domain is explicitly undefined to avoid cross-subdomain local leakage
+      // Domain is explicitly undefined for localhost
+    };
+  }
+
+  if (isNgrok) {
+    return {
+      path: '/',
+      httpOnly: true,
+      sameSite: 'none',
+      secure: true,
+      // Domain is explicitly undefined for ngrok
     };
   }
 
@@ -67,6 +81,12 @@ export const ADMIN_ACCESS_COOKIE_OPTIONS = {
 export const CLEAR_COOKIE_OPTIONS = { ...baseCookieOptions };
 export const COOKIE_PARSE_OPTIONS = { ...baseCookieOptions };
 
+// ─── CSRF Cookie Options ────────────────────────────────────────────────────
+export const CSRF_COOKIE_OPTIONS = {
+  ...baseCookieOptions,
+  httpOnly: false, // SPA needs to read this cookie
+};
+
 // ─── Cookie Names ───────────────────────────────────────────────────────────
 export const COOKIE_NAMES = {
   REFRESH_TOKEN: 'refresh_token',
@@ -84,6 +104,7 @@ export default {
   ADMIN_ACCESS_COOKIE_OPTIONS,
   CLEAR_COOKIE_OPTIONS,
   COOKIE_PARSE_OPTIONS,
+  CSRF_COOKIE_OPTIONS,
   COOKIE_NAMES,
   resolvedCookieDomain,
 };

@@ -1,10 +1,6 @@
 import authController from '../controller/auth.fastify.controller.js';
 import { authenticate } from '../../../middleware/auth.fastify.js';
-import csrfMiddleware from '../middleware/csrf.middleware.js';
-
 async function authRoutes(fastify) {
-  fastify.addHook('preHandler', csrfMiddleware.verifyCsrf.bind(csrfMiddleware));
-
   fastify.post(
     '/forgot-password',
     {
@@ -225,25 +221,8 @@ async function authRoutes(fastify) {
   fastify.post('/logout-all', { preHandler: [authenticate] }, authController.logoutAll);
   fastify.get('/session', { preHandler: [authenticate] }, authController.getCurrentSession);
   fastify.post('/change-password', { preHandler: [authenticate] }, authController.changePassword);
-
-  // ── Email Verification Endpoints ───────────────────────────────────────
-  fastify.post('/verify-email', authController.verifyEmail);
-  fastify.post(
-    '/resend-verification',
-    {
-      config: {
-        rateLimit: {
-          max: 5,
-          timeWindow: '15 minutes',
-        },
-      },
-    },
-    authController.resendVerification,
-  );
   fastify.post('/change-email', { preHandler: [authenticate] }, authController.requestEmailChange);
   fastify.post('/confirm-email-change', authController.verifyEmailChange);
-
-  // ── Account Recovery Suite ─────────────────────────────────────────────
   fastify.post('/recovery/request', authController.requestRecovery);
   fastify.get('/admin/recovery', { preHandler: [authenticate] }, authController.getPendingRecovery);
   fastify.post(
