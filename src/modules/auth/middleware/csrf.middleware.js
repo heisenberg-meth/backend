@@ -2,12 +2,12 @@ import crypto from 'crypto';
 import AUTH_ERRORS from '../../../config/auth.errors.js';
 import logger from '../../../shared/utils/logger.js';
 import { CSRF_COOKIE_OPTIONS } from '../../../config/cookie.config.js';
+import { CSRF_EXEMPT_PATHS } from '../../../config/security.config.js';
 
+// Merge the centralized exempt list with middleware-specific routes
+// to ensure a single source of truth for CSRF exemptions.
 const EXEMPT_ROUTES = new Set([
-  '/api/auth/login',
-  '/api/auth/register',
-  '/api/auth/forgot-password',
-  '/api/auth/reset-password',
+  ...CSRF_EXEMPT_PATHS,
   '/api/auth/recovery/request',
   '/api/webhooks/stripe',
 ]);

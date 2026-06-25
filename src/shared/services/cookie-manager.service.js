@@ -6,6 +6,7 @@ import {
   ADMIN_REFRESH_COOKIE_OPTIONS,
   ADMIN_ACCESS_COOKIE_OPTIONS,
   CLEAR_COOKIE_OPTIONS,
+  CSRF_COOKIE_OPTIONS,
   COOKIE_NAMES,
   resolvedCookieDomain,
 } from '../../config/cookie.config.js';
@@ -127,6 +128,7 @@ class CookieManager {
   clearAuthCookies(reply) {
     reply.clearCookie(COOKIE_NAMES.REFRESH_TOKEN, CLEAR_COOKIE_OPTIONS);
     reply.clearCookie(COOKIE_NAMES.ACCESS_TOKEN, CLEAR_COOKIE_OPTIONS);
+    reply.clearCookie(COOKIE_NAMES.CSRF_TOKEN, CLEAR_COOKIE_OPTIONS);
     this._clearLegacyCookies(reply, [COOKIE_NAMES.ACCESS_TOKEN, COOKIE_NAMES.REFRESH_TOKEN]);
 
     logger.info(
@@ -136,6 +138,14 @@ class CookieManager {
       },
       'Authentication cookies cleared from browser',
     );
+  }
+
+  setCsrfCookie(reply, token) {
+    reply.setCookie(COOKIE_NAMES.CSRF_TOKEN, token, CSRF_COOKIE_OPTIONS);
+  }
+
+  clearCsrfCookie(reply) {
+    reply.clearCookie(COOKIE_NAMES.CSRF_TOKEN, CLEAR_COOKIE_OPTIONS);
   }
 
   setAdminAuthCookies(reply, { accessToken, refreshToken }) {

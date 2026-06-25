@@ -25,6 +25,7 @@ import { HELMET_CONFIG, getRateLimitConfig } from './config/security.config.js';
 import { initSentry } from './config/sentry.js';
 import uptimeMonitor from './shared/services/uptime-monitor.js';
 import csrfMiddleware from './modules/auth/middleware/csrf.middleware.js';
+import cookieManager from './shared/services/cookie-manager.service.js';
 import authRoutes from './modules/auth/routes/auth.fastify.routes.js';
 import usersRoutes from './modules/users/users.fastify.routes.js';
 import uploadsRoutes from './modules/uploads/uploads.fastify.routes.js';
@@ -189,7 +190,7 @@ const setupFastify = async () => {
     let token = request.cookies?.csrf_token;
     if (!token) {
       token = csrfMiddleware.generateToken();
-      csrfMiddleware.setCsrfCookie(reply, token);
+      cookieManager.setCsrfCookie(reply, token);
     }
     return {
       success: true,

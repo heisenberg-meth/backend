@@ -96,7 +96,7 @@ class AuthFastifyController {
         refreshToken: result.refreshToken,
         accessToken: result.token,
       });
-      csrfMiddleware.setCsrfCookie(reply, csrfMiddleware.generateToken());
+      cookieManager.setCsrfCookie(reply, csrfMiddleware.generateToken());
 
       const responsePayload = { ...result };
       delete responsePayload.refreshToken;

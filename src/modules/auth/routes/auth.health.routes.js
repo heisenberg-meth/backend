@@ -96,6 +96,26 @@ export async function authHealthRoutes(fastify) {
       data: authMetricsService.getMetrics(),
     };
   });
+
+  // ── Dev-only CSRF diagnostic endpoint ──────────────────────────────────
+  // Hit POST /api/auth/debug/csrf with the normal interceptors to see whether
+  // your CSRF cookie and header are synchronized. Never expose in production.
+  if (env.nodeEnv !== 'production') {
+    const { authenticate } = await import('../../../middleware/auth.fastify.js');
+
+    fastify.post('/debug/csrf', { preHandler: [authenticate] }, async (request) => {
+      const cookieToken = request.cookies?.csrf_token;
+      const headerToken = request.headers['x-csrf-token'] || request.headers['x-xsrf-token'];
+      return {
+        success: true,
+        hasCookie: !!cookieToken,
+        hasHeader: !!headerToken,
+        match: !!(cookieToken && headerToken && cookieToken === headerToken),
+        cookieNames: Object.keys(request.cookies || {}),
+        environment: env.nodeEnv,
+      };
+    });
+  }
 }
 
 export default authHealthRoutes;

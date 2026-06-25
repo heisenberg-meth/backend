@@ -93,6 +93,7 @@ export const COOKIE_NAMES = {
   ACCESS_TOKEN: 'accessToken',
   ADMIN_REFRESH_TOKEN: 'adminRefreshToken',
   ADMIN_ACCESS_TOKEN: 'adminAccessToken',
+  CSRF_TOKEN: 'csrf_token',
 };
 
 export const resolvedCookieDomain = cookieDomain;
