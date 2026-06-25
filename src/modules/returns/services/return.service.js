@@ -13,8 +13,8 @@ class ReturnService {
   async createReturn(tenantId, userId, data) {
     const { invoiceId, saleId, reason, returnType, items, refundMethod, notes, branchId } = data;
 
-    const invoice = await prisma.invoice.findUnique({
-      where: { id: invoiceId },
+    const invoice = await prisma.invoice.findFirst({
+      where: { id: invoiceId, tenantId },
       include: {
         items: {
           include: {
@@ -28,7 +28,9 @@ class ReturnService {
     });
 
     if (!invoice) {
-      throw new Error('Invoice not found');
+      const err = new Error('Invoice not found');
+      err.code = 'NOT_FOUND';
+      throw err;
     }
 
     const sale = saleId
@@ -72,8 +74,21 @@ class ReturnService {
         }
       }
 
+      // Fallback: match by medicineId and batchId
+      if (!invoiceItem && item.medicineId) {
+        invoiceItem = invoice.items.find(
+          (ii) =>
+            ii.medicineId === item.medicineId && (!item.batchId || ii.batchId === item.batchId),
+        );
+      }
+      if (!invoiceItem && item.medicineId) {
+        invoiceItem = invoice.items.find((ii) => ii.medicineId === item.medicineId);
+      }
+
       if (!invoiceItem) {
-        throw new Error(`Invoice item not found: ${item.invoiceItemId}`);
+        const err = new Error(`Invoice item not found: ${item.invoiceItemId || item.medicineId}`);
+        err.code = 'NOT_FOUND';
+        throw err;
       }
 
       const itemAmount = invoiceItem.unitPrice * item.quantity;

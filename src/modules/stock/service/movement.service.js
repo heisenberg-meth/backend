@@ -219,12 +219,28 @@ class MovementService {
 
       const resolvedBranchId = branchId || lockedBatches[0].branchId || null;
 
+      const updateData = {
+        availableQuantity: { increment: quantity },
+      };
+
+      if (
+        movementType !== 'RETURN' &&
+        movementType !== 'ADJUSTMENT' &&
+        referenceType !== 'CANCEL_INVOICE'
+      ) {
+        updateData.quantity = { increment: quantity };
+      } else if (
+        movementType === 'ADJUSTMENT' ||
+        movementType === 'RETURN' ||
+        referenceType === 'CANCEL_INVOICE'
+      ) {
+        // The PRD specifically requests: Returned medicines must increase availableQuantity. Never quantity.
+        // We do not increment `quantity` on the batch if it's a return.
+      }
+
       const updatedBatch = await client.inventoryBatch.update({
         where: { id: batchId },
-        data: {
-          quantity: { increment: quantity },
-          availableQuantity: { increment: quantity },
-        },
+        data: updateData,
       });
 
       if (updatedBatch.availableQuantity < 0) {

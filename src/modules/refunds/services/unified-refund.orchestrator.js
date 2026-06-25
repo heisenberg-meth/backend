@@ -2,6 +2,8 @@ import prisma from '../../../config/prisma.js';
 import movementService from '../../stock/service/movement.service.js';
 import cacheInvalidator from '../../inventory/service/cache-invalidator.service.js';
 import logger from '../../../shared/utils/logger.js';
+import refundCalculationService from './refund-calculation.service.js';
+import pricingService from '../../billing/services/pricing.service.js';
 
 class UnifiedRefundOrchestrator {
   /**
@@ -53,7 +55,7 @@ class UnifiedRefundOrchestrator {
           where: { invoiceId },
         });
 
-        let calculatedRefund = 0;
+        const refundItemsData = [];
 
         for (const item of items) {
           const invItem = invoiceItems.find(
@@ -66,9 +68,11 @@ class UnifiedRefundOrchestrator {
             );
           }
 
-          const ratio = item.quantity / invItem.quantity;
-          const itemRefund = Number(invItem.totalPrice) * ratio;
-          calculatedRefund += itemRefund;
+          const calculatedItemRefund = refundCalculationService.calculateRefundAmount(
+            invItem,
+            item.quantity,
+          );
+          refundItemsData.push(calculatedItemRefund);
 
           // Restore inventory (fraud protection ensures idempotency)
           if (invItem.batchId) {
@@ -91,15 +95,23 @@ class UnifiedRefundOrchestrator {
             );
           }
 
+          await tx.invoiceItem.update({
+            where: { id: invItem.id },
+            data: { quantity: { decrement: item.quantity } },
+          });
+
           resolvedItems.push({
             invoiceItemId: invItem.id,
             batchId: invItem.batchId,
             quantity: item.quantity,
-            amount: itemRefund,
+            amount: calculatedItemRefund.totalRefund,
           });
         }
 
-        if (!actualRefundAmount) actualRefundAmount = calculatedRefund;
+        if (!actualRefundAmount) {
+          const totalRefundData = refundCalculationService.calculateTotalRefund(refundItemsData);
+          actualRefundAmount = totalRefundData.totalRefund;
+        }
       }
 
       actualRefundAmount = Number(actualRefundAmount || 0);
@@ -120,19 +132,6 @@ class UnifiedRefundOrchestrator {
 
       // 4. Create Unified Refund Ledger Entry
       const transactionId = `REF-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
-
-      const refundPayment = await tx.refundPayment.create({
-        data: {
-          tenantId,
-          invoiceId,
-          returnId: returnId || undefined,
-          paymentMode: refundMethod,
-          amount: actualRefundAmount,
-          transactionReference: transactionId,
-          refundStatus: 'COMPLETED',
-          createdBy: userId,
-        },
-      });
 
       // If called from Billing, we might still create a SalesReturn for legacy compatibility, or just use Return.
       let createdSalesReturn = null;
@@ -166,17 +165,47 @@ class UnifiedRefundOrchestrator {
         });
       }
 
+      const finalReturnId = returnId || (createdSalesReturn ? createdSalesReturn.id : undefined);
+
+      const refundPayment = await tx.refundPayment.create({
+        data: {
+          tenantId,
+          invoiceId,
+          returnId: finalReturnId,
+          paymentMode: refundMethod,
+          amount: actualRefundAmount,
+          transactionReference: transactionId,
+          refundStatus: 'COMPLETED',
+          createdBy: userId,
+        },
+      });
+
       // 5. Update Invoice aggregates strictly via Unified rules
       const isFullRefund = proposedTotal >= invoiceTotal;
       const totalPaid = Number(targetInvoice.paidAmount);
       const newPaid = Math.max(0, totalPaid - actualRefundAmount);
 
+      const updatedInvoiceItems = await tx.invoiceItem.findMany({
+        where: { invoiceId },
+      });
+
+      const { totals } = pricingService.calculateInvoiceTotals(
+        updatedInvoiceItems,
+        Number(targetInvoice.discountAmount) || 0,
+      );
+
+      const newBalance = Math.max(0, totals.totalAmount - newPaid);
+
       await tx.invoice.update({
         where: { id: invoiceId },
         data: {
-          status: isFullRefund ? 'REFUNDED' : 'PARTIALLY_REFUNDED',
+          subtotal: totals.subtotal,
+          gstAmount: totals.gstAmount,
+          totalAmount: totals.totalAmount,
           paidAmount: newPaid,
-          paymentStatus: newPaid <= 0 ? 'REFUNDED' : 'PARTIALLY_PAID',
+          balanceAmount: newBalance,
+          status: isFullRefund ? 'REFUNDED' : 'PARTIALLY_REFUNDED',
+          paymentStatus: newPaid <= 0 ? 'REFUNDED' : newBalance > 0 ? 'PARTIALLY_PAID' : 'PAID',
         },
       });
 
@@ -198,7 +227,7 @@ class UnifiedRefundOrchestrator {
         invoiceId,
         tenantId,
         actualRefundAmount,
-        medicineIds: resolvedItems.map(i => i.medicineId).filter(Boolean),
+        medicineIds: resolvedItems.map((i) => i.medicineId).filter(Boolean),
       };
     });
 
