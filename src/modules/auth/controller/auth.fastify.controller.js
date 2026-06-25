@@ -30,12 +30,15 @@ import env from '../../../config/env.js';
 // Dynamic cookie domain based on environment
 const getCookieDomain = () => {
   if (env.cookieDomain) {
-    return env.cookieDomain;
+    let domain = env.cookieDomain;
+    domain = domain.replace(/^https?:\/\//, '');
+    domain = domain.replace(/\/$/, '');
+    return domain;
   }
   if (env.nodeEnv === 'development') {
     return 'localhost';
   }
-  return '.viyaninfo.com';
+  return undefined;
 };
 
 const COOKIE_OPTIONS = {
@@ -44,7 +47,7 @@ const COOKIE_OPTIONS = {
   sameSite: 'none',
   secure: true,
   maxAge: 30 * 24 * 60 * 60,
-  domain: getCookieDomain(),
+  ...(getCookieDomain() ? { domain: getCookieDomain() } : {}),
 };
 
 const ACCESS_COOKIE_OPTIONS = {
@@ -53,7 +56,7 @@ const ACCESS_COOKIE_OPTIONS = {
   sameSite: 'none',
   secure: true,
   maxAge: 15 * 60,
-  domain: getCookieDomain(),
+  ...(getCookieDomain() ? { domain: getCookieDomain() } : {}),
 };
 
 class AuthFastifyController {
@@ -266,13 +269,13 @@ class AuthFastifyController {
       if (isInvalidToken) {
         reply.clearCookie('refresh_token', {
           path: '/',
-          domain: getCookieDomain(),
+          ...(getCookieDomain() ? { domain: getCookieDomain() } : {}),
           sameSite: 'none',
           secure: true,
         });
         reply.clearCookie('accessToken', {
           path: '/',
-          domain: getCookieDomain(),
+          ...(getCookieDomain() ? { domain: getCookieDomain() } : {}),
           sameSite: 'none',
           secure: true,
         });
@@ -294,13 +297,13 @@ class AuthFastifyController {
 
       reply.clearCookie('refresh_token', {
         path: '/',
-        domain: getCookieDomain(),
+        ...(getCookieDomain() ? { domain: getCookieDomain() } : {}),
         sameSite: 'none',
         secure: true,
       });
       reply.clearCookie('accessToken', {
         path: '/',
-        domain: getCookieDomain(),
+        ...(getCookieDomain() ? { domain: getCookieDomain() } : {}),
         sameSite: 'none',
         secure: true,
       });
@@ -326,13 +329,13 @@ class AuthFastifyController {
 
       reply.clearCookie('refresh_token', {
         path: '/',
-        domain: getCookieDomain(),
+        ...(getCookieDomain() ? { domain: getCookieDomain() } : {}),
         sameSite: 'none',
         secure: true,
       });
       reply.clearCookie('accessToken', {
         path: '/',
-        domain: getCookieDomain(),
+        ...(getCookieDomain() ? { domain: getCookieDomain() } : {}),
         sameSite: 'none',
         secure: true,
       });

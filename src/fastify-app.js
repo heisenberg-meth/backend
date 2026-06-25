@@ -213,18 +213,28 @@ const setupFastify = async () => {
     },
   });
 
-  const defaultCookieDomain =
-    env.cookieDomain || (env.nodeEnv === 'development' ? 'localhost' : '.viyaninfo.com');
+  let defaultCookieDomain;
+  if (env.cookieDomain) {
+    defaultCookieDomain = env.cookieDomain;
+    defaultCookieDomain = defaultCookieDomain.replace(/^https?:\/\//, '');
+    defaultCookieDomain = defaultCookieDomain.replace(/\/$/, '');
+  } else if (env.nodeEnv === 'development') {
+    defaultCookieDomain = 'localhost';
+  }
+
+  const cookieParseOptions = {
+    httpOnly: true,
+    sameSite: 'none',
+    secure: true,
+    path: '/',
+  };
+  if (defaultCookieDomain) {
+    cookieParseOptions.domain = defaultCookieDomain;
+  }
 
   await fastify.register(cookie, {
     secret: env.cookieSecret,
-    parseOptions: {
-      httpOnly: true,
-      sameSite: 'none',
-      secure: true,
-      path: '/',
-      domain: defaultCookieDomain,
-    },
+    parseOptions: cookieParseOptions,
   });
 
   await fastify.register(multipart, {
