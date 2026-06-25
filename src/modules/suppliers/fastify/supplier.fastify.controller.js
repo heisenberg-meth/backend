@@ -1,5 +1,6 @@
 import supplierService from '../services/supplier.service.js';
 import { toSupplierListDto, toSupplierDetailDto } from '../dto/supplier-response.dto.js';
+import { listSupplierQuerySchema } from '../validators/supplier.validator.js';
 
 class SupplierFastifyController {
   async createSupplier(request, reply) {
@@ -12,7 +13,8 @@ class SupplierFastifyController {
   }
 
   async getSuppliers(request, reply) {
-    const result = await supplierService.getSuppliers(request.tenantId, request.query);
+    const parsedQuery = listSupplierQuerySchema.parse(request.query);
+    const result = await supplierService.getSuppliers(request.tenantId, parsedQuery);
     return reply.send({
       success: true,
       data: result.suppliers.map(toSupplierListDto),

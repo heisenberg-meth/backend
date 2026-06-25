@@ -131,7 +131,8 @@ class PurchaseFastifyController {
         { err: error, tenantId: request.tenantId },
         'Get supplier credit balance failed',
       );
-      return reply.code(500).send({ success: false, message: error.message });
+      const status = error.message === 'Supplier not found' ? 404 : 500;
+      return reply.code(status).send({ success: false, message: error.message });
     }
   }
 }

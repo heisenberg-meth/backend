@@ -76,7 +76,7 @@ class SupplierCreditNoteService {
 
     const supplier = await prisma.supplier.findUnique({
       where: { id: supplierId },
-      select: { id: true, name: true, outstandingBalance: true },
+      select: { id: true, name: true, outstandingBalance: true, tenantId: true },
     });
 
     if (!supplier || supplier.tenantId !== tenantId) {

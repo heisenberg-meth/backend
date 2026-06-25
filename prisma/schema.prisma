@@ -2255,7 +2255,7 @@ model CreditNote {
 model RefundPayment {
   id                   String       @id @default(uuid())
   tenantId             String
-  returnId             String
+  returnId             String?
   invoiceId            String
   paymentMode          String
   amount               Decimal      @db.Decimal(12, 2)
@@ -2265,9 +2265,8 @@ model RefundPayment {
   createdAt            DateTime     @default(now())
   user                 User?        @relation(fields: [createdBy], references: [id])
   invoice              Invoice      @relation(fields: [invoiceId], references: [id])
-  return               Return       @relation(fields: [returnId], references: [id])
+  return               Return?      @relation(fields: [returnId], references: [id])
   tenant               Tenant       @relation(fields: [tenantId], references: [id])
-
   @@index([returnId])
   @@index([invoiceId])
   @@index([tenantId, createdAt])
