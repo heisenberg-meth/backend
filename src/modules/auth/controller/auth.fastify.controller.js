@@ -4,7 +4,7 @@ import prisma from '../../../config/prisma.js';
 import authService from '../service/auth.prisma.service.js';
 import authRepository from '../repository/auth.prisma.repository.js';
 import emailVerificationService from '../service/email-verification.service.js';
-import mfaService from '../service/mfa.service.js';
+
 import accountRecoveryService from '../service/account-recovery.service.js';
 import deviceManagementService from '../service/device-management.service.js';
 import loginHistoryService from '../service/login-history.service.js';
@@ -193,6 +193,29 @@ class AuthFastifyController {
         );
         return reply.code(403).send(errorResponse(error.message, AUTH_ERRORS.SESSION_LIMIT));
       }
+      if (error?.code === AUTH_ERRORS.AUTH_EMAIL_NOT_VERIFIED) {
+        request.log.warn(
+          { event: 'AUTH_EMAIL_NOT_VERIFIED', email: request.body?.email },
+          'Email Not Verified',
+        );
+        return reply
+          .code(403)
+          .send(errorResponse(error.message, AUTH_ERRORS.AUTH_EMAIL_NOT_VERIFIED));
+      }
+      if (
+        error?.message?.includes('account has been blocked') ||
+        error?.message?.includes('organization has been blocked')
+      ) {
+        return reply
+          .code(403)
+          .send(errorResponse(error.message, AUTH_ERRORS.AUTH_ACCOUNT_DISABLED));
+      }
+      if (error?.message?.includes('account has been suspended')) {
+        return reply
+          .code(403)
+          .send(errorResponse(error.message, AUTH_ERRORS.AUTH_ACCOUNT_DISABLED));
+      }
+
       return reply
         .code(500)
         .send(errorResponse(error?.message || 'Internal server error', AUTH_ERRORS.INTERNAL_ERROR));
@@ -734,50 +757,6 @@ class AuthFastifyController {
     }
   }
 
-  async enrollMfa(request, reply) {
-    try {
-      const user = await authRepository.findUserById(request.user.id);
-      const result = await mfaService.enrollMfa(request.user.id, user.email);
-      return reply.send(success(result));
-    } catch (error) {
-      request.log.error(error);
-      const code = error.code || AUTH_ERRORS.INTERNAL_ERROR;
-      return reply.code(500).send(errorResponse(error?.message || 'MFA enrollment failed', code));
-    }
-  }
-
-  async confirmMfaEnrollment(request, reply) {
-    try {
-      const { token } = request.body || {};
-      const result = await mfaService.confirmMfaEnrollment(request.user.id, token);
-      return reply.send(success(result));
-    } catch (error) {
-      request.log.error(error);
-      const code = error.code || AUTH_ERRORS.AUTH_MFA_INVALID;
-      return reply.code(400).send(errorResponse(error?.message || 'MFA confirmation failed', code));
-    }
-  }
-
-  async disableMfa(request, reply) {
-    try {
-      const { currentPassword } = request.body || {};
-      if (!currentPassword) {
-        return reply
-          .code(400)
-          .send(errorResponse('Current password is required', AUTH_ERRORS.VALIDATION_ERROR));
-      }
-      const result = await mfaService.disableMfa(request.user.id, currentPassword);
-      return reply.send(success(result));
-    } catch (error) {
-      request.log.error(error);
-      const code = error.code || AUTH_ERRORS.INTERNAL_ERROR;
-      const status = code === AUTH_ERRORS.INVALID_PASSWORD ? 401 : 400;
-      return reply
-        .code(status)
-        .send(errorResponse(error?.message || 'Failed to disable MFA', code));
-    }
-  }
-
   // --- Account Recovery Suite ---
   async requestRecovery(request, reply) {
     const { email, password, reason, identityData } = request.body || {};
@@ -947,24 +926,6 @@ class AuthFastifyController {
         request.body,
       );
       return reply.send(success(updated));
-    } catch (error) {
-      request.log.error(error);
-      return reply.code(500).send(errorResponse(error.message, AUTH_ERRORS.INTERNAL_ERROR));
-    }
-  }
-
-  async adminResetMfa(request, reply) {
-    try {
-      if (request.user.role !== 'ADMIN' && request.user.role !== 'OWNER') {
-        return reply.code(403).send(errorResponse('Forbidden', AUTH_ERRORS.AUTH_UNAUTHORIZED));
-      }
-      const { userId } = request.params;
-      const res = await adminGovernanceService.adminResetUserMfa({
-        adminUserId: request.user.id,
-        targetUserId: userId,
-        tenantId: request.user.tenantId,
-      });
-      return reply.send(success(res));
     } catch (error) {
       request.log.error(error);
       return reply.code(500).send(errorResponse(error.message, AUTH_ERRORS.INTERNAL_ERROR));

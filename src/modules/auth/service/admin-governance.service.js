@@ -1,6 +1,5 @@
 import prisma from '../../../config/prisma.js';
 import redis from '../../../config/redis.js';
-import AUTH_ERRORS from '../../../config/auth.errors.js';
 import sessionService from './session.service.js';
 import eventBus from '../../../shared/services/eventbus.service.js';
 import logger from '../../../shared/utils/logger.js';
@@ -10,7 +9,6 @@ const DEFAULT_AUTH_POLICY = {
   requireUppercase: true,
   requireNumbers: true,
   requireSymbols: true,
-  mfaRequired: false,
   sessionIdleTimeoutMinutes: 30,
   maxSessionDurationHours: 24,
   jitProvisioningEnabled: true,
@@ -74,44 +72,6 @@ class AdminGovernanceService {
     eventBus.publish('TenantAuthPolicyUpdated', { tenantId, updatedPolicy, timestamp: new Date() });
 
     return updatedPolicy;
-  }
-
-  /**
-   * IT Administrator override: Revokes and resets a user's lost MFA credentials.
-   */
-  async adminResetUserMfa({ adminUserId, targetUserId, tenantId }) {
-    const targetUser = await prisma.user.findFirst({
-      where: { id: targetUserId, tenantId },
-    });
-
-    if (!targetUser) {
-      const err = new Error('Target user not found within administrator tenant scope');
-      err.code = AUTH_ERRORS.AUTH_UNAUTHORIZED;
-      throw err;
-    }
-
-    await prisma.$transaction([
-      prisma.user.update({
-        where: { id: targetUserId },
-        data: { twoFactorEnabled: false },
-      }),
-      prisma.userBackupCode.deleteMany({
-        where: { userId: targetUserId },
-      }),
-    ]);
-
-    // Terminate active sessions to force re-authentication
-    await sessionService.revokeAllUserSessions(targetUserId);
-
-    logger.warn({ adminUserId, targetUserId, tenantId }, 'Admin override: User MFA reset');
-    eventBus.publish('AdminUserMfaReset', {
-      adminUserId,
-      targetUserId,
-      tenantId,
-      timestamp: new Date(),
-    });
-
-    return { success: true, message: 'User multi-factor authentication reset successfully.' };
   }
 
   /**

@@ -84,8 +84,8 @@ async function authRoutes(fastify) {
     {
       config: {
         rateLimit: {
-          max: 3,
-          timeWindow: '1 hour',
+          max: 5,
+          timeWindow: '15 minutes',
         },
       },
       schema: {
@@ -228,14 +228,20 @@ async function authRoutes(fastify) {
 
   // ── Email Verification Endpoints ───────────────────────────────────────
   fastify.post('/verify-email', authController.verifyEmail);
-  fastify.post('/resend-verification', authController.resendVerification);
+  fastify.post(
+    '/resend-verification',
+    {
+      config: {
+        rateLimit: {
+          max: 5,
+          timeWindow: '15 minutes',
+        },
+      },
+    },
+    authController.resendVerification,
+  );
   fastify.post('/change-email', { preHandler: [authenticate] }, authController.requestEmailChange);
   fastify.post('/confirm-email-change', authController.verifyEmailChange);
-
-  // ── Enterprise MFA Endpoints ───────────────────────────────────────────
-  fastify.post('/mfa/enroll', { preHandler: [authenticate] }, authController.enrollMfa);
-  fastify.post('/mfa/confirm', { preHandler: [authenticate] }, authController.confirmMfaEnrollment);
-  fastify.post('/mfa/disable', { preHandler: [authenticate] }, authController.disableMfa);
 
   // ── Account Recovery Suite ─────────────────────────────────────────────
   fastify.post('/recovery/request', authController.requestRecovery);
@@ -266,11 +272,6 @@ async function authRoutes(fastify) {
   // ── Phase 4: Enterprise Administration & SSO ───────────────────────────
   fastify.get('/tenant/policy', { preHandler: [authenticate] }, authController.getTenantPolicy);
   fastify.put('/tenant/policy', { preHandler: [authenticate] }, authController.updateTenantPolicy);
-  fastify.post(
-    '/admin/users/:userId/reset-mfa',
-    { preHandler: [authenticate] },
-    authController.adminResetMfa,
-  );
   fastify.post(
     '/admin/users/:userId/force-reset-password',
     { preHandler: [authenticate] },

@@ -92,7 +92,7 @@ class AccountRecoveryService {
       where: whereClause,
       include: {
         user: {
-          select: { id: true, email: true, name: true, branchId: true, twoFactorEnabled: true },
+          select: { id: true, email: true, name: true, branchId: true },
         },
       },
       orderBy: { createdAt: 'asc' },
@@ -141,10 +141,8 @@ class AccountRecoveryService {
 
       await tx.user.update({
         where: { id: targetUserId },
-        data: { twoFactorEnabled: false, twoFactorSecret: null },
       });
 
-      await tx.userBackupCode.deleteMany({ where: { userId: targetUserId } });
       await tx.device.updateMany({
         where: { userId: targetUserId },
         data: { isTrusted: false },

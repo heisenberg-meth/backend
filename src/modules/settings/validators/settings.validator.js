@@ -53,7 +53,6 @@ export const securitySettingsSchema = z.object({
   passwordMinLength: z.number().min(6).max(32).optional(),
   requirePasswordExpiry: z.boolean().optional(),
   passwordExpiryDays: z.number().min(30).max(365).optional(),
-  twoFactorEnabled: z.boolean().optional(),
   ipWhitelistEnabled: z.boolean().optional(),
   auditLogging: z.boolean().optional(),
   dataRetentionDays: z.number().min(30).max(2555).optional(),

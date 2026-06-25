@@ -14,7 +14,6 @@ import MediaService from '../../../shared/services/media.service.js';
 import { CURRENT_AUTH_VERSION } from '../auth.constants.js';
 import tokenService from './token.service.js';
 import emailVerificationService from './email-verification.service.js';
-import mfaService from './mfa.service.js';
 import loginHistoryService from './login-history.service.js';
 import securityEngineService from './security-engine.service.js';
 import secretManager from '../../../config/secrets.js';
@@ -164,9 +163,6 @@ class AuthPrismaService {
     ipAddress,
     deviceToken,
     otp,
-    twoFactorToken,
-    backupCode,
-    rememberDevice,
     headers = {},
   }) {
     const normalizedEmail = email.toLowerCase().trim();
@@ -247,27 +243,6 @@ class AuthPrismaService {
     // Successful login — clear failed attempts
     await securityEngineService.clearFailedLogin({ userId: user.id });
 
-    // --- 2FA VALIDATION ---
-    if (user.twoFactorEnabled) {
-      const fingerprintId = fingerprint ? sessionService.hashFingerprint(fingerprint) : null;
-      const isTrusted = await mfaService.isDeviceTrusted(user.id, fingerprintId);
-
-      if (!isTrusted) {
-        if (!twoFactorToken && !backupCode) {
-          return {
-            twoFactorVerificationRequired: true,
-            message: 'Multi-factor authentication required',
-          };
-        }
-        await mfaService.verifyMfaChallenge(user.id, {
-          token: twoFactorToken,
-          backupCode,
-          fingerprintId,
-          rememberDevice,
-        });
-      }
-    }
-
     // --- DEVICE BINDING & BROWSER LOCKS VALIDATION ---
     const fingerprintId = fingerprint ? sessionService.hashFingerprint(fingerprint) : null;
 
@@ -280,100 +255,106 @@ class AuthPrismaService {
         throw new Error('This browser is already linked to another account');
       }
 
+      if (deviceToken) {
+        const existingDevice = await prisma.device.findUnique({
+          where: { deviceToken },
+        });
+        if (existingDevice && existingDevice.userId !== user.id) {
+          throw new Error('This device is already linked to another account');
+        }
+      }
+
       // 2. Account Device Binding check: One Account = One Browser / Device
       const userDevices = await prisma.device.findMany({
         where: { userId: user.id },
       });
 
-      if (userDevices.length > 0) {
-        // Find if this is a recognized device
-        const matchingDevice = userDevices.find(
-          (d) =>
-            (deviceToken && d.deviceToken === deviceToken) || d.fingerprintId === fingerprintId,
-        );
+      // Find if this is a recognized device
+      const matchingDevice = userDevices.find(
+        (d) => (deviceToken && d.deviceToken === deviceToken) || d.fingerprintId === fingerprintId,
+      );
 
-        if (!matchingDevice) {
-          // If a new device is attempting to log in, require OTP verification
-          if (!otp) {
-            const deviceOtp = Math.floor(100000 + Math.random() * 900000).toString();
-            const hashedOtp = await bcrypt.hash(deviceOtp, 12);
+      if (!matchingDevice) {
+        // If a new device is attempting to log in, require OTP verification
+        if (!otp) {
+          const deviceOtp = Math.floor(100000 + Math.random() * 900000).toString();
+          const hashedOtp = await bcrypt.hash(deviceOtp, 12);
 
-            await prisma.user.update({
-              where: { id: user.id },
-              data: {
-                resetOtp: hashedOtp,
-                resetOtpExpiry: new Date(Date.now() + 10 * 60 * 1000), // 10 minutes
-                resetOtpVerified: false,
-              },
-            });
+          await prisma.user.update({
+            where: { id: user.id },
+            data: {
+              resetOtp: hashedOtp,
+              resetOtpExpiry: new Date(Date.now() + 10 * 60 * 1000), // 10 minutes
+              resetOtpVerified: false,
+            },
+          });
 
-            await queueEmail(
-              user.email,
-              'New Device Login Verification',
-              `We detected a login attempt from a new device. Please use the following code to approve this device: ${deviceOtp}`,
-            );
+          await queueEmail(
+            user.email,
+            'New Device Login Verification',
+            `We detected a login attempt from a new device. Please use the following code to approve this device: ${deviceOtp}`,
+          );
 
-            otpAuditService.logOtpGenerated({
-              userId: user.id,
+          otpAuditService.logOtpGenerated({
+            userId: user.id,
+            email: user.email,
+            otp: deviceOtp,
+            purpose: 'DEVICE_VERIFICATION',
+            channel: 'EMAIL',
+            expiresAt: new Date(Date.now() + 10 * 60 * 1000),
+          });
+
+          return {
+            deviceVerificationRequired: true,
+            message: 'Verification code sent to your email to approve this new device.',
+          };
+        } else {
+          // Verify OTP
+          if (!user.resetOtp || !user.resetOtpExpiry || new Date() > user.resetOtpExpiry) {
+            otpAuditService.logOtpExpired({
               email: user.email,
-              otp: deviceOtp,
+              userId: user.id,
               purpose: 'DEVICE_VERIFICATION',
-              channel: 'EMAIL',
-              expiresAt: new Date(Date.now() + 10 * 60 * 1000),
             });
-
-            return {
-              deviceVerificationRequired: true,
-              message: 'Verification code sent to your email to approve this new device.',
-            };
-          } else {
-            // Verify OTP
-            if (!user.resetOtp || !user.resetOtpExpiry || new Date() > user.resetOtpExpiry) {
-              otpAuditService.logOtpExpired({
-                email: user.email,
-                userId: user.id,
-                purpose: 'DEVICE_VERIFICATION',
-              });
-              throw new Error('Verification code has expired or is invalid');
-            }
-
-            const isOtpMatch = await bcrypt.compare(otp, user.resetOtp);
-            if (!isOtpMatch) {
-              otpAuditService.logOtpFailed({
-                email: user.email,
-                enteredOtp: otp,
-                reason: 'INVALID_OTP',
-                userId: user.id,
-                purpose: 'DEVICE_VERIFICATION',
-              });
-              throw new Error('Invalid verification code');
-            }
-
-            otpAuditService.logOtpVerified({
-              email: user.email,
-              otp,
-              userId: user.id,
-              channel: 'EMAIL',
-            });
-
-            // Clear OTP fields
-            await prisma.user.update({
-              where: { id: user.id },
-              data: {
-                resetOtp: null,
-                resetOtpExpiry: null,
-                resetOtpVerified: false,
-              },
-            });
-
-            // Clean/release old devices and old browser locks for this user to enforce "One active device/browser"
-            await prisma.device.deleteMany({
-              where: { userId: user.id },
-            });
-            await prisma.browserLock.deleteMany({
-              where: { userId: user.id },
-            });
+            throw new Error('Verification code has expired or is invalid');
           }
+
+          const isOtpMatch = await bcrypt.compare(otp, user.resetOtp);
+          if (!isOtpMatch) {
+            otpAuditService.logOtpFailed({
+              email: user.email,
+              enteredOtp: otp,
+              reason: 'INVALID_OTP',
+              userId: user.id,
+              purpose: 'DEVICE_VERIFICATION',
+            });
+            throw new Error('Invalid verification code');
+          }
+
+          otpAuditService.logOtpVerified({
+            email: user.email,
+            otp,
+            userId: user.id,
+            channel: 'EMAIL',
+          });
+
+          // Clear OTP fields
+          await prisma.user.update({
+            where: { id: user.id },
+            data: {
+              resetOtp: null,
+              resetOtpExpiry: null,
+              resetOtpVerified: false,
+            },
+          });
+
+          // Clean/release old devices and old browser locks for this user to enforce "One active device/browser"
+          await prisma.device.deleteMany({
+            where: { userId: user.id },
+          });
+          await prisma.browserLock.deleteMany({
+            where: { userId: user.id },
+          });
         }
       }
     }

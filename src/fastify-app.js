@@ -31,7 +31,6 @@ import { initSentry } from './config/sentry.js';
 import uptimeMonitor from './shared/services/uptime-monitor.js';
 import authRoutes from './modules/auth/routes/auth.fastify.routes.js';
 import usersRoutes from './modules/users/users.fastify.routes.js';
-import twoFactorRoutes from './modules/users/2fa.fastify.routes.js';
 import uploadsRoutes from './modules/uploads/uploads.fastify.routes.js';
 import avatarRoutes from './modules/uploads/avatar.fastify.routes.js';
 import purchaseOrderRoutes from './modules/purchase-orders/purchase-order.fastify.routes.js';
@@ -383,7 +382,6 @@ const setupFastify = async () => {
   await fastify.register(authRoutes, { prefix: '/api/auth' });
   await fastify.register(authHealthRoutes, { prefix: '/api/auth' });
   await fastify.register(usersRoutes, { prefix: '/api/users' });
-  await fastify.register(twoFactorRoutes, { prefix: '/api/users' });
   await fastify.register(uploadsRoutes, { prefix: '/api/uploads' });
   await fastify.register(avatarRoutes, { prefix: '/avatars' });
   await fastify.register(purchaseOrderRoutes, { prefix: '/api/purchase-orders' });

@@ -20,7 +20,7 @@ class ComplianceService {
         status: true,
         tenantId: true,
         branchId: true,
-        twoFactorEnabled: true,
+
         emailVerified: true,
         createdAt: true,
         updatedAt: true,
@@ -82,11 +82,10 @@ class ComplianceService {
           email: anonymizedEmail,
           name: 'Anonymized User',
           password: 'gdpr_purged_bcrypt_hash_placeholder',
-          twoFactorEnabled: false,
+
           status: 'BLOCKED',
         },
       }),
-      prisma.userBackupCode.deleteMany({ where: { userId } }),
       prisma.accountRecoveryRequest.deleteMany({ where: { userId } }),
     ]);
 
