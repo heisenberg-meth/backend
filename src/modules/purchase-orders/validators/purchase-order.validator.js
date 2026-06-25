@@ -1,19 +1,18 @@
 import { z } from 'zod';
 
+/**
+ * Purchase Order Item — only what is known at order time.
+ * NO pricing, GST, batch, expiry, MRP, or invoice details.
+ */
 const createPurchaseOrderItemSchema = z.object({
   medicineId: z.string().uuid('Invalid medicine ID'),
   quantity: z.number().int().positive('Quantity must be greater than zero'),
-  unitPrice: z.number().positive('Unit price must be greater than zero').optional(),
-  purchasePrice: z.number().positive('Purchase price must be greater than zero').optional(),
-  gstPercentage: z.number().min(0).max(100).default(0),
-}).refine(
-  (data) => data.unitPrice !== undefined || data.purchasePrice !== undefined,
-  { message: 'Either unitPrice or purchasePrice is required' },
-).transform((data) => ({
-  ...data,
-  unitPrice: data.unitPrice ?? data.purchasePrice,
-}));
+});
 
+/**
+ * Create Purchase Order — only ordering information.
+ * Financial and inventory details belong to Goods Receipt (GRN).
+ */
 export const createPurchaseOrderSchema = z.object({
   supplierId: z.string().uuid('Invalid supplier ID'),
   branchId: z.string().uuid('Invalid branch ID').optional(),
@@ -23,7 +22,6 @@ export const createPurchaseOrderSchema = z.object({
     .optional(),
   paymentMode: z.enum(['CASH', 'CREDIT', 'UPI', 'BANK_TRANSFER', 'CHEQUE']).optional(),
   paymentTermsDays: z.number().int().min(0).max(365).optional(),
-  discountAmount: z.number().min(0).default(0),
   notes: z.string().max(500).optional(),
   items: z
     .array(createPurchaseOrderItemSchema)
@@ -31,6 +29,10 @@ export const createPurchaseOrderSchema = z.object({
     .max(100, 'Cannot order more than 100 different medicines in a single PO'),
 });
 
+/**
+ * Receive Goods (GRN) — all financial and inventory details captured here.
+ * Supplier invoice, batch, expiry, purchase price, GST, MRP all belong here.
+ */
 export const receivePurchaseOrderSchema = z.object({
   supplierInvoiceNumber: z.string().min(1, 'Supplier invoice number is required'),
   invoiceDate: z
@@ -39,7 +41,7 @@ export const receivePurchaseOrderSchema = z.object({
   receivedItems: z
     .array(
       z.object({
-        purchaseOrderItemId: z.string().uuid('Invalid PO item ID'),
+        medicineId: z.string().uuid('Invalid medicine ID'),
         receivedQuantity: z.number().int().positive('Received quantity must be greater than zero'),
         batchNumber: z.string().min(1, 'Batch number is required'),
         expiryDate: z
@@ -52,7 +54,7 @@ export const receivePurchaseOrderSchema = z.object({
           .optional(),
         purchasePrice: z.number().positive('Purchase price must be greater than zero'),
         mrp: z.number().positive('MRP must be greater than zero'),
-        sellingPrice: z.number().positive('Selling price must be greater than zero'),
+        gstPercentage: z.number().min(0).max(100).default(0),
       }),
     )
     .min(1, 'At least one received item is required'),

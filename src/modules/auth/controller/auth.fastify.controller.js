@@ -29,6 +29,9 @@ import env from '../../../config/env.js';
 
 // Dynamic cookie domain based on environment
 const getCookieDomain = () => {
+  if (env.cookieDomain) {
+    return env.cookieDomain;
+  }
   if (env.nodeEnv === 'development') {
     return 'localhost';
   }
@@ -76,7 +79,9 @@ class AuthFastifyController {
           .send(errorResponse(firstIssue?.message || 'Validation failed', 'VALIDATION_ERROR'));
       }
       if (error?.message === 'User already exists') {
-        return reply.code(409).send(errorResponse('An account with this email already exists', 'USER_EXISTS'));
+        return reply
+          .code(409)
+          .send(errorResponse('An account with this email already exists', 'USER_EXISTS'));
       }
       return reply
         .code(400)
@@ -259,8 +264,18 @@ class AuthFastifyController {
       );
 
       if (isInvalidToken) {
-        reply.clearCookie('refresh_token', { path: '/', domain: getCookieDomain(), sameSite: 'none', secure: true });
-        reply.clearCookie('accessToken', { path: '/', domain: getCookieDomain(), sameSite: 'none', secure: true });
+        reply.clearCookie('refresh_token', {
+          path: '/',
+          domain: getCookieDomain(),
+          sameSite: 'none',
+          secure: true,
+        });
+        reply.clearCookie('accessToken', {
+          path: '/',
+          domain: getCookieDomain(),
+          sameSite: 'none',
+          secure: true,
+        });
         const code =
           error.message === 'Invalid or reused refresh token'
             ? 'REFRESH_TOKEN_REUSED'
@@ -277,9 +292,19 @@ class AuthFastifyController {
     try {
       await authService.logout(request.sessionId);
 
-      reply.clearCookie('refresh_token', { path: '/', domain: getCookieDomain(), sameSite: 'none', secure: true });
-      reply.clearCookie('accessToken', { path: '/', domain: getCookieDomain(), sameSite: 'none', secure: true });
-      
+      reply.clearCookie('refresh_token', {
+        path: '/',
+        domain: getCookieDomain(),
+        sameSite: 'none',
+        secure: true,
+      });
+      reply.clearCookie('accessToken', {
+        path: '/',
+        domain: getCookieDomain(),
+        sameSite: 'none',
+        secure: true,
+      });
+
       request.log.info(
         {
           userId: request.user?.id,
@@ -287,7 +312,7 @@ class AuthFastifyController {
         },
         'LOGOUT SUCCESS',
       );
-      
+
       return reply.send(success({ message: 'Logged out successfully' }));
     } catch (error) {
       request.log.error(error);
@@ -299,16 +324,26 @@ class AuthFastifyController {
     try {
       await authService.logoutAll(request.user.id);
 
-      reply.clearCookie('refresh_token', { path: '/', domain: getCookieDomain(), sameSite: 'none', secure: true });
-      reply.clearCookie('accessToken', { path: '/', domain: getCookieDomain(), sameSite: 'none', secure: true });
-      
+      reply.clearCookie('refresh_token', {
+        path: '/',
+        domain: getCookieDomain(),
+        sameSite: 'none',
+        secure: true,
+      });
+      reply.clearCookie('accessToken', {
+        path: '/',
+        domain: getCookieDomain(),
+        sameSite: 'none',
+        secure: true,
+      });
+
       request.log.info(
         {
           userId: request.user?.id,
         },
         'LOGOUT ALL SUCCESS',
       );
-      
+
       return reply.send(success({ message: 'All sessions revoked' }));
     } catch (error) {
       request.log.error(error);
@@ -527,9 +562,7 @@ class AuthFastifyController {
       // Verify hashed reset token
       const hashedToken = crypto.createHash('sha256').update(resetToken).digest('hex');
       if (user.resetToken !== hashedToken) {
-        return reply
-          .code(400)
-          .send(errorResponse('Invalid reset token.', 'INVALID_RESET_TOKEN'));
+        return reply.code(400).send(errorResponse('Invalid reset token.', 'INVALID_RESET_TOKEN'));
       }
 
       const hashedPassword = await bcrypt.hash(newPassword, 12);
@@ -662,10 +695,20 @@ class AuthFastifyController {
           .code(400)
           .send(errorResponse('Password must be at least 8 characters', 'VALIDATION_ERROR'));
       }
-      if (!/[A-Z]/.test(newPassword) || !/[a-z]/.test(newPassword) || !/[0-9]/.test(newPassword) || !/[^A-Za-z0-9]/.test(newPassword)) {
+      if (
+        !/[A-Z]/.test(newPassword) ||
+        !/[a-z]/.test(newPassword) ||
+        !/[0-9]/.test(newPassword) ||
+        !/[^A-Za-z0-9]/.test(newPassword)
+      ) {
         return reply
           .code(400)
-          .send(errorResponse('Password must contain uppercase, lowercase, number, and special character', 'VALIDATION_ERROR'));
+          .send(
+            errorResponse(
+              'Password must contain uppercase, lowercase, number, and special character',
+              'VALIDATION_ERROR',
+            ),
+          );
       }
       const result = await authService.changePassword(
         request.user.id,

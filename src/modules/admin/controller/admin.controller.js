@@ -9,6 +9,18 @@ import {
   adminListQuerySchema,
   auditLogQuerySchema,
 } from '../validators/admin.validator.js';
+import env from '../../../config/env.js';
+
+// Dynamic cookie domain based on environment
+const getCookieDomain = () => {
+  if (env.cookieDomain) {
+    return env.cookieDomain;
+  }
+  if (env.nodeEnv === 'development') {
+    return 'localhost';
+  }
+  return '.viyaninfo.com';
+};
 
 const COOKIE_OPTIONS = {
   path: '/',
@@ -17,7 +29,7 @@ const COOKIE_OPTIONS = {
   secure: true,
   partitioned: true,
   maxAge: 30 * 24 * 60 * 60,
-  domain: '.viyaninfo.com',
+  domain: getCookieDomain(),
 };
 
 const ACCESS_COOKIE_OPTIONS = {
@@ -27,7 +39,7 @@ const ACCESS_COOKIE_OPTIONS = {
   secure: true,
   partitioned: true,
   maxAge: 15 * 60,
-  domain: '.viyaninfo.com',
+  domain: getCookieDomain(),
 };
 
 class AdminController {
@@ -83,8 +95,9 @@ class AdminController {
   }
 
   async logout(request, reply) {
-    reply.clearCookie('adminRefreshToken', { path: '/' });
-    reply.clearCookie('adminAccessToken', { path: '/' });
+    const domain = getCookieDomain();
+    reply.clearCookie('adminRefreshToken', { path: '/', domain, sameSite: 'none', secure: true });
+    reply.clearCookie('adminAccessToken', { path: '/', domain, sameSite: 'none', secure: true });
     return reply.send(success({ message: 'Logged out successfully' }));
   }
 
@@ -747,7 +760,11 @@ class AdminController {
     try {
       const { id } = request.params;
       const { status } = request.body;
-      const result = await adminService.updateSupportTicketStatus(id, status, request.admin?.id || request.user?.id);
+      const result = await adminService.updateSupportTicketStatus(
+        id,
+        status,
+        request.admin?.id || request.user?.id,
+      );
       return reply.send(success(result));
     } catch (error) {
       return reply.code(400).send(errorResponse(error.message, 'TICKET_UPDATE_FAILED'));

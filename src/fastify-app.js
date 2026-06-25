@@ -213,6 +213,9 @@ const setupFastify = async () => {
     },
   });
 
+  const defaultCookieDomain =
+    env.cookieDomain || (env.nodeEnv === 'development' ? 'localhost' : '.viyaninfo.com');
+
   await fastify.register(cookie, {
     secret: env.cookieSecret,
     parseOptions: {
@@ -220,7 +223,7 @@ const setupFastify = async () => {
       sameSite: 'none',
       secure: true,
       path: '/',
-      domain: '.viyaninfo.com',
+      domain: defaultCookieDomain,
     },
   });
 

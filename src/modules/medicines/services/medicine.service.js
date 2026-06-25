@@ -7,6 +7,7 @@ import eventBus from '../../../shared/services/eventbus.service.js';
 import { scanKeys } from '../../../shared/utils/scan-keys.js';
 import { mainQueue } from '../../../queue/index.js';
 import { mapDosageFormToPackaging } from '../../../shared/utils/medicine-helpers.js';
+import movementService from '../../stock/service/movement.service.js';
 
 class MedicineIntelligenceService {
   /**
@@ -81,11 +82,7 @@ class MedicineIntelligenceService {
    * Medicine Master only - no stock, no batch, no supplier, no inventory
    */
   async createMedicineMaster(tenantId, userId, data) {
-    const {
-      category,
-      manufacturer,
-      ...rawMedicineData
-    } = data;
+    const { category, manufacturer, ...rawMedicineData } = data;
 
     // Required field validations
     if (!rawMedicineData.medicineName) {
@@ -94,7 +91,11 @@ class MedicineIntelligenceService {
     if (!rawMedicineData.genericName) {
       throw new Error('Generic name is required');
     }
-    if (!rawMedicineData.manufacturerName && !rawMedicineData.manufacturer && !rawMedicineData.manufacturerId) {
+    if (
+      !rawMedicineData.manufacturerName &&
+      !rawMedicineData.manufacturer &&
+      !rawMedicineData.manufacturerId
+    ) {
       throw new Error('Manufacturer is required');
     }
     if (!rawMedicineData.categoryId && !category) {
@@ -112,8 +113,10 @@ class MedicineIntelligenceService {
 
     // GST validation
     const validGstPercentages = [0, 5, 12, 18, 28];
-    if (rawMedicineData.gstPercentage !== undefined && 
-        !validGstPercentages.includes(rawMedicineData.gstPercentage)) {
+    if (
+      rawMedicineData.gstPercentage !== undefined &&
+      !validGstPercentages.includes(rawMedicineData.gstPercentage)
+    ) {
       throw new Error(`GST percentage must be one of: ${validGstPercentages.join(', ')}`);
     }
 
@@ -136,7 +139,9 @@ class MedicineIntelligenceService {
         where: { sku: rawMedicineData.sku, tenantId, deletedAt: null },
       });
       if (existing)
-        throw new Error(`SKU ${rawMedicineData.sku} is already assigned to ${existing.medicineName}`);
+        throw new Error(
+          `SKU ${rawMedicineData.sku} is already assigned to ${existing.medicineName}`,
+        );
     }
 
     // Resolve Category ID from name if not provided
@@ -216,12 +221,14 @@ class MedicineIntelligenceService {
       barcode: rawMedicineData.barcode,
       sku: rawMedicineData.sku,
       requiresPrescription: rawMedicineData.requiresPrescription ?? false,
-      prescriptionRequired: rawMedicineData.prescriptionRequired ?? rawMedicineData.requiresPrescription ?? false,
+      prescriptionRequired:
+        rawMedicineData.prescriptionRequired ?? rawMedicineData.requiresPrescription ?? false,
       storageCondition: rawMedicineData.storageCondition,
       status: rawMedicineData.status || 'ACTIVE',
       notes: rawMedicineData.notes,
       isActive: rawMedicineData.isActive ?? true,
-      packagingType: rawMedicineData.packagingType || mapDosageFormToPackaging(rawMedicineData.dosageForm),
+      packagingType:
+        rawMedicineData.packagingType || mapDosageFormToPackaging(rawMedicineData.dosageForm),
       scheduleType: rawMedicineData.scheduleType,
       composition: rawMedicineData.composition,
       description: rawMedicineData.description,
@@ -359,7 +366,10 @@ class MedicineIntelligenceService {
     if (data.schedule && ['SCHEDULE_H', 'SCHEDULE_H1', 'SCHEDULE_X'].includes(data.schedule)) {
       data.requiresPrescription = true;
     }
-    if (data.scheduleType && ['Schedule H', 'Schedule H1', 'Schedule X'].includes(data.scheduleType)) {
+    if (
+      data.scheduleType &&
+      ['Schedule H', 'Schedule H1', 'Schedule X'].includes(data.scheduleType)
+    ) {
       data.prescriptionRequired = true;
       data.requiresPrescription = true;
     }
@@ -370,11 +380,11 @@ class MedicineIntelligenceService {
     delete cleanData.statusReason;
     delete cleanData.categoryId;
     delete cleanData.manufacturerId;
-    
+
     if (cleanData.dosageForm !== undefined) {
       cleanData.packagingType = mapDosageFormToPackaging(cleanData.dosageForm);
     }
-    
+
     const updateData = {
       ...cleanData,
       ...(categoryId !== undefined && {

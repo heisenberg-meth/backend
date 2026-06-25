@@ -67,11 +67,13 @@ class MedicineRepository {
 
     // Format medicines with stock summary
     const formattedMedicines = medicines.map((m) => {
-      const inv = m.inventory?.[0] || {};
       const batches = m.inventoryBatches || [];
       const totalStock = batches.reduce((sum, b) => sum + (b.quantity || 0), 0);
-      const availableStock = batches.reduce((sum, b) => sum + (b.availableQuantity || b.quantity || 0), 0);
-      
+      const availableStock = batches.reduce(
+        (sum, b) => sum + (b.availableQuantity || b.quantity || 0),
+        0,
+      );
+
       return {
         id: m.id,
         name: m.medicineName || m.name, // Legacy field for backward compatibility
@@ -147,7 +149,10 @@ class MedicineRepository {
 
     const batches = medicine.inventoryBatches || [];
     const totalStock = batches.reduce((sum, b) => sum + (b.quantity || 0), 0);
-    const availableStock = batches.reduce((sum, b) => sum + (b.availableQuantity || b.quantity || 0), 0);
+    const availableStock = batches.reduce(
+      (sum, b) => sum + (b.availableQuantity || b.quantity || 0),
+      0,
+    );
 
     return {
       id: medicine.id,
@@ -176,7 +181,7 @@ class MedicineRepository {
       manufacturerData: medicine.manufacturer,
       createdAt: medicine.createdAt,
       updatedAt: medicine.updatedAt,
-      batches: batches.map(b => ({
+      batches: batches.map((b) => ({
         id: b.id,
         batchNumber: b.batchNumber,
         expiryDate: b.expiryDate,
@@ -195,11 +200,12 @@ class MedicineRepository {
       },
       pricing: medicine.pricingMaster?.[0] || null,
       alternatives: medicine.alternatives?.map((a) => a.alternative) || [],
-      interactions: medicine.interactions?.map((i) => ({
-        medicine: i.interactsWith,
-        severity: i.severity,
-        description: i.description,
-      })) || [],
+      interactions:
+        medicine.interactions?.map((i) => ({
+          medicine: i.interactsWith,
+          severity: i.severity,
+          description: i.description,
+        })) || [],
     };
   }
 
@@ -266,10 +272,12 @@ class MedicineRepository {
 
     if (!medicine) return null;
 
-    const inv = medicine.inventory?.[0] || {};
     const batches = medicine.inventoryBatches || [];
     const totalStock = batches.reduce((sum, b) => sum + (b.quantity || 0), 0);
-    const availableStock = batches.reduce((sum, b) => sum + (b.availableQuantity || b.quantity || 0), 0);
+    const availableStock = batches.reduce(
+      (sum, b) => sum + (b.availableQuantity || b.quantity || 0),
+      0,
+    );
 
     return {
       id: medicine.id,

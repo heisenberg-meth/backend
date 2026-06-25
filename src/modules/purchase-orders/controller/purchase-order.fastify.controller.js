@@ -85,10 +85,6 @@ class PurchaseOrderFastifyController {
           expectedDeliveryDate: order.expectedDeliveryDate,
           paymentMode: order.paymentMode,
           paymentTermsDays: order.paymentTermsDays,
-          discountAmount: Number(order.discountAmount),
-          subtotal: Number(order.subtotal),
-          gstAmount: Number(order.gstAmount),
-          totalAmount: Number(order.totalAmount),
           notes: order.notes,
           createdAt: order.createdAt,
           items: order.items.map((item) => ({
@@ -96,9 +92,6 @@ class PurchaseOrderFastifyController {
             medicineId: item.medicineId,
             medicineName: item.medicineName,
             quantity: item.quantity,
-            unitPrice: Number(item.unitPrice),
-            gstPercentage: item.gstPercentage,
-            totalAmount: Number(item.totalAmount),
           })),
         },
       });

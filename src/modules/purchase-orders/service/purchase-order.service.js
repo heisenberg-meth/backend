@@ -35,22 +35,33 @@ class PurchaseOrderService {
   }
 
   async createOrder(tenantId, userId, data) {
-    const receiptOnlyFields = [
+    // Guard: reject any invoice/GRN fields at the PO creation stage
+    const grnOnlyFields = [
       'batchNumber',
       'expiryDate',
       'manufacturingDate',
       'mrp',
       'sellingPrice',
+      'unitPrice',
+      'purchasePrice',
+      'gstPercentage',
+      'supplierInvoiceNumber',
+      'invoiceDate',
+      'discountAmount',
     ];
-    const invalidHeaderField = receiptOnlyFields.find((field) => data[field] !== undefined);
+    const invalidHeaderField = grnOnlyFields.find((field) => data[field] !== undefined);
     if (invalidHeaderField) {
-      throw new BadRequestError(`${invalidHeaderField} belongs to GRN receiving, not PO creation`);
+      throw new BadRequestError(
+        `'${invalidHeaderField}' belongs to Goods Receipt (GRN), not Purchase Order creation`,
+      );
     }
     const invalidItem = data.items?.find((item) =>
-      receiptOnlyFields.some((field) => item[field] !== undefined),
+      grnOnlyFields.some((field) => item[field] !== undefined),
     );
     if (invalidItem) {
-      throw new BadRequestError('Batch, invoice, MRP, and actual purchase fields belong to GRN receiving');
+      throw new BadRequestError(
+        'Purchase price, GST, batch, expiry, MRP, and invoice fields belong to Goods Receipt, not Purchase Order creation',
+      );
     }
 
     // 1. Validate supplier exists
@@ -85,60 +96,39 @@ class PurchaseOrderService {
       ? new Date(data.expectedDeliveryDate)
       : null;
 
-    // 5. Fetch medicine metadata — never trust frontend for prices/GST
+    // 5. Validate medicines exist
     const medicineIds = data.items.map((it) => it.medicineId);
     const medicines = await prisma.medicine.findMany({
       where: { id: { in: medicineIds }, deletedAt: null },
-      include: {
-        inventory: { where: { tenantId }, take: 1 },
-      },
+      include: { inventory: { where: { tenantId }, take: 1 } },
     });
-
     const medicineMap = new Map(medicines.map((m) => [m.id, m]));
 
-    // 6. Build items with server-side calculations
+    // 6. Build PO items — only medicineId + quantity. No pricing.
     const mappedItems = [];
-    let subtotal = 0;
-    let totalGst = 0;
-
     for (const item of data.items) {
       const med = medicineMap.get(item.medicineId);
       if (!med) throw new BadRequestError(`Medicine with ID ${item.medicineId} not found`);
 
-      const currentStock = med.inventory?.[0]?.currentStock || 0;
-      const reorderQty = med.reorderLevel || 0;
-      const unitPrice = Number(item.unitPrice ?? item.purchasePrice);
-      const gstPercentage = Number(item.gstPercentage ?? med.gstPercentage ?? 0);
       const qty = Number(item.quantity);
-
-      // Server-side calculations
-      const itemTotal = Number((qty * unitPrice).toFixed(2));
-      const itemGst = Number((itemTotal * gstPercentage / 100).toFixed(2));
-
-      subtotal += itemTotal;
-      totalGst += itemGst;
+      if (!qty || qty <= 0)
+        throw new BadRequestError(`Quantity must be greater than zero for ${med.name}`);
 
       mappedItems.push({
         medicineId: item.medicineId,
         medicineName: med.name,
-        currentStock,
-        reorderQty,
+        currentStock: med.inventory?.[0]?.currentStock || 0,
+        reorderQty: med.reorderLevel || 0,
         quantity: qty,
-        unitPrice,
-        gstPercentage,
-        totalAmount: itemTotal,
+        // Pricing fields kept nullable in DB — set to 0 as placeholder until GRN
+        unitPrice: 0,
+        gstPercentage: 0,
+        totalAmount: 0,
         remainingQuantity: qty,
       });
     }
 
-    // 7. Calculate totals — never trust frontend
-    const subtotalRounded = Number(subtotal.toFixed(2));
-    const discountAmount = Number((data.discountAmount || 0).toFixed(2));
-    const taxableAmount = Number(Math.max(0, subtotalRounded - discountAmount).toFixed(2));
-    const totalGstRounded = Number(totalGst.toFixed(2));
-    const grandTotal = Number((taxableAmount + totalGstRounded).toFixed(2));
-
-    // 8. Generate order number
+    // 7. Generate order number
     const now = new Date();
     const dateStr =
       now.getFullYear() +
@@ -147,7 +137,7 @@ class PurchaseOrderService {
     const random = Math.floor(1000 + Math.random() * 9000);
     const orderNumber = `PO-${dateStr}-${random}`;
 
-    // 9. Create Purchase Order in a transaction
+    // 8. Create Purchase Order — no financial totals yet (those come from GRN)
     const order = await prisma.$transaction(async (tx) => {
       const po = await tx.purchaseOrder.create({
         data: {
@@ -160,13 +150,14 @@ class PurchaseOrderService {
           expectedDeliveryDate,
           paymentMode,
           paymentTermsDays,
-          discountAmount,
-          subtotal: subtotalRounded,
-          gstAmount: totalGstRounded,
-          totalAmount: grandTotal,
-          notes: data.notes,
+          // Totals are 0 at PO creation — real values set after GRN
+          subtotal: 0,
+          gstAmount: 0,
+          totalAmount: 0,
+          discountAmount: 0,
           advancePaid: 0,
-          balanceAmount: grandTotal,
+          balanceAmount: 0,
+          notes: data.notes,
           items: { create: mappedItems },
         },
         include: {
@@ -175,7 +166,6 @@ class PurchaseOrderService {
         },
       });
 
-      // Audit log
       await tx.auditLog.create({
         data: {
           tenantId,
@@ -196,7 +186,6 @@ class PurchaseOrderService {
         tenantId,
         userId,
         supplierId: order.supplierId,
-        totalAmount: order.totalAmount,
       });
       await emitEvent(DOMAIN_EVENTS.PURCHASE_ORDER_CREATED, { orderId: order.id, tenantId });
     } catch (eventError) {
@@ -239,7 +228,9 @@ class PurchaseOrderService {
 
     // 3. Resolve pricing from last batch or medicine defaults
     const purchasePrice = Number(lastBatch?.purchasePrice ?? medicine.purchasePrice ?? 0);
-    const sellingPrice = Number(lastBatch?.sellingPrice ?? medicine.sellingPrice ?? purchasePrice * 1.2);
+    const sellingPrice = Number(
+      lastBatch?.sellingPrice ?? medicine.sellingPrice ?? purchasePrice * 1.2,
+    );
     const mrp = Number(lastBatch?.mrp ?? medicine.mrp ?? sellingPrice);
     const gstPercentage = Number(medicine.gstPercentage ?? 0);
 
@@ -257,15 +248,21 @@ class PurchaseOrderService {
 
     // 5. Resolve branchId
     let branchId = null;
-    const creator = await prisma.user.findUnique({ where: { id: userId }, select: { branchId: true } });
+    const creator = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { branchId: true },
+    });
     branchId = creator?.branchId;
     if (!branchId) {
-      const firstBranch = await prisma.branch.findFirst({ where: { tenantId }, select: { id: true } });
+      const firstBranch = await prisma.branch.findFirst({
+        where: { tenantId },
+        select: { id: true },
+      });
       branchId = firstBranch?.id;
     }
 
     const subtotal = Number((quantity * purchasePrice).toFixed(2));
-    const gstAmount = Number((subtotal * gstPercentage / 100).toFixed(2));
+    const gstAmount = Number(((subtotal * gstPercentage) / 100).toFixed(2));
     const totalAmount = Number((subtotal + gstAmount).toFixed(2));
 
     // 6. Create Purchase Order in a transaction
@@ -280,9 +277,9 @@ class PurchaseOrderService {
           subtotal,
           gstAmount,
           totalAmount,
-            notes: `Auto-generated reorder from Inventory. Medicine: ${medicine.name}, Current Stock: ${currentStock}, Reorder Level: ${reorderLevel}`,
-            userId,
-            items: {
+          notes: `Auto-generated reorder from Inventory. Medicine: ${medicine.name}, Current Stock: ${currentStock}, Reorder Level: ${reorderLevel}`,
+          userId,
+          items: {
             create: {
               medicineId,
               medicineName: medicine.name,
@@ -333,7 +330,6 @@ class PurchaseOrderService {
     };
   }
 
-
   async updateDraftOrder(tenantId, id, userId, data) {
     const order = await this.getOrderById(tenantId, id);
     if (order.status !== PROCUREMENT_STATUS.DRAFT) {
@@ -342,7 +338,9 @@ class PurchaseOrderService {
 
     return prisma.$transaction(async (tx) => {
       const updateData = {
-        expectedDeliveryDate: data.expectedDeliveryDate ? new Date(data.expectedDeliveryDate) : order.expectedDeliveryDate,
+        expectedDeliveryDate: data.expectedDeliveryDate
+          ? new Date(data.expectedDeliveryDate)
+          : order.expectedDeliveryDate,
         paymentTermsDays: data.paymentTermsDays ?? order.paymentTermsDays,
         notes: data.notes ?? order.notes,
       };
@@ -350,8 +348,6 @@ class PurchaseOrderService {
       if (Array.isArray(data.items)) {
         await tx.purchaseOrderItem.deleteMany({ where: { purchaseOrderId: id } });
 
-        let subtotal = 0;
-        let gstAmount = 0;
         const medicineIds = data.items.map((item) => item.medicineId);
         const medicines = await tx.medicine.findMany({
           where: { id: { in: medicineIds }, tenantId, deletedAt: null },
@@ -359,32 +355,26 @@ class PurchaseOrderService {
         });
         const medicineMap = new Map(medicines.map((medicine) => [medicine.id, medicine]));
 
+        // PO update only stores medicineId + quantity. No pricing.
         const mappedItems = data.items.map((item) => {
           const medicine = medicineMap.get(item.medicineId);
           if (!medicine) throw new BadRequestError(`Medicine with ID ${item.medicineId} not found`);
           const quantity = Number(item.quantity);
-      const unitPrice = Number(item.unitPrice ?? item.purchasePrice);
-          const gstPercentage = Number(item.gstPercentage ?? medicine.gstPercentage ?? 0);
-          const totalAmount = Number((quantity * unitPrice).toFixed(2));
-          subtotal += totalAmount;
-          gstAmount += Number((totalAmount * gstPercentage / 100).toFixed(2));
+          if (!quantity || quantity <= 0)
+            throw new BadRequestError(`Quantity must be > 0 for ${medicine.name}`);
           return {
             medicineId: item.medicineId,
             medicineName: medicine.name,
             currentStock: medicine.inventory?.[0]?.currentStock || 0,
             reorderQty: medicine.reorderLevel || 0,
             quantity,
-            unitPrice,
-            gstPercentage,
-            totalAmount,
+            unitPrice: 0,
+            gstPercentage: 0,
+            totalAmount: 0,
             remainingQuantity: quantity,
           };
         });
 
-        updateData.subtotal = Number(subtotal.toFixed(2));
-        updateData.gstAmount = Number(gstAmount.toFixed(2));
-        updateData.totalAmount = Number((updateData.subtotal + updateData.gstAmount).toFixed(2));
-        updateData.balanceAmount = updateData.totalAmount;
         await tx.purchaseOrderItem.createMany({
           data: mappedItems.map((item) => ({ ...item, purchaseOrderId: id })),
         });
@@ -467,7 +457,13 @@ class PurchaseOrderService {
         data: { status: nextStatus, sentAt: new Date() },
         include: { items: true },
       });
-      await this.logAudit(tx, tenantId, userId, 'PURCHASE_ORDER_SENT_TO_SUPPLIER', `PurchaseOrder:${id}`);
+      await this.logAudit(
+        tx,
+        tenantId,
+        userId,
+        'PURCHASE_ORDER_SENT_TO_SUPPLIER',
+        `PurchaseOrder:${id}`,
+      );
       return updated;
     });
   }
@@ -481,7 +477,13 @@ class PurchaseOrderService {
         data: { status: nextStatus, acknowledgedAt: new Date() },
         include: { items: true },
       });
-      await this.logAudit(tx, tenantId, userId, 'PURCHASE_ORDER_ACKNOWLEDGED', `PurchaseOrder:${id}`);
+      await this.logAudit(
+        tx,
+        tenantId,
+        userId,
+        'PURCHASE_ORDER_ACKNOWLEDGED',
+        `PurchaseOrder:${id}`,
+      );
       return updated;
     });
   }
@@ -497,14 +499,18 @@ class PurchaseOrderService {
     if (!payload.reason) throw new BadRequestError('Revision reason is required');
 
     return prisma.$transaction(async (tx) => {
-      const revisionCount = await tx.purchaseOrderRevision.count({ where: { purchaseOrderId: id } });
+      const revisionCount = await tx.purchaseOrderRevision.count({
+        where: { purchaseOrderId: id },
+      });
       const changes = [];
       for (const item of payload.items) {
         const existing = order.items.find((poItem) => poItem.id === item.purchaseOrderItemId);
         if (!existing) throw new BadRequestError(`PO item ${item.purchaseOrderItemId} not found`);
         const quantity = Number(item.quantity);
         if (quantity < existing.receivedQuantity) {
-          throw new BadRequestError('Revised quantity cannot be lower than already received quantity');
+          throw new BadRequestError(
+            'Revised quantity cannot be lower than already received quantity',
+          );
         }
         changes.push({ purchaseOrderItemId: existing.id, from: existing.quantity, to: quantity });
         await tx.purchaseOrderItem.update({
@@ -551,10 +557,7 @@ class PurchaseOrderService {
     return prisma.auditLog.findMany({
       where: {
         tenantId,
-        OR: [
-          { target: `PurchaseOrder:${id}` },
-          { target: id },
-        ],
+        OR: [{ target: `PurchaseOrder:${id}` }, { target: id }],
       },
       orderBy: { date: 'desc' },
     });
@@ -611,7 +614,10 @@ class PurchaseOrderService {
           { attempts: 5, backoff: { type: 'exponential', delay: 15000 } },
         );
       } catch (queueErr) {
-        logger.error({ err: queueErr, orderId: id }, 'CRITICAL: Failed to queue PO approved event retry');
+        logger.error(
+          { err: queueErr, orderId: id },
+          'CRITICAL: Failed to queue PO approved event retry',
+        );
       }
     }
 
@@ -746,14 +752,18 @@ class PurchaseOrderService {
         });
 
         for (const item of receivedItems) {
-          // Find PO item by purchaseOrderItemId
-          const poItem = order.items.find((i) => i.id === item.purchaseOrderItemId);
+          // Find PO item by medicineId (as sent from GRN form)
+          const poItem = order.items.find(
+            (i) => i.medicineId === item.medicineId || i.id === item.purchaseOrderItemId,
+          );
           if (!poItem) {
-            throw new BadRequestError(`PO item ${item.purchaseOrderItemId} not found in this order`);
+            throw new BadRequestError(
+              `Medicine ${item.medicineId} not found in this purchase order`,
+            );
           }
 
-          if (item.receivedQuantity < 0) {
-            throw new BadRequestError(`Received quantity cannot be negative for ${poItem.medicineName}`);
+          if (item.receivedQuantity <= 0) {
+            throw new BadRequestError(`Received quantity must be > 0 for ${poItem.medicineName}`);
           }
 
           const remainingQty = poItem.quantity - poItem.receivedQuantity;
@@ -763,8 +773,10 @@ class PurchaseOrderService {
             );
           }
 
-          if (!item.batchNumber) throw new BadRequestError(`Batch number is required for ${poItem.medicineName}`);
-          if (!item.expiryDate) throw new BadRequestError(`Expiry date is required for ${poItem.medicineName}`);
+          if (!item.batchNumber)
+            throw new BadRequestError(`Batch number is required for ${poItem.medicineName}`);
+          if (!item.expiryDate)
+            throw new BadRequestError(`Expiry date is required for ${poItem.medicineName}`);
 
           const parsedExpiryDate = new Date(item.expiryDate);
           if (isNaN(parsedExpiryDate.getTime())) {
@@ -772,23 +784,27 @@ class PurchaseOrderService {
           }
 
           const today = new Date();
-          const todayUTC = new Date(Date.UTC(today.getFullYear(), today.getMonth(), today.getDate()));
+          const todayUTC = new Date(
+            Date.UTC(today.getFullYear(), today.getMonth(), today.getDate()),
+          );
           if (parsedExpiryDate < todayUTC) {
-            throw new BadRequestError(`Expiry date cannot be in the past for ${poItem.medicineName}`);
+            throw new BadRequestError(
+              `Expiry date cannot be in the past for ${poItem.medicineName}`,
+            );
           }
 
           const purchasePrice = Number(item.purchasePrice);
-          if (purchasePrice <= 0) throw new BadRequestError(`Purchase price must be > 0 for ${poItem.medicineName}`);
-
-          const sellingPrice = Number(item.sellingPrice);
-          if (sellingPrice <= 0) throw new BadRequestError(`Selling price must be > 0 for ${poItem.medicineName}`);
+          if (purchasePrice <= 0)
+            throw new BadRequestError(`Purchase price must be > 0 for ${poItem.medicineName}`);
 
           const mrp = Number(item.mrp);
           if (mrp <= 0) throw new BadRequestError(`MRP must be > 0 for ${poItem.medicineName}`);
 
-          const manufacturingDate = item.manufacturingDate ? new Date(item.manufacturingDate) : null;
+          const sellingPrice = item.sellingPrice ? Number(item.sellingPrice) : mrp;
+          const manufacturingDate = item.manufacturingDate
+            ? new Date(item.manufacturingDate)
+            : null;
 
-          // 2. Create GRN Item
           await tx.goodsReceiptNoteItem.create({
             data: {
               grnId: grn.id,
@@ -815,7 +831,9 @@ class PurchaseOrderService {
 
           let batch;
           if (existingBatch) {
-            const existingExpiryStr = new Date(existingBatch.expiryDate).toISOString().split('T')[0];
+            const existingExpiryStr = new Date(existingBatch.expiryDate)
+              .toISOString()
+              .split('T')[0];
             const newExpiryStr = parsedExpiryDate.toISOString().split('T')[0];
             if (existingExpiryStr !== newExpiryStr) {
               throw new BadRequestError(
@@ -935,14 +953,15 @@ class PurchaseOrderService {
           },
         });
 
-        // 8. Generate Purchase Invoice
+        // 8. Generate Purchase Invoice — totals calculated from GRN received items
         let invoiceSubtotal = 0;
         let invoiceGstAmount = 0;
 
         for (const item of receivedItems) {
-          const poItem = order.items.find((i) => i.id === item.purchaseOrderItemId);
-          const lineSubtotal = item.receivedQuantity * Number(poItem.unitPrice);
-          const lineGst = lineSubtotal * (Number(poItem.gstPercentage) / 100);
+          const purchasePrice = Number(item.purchasePrice);
+          const gstPercentage = Number(item.gstPercentage ?? 0);
+          const lineSubtotal = item.receivedQuantity * purchasePrice;
+          const lineGst = lineSubtotal * (gstPercentage / 100);
           invoiceSubtotal += lineSubtotal;
           invoiceGstAmount += lineGst;
         }
@@ -1030,12 +1049,19 @@ class PurchaseOrderService {
             { attempts: 5, backoff: { type: 'exponential', delay: 15000 } },
           );
         } catch (queueErr) {
-          logger.error({ err: queueErr, orderId: id }, 'CRITICAL: Failed to queue PO received event retry');
+          logger.error(
+            { err: queueErr, orderId: id },
+            'CRITICAL: Failed to queue PO received event retry',
+          );
         }
       }
 
       logger.info(
-        { grnId: result.grn.id, invoiceId: result.purchaseInvoice?.id, orderStatus: result.orderStatus },
+        {
+          grnId: result.grn.id,
+          invoiceId: result.purchaseInvoice?.id,
+          orderStatus: result.orderStatus,
+        },
         'RECEIVE_GOODS_COMPLETED',
       );
       return result;
@@ -1168,7 +1194,7 @@ class PurchaseOrderService {
         newPaidAmount = Math.min(Math.max(Number(paidAmount), 0), totalAmount);
       }
       newBalanceAmount = totalAmount - newPaidAmount;
-      newPaidAt = newPaidAmount > 0 ? (invoice.paidAt || new Date()) : null;
+      newPaidAt = newPaidAmount > 0 ? invoice.paidAt || new Date() : null;
     }
 
     const updated = await prisma.purchaseInvoice.update({

@@ -106,7 +106,7 @@ async function purchaseOrderRoutes(fastify) {
         tags: ['Purchase Orders'],
         summary: 'Create a new purchase order',
         description:
-          'Creates a PO in DRAFT status. All calculations (subtotal, GST, discount, total) are done server-side. Fields like batchNumber, expiryDate, MRP, and invoice details belong to the GRN stage — use POST /:id/receive for that.',
+          'Creates a PO in DRAFT status. Only ordering information is captured here (supplier, branch, medicines, quantities). Purchase price, GST, batch, expiry, MRP, and invoice details belong to the GRN stage — use POST /:id/receive for that.',
         body: {
           type: 'object',
           required: ['supplierId', 'items'],
@@ -116,24 +116,20 @@ async function purchaseOrderRoutes(fastify) {
             expectedDeliveryDate: { type: 'string', format: 'date' },
             paymentMode: { type: 'string', enum: ['CASH', 'CREDIT', 'UPI', 'BANK_TRANSFER', 'CHEQUE'] },
             paymentTermsDays: { type: 'integer', minimum: 0, maximum: 365 },
-            discountAmount: { type: 'number', minimum: 0, default: 0 },
             notes: { type: 'string', maxLength: 500 },
+            items: {
+              type: 'array',
+              minItems: 1,
+              maxItems: 100,
               items: {
-                type: 'array',
-                minItems: 1,
-                maxItems: 100,
-                items: {
-                  type: 'object',
-                  required: ['medicineId', 'quantity'],
-                  properties: {
-                    medicineId: { type: 'string', format: 'uuid' },
-                    quantity: { type: 'integer', minimum: 1 },
-                    unitPrice: { type: 'number', exclusiveMinimum: 0 },
-                    purchasePrice: { type: 'number', exclusiveMinimum: 0 },
-                    gstPercentage: { type: 'number', minimum: 0, maximum: 100, default: 0 },
-                  },
+                type: 'object',
+                required: ['medicineId', 'quantity'],
+                properties: {
+                  medicineId: { type: 'string', format: 'uuid' },
+                  quantity: { type: 'integer', minimum: 1 },
                 },
               },
+            },
           },
         },
         response: {
@@ -153,10 +149,6 @@ async function purchaseOrderRoutes(fastify) {
                   expectedDeliveryDate: { type: 'string', format: 'date' },
                   paymentMode: { type: 'string' },
                   paymentTermsDays: { type: 'integer' },
-                  discountAmount: { type: 'number' },
-                  subtotal: { type: 'number' },
-                  gstAmount: { type: 'number' },
-                  totalAmount: { type: 'number' },
                   notes: { type: 'string' },
                   createdAt: { type: 'string', format: 'date-time' },
                   items: {
@@ -168,9 +160,6 @@ async function purchaseOrderRoutes(fastify) {
                         medicineId: { type: 'string', format: 'uuid' },
                         medicineName: { type: 'string' },
                         quantity: { type: 'integer' },
-                        unitPrice: { type: 'number' },
-                        gstPercentage: { type: 'number' },
-                        totalAmount: { type: 'number' },
                       },
                     },
                   },
@@ -293,7 +282,7 @@ async function purchaseOrderRoutes(fastify) {
         tags: ['Purchase Orders'],
         summary: 'Receive goods for a purchase order (GRN)',
         description:
-          'Records actual supplier delivery. This is where batchNumber, expiryDate, MRP, purchasePrice, and invoice details are captured. Creates inventory batches, purchase invoices, and supplier ledger entries.',
+          'Records actual supplier delivery. This is where batchNumber, expiryDate, MRP, purchasePrice, gstPercentage, and invoice details are captured. Creates inventory batches, purchase invoices, and supplier ledger entries.',
         params: { type: 'object', properties: { id: { type: 'string', format: 'uuid' } } },
         body: {
           type: 'object',
@@ -307,23 +296,22 @@ async function purchaseOrderRoutes(fastify) {
               items: {
                 type: 'object',
                 required: [
-                  'purchaseOrderItemId',
+                  'medicineId',
                   'receivedQuantity',
                   'batchNumber',
                   'expiryDate',
                   'purchasePrice',
                   'mrp',
-                  'sellingPrice',
                 ],
                 properties: {
-                  purchaseOrderItemId: { type: 'string', format: 'uuid' },
+                  medicineId: { type: 'string', format: 'uuid' },
                   receivedQuantity: { type: 'integer', minimum: 1 },
                   batchNumber: { type: 'string', minLength: 1 },
                   expiryDate: { type: 'string', format: 'date' },
                   manufacturingDate: { type: 'string', format: 'date' },
                   purchasePrice: { type: 'number', exclusiveMinimum: 0 },
                   mrp: { type: 'number', exclusiveMinimum: 0 },
-                  sellingPrice: { type: 'number', exclusiveMinimum: 0 },
+                  gstPercentage: { type: 'number', minimum: 0, maximum: 100, default: 0 },
                 },
               },
             },
