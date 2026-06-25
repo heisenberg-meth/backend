@@ -1,6 +1,7 @@
 import './config/tracing.js';
 import setupFastify from './fastify-app.js';
 import env from './config/env.js';
+import { validateAuthConfigOnStartup } from './modules/auth/service/auth.bootstrap.js';
 import prisma from './config/prisma.js';
 import redisClient from './config/redis.js';
 import eventBus from './shared/services/eventbus.service.js';
@@ -183,6 +184,7 @@ const start = async () => {
 
   try {
     fastify = await setupFastify();
+    await validateAuthConfigOnStartup();
     const port = env.port || 5000;
 
     await fastify.listen({ port, host: '0.0.0.0' });

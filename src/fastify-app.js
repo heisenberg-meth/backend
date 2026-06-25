@@ -18,6 +18,15 @@ import { Prisma } from '@prisma/client';
 import prisma from './config/prisma.js';
 import { connectRedis } from './config/redis.js';
 import env from './config/env.js';
+import { COOKIE_PARSE_OPTIONS } from './config/cookie.config.js';
+import { CORS_CONFIG } from './config/cors.config.js';
+import { JWT_CONFIG } from './config/jwt.config.js';
+import {
+  HELMET_CONFIG,
+  CSRF_CONFIG,
+  CSRF_EXEMPT_PATHS,
+  getRateLimitConfig,
+} from './config/security.config.js';
 import { initSentry } from './config/sentry.js';
 import uptimeMonitor from './shared/services/uptime-monitor.js';
 import authRoutes from './modules/auth/routes/auth.fastify.routes.js';
@@ -74,6 +83,8 @@ import supplierReturnsRoutes from './modules/supplier-returns/routes/supplier-re
 import adminRoutes from './modules/admin/routes/admin.routes.js';
 import supportRoutes from './modules/support/routes/support.routes.js';
 import adminSupportRoutes from './modules/support/routes/admin-support.routes.js';
+import cookieValidationPlugin from './middleware/cookie-validation.fastify.js';
+import authHealthRoutes from './modules/auth/routes/auth.health.routes.js';
 import logger from './shared/utils/logger.js';
 
 const dbHealthGauge = new client.Gauge({
@@ -160,82 +171,14 @@ const setupFastify = async () => {
 
   initSentry(fastify);
 
-  await fastify.register(helmet, {
-    contentSecurityPolicy: {
-      directives: {
-        defaultSrc: ["'self'"],
-        baseUri: ["'self'"],
-        fontSrc: ["'self'", 'https://fonts.gstatic.com', 'https:', 'data:'],
-        formAction: ["'self'"],
-        frameAncestors: ["'self'"],
-        imgSrc: ["'self'", 'data:', 'https:', 'validator.swagger.io', 'https://*.razorpay.com'],
-        objectSrc: ["'none'"],
-        scriptSrc: [
-          "'self'",
-          "'unsafe-inline'",
-          "'unsafe-eval'",
-          'https://checkout.razorpay.com',
-          'https://*.razorpay.com',
-        ],
-        scriptSrcElem: [
-          "'self'",
-          "'unsafe-inline'",
-          "'unsafe-eval'",
-          'https://checkout.razorpay.com',
-          'https://*.razorpay.com',
-        ],
-        scriptSrcAttr: ["'none'"],
-        styleSrc: [
-          "'self'",
-          'https:',
-          'https://fonts.googleapis.com',
-          "'unsafe-inline'",
-          'https://*.razorpay.com',
-        ],
-        frameSrc: [
-          "'self'",
-          'https://api.razorpay.com',
-          'https://checkout.razorpay.com',
-          'https://*.razorpay.com',
-        ],
-        connectSrc: [
-          "'self'",
-          'https://api.razorpay.com',
-          'https://checkout.razorpay.com',
-          'https://*.razorpay.com',
-          'wss://*.razorpay.com',
-        ],
-        upgradeInsecureRequests: [],
-      },
-    },
-    crossOriginResourcePolicy: {
-      policy: 'cross-origin',
-    },
-  });
-
-  let defaultCookieDomain;
-  if (env.cookieDomain) {
-    defaultCookieDomain = env.cookieDomain;
-    defaultCookieDomain = defaultCookieDomain.replace(/^https?:\/\//, '');
-    defaultCookieDomain = defaultCookieDomain.replace(/\/$/, '');
-  } else if (env.nodeEnv === 'development') {
-    defaultCookieDomain = 'localhost';
-  }
-
-  const cookieParseOptions = {
-    httpOnly: true,
-    sameSite: 'none',
-    secure: true,
-    path: '/',
-  };
-  if (defaultCookieDomain) {
-    cookieParseOptions.domain = defaultCookieDomain;
-  }
+  await fastify.register(helmet, HELMET_CONFIG);
 
   await fastify.register(cookie, {
     secret: env.cookieSecret,
-    parseOptions: cookieParseOptions,
+    parseOptions: COOKIE_PARSE_OPTIONS,
   });
+
+  await fastify.register(cookieValidationPlugin);
 
   await fastify.register(multipart, {
     limits: {
@@ -243,42 +186,11 @@ const setupFastify = async () => {
     },
   });
 
-  await fastify.register(fastifyJwt, {
-    secret: env.jwtSecrets[0],
-    sign: {
-      expiresIn: '15m',
-      algorithm: 'HS256',
-    },
-    verify: {
-      algorithms: ['HS256'],
-    },
-  });
+  await fastify.register(fastifyJwt, JWT_CONFIG.fastifyPluginOptions);
 
-  await fastify.register(cors, {
-    origin: [
-      'http://localhost:5173',
-      'http://localhost:5174',
-      'http://localhost:3000',
-      'https://api.medassist.viyaninfo.com',
-      'https://medassist.viyaninfo.com',
-    ],
-    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
-    credentials: true,
-    allowedHeaders: [
-      'Content-Type',
-      'Authorization',
-      'x-auth-token',
-      'x-csrf-token',
-      'X-Idempotency-Key',
-      'x-session-id',
-      'ngrok-skip-browser-warning',
-    ],
-    exposedHeaders: ['set-cookie'],
-  });
+  await fastify.register(cors, CORS_CONFIG);
 
-  await fastify.register(csrf, {
-    cookieOpts: { signed: true },
-  });
+  await fastify.register(csrf, CSRF_CONFIG);
 
   fastify.get('/api/csrf-token', async (request, reply) => {
     const token = await reply.generateCsrf();
@@ -292,21 +204,7 @@ const setupFastify = async () => {
     const safeMethods = ['GET', 'HEAD', 'OPTIONS'];
     if (safeMethods.includes(request.method)) return;
 
-    const exemptPaths = [
-      '/api/auth/login',
-      '/api/auth/register',
-      '/api/auth/refresh',
-      '/api/auth/forgot-password',
-      '/api/auth/verify-reset-otp',
-      '/api/auth/reset-password',
-      '/api/auth/resend-reset-otp',
-      '/api/payments/webhook',
-      '/health',
-      '/api/admin/login',
-      '/api/admin/refresh',
-    ];
-
-    const isExempt = exemptPaths.some((p) => request.url.startsWith(p));
+    const isExempt = CSRF_EXEMPT_PATHS.some((p) => request.url.startsWith(p));
     if (isExempt) return;
 
     if (process.env.NODE_ENV === 'production') {
@@ -319,22 +217,7 @@ const setupFastify = async () => {
     maxRetriesPerRequest: null,
   });
 
-  await fastify.register(rateLimit, {
-    max: 500,
-    timeWindow: '1 minute',
-    redis: fastify.redis,
-    keyGenerator: (request) => {
-      const clientIp = request.ip;
-      const userId = request.user?.id;
-      return userId ? `rl:${userId}:${clientIp}` : `rl:ip:${clientIp}`;
-    },
-    errorResponseBuilder: (request, context) => ({
-      statusCode: 429,
-      code: 'RATE_LIMIT_EXCEEDED',
-      message: `Rate limit exceeded, retry in ${context.after}`,
-      retryAfter: context.after,
-    }),
-  });
+  await fastify.register(rateLimit, getRateLimitConfig(fastify.redis));
 
   fastify.setErrorHandler((error, request, reply) => {
     fastify.log.error(error);
@@ -498,6 +381,7 @@ const setupFastify = async () => {
   fastify.addHook('preHandler', subscriptionGuard);
 
   await fastify.register(authRoutes, { prefix: '/api/auth' });
+  await fastify.register(authHealthRoutes, { prefix: '/api/auth' });
   await fastify.register(usersRoutes, { prefix: '/api/users' });
   await fastify.register(twoFactorRoutes, { prefix: '/api/users' });
   await fastify.register(uploadsRoutes, { prefix: '/api/uploads' });

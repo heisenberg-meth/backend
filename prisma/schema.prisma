@@ -246,6 +246,13 @@ model User {
   blockedReason                String?
   twoFactorSecret              String?
   twoFactorEnabled             Boolean                    @default(false)
+  twoFactorMethod              TwoFactorMethod            @default(TOTP)
+  passwordChangedAt            DateTime?
+  forcePasswordReset           Boolean                    @default(false)
+  emailVerifiedAt              DateTime?
+  emailVerificationToken       String?
+  emailVerificationExpiry      DateTime?
+  pendingEmail                 String?
   alertSettings                AlertSettings[]
   auditLogs                    AuditLog[]
   batchAuditLogs               BatchAuditLog[]
@@ -296,8 +303,71 @@ model User {
   createdTickets               SupportTicket[]            @relation("TicketCreator")
   assignedTickets              SupportTicket[]            @relation("TicketAssignee")
   ticketReplies                SupportTicketReply[]
+  passwordHistory              UserPasswordHistory[]
+  backupCodes                  UserBackupCode[]
+  recoveryRequests             AccountRecoveryRequest[]
+  loginHistory                 LoginHistory[]
 
   @@index([tenantId])
+}
+
+model UserPasswordHistory {
+  id        String   @id @default(uuid())
+  userId    String
+  password  String
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model UserBackupCode {
+  id        String    @id @default(uuid())
+  userId    String
+  codeHash  String
+  used      Boolean   @default(false)
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model AccountRecoveryRequest {
+  id           String         @id @default(uuid())
+  userId       String
+  reason       String
+  identityData Json?
+  status       RecoveryStatus @default(PENDING_APPROVAL)
+  reviewedBy   String?
+  reviewedAt   DateTime?
+  adminNotes   String?
+  expiresAt    DateTime
+  createdAt    DateTime       @default(now())
+  user         User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, status])
+  @@index([status])
+}
+
+model LoginHistory {
+  id            String      @id @default(uuid())
+  userId        String?
+  email         String
+  ipAddress     String?
+  userAgent     String?
+  browser       String?
+  os            String?
+  country       String?
+  city          String?
+  status        LoginStatus @default(SUCCESS)
+  failureReason String?
+  createdAt     DateTime    @default(now())
+  user          User?       @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([userId, createdAt])
+  @@index([email, createdAt])
+  @@index([ipAddress, createdAt])
 }
 
 model OtpAuditLog {
@@ -3217,6 +3287,7 @@ model UserSession {
   fingerprintHash String?
   refreshToken    String    @unique
   userAgent       String?
+  authVersion     String    @default("v1")
   user            User      @relation(fields: [userId], references: [id])
 
   @@index([userId, revoked])
@@ -3382,7 +3453,9 @@ model Device {
   deviceToken   String   @unique
   browser       String?
   os            String?
-  lastSeen      DateTime @default(now())
+  isTrusted     Boolean    @default(false)
+  trustedUntil  DateTime?
+  lastSeen      DateTime   @default(now())
   createdAt     DateTime @default(now())
   user          User     @relation(fields: [userId], references: [id])
 
@@ -3999,9 +4072,31 @@ enum Role {
 }
 
 enum UserStatus {
+  UNVERIFIED
   ACTIVE
   SUSPENDED
   BLOCKED
+}
+
+enum TwoFactorMethod {
+  TOTP
+  EMAIL_OTP
+}
+
+enum RecoveryStatus {
+  PENDING_APPROVAL
+  APPROVED
+  REJECTED
+  CANCELLED
+}
+
+enum LoginStatus {
+  SUCCESS
+  FAILED_PASSWORD
+  FAILED_2FA
+  FAILED_LOCKED
+  FAILED_DISABLED
+  FAILED_UNVERIFIED
 }
 
 enum SubscriptionStatus {

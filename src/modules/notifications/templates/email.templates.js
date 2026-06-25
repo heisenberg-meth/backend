@@ -64,6 +64,38 @@ export const OTP_TEMPLATE = (otp) => `
   </div>
 `;
 
+export const VERIFY_EMAIL_TEMPLATE = (verifyUrl) => `
+  <div style="${BASE_STYLE}">
+    <h2 style="${HEADER_STYLE}">Verify Your Email Address</h2>
+    <div style="${CARD_STYLE}">
+      <p style="margin-top: 0;">Welcome to Viyan MedAssist! Please confirm your email address to activate your account:</p>
+      <div style="text-align: center; margin: 32px 0;">
+        <a href="${verifyUrl}" style="background-color: #4FDBC8; color: #0A0F1C; padding: 14px 28px; font-size: 16px; font-weight: 700; text-decoration: none; border-radius: 8px; display: inline-block;">Verify Email</a>
+      </div>
+      <p style="margin-bottom: 0; font-size: 14px; color: #8899AA;">This link will expire in 24 hours. Or copy this URL into your browser:<br/><span style="color: #4FDBC8; word-break: break-all;">${verifyUrl}</span></p>
+    </div>
+    <div style="${FOOTER_STYLE}">
+      <p>© 2026 Viyan MedAssist. All rights reserved.</p>
+    </div>
+  </div>
+`;
+
+export const CHANGE_EMAIL_TEMPLATE = (verifyUrl, newEmail) => `
+  <div style="${BASE_STYLE}">
+    <h2 style="${HEADER_STYLE}">Confirm Your New Email Address</h2>
+    <div style="${CARD_STYLE}">
+      <p style="margin-top: 0;">You requested to update your email address to <strong>${newEmail}</strong>.</p>
+      <div style="text-align: center; margin: 32px 0;">
+        <a href="${verifyUrl}" style="background-color: #4FDBC8; color: #0A0F1C; padding: 14px 28px; font-size: 16px; font-weight: 700; text-decoration: none; border-radius: 8px; display: inline-block;">Confirm Email Change</a>
+      </div>
+      <p style="margin-bottom: 0; font-size: 14px; color: #8899AA;">This link will expire in 1 hour. If you didn't request this change, please contact support immediately.</p>
+    </div>
+    <div style="${FOOTER_STYLE}">
+      <p>© 2026 Viyan MedAssist. All rights reserved.</p>
+    </div>
+  </div>
+`;
+
 export const EXPIRY_ALERT_TEMPLATE = (shopName, expiringItems, daysAhead) => {
   const itemList = expiringItems
     .map(

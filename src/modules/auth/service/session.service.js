@@ -4,6 +4,7 @@ import prisma from '../../../config/prisma.js';
 import redis from '../../../config/redis.js';
 import { invalidateSessionCache } from './auth.cache.js';
 import logger from '../../../shared/utils/logger.js';
+import { CURRENT_AUTH_VERSION } from '../auth.constants.js';
 
 const MAX_CONCURRENT_SESSIONS = 5;
 const SESSION_CACHE_PREFIX = 'session:';
@@ -38,7 +39,10 @@ class SessionService {
     });
 
     if (activeSessions.length >= MAX_CONCURRENT_SESSIONS) {
-      const sessionsToRevoke = activeSessions.slice(0, activeSessions.length - MAX_CONCURRENT_SESSIONS + 1);
+      const sessionsToRevoke = activeSessions.slice(
+        0,
+        activeSessions.length - MAX_CONCURRENT_SESSIONS + 1,
+      );
       const revokeIds = sessionsToRevoke.map((s) => s.id);
 
       await prisma.userSession.updateMany({
@@ -47,7 +51,10 @@ class SessionService {
       });
 
       revokeIds.forEach((id) => invalidateSessionCache(id));
-      logger.info({ userId, revokedCount: revokeIds.length }, 'Evicted old sessions for max concurrent limit');
+      logger.info(
+        { userId, revokedCount: revokeIds.length },
+        'Evicted old sessions for max concurrent limit',
+      );
     }
 
     const session = await prisma.userSession.create({
@@ -60,6 +67,7 @@ class SessionService {
         ipAddress: ipAddress || null,
         expiresAt,
         lastActivity: new Date(),
+        authVersion: CURRENT_AUTH_VERSION,
       },
     });
 
@@ -137,6 +145,30 @@ class SessionService {
     });
   }
 
+  async revokeUserSessionsByDevice(userId, fingerprintHash) {
+    if (!fingerprintHash) return;
+    const sessions = await prisma.userSession.findMany({
+      where: { userId, fingerprintHash, revoked: false },
+      select: { id: true },
+    });
+
+    await prisma.userSession.updateMany({
+      where: { id: { in: sessions.map((s) => s.id) } },
+      data: { revoked: true },
+    });
+
+    sessions.forEach((s) => {
+      invalidateSessionCache(s.id);
+      redis.del(`${SESSION_CACHE_PREFIX}${s.id}`).catch(() => {});
+    });
+  }
+
+  async findSessionById(sessionId) {
+    return prisma.userSession.findUnique({
+      where: { id: sessionId },
+    });
+  }
+
   async findSessionByRefreshToken(refreshToken) {
     const hash = this.hashToken(refreshToken);
 
@@ -164,6 +196,7 @@ class SessionService {
         refreshToken: this.hashToken(newRefreshToken),
         expiresAt,
         lastActivity: new Date(),
+        authVersion: CURRENT_AUTH_VERSION,
       },
     });
   }

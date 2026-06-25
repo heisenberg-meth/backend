@@ -2,19 +2,26 @@ import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import crypto from 'crypto';
 import prisma from '../../../config/prisma.js';
-import redis from '../../../config/redis.js';
 import authRepository from '../repository/auth.prisma.repository.js';
 import sessionService from './session.service.js';
-import secretManager from '../../../config/secrets.js';
+import { JWT_CONFIG } from '../../../config/jwt.config.js';
 import eventBus from '../../../shared/services/eventbus.service.js';
 import logger from '../../../shared/utils/logger.js';
 import { TRIAL_DAYS } from '../../subscriptions/subscription.constants.js';
 import { queueEmail } from '../../../shared/services/email.service.js';
 import otpAuditService from '../../../shared/services/otp-audit.service.js';
 import MediaService from '../../../shared/services/media.service.js';
-
-const MAX_FAILED_LOGINS = 10;
-const LOCKOUT_DURATION_SECONDS = 30 * 60; // 30 minutes
+import { CURRENT_AUTH_VERSION } from '../auth.constants.js';
+import tokenService from './token.service.js';
+import emailVerificationService from './email-verification.service.js';
+import mfaService from './mfa.service.js';
+import loginHistoryService from './login-history.service.js';
+import securityEngineService from './security-engine.service.js';
+import secretManager from '../../../config/secrets.js';
+import { RESET_OTP_TEMPLATE } from '../../notifications/templates/email.templates.js';
+import PasswordService from './password.service.js';
+import AUTH_ERRORS from '../../../config/auth.errors.js';
+import { OTP_EXPIRY_MS, RESET_TOKEN_EXPIRY_MS, MAX_OTP_ATTEMPTS } from '../auth.constants.js';
 
 class AuthPrismaService {
   async register(userData) {
@@ -68,6 +75,7 @@ class AuthPrismaService {
           password: hashedPassword,
           fullName,
           role: 'OWNER',
+          status: 'UNVERIFIED',
           tenantId: tenant.id,
           branchId: branch.id,
         },
@@ -121,6 +129,9 @@ class AuthPrismaService {
     });
 
     try {
+      emailVerificationService.sendVerificationEmail(user.id, user.email).catch((err) => {
+        logger.warn({ err: err?.message }, '[AUTH] Failed to trigger verification email');
+      });
       await eventBus.publish('USER_REGISTERED', {
         userId: user.id,
         email: user.email,
@@ -154,6 +165,9 @@ class AuthPrismaService {
     deviceToken,
     otp,
     twoFactorToken,
+    backupCode,
+    rememberDevice,
+    headers = {},
   }) {
     const normalizedEmail = email.toLowerCase().trim();
     const user = await authRepository.findUserByEmail(normalizedEmail);
@@ -163,20 +177,26 @@ class AuthPrismaService {
       throw new Error('Invalid credentials');
     }
 
-    // Account lockout check (Redis-based)
-    const lockoutKey = `auth:lockout:${user.id}`;
-    const lockoutTtl = await redis.ttl(lockoutKey);
-    if (lockoutTtl > 0) {
-      logger.warn({ email: normalizedEmail, lockoutRemaining: lockoutTtl }, 'Login blocked: Account locked');
-      throw new Error(`Account locked due to too many failed attempts. Try again in ${Math.ceil(lockoutTtl / 60)} minutes.`);
-    }
-
-    // Failed login attempt tracking
-    const attemptsKey = `auth:attempts:${user.id}`;
+    // Account lockout & IP reputation check (Security Engine)
+    await securityEngineService.checkBruteForce(user.id, ipAddress);
+    await securityEngineService.evaluateLoginRisk({
+      userId: user.id,
+      email: normalizedEmail,
+      ipAddress,
+      userAgent,
+      headers,
+    });
 
     if (user.status === 'BLOCKED') {
       logger.warn({ email: normalizedEmail }, 'Login failed: User is blocked');
       throw new Error('Your account has been blocked. Contact support.');
+    }
+
+    if (user.status === 'UNVERIFIED') {
+      logger.warn({ email: normalizedEmail }, 'Login failed: User email not verified');
+      const err = new Error('Please verify your email address before logging in.');
+      err.code = AUTH_ERRORS.AUTH_EMAIL_NOT_VERIFIED;
+      throw err;
     }
 
     if (user.status === 'SUSPENDED') {
@@ -215,36 +235,36 @@ class AuthPrismaService {
     const isMatch = await bcrypt.compare(password, user.password);
 
     if (!isMatch) {
-      // Track failed login attempt
-      const attempts = await redis.incr(attemptsKey);
-      await redis.expire(attemptsKey, LOCKOUT_DURATION_SECONDS);
-
-      if (attempts >= MAX_FAILED_LOGINS) {
-        await redis.set(lockoutKey, 'locked', 'EX', LOCKOUT_DURATION_SECONDS);
-        await redis.del(attemptsKey);
-        logger.warn({ email: normalizedEmail, attempts }, 'Login failed: Account locked after max attempts');
-        throw new Error('Account locked due to too many failed attempts. Try again in 30 minutes.');
-      }
-
-      logger.warn({ email: normalizedEmail, attempts }, 'Login failed: Password mismatch');
+      await securityEngineService.recordFailedLogin({
+        userId: user.id,
+        email: normalizedEmail,
+        ipAddress,
+      });
+      logger.warn({ email: normalizedEmail }, 'Login failed: Password mismatch');
       throw new Error('Invalid credentials');
     }
 
     // Successful login — clear failed attempts
-    await redis.del(attemptsKey);
+    await securityEngineService.clearFailedLogin({ userId: user.id });
 
     // --- 2FA VALIDATION ---
     if (user.twoFactorEnabled) {
-      if (!twoFactorToken) {
-        return {
-          twoFactorVerificationRequired: true,
-          message: 'Please enter your 2FA code',
-        };
-      }
-      const { verifyTOTP } = await import('../../../shared/utils/totp.js');
-      const isValid2FA = verifyTOTP(twoFactorToken, user.twoFactorSecret);
-      if (!isValid2FA) {
-        throw new Error('Invalid 2FA code');
+      const fingerprintId = fingerprint ? sessionService.hashFingerprint(fingerprint) : null;
+      const isTrusted = await mfaService.isDeviceTrusted(user.id, fingerprintId);
+
+      if (!isTrusted) {
+        if (!twoFactorToken && !backupCode) {
+          return {
+            twoFactorVerificationRequired: true,
+            message: 'Multi-factor authentication required',
+          };
+        }
+        await mfaService.verifyMfaChallenge(user.id, {
+          token: twoFactorToken,
+          backupCode,
+          fingerprintId,
+          rememberDevice,
+        });
       }
     }
 
@@ -405,11 +425,11 @@ class AuthPrismaService {
       subscription.status = 'EXPIRED';
     }
 
-    const refreshToken = sessionService.generateDeviceToken();
+    const jti = sessionService.generateDeviceToken();
 
     const session = await sessionService.createSession({
       userId: user.id,
-      refreshToken,
+      refreshToken: jti,
       fingerprint,
       deviceName,
       userAgent,
@@ -417,13 +437,29 @@ class AuthPrismaService {
     });
 
     const accessToken = this._signAccessToken(user, session.id);
+    const signedRefreshToken = this._signRefreshToken(session.id, jti);
 
     const isExpired = subscription?.status === 'EXPIRED';
     const subscriptionStatus = subscription?.status || 'PENDING';
 
+    await loginHistoryService.recordLoginEvent({
+      userId: user.id,
+      email: user.email,
+      ipAddress,
+      userAgent,
+      status: 'SUCCESS',
+    });
+
+    eventBus.publish('UserLoggedIn', {
+      userId: user.id,
+      tenantId: user.tenantId,
+      sessionId: session.id,
+      timestamp: new Date().toISOString(),
+    });
+
     return {
       token: accessToken,
-      refreshToken,
+      refreshToken: signedRefreshToken,
       deviceToken: finalDeviceToken,
       sessionId: session.id,
       user: {
@@ -443,8 +479,36 @@ class AuthPrismaService {
 
   async refreshSession(oldRefreshToken) {
     const startTime = Date.now();
-    const tokenHash = sessionService.hashToken(oldRefreshToken);
-    const session = await sessionService.findSessionByRefreshToken(oldRefreshToken);
+    let sessionId = null;
+    let jti = null;
+
+    try {
+      const payload = jwt.verify(oldRefreshToken, JWT_CONFIG.refreshSecret);
+      sessionId = payload.sessionId;
+      jti = payload.jti;
+      if (payload.authVersion !== CURRENT_AUTH_VERSION) {
+        logger.info(
+          {
+            sessionId,
+            fromVersion: payload.authVersion || 'legacy',
+            toVersion: CURRENT_AUTH_VERSION,
+          },
+          'Migrating session authentication version',
+        );
+      }
+    } catch (err) {
+      logger.error(err);
+      jti = oldRefreshToken;
+    }
+
+    const tokenHash = sessionService.hashToken(jti);
+    let session;
+
+    if (sessionId) {
+      session = await sessionService.findSessionById(sessionId);
+    } else {
+      session = await sessionService.findSessionByRefreshToken(jti);
+    }
 
     logger.info(
       {
@@ -456,14 +520,27 @@ class AuthPrismaService {
       'Session lookup during refresh',
     );
 
-    if (!session || session.revoked) {
+    if (!session) {
       logger.info({
         route: '/auth/refresh',
         cookieReceived: true,
         sessionFound: false,
-        userFound: false,
         duration: Date.now() - startTime,
       });
+      throw new Error('Session not found');
+    }
+
+    if (session.revoked) {
+      throw new Error('Invalid or reused refresh token');
+    }
+
+    if (session.refreshToken !== tokenHash) {
+      // REPLAY ATTACK! The session is active but the token presented doesn't match the active hash.
+      await sessionService.revokeSession(session.id);
+      logger.warn(
+        { sessionId: session.id, userId: session.userId, jti },
+        'Replay attack detected! Revoked session immediately.',
+      );
       throw new Error('Invalid or reused refresh token');
     }
 
@@ -522,17 +599,12 @@ class AuthPrismaService {
       throw new Error('Your subscription has expired. Please renew.');
     }
 
-    // Extend session expiry on refresh (no token rotation — prevents
-    // multi-tab / race-condition 401s where a second tab still holds the
-    // old cookie that was already overwritten by the first refresh).
-    const newExpiresAt = new Date();
-    newExpiresAt.setDate(newExpiresAt.getDate() + 30);
-    await prisma.userSession.update({
-      where: { id: session.id },
-      data: { expiresAt: newExpiresAt, lastActivity: new Date() },
-    });
+    // Rotate Refresh Token
+    const newJti = sessionService.generateDeviceToken();
+    await sessionService.rotateRefreshToken(session.id, newJti);
 
     const accessToken = this._signAccessToken(user, session.id);
+    const signedRefreshToken = this._signRefreshToken(session.id, newJti);
     const subscription = user.tenant?.subscription;
 
     if (
@@ -550,9 +622,16 @@ class AuthPrismaService {
 
     const isExpired = subscription?.status === 'EXPIRED';
 
+    eventBus.publish('RefreshTokenRotated', {
+      userId: user.id,
+      tenantId: user.tenantId,
+      sessionId: session.id,
+      timestamp: new Date().toISOString(),
+    });
+
     return {
       token: accessToken,
-      refreshToken: oldRefreshToken,
+      refreshToken: signedRefreshToken,
       sessionId: session.id,
       user: {
         id: user.id,
@@ -572,6 +651,7 @@ class AuthPrismaService {
   async logout(sessionId) {
     if (sessionId) {
       await sessionService.revokeSession(sessionId);
+      eventBus.publish('UserLoggedOut', { sessionId, timestamp: new Date().toISOString() });
     }
   }
 
@@ -630,20 +710,211 @@ class AuthPrismaService {
 
   async changePassword(userId, currentPassword, newPassword) {
     const user = await authRepository.findUserById(userId);
-    if (!user) throw new Error('User not found');
+    if (!user) {
+      const err = new Error('User not found');
+      err.code = AUTH_ERRORS.USER_NOT_FOUND;
+      throw err;
+    }
 
     const isMatch = await bcrypt.compare(currentPassword, user.password);
-    if (!isMatch) throw new Error('Current password is incorrect');
+    if (!isMatch) {
+      const err = new Error('Current password is incorrect');
+      err.code = AUTH_ERRORS.INVALID_PASSWORD;
+      throw err;
+    }
 
-    const hashedPassword = await bcrypt.hash(newPassword, 10);
+    PasswordService.validatePasswordPolicy(newPassword);
+    await PasswordService.checkPasswordHistory(userId, newPassword, prisma);
+
+    const hashedPassword = await bcrypt.hash(newPassword, 12);
     await prisma.user.update({
       where: { id: userId },
-      data: { password: hashedPassword },
+      data: {
+        password: hashedPassword,
+        passwordChangedAt: new Date(),
+        forcePasswordReset: false,
+      },
     });
 
+    await PasswordService.recordPasswordHistory(userId, hashedPassword, prisma);
     await sessionService.revokeAllUserSessions(userId);
 
+    eventBus.publish('PasswordChanged', { userId, timestamp: new Date() });
+
     return { message: 'Password changed successfully' };
+  }
+
+  async forgotPassword(email, ipAddress = '') {
+    const user = await authRepository.findUserByEmail(email);
+    if (user) {
+      const otp = Math.floor(100000 + Math.random() * 900000).toString();
+      const hashedOtp = await bcrypt.hash(otp, 12);
+      const expiresAt = new Date(Date.now() + OTP_EXPIRY_MS);
+
+      await prisma.user.update({
+        where: { email },
+        data: {
+          resetOtp: hashedOtp,
+          resetOtpExpiry: expiresAt,
+          resetOtpVerified: false,
+          resetOtpAttempts: 0,
+          resetOtpLastSentAt: new Date(),
+          resetToken: null,
+          resetTokenExpiry: null,
+        },
+      });
+
+      await queueEmail(email, 'Password Reset OTP', RESET_OTP_TEMPLATE(otp));
+
+      otpAuditService.logOtpGenerated({
+        userId: user.id,
+        email,
+        otp,
+        purpose: 'PASSWORD_RESET',
+        channel: 'EMAIL',
+        ipAddress,
+        expiresAt,
+      });
+    }
+    return { message: 'If the account exists, a recovery code has been sent.' };
+  }
+
+  async verifyResetOtp(email, otp, ipAddress = '') {
+    const user = await authRepository.findUserByEmail(email);
+    if (!user || !user.resetOtp) {
+      return { message: 'OTP verified successfully' };
+    }
+
+    if (user.resetOtpAttempts >= MAX_OTP_ATTEMPTS) {
+      otpAuditService.logOtpFailed({
+        email,
+        reason: 'MAX_ATTEMPTS',
+        attempt: user.resetOtpAttempts,
+        userId: user.id,
+        purpose: 'PASSWORD_RESET',
+        ipAddress,
+      });
+      const err = new Error('Too many failed attempts. Request a new OTP.');
+      err.code = AUTH_ERRORS.OTP_LOCKED;
+      throw err;
+    }
+
+    if (new Date() > user.resetOtpExpiry) {
+      otpAuditService.logOtpExpired({ email, userId: user.id, purpose: 'PASSWORD_RESET' });
+      const err = new Error('OTP has expired');
+      err.code = AUTH_ERRORS.OTP_EXPIRED;
+      throw err;
+    }
+
+    const isMatch = await bcrypt.compare(otp, user.resetOtp);
+    if (!isMatch) {
+      await prisma.user.update({
+        where: { email },
+        data: { resetOtpAttempts: { increment: 1 } },
+      });
+      otpAuditService.logOtpFailed({
+        email,
+        enteredOtp: otp,
+        reason: AUTH_ERRORS.INVALID_OTP,
+        attempt: user.resetOtpAttempts + 1,
+        userId: user.id,
+        purpose: 'PASSWORD_RESET',
+        ipAddress,
+      });
+      const err = new Error('Invalid OTP');
+      err.code = AUTH_ERRORS.INVALID_OTP;
+      throw err;
+    }
+
+    const resetToken = jwt.sign(
+      { type: 'password-reset', userId: user.id },
+      secretManager.getPrimarySecret(),
+      { expiresIn: '5m', algorithm: 'HS256' },
+    );
+
+    const hashedResetToken = crypto.createHash('sha256').update(resetToken).digest('hex');
+
+    await prisma.user.update({
+      where: { email },
+      data: {
+        resetOtpVerified: true,
+        resetToken: hashedResetToken,
+        resetTokenExpiry: new Date(Date.now() + RESET_TOKEN_EXPIRY_MS),
+      },
+    });
+
+    otpAuditService.logOtpVerified({
+      email,
+      otp,
+      userId: user.id,
+      channel: 'EMAIL',
+      ipAddress,
+    });
+
+    return { message: 'OTP verified successfully', resetToken };
+  }
+
+  async resetPassword(resetToken, newPassword) {
+    let payload;
+    try {
+      payload = jwt.verify(resetToken, secretManager.getPrimarySecret());
+    } catch {
+      const err = new Error('Invalid or expired reset token.');
+      err.code = AUTH_ERRORS.INVALID_RESET_TOKEN;
+      throw err;
+    }
+
+    if (payload.type !== 'password-reset' || !payload.userId) {
+      const err = new Error('Invalid reset token.');
+      err.code = AUTH_ERRORS.INVALID_RESET_TOKEN;
+      throw err;
+    }
+
+    const user = await authRepository.findUserById(payload.userId);
+    if (!user || !user.resetOtpVerified) {
+      return { message: 'Password reset successful' };
+    }
+
+    if (!user.resetTokenExpiry || new Date() > user.resetTokenExpiry) {
+      const err = new Error('Reset session expired. Request a new OTP.');
+      err.code = AUTH_ERRORS.RESET_SESSION_EXPIRED;
+      throw err;
+    }
+
+    const hashedToken = crypto.createHash('sha256').update(resetToken).digest('hex');
+    if (user.resetToken !== hashedToken) {
+      const err = new Error('Invalid reset token.');
+      err.code = AUTH_ERRORS.INVALID_RESET_TOKEN;
+      throw err;
+    }
+
+    PasswordService.validatePasswordPolicy(newPassword);
+    await PasswordService.checkPasswordHistory(user.id, newPassword, prisma);
+
+    const hashedPassword = await bcrypt.hash(newPassword, 12);
+
+    await prisma.user.update({
+      where: { id: user.id },
+      data: {
+        password: hashedPassword,
+        passwordChangedAt: new Date(),
+        forcePasswordReset: false,
+        resetOtp: null,
+        resetOtpExpiry: null,
+        resetOtpVerified: false,
+        resetOtpAttempts: 0,
+        resetOtpLastSentAt: null,
+        resetToken: null,
+        resetTokenExpiry: null,
+      },
+    });
+
+    await PasswordService.recordPasswordHistory(user.id, hashedPassword, prisma);
+    await sessionService.revokeAllUserSessions(user.id);
+
+    eventBus.publish('PasswordReset', { userId: user.id, timestamp: new Date() });
+
+    return { message: 'Password reset successful' };
   }
 
   async getMe(userId) {
@@ -707,17 +978,11 @@ class AuthPrismaService {
   }
 
   _signAccessToken(user, sessionId) {
-    return jwt.sign(
-      {
-        userId: user.id,
-        tenantId: user.tenantId,
-        role: user.role,
-        branchId: user.branchId,
-        sessionId,
-      },
-      secretManager.getPrimarySecret(),
-      { expiresIn: '15m', algorithm: 'HS256' },
-    );
+    return tokenService.signAccessToken(user, sessionId);
+  }
+
+  _signRefreshToken(sessionId, jti) {
+    return tokenService.signRefreshToken(sessionId, jti);
   }
 }
 

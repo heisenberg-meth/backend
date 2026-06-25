@@ -1,7 +1,10 @@
 import authController from '../controller/auth.fastify.controller.js';
 import { authenticate } from '../../../middleware/auth.fastify.js';
+import csrfMiddleware from '../middleware/csrf.middleware.js';
 
 async function authRoutes(fastify) {
+  fastify.addHook('preHandler', csrfMiddleware.verifyCsrf.bind(csrfMiddleware));
+
   fastify.post(
     '/forgot-password',
     {
@@ -152,6 +155,18 @@ async function authRoutes(fastify) {
   );
 
   fastify.get(
+    '/sessions/current',
+    {
+      preHandler: [authenticate],
+      schema: {
+        tags: ['Auth'],
+        summary: 'Get current session details',
+      },
+    },
+    authController.getCurrentSession,
+  );
+
+  fastify.get(
     '/sessions',
     {
       preHandler: [authenticate],
@@ -204,6 +219,80 @@ async function authRoutes(fastify) {
       },
     },
     authController.changePassword,
+  );
+
+  // ── Enterprise PRD Standardized Aliases ────────────────────────────────
+  fastify.post('/logout-all', { preHandler: [authenticate] }, authController.logoutAll);
+  fastify.get('/session', { preHandler: [authenticate] }, authController.getCurrentSession);
+  fastify.post('/change-password', { preHandler: [authenticate] }, authController.changePassword);
+
+  // ── Email Verification Endpoints ───────────────────────────────────────
+  fastify.post('/verify-email', authController.verifyEmail);
+  fastify.post('/resend-verification', authController.resendVerification);
+  fastify.post('/change-email', { preHandler: [authenticate] }, authController.requestEmailChange);
+  fastify.post('/confirm-email-change', authController.verifyEmailChange);
+
+  // ── Enterprise MFA Endpoints ───────────────────────────────────────────
+  fastify.post('/mfa/enroll', { preHandler: [authenticate] }, authController.enrollMfa);
+  fastify.post('/mfa/confirm', { preHandler: [authenticate] }, authController.confirmMfaEnrollment);
+  fastify.post('/mfa/disable', { preHandler: [authenticate] }, authController.disableMfa);
+
+  // ── Account Recovery Suite ─────────────────────────────────────────────
+  fastify.post('/recovery/request', authController.requestRecovery);
+  fastify.get('/admin/recovery', { preHandler: [authenticate] }, authController.getPendingRecovery);
+  fastify.post(
+    '/admin/recovery/approve',
+    { preHandler: [authenticate] },
+    authController.approveRecovery,
+  );
+  fastify.post(
+    '/admin/recovery/reject',
+    { preHandler: [authenticate] },
+    authController.rejectRecovery,
+  );
+
+  // ── Device Management API ──────────────────────────────────────────────
+  fastify.get('/devices', { preHandler: [authenticate] }, authController.getUserDevices);
+  fastify.delete('/devices/:deviceId', { preHandler: [authenticate] }, authController.revokeDevice);
+
+  // ── Login History & Forensics ──────────────────────────────────────────
+  fastify.get('/login-history', { preHandler: [authenticate] }, authController.getLoginHistory);
+  fastify.post(
+    '/sessions/:sessionId/revoke',
+    { preHandler: [authenticate] },
+    authController.revokeSession,
+  );
+
+  // ── Phase 4: Enterprise Administration & SSO ───────────────────────────
+  fastify.get('/tenant/policy', { preHandler: [authenticate] }, authController.getTenantPolicy);
+  fastify.put('/tenant/policy', { preHandler: [authenticate] }, authController.updateTenantPolicy);
+  fastify.post(
+    '/admin/users/:userId/reset-mfa',
+    { preHandler: [authenticate] },
+    authController.adminResetMfa,
+  );
+  fastify.post(
+    '/admin/users/:userId/force-reset-password',
+    { preHandler: [authenticate] },
+    authController.adminForceResetPassword,
+  );
+  fastify.post(
+    '/admin/users/:userId/terminate-sessions',
+    { preHandler: [authenticate] },
+    authController.adminTerminateSessions,
+  );
+  fastify.get('/sso/:provider/authorize', authController.ssoAuthorize);
+  fastify.post('/sso/:provider/callback', authController.ssoCallback);
+
+  // ── Phase 5: Compliance, Operations & Resiliency ───────────────────────
+  fastify.post('/api-keys', { preHandler: [authenticate] }, authController.createApiKey);
+  fastify.get('/api-keys', { preHandler: [authenticate] }, authController.listApiKeys);
+  fastify.delete('/api-keys/:keyId', { preHandler: [authenticate] }, authController.revokeApiKey);
+  fastify.get('/compliance/export', { preHandler: [authenticate] }, authController.exportGdprData);
+  fastify.post(
+    '/compliance/erasure',
+    { preHandler: [authenticate] },
+    authController.deleteGdprData,
   );
 }
 

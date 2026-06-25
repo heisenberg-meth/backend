@@ -1,12 +1,18 @@
 import bcrypt from 'bcryptjs';
-import jwt from 'jsonwebtoken';
-import crypto from 'crypto';
 import { ZodError } from 'zod';
 import prisma from '../../../config/prisma.js';
 import authService from '../service/auth.prisma.service.js';
 import authRepository from '../repository/auth.prisma.repository.js';
-import sessionService from '../service/session.service.js';
-import secretManager from '../../../config/secrets.js';
+import emailVerificationService from '../service/email-verification.service.js';
+import mfaService from '../service/mfa.service.js';
+import accountRecoveryService from '../service/account-recovery.service.js';
+import deviceManagementService from '../service/device-management.service.js';
+import loginHistoryService from '../service/login-history.service.js';
+import adminGovernanceService from '../service/admin-governance.service.js';
+import ssoService from '../service/sso.service.js';
+import apiKeyService from '../service/api-key.service.js';
+import complianceService from '../service/compliance.service.js';
+import csrfMiddleware from '../middleware/csrf.middleware.js';
 import {
   registerSchema,
   loginSchema,
@@ -19,45 +25,11 @@ import { success, error as errorResponse } from '../../../shared/helpers/respons
 import { queueEmail } from '../../../shared/services/email.service.js';
 import { RESET_OTP_TEMPLATE } from '../../notifications/templates/email.templates.js';
 import otpAuditService from '../../../shared/services/otp-audit.service.js';
-import {
-  OTP_EXPIRY_MS,
-  RESEND_COOLDOWN_MS,
-  MAX_OTP_ATTEMPTS,
-  RESET_TOKEN_EXPIRY_MS,
-} from '../auth.constants.js';
-import env from '../../../config/env.js';
-
-// Dynamic cookie domain based on environment
-const getCookieDomain = () => {
-  if (env.cookieDomain) {
-    let domain = env.cookieDomain;
-    domain = domain.replace(/^https?:\/\//, '');
-    domain = domain.replace(/\/$/, '');
-    return domain;
-  }
-  if (env.nodeEnv === 'development') {
-    return 'localhost';
-  }
-  return undefined;
-};
-
-const COOKIE_OPTIONS = {
-  path: '/',
-  httpOnly: true,
-  sameSite: 'none',
-  secure: true,
-  maxAge: 30 * 24 * 60 * 60,
-  ...(getCookieDomain() ? { domain: getCookieDomain() } : {}),
-};
-
-const ACCESS_COOKIE_OPTIONS = {
-  path: '/',
-  httpOnly: true,
-  sameSite: 'none',
-  secure: true,
-  maxAge: 15 * 60,
-  ...(getCookieDomain() ? { domain: getCookieDomain() } : {}),
-};
+import { OTP_EXPIRY_MS, RESEND_COOLDOWN_MS } from '../auth.constants.js';
+import { resolvedCookieDomain, REFRESH_COOKIE_OPTIONS } from '../../../config/cookie.config.js';
+import AUTH_ERRORS from '../../../config/auth.errors.js';
+import authMetricsService from '../service/auth.metrics.service.js';
+import cookieManager from '../../../shared/services/cookie-manager.service.js';
 
 class AuthFastifyController {
   async register(request, reply) {
@@ -66,7 +38,7 @@ class AuthFastifyController {
       const result = await authService.register(parsed);
 
       if (result.refreshToken) {
-        reply.setCookie('refresh_token', result.refreshToken, COOKIE_OPTIONS);
+        cookieManager.setAuthCookies(reply, { refreshToken: result.refreshToken });
       }
 
       const responsePayload = { ...result };
@@ -79,20 +51,27 @@ class AuthFastifyController {
         const firstIssue = error.issues?.[0];
         return reply
           .code(400)
-          .send(errorResponse(firstIssue?.message || 'Validation failed', 'VALIDATION_ERROR'));
+          .send(
+            errorResponse(firstIssue?.message || 'Validation failed', AUTH_ERRORS.VALIDATION_ERROR),
+          );
       }
       if (error?.message === 'User already exists') {
         return reply
           .code(409)
-          .send(errorResponse('An account with this email already exists', 'USER_EXISTS'));
+          .send(
+            errorResponse('An account with this email already exists', AUTH_ERRORS.USER_EXISTS),
+          );
       }
       return reply
         .code(400)
-        .send(errorResponse(error?.message || 'Registration failed', 'REGISTRATION_ERROR'));
+        .send(
+          errorResponse(error?.message || 'Registration failed', AUTH_ERRORS.REGISTRATION_ERROR),
+        );
     }
   }
 
   async login(request, reply) {
+    const startTime = Date.now();
     try {
       request.log.info(
         {
@@ -110,6 +89,7 @@ class AuthFastifyController {
         deviceName: request.body.deviceName,
         userAgent: request.headers['user-agent'],
         ipAddress: request.ip,
+        headers: request.headers,
       });
 
       if (result.deviceVerificationRequired || result.twoFactorVerificationRequired) {
@@ -117,8 +97,11 @@ class AuthFastifyController {
       }
 
       // Set cookies with proper options
-      reply.setCookie('refresh_token', result.refreshToken, COOKIE_OPTIONS);
-      reply.setCookie('accessToken', result.token, ACCESS_COOKIE_OPTIONS);
+      cookieManager.setAuthCookies(reply, {
+        refreshToken: result.refreshToken,
+        accessToken: result.token,
+      });
+      csrfMiddleware.setCsrfCookie(reply, csrfMiddleware.generateToken());
 
       const responsePayload = { ...result };
       delete responsePayload.refreshToken;
@@ -132,52 +115,87 @@ class AuthFastifyController {
         'LOGIN SUCCESS',
       );
 
+      authMetricsService.recordLoginSuccess();
+      authMetricsService.logStructuredAuthEvent({
+        requestId: request.id,
+        method: request.method,
+        userId: result.user?.id,
+        tenantId: result.user?.tenantId,
+        branchId: result.user?.branchId,
+        role: result.user?.role,
+        endpoint: '/api/auth/login',
+        result: 'SUCCESS',
+        responseTime: Date.now() - startTime,
+        ipAddress: request.ip,
+        userAgent: request.headers['user-agent'],
+      });
+
       return reply.send(success(responsePayload));
     } catch (error) {
       request.log.error(error);
+
+      authMetricsService.recordLoginFailure(
+        error?.message === 'Invalid credentials' ? 'invalid_password' : 'other',
+      );
+      authMetricsService.logStructuredAuthEvent({
+        requestId: request.id,
+        method: request.method,
+        endpoint: '/api/auth/login',
+        result: 'FAILURE',
+        errorCode: error?.message || 'UnknownError',
+        failureReason: error?.message || 'Invalid login attempt',
+        responseTime: Date.now() - startTime,
+        ipAddress: request.ip,
+        userAgent: request.headers['user-agent'],
+      });
+
       if (error instanceof ZodError) {
         const firstIssue = error.issues?.[0];
         return reply
           .code(400)
-          .send(errorResponse(firstIssue?.message || 'Validation failed', 'VALIDATION_ERROR'));
+          .send(
+            errorResponse(firstIssue?.message || 'Validation failed', AUTH_ERRORS.VALIDATION_ERROR),
+          );
       }
       if (error?.message === 'Invalid credentials') {
         request.log.warn(
           { event: 'AUTH_LOGIN_FAILURE', email: request.body?.email },
           'Login Failure',
         );
-        return reply.code(401).send(errorResponse(error.message, 'INVALID_CREDENTIALS'));
+        return reply.code(401).send(errorResponse(error.message, AUTH_ERRORS.INVALID_CREDENTIALS));
       }
       if (error?.message === 'Invalid 2FA code') {
         request.log.warn(
           { event: 'AUTH_LOGIN_FAILURE_2FA', email: request.body?.email },
           'Invalid 2FA code',
         );
-        return reply.code(401).send(errorResponse(error.message, 'INVALID_2FA_CODE'));
+        return reply.code(401).send(errorResponse(error.message, AUTH_ERRORS.INVALID_2FA_CODE));
       }
       if (error?.message === 'This browser is already linked to another account') {
         request.log.warn(
           { event: 'AUTH_FINGERPRINT_MISMATCH', email: request.body?.email },
           'Fingerprint Mismatch',
         );
-        return reply.code(403).send(errorResponse(error.message, 'BROWSER_LOCKED'));
+        return reply.code(403).send(errorResponse(error.message, AUTH_ERRORS.BROWSER_LOCKED));
       }
       if (
         error?.message === 'Verification code has expired or is invalid' ||
         error?.message === 'Invalid verification code'
       ) {
-        return reply.code(400).send(errorResponse(error.message, 'INVALID_VERIFICATION_CODE'));
+        return reply
+          .code(400)
+          .send(errorResponse(error.message, AUTH_ERRORS.INVALID_VERIFICATION_CODE));
       }
       if (error?.message?.includes('active on another device')) {
         request.log.warn(
           { event: 'AUTH_SESSION_LIMIT', email: request.body?.email },
           'Session Limit Reached',
         );
-        return reply.code(403).send(errorResponse(error.message, 'SESSION_LIMIT'));
+        return reply.code(403).send(errorResponse(error.message, AUTH_ERRORS.SESSION_LIMIT));
       }
       return reply
         .code(500)
-        .send(errorResponse(error?.message || 'Internal server error', 'INTERNAL_ERROR'));
+        .send(errorResponse(error?.message || 'Internal server error', AUTH_ERRORS.INTERNAL_ERROR));
     }
   }
 
@@ -209,23 +227,25 @@ class AuthFastifyController {
             sessionFound: false,
             userFound: false,
             duration: Date.now() - startTime,
-            cookieDomain: COOKIE_OPTIONS.domain,
-            sameSite: COOKIE_OPTIONS.sameSite,
-            secure: COOKIE_OPTIONS.secure,
+            cookieDomain: resolvedCookieDomain,
+            sameSite: REFRESH_COOKIE_OPTIONS.sameSite,
+            secure: REFRESH_COOKIE_OPTIONS.secure,
           },
           'Token refresh failed: Missing cookie - check cookie domain and SameSite settings',
         );
         return reply
           .code(401)
-          .send(errorResponse('Refresh token required', 'REFRESH_TOKEN_REQUIRED'));
+          .send(errorResponse('Refresh token required', AUTH_ERRORS.REFRESH_TOKEN_REQUIRED));
       }
 
       const result = await authService.refreshSession(refreshToken);
       sessionFound = true;
       userFound = true;
 
-      reply.setCookie('refresh_token', result.refreshToken, COOKIE_OPTIONS);
-      reply.setCookie('accessToken', result.token, ACCESS_COOKIE_OPTIONS);
+      cookieManager.setAuthCookies(reply, {
+        refreshToken: result.refreshToken,
+        accessToken: result.token,
+      });
 
       const responsePayload = { ...result };
       delete responsePayload.refreshToken;
@@ -241,9 +261,39 @@ class AuthFastifyController {
         'Token refresh successful',
       );
 
+      authMetricsService.recordRefreshSuccess();
+      authMetricsService.logStructuredAuthEvent({
+        requestId: request.id,
+        method: request.method,
+        userId: result.user?.id,
+        tenantId: result.user?.tenantId,
+        branchId: result.user?.branchId,
+        role: result.user?.role,
+        sessionId: result.id,
+        endpoint: '/api/auth/refresh',
+        result: 'SUCCESS',
+        responseTime: Date.now() - startTime,
+        ipAddress: request.ip,
+        userAgent: request.headers['user-agent'],
+      });
+
       return reply.send(success(responsePayload));
     } catch (error) {
       request.log.error(error);
+
+      const isReused = error?.message === 'Invalid or reused refresh token';
+      authMetricsService.recordRefreshFailure(isReused ? 'replay' : 'expired');
+      authMetricsService.logStructuredAuthEvent({
+        requestId: request.id,
+        method: request.method,
+        endpoint: '/api/auth/refresh',
+        result: 'FAILURE',
+        errorCode: error?.message || 'RefreshFailed',
+        failureReason: isReused ? 'Replay attack detected' : 'Token expired or invalid',
+        responseTime: Date.now() - startTime,
+        ipAddress: request.ip,
+        userAgent: request.headers['user-agent'],
+      });
 
       const isInvalidToken =
         error?.message === 'Invalid refresh token' ||
@@ -267,46 +317,27 @@ class AuthFastifyController {
       );
 
       if (isInvalidToken) {
-        reply.clearCookie('refresh_token', {
-          path: '/',
-          ...(getCookieDomain() ? { domain: getCookieDomain() } : {}),
-          sameSite: 'none',
-          secure: true,
-        });
-        reply.clearCookie('accessToken', {
-          path: '/',
-          ...(getCookieDomain() ? { domain: getCookieDomain() } : {}),
-          sameSite: 'none',
-          secure: true,
-        });
+        cookieManager.clearAuthCookies(reply);
         const code =
           error.message === 'Invalid or reused refresh token'
-            ? 'REFRESH_TOKEN_REUSED'
-            : 'REFRESH_INVALID';
+            ? AUTH_ERRORS.REFRESH_TOKEN_REUSED
+            : AUTH_ERRORS.REFRESH_INVALID;
         return reply.code(401).send(errorResponse(error.message, code));
       }
       return reply
         .code(401)
-        .send(errorResponse(error?.message || 'Session refresh failed', 'REFRESH_FAILED'));
+        .send(
+          errorResponse(error?.message || 'Session refresh failed', AUTH_ERRORS.REFRESH_FAILED),
+        );
     }
   }
 
   async logout(request, reply) {
+    const startTime = Date.now();
     try {
       await authService.logout(request.sessionId);
 
-      reply.clearCookie('refresh_token', {
-        path: '/',
-        ...(getCookieDomain() ? { domain: getCookieDomain() } : {}),
-        sameSite: 'none',
-        secure: true,
-      });
-      reply.clearCookie('accessToken', {
-        path: '/',
-        ...(getCookieDomain() ? { domain: getCookieDomain() } : {}),
-        sameSite: 'none',
-        secure: true,
-      });
+      cookieManager.clearAuthCookies(reply);
 
       request.log.info(
         {
@@ -316,10 +347,42 @@ class AuthFastifyController {
         'LOGOUT SUCCESS',
       );
 
+      authMetricsService.recordLogoutSuccess();
+      authMetricsService.logStructuredAuthEvent({
+        requestId: request.id,
+        method: request.method,
+        userId: request.user?.id,
+        tenantId: request.user?.tenantId,
+        branchId: request.user?.branchId,
+        role: request.user?.role,
+        sessionId: request.sessionId,
+        endpoint: '/api/auth/logout',
+        result: 'SUCCESS',
+        responseTime: Date.now() - startTime,
+        ipAddress: request.ip,
+        userAgent: request.headers['user-agent'],
+      });
+
       return reply.send(success({ message: 'Logged out successfully' }));
     } catch (error) {
       request.log.error(error);
-      return reply.code(400).send(errorResponse(error?.message || 'Logout failed', 'LOGOUT_ERROR'));
+
+      authMetricsService.recordLogoutFailure();
+      authMetricsService.logStructuredAuthEvent({
+        requestId: request.id,
+        method: request.method,
+        endpoint: '/api/auth/logout',
+        result: 'FAILURE',
+        errorCode: error?.message || 'LogoutFailed',
+        failureReason: error?.message || 'Failed to clear session',
+        responseTime: Date.now() - startTime,
+        ipAddress: request.ip,
+        userAgent: request.headers['user-agent'],
+      });
+
+      return reply
+        .code(400)
+        .send(errorResponse(error?.message || 'Logout failed', AUTH_ERRORS.LOGOUT_ERROR));
     }
   }
 
@@ -327,18 +390,7 @@ class AuthFastifyController {
     try {
       await authService.logoutAll(request.user.id);
 
-      reply.clearCookie('refresh_token', {
-        path: '/',
-        ...(getCookieDomain() ? { domain: getCookieDomain() } : {}),
-        sameSite: 'none',
-        secure: true,
-      });
-      reply.clearCookie('accessToken', {
-        path: '/',
-        ...(getCookieDomain() ? { domain: getCookieDomain() } : {}),
-        sameSite: 'none',
-        secure: true,
-      });
+      cookieManager.clearAuthCookies(reply);
 
       request.log.info(
         {
@@ -352,19 +404,51 @@ class AuthFastifyController {
       request.log.error(error);
       return reply
         .code(400)
-        .send(errorResponse(error?.message || 'Session revocation failed', 'LOGOUT_ALL_ERROR'));
+        .send(
+          errorResponse(
+            error?.message || 'Session revocation failed',
+            AUTH_ERRORS.LOGOUT_ALL_ERROR,
+          ),
+        );
     }
   }
 
   async getSessions(request, reply) {
     try {
-      const sessions = await authService.getSessions(request.user.id);
+      const rawSessions = await authService.getSessions(request.user.id);
+      const sessions = rawSessions.map((s) => ({
+        ...s,
+        isCurrent: s.id === request.sessionId,
+      }));
       return reply.send(success({ sessions }));
     } catch (error) {
       request.log.error(error);
       return reply
         .code(400)
-        .send(errorResponse(error?.message || 'Failed to fetch sessions', 'SESSIONS_ERROR'));
+        .send(
+          errorResponse(error?.message || 'Failed to fetch sessions', AUTH_ERRORS.SESSIONS_ERROR),
+        );
+    }
+  }
+
+  async getCurrentSession(request, reply) {
+    try {
+      const currentId = request.sessionId;
+      if (!currentId) throw new Error('No active session associated with this token');
+      const sessions = await authService.getSessions(request.user.id);
+      const currentSession = sessions.find((s) => s.id === currentId);
+      if (!currentSession) throw new Error('Session not found');
+      return reply.send(success({ session: { ...currentSession, isCurrent: true } }));
+    } catch (error) {
+      request.log.error(error);
+      return reply
+        .code(400)
+        .send(
+          errorResponse(
+            error?.message || 'Failed to fetch current session',
+            AUTH_ERRORS.SESSIONS_ERROR,
+          ),
+        );
     }
   }
 
@@ -377,227 +461,77 @@ class AuthFastifyController {
       request.log.error(error);
       return reply
         .code(400)
-        .send(errorResponse(error?.message || 'Failed to revoke session', 'REVOKE_ERROR'));
+        .send(
+          errorResponse(error?.message || 'Failed to revoke session', AUTH_ERRORS.REVOKE_ERROR),
+        );
     }
   }
 
   async forgotPassword(request, reply) {
     try {
       const { email } = forgotPasswordSchema.parse(request.body);
-
-      const user = await authRepository.findUserByEmail(email);
-
-      if (user) {
-        const otp = Math.floor(100000 + Math.random() * 900000).toString();
-        const hashedOtp = await bcrypt.hash(otp, 12);
-        const expiresAt = new Date(Date.now() + OTP_EXPIRY_MS);
-
-        await prisma.user.update({
-          where: { email },
-          data: {
-            resetOtp: hashedOtp,
-            resetOtpExpiry: expiresAt,
-            resetOtpVerified: false,
-            resetOtpAttempts: 0,
-            resetOtpLastSentAt: new Date(),
-            resetToken: null,
-            resetTokenExpiry: null,
-          },
-        });
-
-        await queueEmail(email, 'Password Reset OTP', RESET_OTP_TEMPLATE(otp));
-
-        otpAuditService.logOtpGenerated({
-          userId: user.id,
-          email,
-          otp,
-          purpose: 'PASSWORD_RESET',
-          channel: 'EMAIL',
-          ipAddress: request.ip,
-          expiresAt,
-        });
-      }
-
-      return reply.send(
-        success({
-          message: 'If the account exists, a recovery code has been sent.',
-        }),
-      );
+      const result = await authService.forgotPassword(email, request.ip);
+      return reply.send(success(result));
     } catch (error) {
       request.log.error(error);
       if (error instanceof ZodError) {
-        const firstIssue = error.issues?.[0];
         return reply
           .code(400)
-          .send(errorResponse(firstIssue?.message || 'Validation failed', 'VALIDATION_ERROR'));
+          .send(
+            errorResponse(
+              error.issues?.[0]?.message || 'Validation failed',
+              AUTH_ERRORS.VALIDATION_ERROR,
+            ),
+          );
       }
       return reply
         .code(500)
-        .send(errorResponse(error?.message || 'Internal server error', 'INTERNAL_ERROR'));
+        .send(errorResponse(error?.message || 'Internal server error', AUTH_ERRORS.INTERNAL_ERROR));
     }
   }
 
   async verifyResetOtp(request, reply) {
     try {
       const { email, otp } = verifyResetOtpSchema.parse(request.body);
-
-      const user = await authRepository.findUserByEmail(email);
-      if (!user || !user.resetOtp) {
-        return reply.send(success({ message: 'OTP verified successfully' }));
-      }
-
-      if (user.resetOtpAttempts >= MAX_OTP_ATTEMPTS) {
-        otpAuditService.logOtpFailed({
-          email,
-          reason: 'MAX_ATTEMPTS',
-          attempt: user.resetOtpAttempts,
-          userId: user.id,
-          purpose: 'PASSWORD_RESET',
-          ipAddress: request.ip,
-        });
-        return reply
-          .code(429)
-          .send(errorResponse('Too many failed attempts. Request a new OTP.', 'OTP_LOCKED'));
-      }
-
-      if (new Date() > user.resetOtpExpiry) {
-        otpAuditService.logOtpExpired({
-          email,
-          userId: user.id,
-          purpose: 'PASSWORD_RESET',
-        });
-        return reply.code(400).send(errorResponse('OTP has expired', 'OTP_EXPIRED'));
-      }
-
-      const isMatch = await bcrypt.compare(otp, user.resetOtp);
-      if (!isMatch) {
-        await prisma.user.update({
-          where: { email },
-          data: { resetOtpAttempts: { increment: 1 } },
-        });
-        otpAuditService.logOtpFailed({
-          email,
-          enteredOtp: otp,
-          reason: 'INVALID_OTP',
-          attempt: user.resetOtpAttempts + 1,
-          userId: user.id,
-          purpose: 'PASSWORD_RESET',
-          ipAddress: request.ip,
-        });
-        return reply.code(400).send(errorResponse('Invalid OTP', 'INVALID_OTP'));
-      }
-
-      const resetToken = jwt.sign(
-        { type: 'password-reset', userId: user.id },
-        secretManager.getPrimarySecret(),
-        { expiresIn: '5m', algorithm: 'HS256' },
-      );
-
-      const hashedResetToken = crypto.createHash('sha256').update(resetToken).digest('hex');
-
-      await prisma.user.update({
-        where: { email },
-        data: {
-          resetOtpVerified: true,
-          resetToken: hashedResetToken,
-          resetTokenExpiry: new Date(Date.now() + RESET_TOKEN_EXPIRY_MS),
-        },
-      });
-
-      otpAuditService.logOtpVerified({
-        email,
-        otp,
-        userId: user.id,
-        channel: 'EMAIL',
-        ipAddress: request.ip,
-      });
-
-      return reply.send(
-        success({
-          message: 'OTP verified successfully',
-          resetToken,
-        }),
-      );
+      const result = await authService.verifyResetOtp(email, otp, request.ip);
+      return reply.send(success(result));
     } catch (error) {
       request.log.error(error);
       if (error instanceof ZodError) {
-        const firstIssue = error.issues?.[0];
         return reply
           .code(400)
-          .send(errorResponse(firstIssue?.message || 'Validation failed', 'VALIDATION_ERROR'));
+          .send(
+            errorResponse(
+              error.issues?.[0]?.message || 'Validation failed',
+              AUTH_ERRORS.VALIDATION_ERROR,
+            ),
+          );
       }
-      return reply
-        .code(500)
-        .send(errorResponse(error?.message || 'Internal server error', 'INTERNAL_ERROR'));
+      const code = error.code || AUTH_ERRORS.INVALID_OTP;
+      const status = code === AUTH_ERRORS.OTP_LOCKED ? 429 : 400;
+      return reply.code(status).send(errorResponse(error?.message || 'Verification failed', code));
     }
   }
 
   async resetPassword(request, reply) {
     try {
       const { resetToken, newPassword } = resetPasswordSchema.parse(request.body);
-
-      let payload;
-      try {
-        payload = jwt.verify(resetToken, secretManager.getPrimarySecret());
-      } catch {
-        return reply
-          .code(400)
-          .send(errorResponse('Invalid or expired reset token.', 'INVALID_RESET_TOKEN'));
-      }
-
-      if (payload.type !== 'password-reset' || !payload.userId) {
-        return reply.code(400).send(errorResponse('Invalid reset token.', 'INVALID_RESET_TOKEN'));
-      }
-
-      const user = await authRepository.findUserById(payload.userId);
-      if (!user || !user.resetOtpVerified) {
-        return reply.send(success({ message: 'Password reset successful' }));
-      }
-
-      if (!user.resetTokenExpiry || new Date() > user.resetTokenExpiry) {
-        return reply
-          .code(400)
-          .send(
-            errorResponse('Reset session expired. Request a new OTP.', 'RESET_SESSION_EXPIRED'),
-          );
-      }
-
-      // Verify hashed reset token
-      const hashedToken = crypto.createHash('sha256').update(resetToken).digest('hex');
-      if (user.resetToken !== hashedToken) {
-        return reply.code(400).send(errorResponse('Invalid reset token.', 'INVALID_RESET_TOKEN'));
-      }
-
-      const hashedPassword = await bcrypt.hash(newPassword, 12);
-
-      await prisma.user.update({
-        where: { id: user.id },
-        data: {
-          password: hashedPassword,
-          resetOtp: null,
-          resetOtpExpiry: null,
-          resetOtpVerified: false,
-          resetOtpAttempts: 0,
-          resetOtpLastSentAt: null,
-          resetToken: null,
-          resetTokenExpiry: null,
-        },
-      });
-
-      await sessionService.revokeAllUserSessions(user.id);
-
-      return reply.send(success({ message: 'Password reset successful' }));
+      const result = await authService.resetPassword(resetToken, newPassword);
+      return reply.send(success(result));
     } catch (error) {
       request.log.error(error);
       if (error instanceof ZodError) {
-        const firstIssue = error.issues?.[0];
         return reply
           .code(400)
-          .send(errorResponse(firstIssue?.message || 'Validation failed', 'VALIDATION_ERROR'));
+          .send(
+            errorResponse(
+              error.issues?.[0]?.message || 'Validation failed',
+              AUTH_ERRORS.VALIDATION_ERROR,
+            ),
+          );
       }
-      return reply
-        .code(500)
-        .send(errorResponse(error?.message || 'Internal server error', 'INTERNAL_ERROR'));
+      const code = error.code || AUTH_ERRORS.INVALID_RESET_TOKEN;
+      return reply.code(400).send(errorResponse(error?.message || 'Password reset failed', code));
     }
   }
 
@@ -617,7 +551,7 @@ class AuthFastifyController {
               .send(
                 errorResponse(
                   `Please wait ${remaining} seconds before requesting a new OTP.`,
-                  'RESEND_COOLDOWN',
+                  AUTH_ERRORS.RESEND_COOLDOWN,
                 ),
               );
           }
@@ -663,11 +597,13 @@ class AuthFastifyController {
         const firstIssue = error.issues?.[0];
         return reply
           .code(400)
-          .send(errorResponse(firstIssue?.message || 'Validation failed', 'VALIDATION_ERROR'));
+          .send(
+            errorResponse(firstIssue?.message || 'Validation failed', AUTH_ERRORS.VALIDATION_ERROR),
+          );
       }
       return reply
         .code(500)
-        .send(errorResponse(error?.message || 'Internal server error', 'INTERNAL_ERROR'));
+        .send(errorResponse(error?.message || 'Internal server error', AUTH_ERRORS.INTERNAL_ERROR));
     }
   }
 
@@ -679,7 +615,12 @@ class AuthFastifyController {
       request.log.error(error);
       return reply
         .code(400)
-        .send(errorResponse(error?.message || 'Profile update failed', 'PROFILE_UPDATE_ERROR'));
+        .send(
+          errorResponse(
+            error?.message || 'Profile update failed',
+            AUTH_ERRORS.PROFILE_UPDATE_ERROR,
+          ),
+        );
     }
   }
 
@@ -690,29 +631,13 @@ class AuthFastifyController {
         return reply
           .code(400)
           .send(
-            errorResponse('Current password and new password are required', 'VALIDATION_ERROR'),
-          );
-      }
-      if (newPassword.length < 6) {
-        return reply
-          .code(400)
-          .send(errorResponse('Password must be at least 8 characters', 'VALIDATION_ERROR'));
-      }
-      if (
-        !/[A-Z]/.test(newPassword) ||
-        !/[a-z]/.test(newPassword) ||
-        !/[0-9]/.test(newPassword) ||
-        !/[^A-Za-z0-9]/.test(newPassword)
-      ) {
-        return reply
-          .code(400)
-          .send(
             errorResponse(
-              'Password must contain uppercase, lowercase, number, and special character',
-              'VALIDATION_ERROR',
+              'Current password and new password are required',
+              AUTH_ERRORS.VALIDATION_ERROR,
             ),
           );
       }
+
       const result = await authService.changePassword(
         request.user.id,
         currentPassword,
@@ -721,12 +646,468 @@ class AuthFastifyController {
       return reply.send(success(result));
     } catch (error) {
       request.log.error(error);
-      if (error?.message === 'Current password is incorrect') {
-        return reply.code(400).send(errorResponse(error.message, 'INVALID_PASSWORD'));
-      }
+      const code = error.code || AUTH_ERRORS.PASSWORD_CHANGE_ERROR;
+      const status = code === AUTH_ERRORS.INVALID_PASSWORD ? 401 : 400;
+      return reply
+        .code(status)
+        .send(errorResponse(error?.message || 'Password change failed', code));
+    }
+  }
+
+  async verifyEmail(request, reply) {
+    try {
+      const { token } = request.body || {};
+      const result = await emailVerificationService.verifyEmail(token);
+      return reply.send(success(result));
+    } catch (error) {
+      request.log.error(error);
+      const code = error.code || AUTH_ERRORS.INVALID_VERIFICATION_TOKEN;
       return reply
         .code(400)
-        .send(errorResponse(error?.message || 'Password change failed', 'PASSWORD_CHANGE_ERROR'));
+        .send(errorResponse(error?.message || 'Email verification failed', code));
+    }
+  }
+
+  async resendVerification(request, reply) {
+    try {
+      const { email } = request.body || {};
+      if (!email) {
+        return reply
+          .code(400)
+          .send(errorResponse('Email is required', AUTH_ERRORS.VALIDATION_ERROR));
+      }
+      const origin = request.headers.origin || 'http://localhost:5173';
+      const result = await emailVerificationService.resendVerification(email, origin);
+      return reply.send(success(result));
+    } catch (error) {
+      request.log.error(error);
+      const code = error.code || AUTH_ERRORS.INTERNAL_ERROR;
+      const status = code === AUTH_ERRORS.EMAIL_ALREADY_VERIFIED ? 400 : 500;
+      return reply
+        .code(status)
+        .send(errorResponse(error?.message || 'Failed to resend verification', code));
+    }
+  }
+
+  async requestEmailChange(request, reply) {
+    try {
+      const { newEmail, currentPassword } = request.body || {};
+      if (!newEmail || !currentPassword) {
+        return reply
+          .code(400)
+          .send(
+            errorResponse(
+              'New email and current password are required',
+              AUTH_ERRORS.VALIDATION_ERROR,
+            ),
+          );
+      }
+      const origin = request.headers.origin || 'http://localhost:5173';
+      const result = await emailVerificationService.requestEmailChange(
+        request.user.id,
+        newEmail,
+        currentPassword,
+        origin,
+      );
+      return reply.send(success(result));
+    } catch (error) {
+      request.log.error(error);
+      const code = error.code || AUTH_ERRORS.INTERNAL_ERROR;
+      const status = code === AUTH_ERRORS.INVALID_PASSWORD ? 401 : 400;
+      return reply
+        .code(status)
+        .send(errorResponse(error?.message || 'Failed to request email change', code));
+    }
+  }
+
+  async verifyEmailChange(request, reply) {
+    try {
+      const { token } = request.body || {};
+      const result = await emailVerificationService.verifyEmailChange(token);
+      return reply.send(success(result));
+    } catch (error) {
+      request.log.error(error);
+      const code = error.code || AUTH_ERRORS.INVALID_VERIFICATION_TOKEN;
+      return reply
+        .code(400)
+        .send(errorResponse(error?.message || 'Email change verification failed', code));
+    }
+  }
+
+  async enrollMfa(request, reply) {
+    try {
+      const user = await authRepository.findUserById(request.user.id);
+      const result = await mfaService.enrollMfa(request.user.id, user.email);
+      return reply.send(success(result));
+    } catch (error) {
+      request.log.error(error);
+      const code = error.code || AUTH_ERRORS.INTERNAL_ERROR;
+      return reply.code(500).send(errorResponse(error?.message || 'MFA enrollment failed', code));
+    }
+  }
+
+  async confirmMfaEnrollment(request, reply) {
+    try {
+      const { token } = request.body || {};
+      const result = await mfaService.confirmMfaEnrollment(request.user.id, token);
+      return reply.send(success(result));
+    } catch (error) {
+      request.log.error(error);
+      const code = error.code || AUTH_ERRORS.AUTH_MFA_INVALID;
+      return reply.code(400).send(errorResponse(error?.message || 'MFA confirmation failed', code));
+    }
+  }
+
+  async disableMfa(request, reply) {
+    try {
+      const { currentPassword } = request.body || {};
+      if (!currentPassword) {
+        return reply
+          .code(400)
+          .send(errorResponse('Current password is required', AUTH_ERRORS.VALIDATION_ERROR));
+      }
+      const result = await mfaService.disableMfa(request.user.id, currentPassword);
+      return reply.send(success(result));
+    } catch (error) {
+      request.log.error(error);
+      const code = error.code || AUTH_ERRORS.INTERNAL_ERROR;
+      const status = code === AUTH_ERRORS.INVALID_PASSWORD ? 401 : 400;
+      return reply
+        .code(status)
+        .send(errorResponse(error?.message || 'Failed to disable MFA', code));
+    }
+  }
+
+  // --- Account Recovery Suite ---
+  async requestRecovery(request, reply) {
+    const { email, password, reason, identityData } = request.body || {};
+    if (!email || !password) {
+      return reply
+        .code(400)
+        .send(errorResponse('Email and password are required', AUTH_ERRORS.VALIDATION_ERROR));
+    }
+    try {
+      const result = await accountRecoveryService.requestRecovery({
+        email,
+        password,
+        reason,
+        identityData,
+      });
+      return reply.send(success(result));
+    } catch (error) {
+      request.log.error(error);
+      const status = error?.code === AUTH_ERRORS.AUTH_INVALID_CREDENTIALS ? 401 : 400;
+      return reply
+        .code(status)
+        .send(
+          errorResponse(
+            error?.message || 'Failed to submit recovery request',
+            error?.code || AUTH_ERRORS.INTERNAL_ERROR,
+          ),
+        );
+    }
+  }
+
+  async getPendingRecovery(request, reply) {
+    try {
+      const tenantId = request.user?.tenantId;
+      const result = await accountRecoveryService.getPendingRecoveryRequests(tenantId);
+      return reply.send(success(result));
+    } catch (error) {
+      request.log.error(error);
+      return reply
+        .code(500)
+        .send(
+          errorResponse(
+            error?.message || 'Failed to fetch recovery requests',
+            AUTH_ERRORS.INTERNAL_ERROR,
+          ),
+        );
+    }
+  }
+
+  async approveRecovery(request, reply) {
+    const { requestId, adminNotes } = request.body || {};
+    if (!requestId) {
+      return reply
+        .code(400)
+        .send(errorResponse('requestId is required', AUTH_ERRORS.VALIDATION_ERROR));
+    }
+    try {
+      const result = await accountRecoveryService.approveRecoveryRequest({
+        requestId,
+        adminId: request.user.id,
+        adminNotes,
+      });
+      return reply.send(success(result));
+    } catch (error) {
+      request.log.error(error);
+      const status = error?.code === AUTH_ERRORS.AUTH_RECOVERY_NOT_FOUND ? 404 : 400;
+      return reply
+        .code(status)
+        .send(
+          errorResponse(
+            error?.message || 'Failed to approve recovery',
+            error?.code || AUTH_ERRORS.INTERNAL_ERROR,
+          ),
+        );
+    }
+  }
+
+  async rejectRecovery(request, reply) {
+    const { requestId, adminNotes } = request.body || {};
+    if (!requestId) {
+      return reply
+        .code(400)
+        .send(errorResponse('requestId is required', AUTH_ERRORS.VALIDATION_ERROR));
+    }
+    try {
+      const result = await accountRecoveryService.rejectRecoveryRequest({
+        requestId,
+        adminId: request.user.id,
+        adminNotes,
+      });
+      return reply.send(success(result));
+    } catch (error) {
+      request.log.error(error);
+      const status = error?.code === AUTH_ERRORS.AUTH_RECOVERY_NOT_FOUND ? 404 : 400;
+      return reply
+        .code(status)
+        .send(
+          errorResponse(
+            error?.message || 'Failed to reject recovery',
+            error?.code || AUTH_ERRORS.INTERNAL_ERROR,
+          ),
+        );
+    }
+  }
+
+  // --- Device Management API ---
+  async getUserDevices(request, reply) {
+    try {
+      const result = await deviceManagementService.getUserDevices(request.user.id);
+      return reply.send(success(result));
+    } catch (error) {
+      request.log.error(error);
+      return reply
+        .code(500)
+        .send(errorResponse('Failed to fetch devices', AUTH_ERRORS.INTERNAL_ERROR));
+    }
+  }
+
+  async revokeDevice(request, reply) {
+    const { deviceId } = request.params;
+    try {
+      const result = await deviceManagementService.revokeDevice(request.user.id, deviceId);
+      return reply.send(success(result));
+    } catch (error) {
+      request.log.error(error);
+      const status = error?.message === 'Device not found' ? 404 : 400;
+      return reply
+        .code(status)
+        .send(
+          errorResponse(error?.message || 'Failed to revoke device', AUTH_ERRORS.INTERNAL_ERROR),
+        );
+    }
+  }
+
+  // --- Login History & Forensics ---
+  async getLoginHistory(request, reply) {
+    try {
+      const result = await loginHistoryService.getLoginHistory({
+        userId: request.user.id,
+        limit: 50,
+      });
+      return reply.send(success(result));
+    } catch (error) {
+      request.log.error(error);
+      return reply
+        .code(500)
+        .send(errorResponse('Failed to fetch login history', AUTH_ERRORS.INTERNAL_ERROR));
+    }
+  }
+
+  async getTenantPolicy(request, reply) {
+    try {
+      const policy = await adminGovernanceService.getTenantAuthPolicy(request.user.tenantId);
+      return reply.send(success(policy));
+    } catch (error) {
+      request.log.error(error);
+      return reply.code(500).send(errorResponse(error.message, AUTH_ERRORS.INTERNAL_ERROR));
+    }
+  }
+
+  async updateTenantPolicy(request, reply) {
+    try {
+      if (request.user.role !== 'ADMIN' && request.user.role !== 'OWNER') {
+        return reply.code(403).send(errorResponse('Forbidden', AUTH_ERRORS.AUTH_UNAUTHORIZED));
+      }
+      const updated = await adminGovernanceService.updateTenantAuthPolicy(
+        request.user.tenantId,
+        request.body,
+      );
+      return reply.send(success(updated));
+    } catch (error) {
+      request.log.error(error);
+      return reply.code(500).send(errorResponse(error.message, AUTH_ERRORS.INTERNAL_ERROR));
+    }
+  }
+
+  async adminResetMfa(request, reply) {
+    try {
+      if (request.user.role !== 'ADMIN' && request.user.role !== 'OWNER') {
+        return reply.code(403).send(errorResponse('Forbidden', AUTH_ERRORS.AUTH_UNAUTHORIZED));
+      }
+      const { userId } = request.params;
+      const res = await adminGovernanceService.adminResetUserMfa({
+        adminUserId: request.user.id,
+        targetUserId: userId,
+        tenantId: request.user.tenantId,
+      });
+      return reply.send(success(res));
+    } catch (error) {
+      request.log.error(error);
+      return reply.code(500).send(errorResponse(error.message, AUTH_ERRORS.INTERNAL_ERROR));
+    }
+  }
+
+  async adminForceResetPassword(request, reply) {
+    try {
+      if (request.user.role !== 'ADMIN' && request.user.role !== 'OWNER') {
+        return reply.code(403).send(errorResponse('Forbidden', AUTH_ERRORS.AUTH_UNAUTHORIZED));
+      }
+      const { userId } = request.params;
+      const res = await adminGovernanceService.adminForcePasswordReset({
+        adminUserId: request.user.id,
+        targetUserId: userId,
+        tenantId: request.user.tenantId,
+      });
+      return reply.send(success(res));
+    } catch (error) {
+      request.log.error(error);
+      return reply.code(500).send(errorResponse(error.message, AUTH_ERRORS.INTERNAL_ERROR));
+    }
+  }
+
+  async adminTerminateSessions(request, reply) {
+    try {
+      if (request.user.role !== 'ADMIN' && request.user.role !== 'OWNER') {
+        return reply.code(403).send(errorResponse('Forbidden', AUTH_ERRORS.AUTH_UNAUTHORIZED));
+      }
+      const { userId } = request.params;
+      const res = await adminGovernanceService.adminTerminateUserSessions({
+        adminUserId: request.user.id,
+        targetUserId: userId,
+        tenantId: request.user.tenantId,
+      });
+      return reply.send(success(res));
+    } catch (error) {
+      request.log.error(error);
+      return reply.code(500).send(errorResponse(error.message, AUTH_ERRORS.INTERNAL_ERROR));
+    }
+  }
+
+  async ssoAuthorize(request, reply) {
+    try {
+      const { provider } = request.params;
+      const { redirectUri, tenantId } = request.query;
+      const url = ssoService.getAuthorizationUrl({ provider, tenantId, redirectUri });
+      return reply.send(success({ url }));
+    } catch (error) {
+      request.log.error(error);
+      return reply.code(400).send(errorResponse(error.message, AUTH_ERRORS.INTERNAL_ERROR));
+    }
+  }
+
+  async ssoCallback(request, reply) {
+    try {
+      const { provider } = request.params;
+      const { code, state } = request.body;
+      const result = await ssoService.handleCallback({
+        provider,
+        code,
+        statePayload: state,
+        ipAddress: request.ip,
+        userAgent: request.headers['user-agent'],
+      });
+
+      cookieManager.setAuthCookies(reply, {
+        refreshToken: result.refreshToken,
+        accessToken: result.token,
+      });
+      csrfMiddleware.setCsrfCookie(reply, csrfMiddleware.generateToken());
+
+      const payload = { ...result };
+      delete payload.refreshToken;
+      return reply.send(success(payload));
+    } catch (error) {
+      request.log.error(error);
+      return reply.code(401).send(errorResponse(error.message, AUTH_ERRORS.AUTH_UNAUTHORIZED));
+    }
+  }
+
+  // --- PHASE 5: COMPLIANCE, OPERATIONS & RESILIENCY ---
+
+  async createApiKey(request, reply) {
+    try {
+      const { name, scopes, expiresInDays } = request.body;
+      const result = await apiKeyService.createApiKey({
+        userId: request.user.id,
+        tenantId: request.user.tenantId,
+        name,
+        scopes,
+        expiresInDays,
+      });
+      return reply.code(201).send(success(result));
+    } catch (error) {
+      request.log.error(error);
+      return reply.code(400).send(errorResponse(error.message, AUTH_ERRORS.INTERNAL_ERROR));
+    }
+  }
+
+  async listApiKeys(request, reply) {
+    try {
+      const keys = await apiKeyService.listUserApiKeys(request.user.id);
+      return reply.send(success(keys));
+    } catch (error) {
+      request.log.error(error);
+      return reply.code(500).send(errorResponse(error.message, AUTH_ERRORS.INTERNAL_ERROR));
+    }
+  }
+
+  async revokeApiKey(request, reply) {
+    try {
+      const { keyId } = request.params;
+      const res = await apiKeyService.revokeApiKey({ userId: request.user.id, keyId });
+      return reply.send(success(res));
+    } catch (error) {
+      request.log.error(error);
+      return reply.code(404).send(errorResponse(error.message, AUTH_ERRORS.USER_NOT_FOUND));
+    }
+  }
+
+  async exportGdprData(request, reply) {
+    try {
+      const exportPackage = await complianceService.exportUserData(request.user.id);
+      return reply.send(success(exportPackage));
+    } catch (error) {
+      request.log.error(error);
+      return reply.code(500).send(errorResponse(error.message, AUTH_ERRORS.INTERNAL_ERROR));
+    }
+  }
+
+  async deleteGdprData(request, reply) {
+    try {
+      const { reason } = request.body || {};
+      const res = await complianceService.deleteUserData({
+        userId: request.user.id,
+        tenantId: request.user.tenantId,
+        reason,
+      });
+      return reply.send(success(res));
+    } catch (error) {
+      request.log.error(error);
+      return reply.code(500).send(errorResponse(error.message, AUTH_ERRORS.INTERNAL_ERROR));
     }
   }
 
@@ -737,11 +1118,11 @@ class AuthFastifyController {
     } catch (error) {
       request.log.error(error);
       if (error?.message === 'User not found') {
-        return reply.code(404).send(errorResponse(error.message, 'USER_NOT_FOUND'));
+        return reply.code(404).send(errorResponse(error.message, AUTH_ERRORS.USER_NOT_FOUND));
       }
       return reply
         .code(500)
-        .send(errorResponse(error?.message || 'Internal server error', 'INTERNAL_ERROR'));
+        .send(errorResponse(error?.message || 'Internal server error', AUTH_ERRORS.INTERNAL_ERROR));
     }
   }
 }

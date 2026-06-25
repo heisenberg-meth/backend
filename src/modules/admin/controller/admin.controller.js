@@ -9,38 +9,8 @@ import {
   adminListQuerySchema,
   auditLogQuerySchema,
 } from '../validators/admin.validator.js';
-import env from '../../../config/env.js';
-
-// Dynamic cookie domain based on environment
-const getCookieDomain = () => {
-  if (env.cookieDomain) {
-    return env.cookieDomain;
-  }
-  if (env.nodeEnv === 'development') {
-    return 'localhost';
-  }
-  return '.viyaninfo.com';
-};
-
-const COOKIE_OPTIONS = {
-  path: '/',
-  httpOnly: true,
-  sameSite: 'none',
-  secure: true,
-  partitioned: true,
-  maxAge: 30 * 24 * 60 * 60,
-  domain: getCookieDomain(),
-};
-
-const ACCESS_COOKIE_OPTIONS = {
-  path: '/',
-  httpOnly: true,
-  sameSite: 'none',
-  secure: true,
-  partitioned: true,
-  maxAge: 15 * 60,
-  domain: getCookieDomain(),
-};
+import AUTH_ERRORS from '../../../config/auth.errors.js';
+import cookieManager from '../../../shared/services/cookie-manager.service.js';
 
 class AdminController {
   async login(request, reply) {
@@ -52,8 +22,10 @@ class AdminController {
         userAgent: request.headers['user-agent'],
       });
 
-      reply.setCookie('adminRefreshToken', result.refreshToken, COOKIE_OPTIONS);
-      reply.setCookie('adminAccessToken', result.accessToken, ACCESS_COOKIE_OPTIONS);
+      cookieManager.setAdminAuthCookies(reply, {
+        refreshToken: result.refreshToken,
+        accessToken: result.accessToken,
+      });
 
       return reply.send(
         success({
@@ -65,9 +37,11 @@ class AdminController {
     } catch (error) {
       request.log.error(error);
       if (error instanceof ZodError) {
-        return reply.code(400).send(errorResponse('Validation failed', 'VALIDATION_ERROR'));
+        return reply
+          .code(400)
+          .send(errorResponse('Validation failed', AUTH_ERRORS.VALIDATION_ERROR));
       }
-      return reply.code(401).send(errorResponse(error.message, 'ADMIN_LOGIN_FAILED'));
+      return reply.code(401).send(errorResponse(error.message, AUTH_ERRORS.ADMIN_LOGIN_FAILED));
     }
   }
 
@@ -76,8 +50,10 @@ class AdminController {
       const parsed = adminRefreshSchema.parse(request.body);
       const result = await adminService.refreshToken(parsed.refreshToken);
 
-      reply.setCookie('adminRefreshToken', result.refreshToken, COOKIE_OPTIONS);
-      reply.setCookie('adminAccessToken', result.accessToken, ACCESS_COOKIE_OPTIONS);
+      cookieManager.setAdminAuthCookies(reply, {
+        refreshToken: result.refreshToken,
+        accessToken: result.accessToken,
+      });
 
       return reply.send(
         success({
@@ -88,16 +64,16 @@ class AdminController {
       );
     } catch (error) {
       if (error instanceof ZodError) {
-        return reply.code(400).send(errorResponse('Validation failed', 'VALIDATION_ERROR'));
+        return reply
+          .code(400)
+          .send(errorResponse('Validation failed', AUTH_ERRORS.VALIDATION_ERROR));
       }
-      return reply.code(401).send(errorResponse(error.message, 'REFRESH_FAILED'));
+      return reply.code(401).send(errorResponse(error.message, AUTH_ERRORS.REFRESH_FAILED));
     }
   }
 
   async logout(request, reply) {
-    const domain = getCookieDomain();
-    reply.clearCookie('adminRefreshToken', { path: '/', domain, sameSite: 'none', secure: true });
-    reply.clearCookie('adminAccessToken', { path: '/', domain, sameSite: 'none', secure: true });
+    cookieManager.clearAdminAuthCookies(reply);
     return reply.send(success({ message: 'Logged out successfully' }));
   }
 
@@ -106,7 +82,7 @@ class AdminController {
       const admin = await adminService.getProfile(request.admin.id);
       return reply.send(success(admin));
     } catch (error) {
-      return reply.code(404).send(errorResponse(error.message, 'ADMIN_NOT_FOUND'));
+      return reply.code(404).send(errorResponse(error.message, AUTH_ERRORS.ADMIN_NOT_FOUND));
     }
   }
 
@@ -122,7 +98,9 @@ class AdminController {
       return reply.code(201).send(success(admin));
     } catch (error) {
       if (error instanceof ZodError) {
-        return reply.code(400).send(errorResponse('Validation failed', 'VALIDATION_ERROR'));
+        return reply
+          .code(400)
+          .send(errorResponse('Validation failed', AUTH_ERRORS.VALIDATION_ERROR));
       }
       if (error.message === 'Admin with this email already exists') {
         return reply.code(409).send(errorResponse(error.message, 'ADMIN_EXISTS'));
@@ -144,10 +122,12 @@ class AdminController {
       return reply.send(success(admin));
     } catch (error) {
       if (error instanceof ZodError) {
-        return reply.code(400).send(errorResponse('Validation failed', 'VALIDATION_ERROR'));
+        return reply
+          .code(400)
+          .send(errorResponse('Validation failed', AUTH_ERRORS.VALIDATION_ERROR));
       }
       if (error.message === 'Admin not found') {
-        return reply.code(404).send(errorResponse(error.message, 'ADMIN_NOT_FOUND'));
+        return reply.code(404).send(errorResponse(error.message, AUTH_ERRORS.ADMIN_NOT_FOUND));
       }
       return reply.code(400).send(errorResponse(error.message, 'ADMIN_UPDATE_FAILED'));
     }

@@ -2,6 +2,8 @@ import prisma from '../config/prisma.js';
 import logger from '../shared/utils/logger.js';
 import { sessionCache, userCache } from '../modules/auth/service/auth.cache.js';
 import sessionService from '../modules/auth/service/session.service.js';
+import { CURRENT_AUTH_VERSION } from '../modules/auth/auth.constants.js';
+import { compareVersions } from '../modules/auth/auth.version.js';
 
 const SESSION_CACHE_TTL_MS = 30_000;
 const USER_CACHE_TTL_MS = 60_000;
@@ -12,9 +14,25 @@ const TOUCH_INTERVAL_MS = 5 * 60 * 1000;
 async function verifySession(sessionId) {
   const session = await prisma.userSession.findUnique({
     where: { id: sessionId },
-    select: { revoked: true, expiresAt: true },
+    select: { revoked: true, expiresAt: true, authVersion: true },
   });
-  return session && !session.revoked && new Date() <= session.expiresAt ? session : null;
+  if (!session || session.revoked || new Date() > session.expiresAt) return null;
+
+  const versionDiff = compareVersions(session.authVersion, CURRENT_AUTH_VERSION);
+  if (versionDiff < 0) {
+    logger.info(
+      { sessionId, sessionVersion: session.authVersion, currentVersion: CURRENT_AUTH_VERSION },
+      'Session version outdated - will be upgraded on next refresh',
+    );
+  } else if (versionDiff > 0) {
+    logger.warn(
+      { sessionId, sessionVersion: session.authVersion, currentVersion: CURRENT_AUTH_VERSION },
+      'Session from future version rejected',
+    );
+    return null;
+  }
+
+  return session;
 }
 
 async function fetchAndCacheUser(userId) {

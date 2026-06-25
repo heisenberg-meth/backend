@@ -1,32 +1,43 @@
 import 'dotenv/config';
 import { z } from 'zod';
 
-const envSchema = z.object({
-  NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
-  PORT: z.string().transform(Number).default('5000'),
-  FRONTEND_URL: z.string().url().default('https://medassist.viyaninfo.com/'),
-  MEDIA_BASE_URL: z.string().url().optional(),
-  CORS_ORIGIN: z.string().optional(),
-  LOG_LEVEL: z.string().default('info'),
-  LOG_OTP: z.string().optional(),
-  COOKIE_SECRET: z.string().min(10),
-  JWT_SECRET: z.string().min(64, 'JWT_SECRET must be at least 64 characters'),
-  COOKIE_DOMAIN: z.string().optional(),
-  AWS_BUCKET_NAME: z.string().optional(),
-  AWS_REGION: z.string().default('us-east-1'),
-  AWS_ACCESS_KEY_ID: z.string().optional(),
-  AWS_SECRET_ACCESS_KEY: z.string().optional(),
-  CLOUDINARY_CLOUD_NAME: z.string().optional(),
-  CLOUDINARY_API_KEY: z.string().optional(),
-  CLOUDINARY_API_SECRET: z.string().optional(),
-  REDIS_URL: z.string().url(),
-  RABBITMQ_URL: z.string().url().optional(),
-  ENABLE_EVENTBUS: z.string().optional(),
-  RAZORPAY_KEY_ID: z.string().optional(),
-  RAZORPAY_KEY_SECRET: z.string().optional(),
-  ENCRYPTION_KEY: z.string().length(64, 'ENCRYPTION_KEY must be 64 hex chars (32 bytes)'),
-  SENTRY_DSN: z.string().url().optional(),
-});
+const envSchema = z
+  .object({
+    NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
+    PORT: z.string().transform(Number).default('5000'),
+    FRONTEND_URL: z.string().url().default('https://medassist.viyaninfo.com/'),
+    MEDIA_BASE_URL: z.string().url().optional(),
+    CORS_ORIGIN: z.string().optional(),
+    LOG_LEVEL: z.string().default('info'),
+    LOG_OTP: z.string().optional(),
+    COOKIE_SECRET: z.string().min(10),
+    JWT_SECRET: z.string().min(64, 'JWT_SECRET must be at least 64 characters'),
+    REFRESH_SECRET: z.string().min(64, 'REFRESH_SECRET must be at least 64 characters').optional(),
+    COOKIE_DOMAIN: z.string().optional(),
+    AWS_BUCKET_NAME: z.string().optional(),
+    AWS_REGION: z.string().default('us-east-1'),
+    AWS_ACCESS_KEY_ID: z.string().optional(),
+    AWS_SECRET_ACCESS_KEY: z.string().optional(),
+    CLOUDINARY_CLOUD_NAME: z.string().optional(),
+    CLOUDINARY_API_KEY: z.string().optional(),
+    CLOUDINARY_API_SECRET: z.string().optional(),
+    REDIS_URL: z.string().url(),
+    RABBITMQ_URL: z.string().url().optional(),
+    ENABLE_EVENTBUS: z.string().optional(),
+    RAZORPAY_KEY_ID: z.string().optional(),
+    RAZORPAY_KEY_SECRET: z.string().optional(),
+    ENCRYPTION_KEY: z.string().length(64, 'ENCRYPTION_KEY must be 64 hex chars (32 bytes)'),
+    SENTRY_DSN: z.string().url().optional(),
+  })
+  .superRefine((data, ctx) => {
+    if (data.NODE_ENV === 'production' && !data.COOKIE_DOMAIN) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'COOKIE_DOMAIN must be explicitly configured in production',
+        path: ['COOKIE_DOMAIN'],
+      });
+    }
+  });
 
 const parsedEnv = envSchema.safeParse(process.env);
 
@@ -57,6 +68,9 @@ const env = {
   cookieSecret: validatedEnv.COOKIE_SECRET,
   cookieDomain: validatedEnv.COOKIE_DOMAIN,
   jwtSecrets: validatedEnv.JWT_SECRET.split(','),
+  refreshSecrets: validatedEnv.REFRESH_SECRET
+    ? validatedEnv.REFRESH_SECRET.split(',')
+    : validatedEnv.JWT_SECRET.split(','),
 
   s3: {
     bucketName: validatedEnv.AWS_BUCKET_NAME,
