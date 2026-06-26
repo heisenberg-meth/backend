@@ -54,19 +54,22 @@ class CookieManager {
     const currentDomain = resolvedCookieDomain;
 
     for (const name of cookieNames) {
+      let clearCookieStr;
       if (currentDomain) {
         // We are going to set a domain cookie, so clear any existing host-only cookie.
-        reply.clearCookie(name, { path: '/', secure: true, sameSite: 'none' });
+        clearCookieStr = `${name}=; Max-Age=0; Path=/; Secure; SameSite=None`;
       } else {
         // We are going to set a host-only cookie, so try to clear any generic domain cookie
         // that might have been accidentally set in the past.
-        reply.clearCookie(name, {
-          path: '/',
-          domain: '.medassist.viyaninfo.com',
-          secure: true,
-          sameSite: 'none',
-        });
+        clearCookieStr = `${name}=; Max-Age=0; Domain=.medassist.viyaninfo.com; Path=/; Secure; SameSite=None`;
       }
+
+      let existing = reply.getHeader('Set-Cookie') || [];
+      if (!Array.isArray(existing)) {
+        existing = [existing];
+      }
+      existing.push(clearCookieStr);
+      reply.header('Set-Cookie', existing);
     }
 
     logger.info(

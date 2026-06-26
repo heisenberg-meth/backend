@@ -247,7 +247,6 @@ class AuthFastifyController {
 
       const responsePayload = { ...result };
       delete responsePayload.refreshToken;
-      delete responsePayload.token;
 
       request.log.info(
         {

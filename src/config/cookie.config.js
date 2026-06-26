@@ -6,7 +6,17 @@ const resolveCookieDomain = () => {
     return undefined;
   }
   if (env.cookieDomain) {
-    return env.cookieDomain.replace(/^https?:\/\//, '').replace(/\/$/, '');
+    let domain = env.cookieDomain.replace(/^https?:\/\//, '').replace(/\/$/, '');
+
+    // If the domain is explicitly an 'api.' subdomain, strip it and prefix with a dot
+    // to allow the cookie to be shared with the root frontend domain.
+    if (domain.startsWith('api.')) {
+      domain = domain.substring(3);
+    }
+    if (domain && !domain.startsWith('.')) {
+      domain = '.' + domain;
+    }
+    return domain;
   }
   return undefined;
 };

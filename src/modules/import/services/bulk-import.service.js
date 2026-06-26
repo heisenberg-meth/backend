@@ -31,7 +31,11 @@ class BulkImportService {
         where: { tenantId, name: { equals: supplierName, mode: 'insensitive' }, deletedAt: null },
         select: { id: true },
       });
-      if (supplier) resolvedSupplierId = supplier.id;
+      if (supplier) {
+        resolvedSupplierId = supplier.id;
+      } else {
+        throw new Error(`Supplier "${supplierName}" not found in system.`);
+      }
     }
 
     const analysis = {
@@ -198,6 +202,8 @@ class BulkImportService {
         for (const err of validationErrors) {
           analysis.errors.push({
             row: rowNum,
+            name: name || 'Unknown',
+            reason: err.message,
             field: err.field,
             value: err.value,
             errorCode: err.errorCode,
@@ -559,7 +565,7 @@ class BulkImportService {
         const commitStart = Date.now();
         await prisma.$transaction(async (tx) => {
           if (newMedicines.length > 0) {
-            await tx.medicine.createMany({ data: newMedicines });
+            await tx.medicine.createMany({ data: newMedicines, skipDuplicates: true });
           }
 
           if (updatePayloads.length > 0) {
@@ -578,11 +584,11 @@ class BulkImportService {
           }
 
           if (newBatches.length > 0) {
-            await tx.inventoryBatch.createMany({ data: newBatches });
+            await tx.inventoryBatch.createMany({ data: newBatches, skipDuplicates: true });
           }
 
           if (newMovements.length > 0) {
-            await tx.stockMovement.createMany({ data: newMovements });
+            await tx.stockMovement.createMany({ data: newMovements, skipDuplicates: true });
           }
 
           if (inventoryAggregated.size > 0) {
@@ -628,6 +634,8 @@ class BulkImportService {
         );
         analysis.errors.push({
           row: i + 1,
+          name: chunk[0]?.name || 'Chunk',
+          reason: err.message || 'Chunk transaction failed',
           field: 'chunk',
           value: '',
           errorCode: err.code === 'P2002' ? 'DUPLICATE_BARCODE_OR_SKU' : 'DATABASE_ERROR',
