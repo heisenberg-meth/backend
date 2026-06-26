@@ -50,55 +50,31 @@ class CookieManager {
     logger.info('Cookie Configuration Matrix is VALID.');
   }
 
-  /**
-   * Clears legacy/duplicate cookies from previous inconsistent configurations
-   * to ensure zero duplicate active refresh tokens.
-   */
   _clearLegacyCookies(reply, cookieNames) {
     const currentDomain = resolvedCookieDomain;
 
-    // Legacy domains to hunt down and destroy
-    const legacyDomains = [
-      'localhost',
-      '.viyaninfo.com',
-      'medassist.viyaninfo.com',
-      'api.medassist.viyaninfo.com',
-      '.onrender.com',
-      undefined,
-    ].filter((d) => d !== currentDomain);
-
-    const legacyPaths = ['/', '/api'];
-
     for (const name of cookieNames) {
-      for (const domain of legacyDomains) {
-        for (const path of legacyPaths) {
-          reply.clearCookie(name, { path, domain, secure: false, sameSite: 'lax' });
-          reply.clearCookie(name, { path, domain, secure: true, sameSite: 'none' });
-          reply.clearCookie(name, { path, domain, secure: true, sameSite: 'lax' });
-        }
+      // Clear for explicit current domain
+      if (currentDomain) {
+        reply.clearCookie(name, {
+          path: '/',
+          domain: currentDomain,
+          secure: true,
+          sameSite: 'none',
+        });
       }
 
-      // Also clear root domain without dot if current is dot
-      if (currentDomain && currentDomain.startsWith('.')) {
-        const noDotDomain = currentDomain.substring(1);
-        for (const path of legacyPaths) {
-          reply.clearCookie(name, { path, domain: noDotDomain, secure: true, sameSite: 'none' });
-        }
-      }
-
-      // Clear without domain (browser default) in case old cookies had no explicit domain
-      reply.clearCookie(name, { path: '/', secure: false, sameSite: 'lax' });
+      // Clear host-only cookie (no domain)
       reply.clearCookie(name, { path: '/', secure: true, sameSite: 'none' });
     }
 
     logger.info(
       {
-        event: 'LEGACY_COOKIE_CLEANUP',
+        event: 'COOKIE_CLEANUP',
         cookieNames,
-        legacyDomainsCount: legacyDomains.length,
         currentDomain: currentDomain || 'none',
       },
-      'Legacy cookie cleanup completed',
+      'Cookie cleanup completed',
     );
   }
 

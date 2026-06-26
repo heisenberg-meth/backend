@@ -103,14 +103,24 @@ class UnifiedRefundOrchestrator {
             medicineId: invItem.medicineId,
             batchId: invItem.batchId,
             quantity: item.quantity,
+            originalQuantity: invItem.quantity,
+            unitPrice: invItem.unitPrice,
+            gstPercentage: invItem.gstPercentage,
             amount: calculatedItemRefund.totalRefund,
           });
         }
 
-        if (!actualRefundAmount) {
-          const totalRefundData = refundCalculationService.calculateTotalRefund(refundItemsData);
-          actualRefundAmount = totalRefundData.totalRefund;
+        const totalRefundData = refundCalculationService.calculateTotalRefund(refundItemsData);
+        const calculatedTotal = Number(totalRefundData.totalRefund);
+
+        if (actualRefundAmount && Math.abs(Number(actualRefundAmount) - calculatedTotal) > 0.01) {
+          throw new Error(
+            `Refund total mismatch: calculated ₹${calculatedTotal}, requested ₹${actualRefundAmount}`,
+          );
         }
+
+        // Always trust backend calculated total
+        actualRefundAmount = calculatedTotal;
       }
 
       actualRefundAmount = Number(actualRefundAmount || 0);
@@ -156,19 +166,22 @@ class UnifiedRefundOrchestrator {
             refundTransactionId: transactionId,
             createdBy: userId,
             items: {
-              create: resolvedItems.map(ri => ({
+              create: resolvedItems.map((ri) => ({
                 invoiceItemId: ri.invoiceItemId,
                 medicineId: ri.medicineId,
                 batchId: ri.batchId,
                 returnedQuantity: ri.quantity,
+                originalQuantity: ri.originalQuantity,
+                unitPrice: ri.unitPrice,
+                gstPercentage: ri.gstPercentage,
                 returnAmount: ri.amount,
-                disposition: 'PENDING'
-              }))
-            }
-          }
+                disposition: 'PENDING',
+              })),
+            },
+          },
         });
         finalReturnId = createdSalesReturn.id;
-        
+
         logger.info(`[Refund] Created Return ID: ${finalReturnId} for Invoice: ${invoiceId}`);
       } else if (returnId) {
         updatedReturn = await tx.return.update({
@@ -187,7 +200,9 @@ class UnifiedRefundOrchestrator {
         throw new Error('SALE_RETURN_CREATION_FAILED: Failed to resolve Return record ID');
       }
 
-      logger.info(`[Refund] Preparing RefundPayment for Return ID: ${finalReturnId}, Invoice: ${invoiceId}`);
+      logger.info(
+        `[Refund] Preparing RefundPayment for Return ID: ${finalReturnId}, Invoice: ${invoiceId}`,
+      );
 
       // FR-3: Correct Foreign Key Assignment (RefundPayment references Return)
       const refundPayment = await tx.refundPayment.create({
