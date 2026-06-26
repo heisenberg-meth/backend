@@ -2,9 +2,6 @@ import env from './env.js';
 
 // ─── Cookie Domain Resolution ───────────────────────────────────────────────
 const resolveCookieDomain = () => {
-  if (env.nodeEnv === 'development') {
-    return undefined;
-  }
   if (env.cookieDomain) {
     let domain = env.cookieDomain.replace(/^https?:\/\//, '').replace(/\/$/, '');
 
@@ -18,6 +15,12 @@ const resolveCookieDomain = () => {
     }
     return domain;
   }
+
+  // Only return undefined in development if no explicit cookieDomain was provided
+  if (env.nodeEnv === 'development') {
+    return undefined;
+  }
+
   return undefined;
 };
 

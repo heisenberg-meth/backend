@@ -511,7 +511,7 @@ class BulkImportService {
             packagingType: mapDosageFormToPackaging(row.dosageForm),
             strength: row.strength || null,
             sku: `SKU-${crypto.randomUUID()}`,
-            gstPercentage: row.gstPercentage || 0,
+            gstPercentage: parseFloat(row.gstPercentage) || 0,
             reorderLevel: 10,
             status: 'ACTIVE',
             isActive: true,
@@ -527,7 +527,9 @@ class BulkImportService {
           }
         }
 
-        if (row.qty > 0) {
+        const parsedQty = parseInt(row.qty, 10);
+        if (!isNaN(parsedQty) && parsedQty > 0) {
+          const parsedPrice = parseFloat(row.price) || 0;
           const batchId = crypto.randomUUID();
           newBatches.push({
             id: batchId,
@@ -535,13 +537,13 @@ class BulkImportService {
             medicineId,
             branchId,
             batchNumber: row.batch,
-            quantity: row.qty,
-            receivedQuantity: row.qty,
-            availableQuantity: row.qty,
+            quantity: parsedQty,
+            receivedQuantity: parsedQty,
+            availableQuantity: parsedQty,
             expiryDate: row.expiryDate || defaultExpiry,
-            purchasePrice: row.price || 0,
-            sellingPrice: (row.price || 0) * 1.2,
-            mrp: (row.price || 0) * 1.2,
+            purchasePrice: parsedPrice,
+            sellingPrice: parsedPrice * 1.2,
+            mrp: parsedPrice * 1.2,
             status: 'ACTIVE',
             supplierId: resolvedSupplierId,
           });
@@ -552,13 +554,16 @@ class BulkImportService {
             branchId,
             medicineId,
             movementType: 'STOCK_IN',
-            quantity: row.qty,
+            quantity: parsedQty,
             referenceType: 'BULK_IMPORT',
             performedBy: userId,
             notes: `Bulk imported from ${supplierName !== 'None' ? supplierName : 'spreadsheet'}`,
           });
 
-          inventoryAggregated.set(medicineId, (inventoryAggregated.get(medicineId) || 0) + row.qty);
+          inventoryAggregated.set(
+            medicineId,
+            (inventoryAggregated.get(medicineId) || 0) + parsedQty,
+          );
           chunkBatchesCount++;
         }
 
