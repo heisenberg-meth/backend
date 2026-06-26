@@ -47,9 +47,14 @@ class CsvImportService {
           where: { tenantId, name: { equals: supplierName, mode: 'insensitive' }, deletedAt: null },
           select: { id: true },
         });
-        if (supplier) resolvedSupplierId = supplier.id;
+        if (supplier) {
+          resolvedSupplierId = supplier.id;
+        } else {
+          throw new Error(`Supplier "${supplierName}" not found in system.`);
+        }
       } catch (err) {
         logger.warn({ err }, '[CSV-Import] Supplier lookup failed');
+        throw err;
       }
     }
 
@@ -521,6 +526,8 @@ class CsvImportService {
         );
         ctx.errors.push({
           row: ctx.importedCount + ctx.newMedicines.length + 1,
+          name: name || 'Unknown',
+          reason: pricingError,
           field: 'price',
           value: priceStr,
           errorCode: 'INVALID_PRICE',
@@ -727,12 +734,12 @@ class CsvImportService {
         newMedicinesData.push(data);
       }
       if (newMedicinesData.length > 0) {
-        await tx.medicine.createMany({ data: newMedicinesData });
+        await tx.medicine.createMany({ data: newMedicinesData, skipDuplicates: true });
       }
       logger.info({ count: newMedicines.length }, '[CSV-Import] Created medicines');
 
       if (newBatches.length > 0) {
-        await tx.inventoryBatch.createMany({ data: newBatches });
+        await tx.inventoryBatch.createMany({ data: newBatches, skipDuplicates: true });
         logger.info({ count: newBatches.length }, '[CSV-Import] Created batches (batch)');
       }
 
@@ -783,14 +790,14 @@ class CsvImportService {
       }
 
       if (newMovements.length > 0) {
-        await tx.stockMovement.createMany({ data: newMovements });
+        await tx.stockMovement.createMany({ data: newMovements, skipDuplicates: true });
         logger.info({ count: newMovements.length }, '[CSV-Import] Created movements (batch)');
       }
 
       await tx.importJob.update({
         where: { id: jobId },
         data: {
-          importStatus: errors.length > 0 ? 'COMPLETED_WITH_ERRORS' : 'COMPLETED',
+          importStatus: 'COMPLETED',
           processedAt: new Date(),
           extractedData: {
             totalRows: ctx.importedCount,

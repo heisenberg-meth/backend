@@ -434,6 +434,10 @@ class BulkImportService {
       const updatePayloads = [];
       const defaultExpiry = new Date(new Date().setFullYear(new Date().getFullYear() + 2));
 
+      let chunkMedicinesCount = 0;
+      let chunkBatchesCount = 0;
+      let chunkImportedCount = 0;
+
       for (const row of chunk) {
         let medicineId = null;
 
@@ -514,7 +518,7 @@ class BulkImportService {
             categoryId: categoryId || null,
             manufacturerId: manufacturerId || null,
           });
-          commitSummary.newMedicinesCount++;
+          chunkMedicinesCount++;
 
           const cachedMed = { id: medicineId, name: row.name, barcode: row.barcode };
           medicineMapByName.set(normName, cachedMed);
@@ -555,10 +559,10 @@ class BulkImportService {
           });
 
           inventoryAggregated.set(medicineId, (inventoryAggregated.get(medicineId) || 0) + row.qty);
-          commitSummary.newBatchesCount++;
+          chunkBatchesCount++;
         }
 
-        commitSummary.importedCount++;
+        chunkImportedCount++;
       }
 
       try {
@@ -627,6 +631,10 @@ class BulkImportService {
           },
           'Chunk committed successfully',
         );
+
+        commitSummary.newMedicinesCount += chunkMedicinesCount;
+        commitSummary.newBatchesCount += chunkBatchesCount;
+        commitSummary.importedCount += chunkImportedCount;
       } catch (err) {
         logger.warn(
           { chunkIdx: Math.floor(i / CHUNK_SIZE) + 1, err: err.message },
