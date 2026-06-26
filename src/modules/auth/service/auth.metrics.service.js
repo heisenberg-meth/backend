@@ -1,6 +1,6 @@
 import logger from '../../../shared/utils/logger.js';
 import { CURRENT_AUTH_VERSION } from '../auth.constants.js';
-import { resolvedCookieDomain, REFRESH_COOKIE_OPTIONS } from '../../../config/cookie.config.js';
+import { resolvedCookieDomain } from '../../../config/cookie.config.js';
 
 class AuthMetricsService {
   constructor() {
@@ -93,61 +93,6 @@ class AuthMetricsService {
         },
       },
     };
-  }
-
-  logStructuredAuthEvent({
-    requestId,
-    correlationId,
-    method,
-    endpoint,
-    userId,
-    tenantId,
-    branchId,
-    role,
-    sessionId,
-    result,
-    errorCode,
-    failureReason,
-    responseTime,
-    ipAddress,
-    userAgent,
-  }) {
-    logger.info(
-      {
-        event: 'AUTH_AUDIT_LOG',
-        requestInfo: {
-          requestId: requestId || null,
-          correlationId: correlationId || requestId || null,
-          timestamp: new Date().toISOString(),
-          endpoint,
-          httpMethod: method || null,
-        },
-        userContext: {
-          userId: userId || null,
-          tenantId: tenantId || null,
-          branchId: branchId || null,
-          role: role || null,
-          sessionId: sessionId || null,
-        },
-        clientContext: {
-          userAgent: userAgent || null,
-          clientIp: ipAddress || null,
-        },
-        authContext: {
-          authVersion: CURRENT_AUTH_VERSION,
-          cookieDomain: resolvedCookieDomain || null,
-          sameSite: REFRESH_COOKIE_OPTIONS.sameSite,
-          secureFlag: REFRESH_COOKIE_OPTIONS.secure,
-        },
-        result: {
-          status: result,
-          errorCode: errorCode || null,
-          failureReason: failureReason || null,
-          responseTimeMs: responseTime || null,
-        },
-      },
-      `[AUTH_AUDIT] ${method || 'POST'} ${endpoint} -> ${result}${errorCode ? ` (${errorCode})` : ''}`,
-    );
   }
 
   logDeploymentEvent({ action, version, engineer, result, details }) {

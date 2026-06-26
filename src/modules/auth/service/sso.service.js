@@ -106,7 +106,7 @@ class SsoService {
       deviceToken: 'sso_federated_device',
     });
 
-    const jti = tokenService.generateJti();
+    const jti = sessionService.generateDeviceToken();
     const token = tokenService.signAccessToken(user, session.id);
     const refreshToken = tokenService.signRefreshToken(session.id, jti);
 

@@ -132,21 +132,73 @@ export const initRedis = () => getActiveClient();
 export { getBullRedis };
 
 export const connectRedis = async () => {
+  const startTime = Date.now();
   try {
     const client = getActiveClient();
     await client.ping();
-    logger.info('Redis startup verification successful (PONG)');
+    logger.info(
+      { duration: Date.now() - startTime },
+      'REDIS_CONNECTED: Redis startup verification successful (PONG)',
+    );
+    logger.info('REDIS_HEALTH_CHECK: Passed');
 
     try {
-      await client.config('SET', 'maxmemory-policy', 'noeviction');
-      logger.info('Redis maxmemory-policy set to noeviction');
+      const policyConfig = await client.config('GET', 'maxmemory-policy');
+      const maxMemoryConfig = await client.config('GET', 'maxmemory');
+      const info = await client.info('server');
+
+      let policy = 'unknown';
+      if (Array.isArray(policyConfig)) {
+        policy = policyConfig[1];
+      } else if (policyConfig && policyConfig['maxmemory-policy']) {
+        policy = policyConfig['maxmemory-policy'];
+      }
+
+      let maxMemory = 'unknown';
+      if (Array.isArray(maxMemoryConfig)) {
+        maxMemory = maxMemoryConfig[1];
+      } else if (maxMemoryConfig && maxMemoryConfig['maxmemory']) {
+        maxMemory = maxMemoryConfig['maxmemory'];
+      }
+
+      let redisVersion = 'unknown';
+      const versionMatch = info.match(/redis_version:([0-9.]+)/);
+      if (versionMatch) {
+        redisVersion = versionMatch[1];
+      }
+
+      logger.info({ policy, maxMemory, redisVersion }, 'REDIS_CONFIGURATION_VERIFIED');
+
+      if (policy && policy !== 'noeviction') {
+        logger.warn(
+          { currentPolicy: policy, expectedPolicy: 'noeviction' },
+          `REDIS_CONFIGURATION_WARNING: Eviction policy is ${policy}. Recommendation: Configure noeviction in Redis server. Application continuing normally.`,
+        );
+      }
     } catch (configErr) {
-      logger.warn({ err: configErr.message }, 'Failed to set Redis maxmemory-policy');
+      if (
+        configErr.message.includes('NOPERM') ||
+        configErr.message.includes('ERR unknown command')
+      ) {
+        logger.warn(
+          'REDIS_CONFIGURATION_WARNING: Insufficient permissions to read Redis config (Managed Redis). Application continuing normally.',
+        );
+      } else {
+        logger.warn(
+          { err: configErr.message },
+          'REDIS_CONFIGURATION_WARNING: Failed to verify Redis configuration. Application continuing normally.',
+        );
+      }
     }
 
+    logger.info('REDIS_STARTUP_COMPLETED: Application continuing normally.');
     return client;
   } catch (err) {
-    logger.warn({ err: err.message }, 'Redis startup verification failed - running without cache');
+    logger.error(
+      { err: err.message },
+      'REDIS_HEALTH_CHECK: Redis startup verification failed. Connectivity error.',
+    );
+    throw err;
   }
 };
 

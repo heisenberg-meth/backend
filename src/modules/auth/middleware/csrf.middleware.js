@@ -1,11 +1,9 @@
 import crypto from 'crypto';
 import AUTH_ERRORS from '../../../config/auth.errors.js';
 import logger from '../../../shared/utils/logger.js';
-import { CSRF_COOKIE_OPTIONS } from '../../../config/cookie.config.js';
+import cookieManager from '../../../shared/services/cookie-manager.service.js';
 import { CSRF_EXEMPT_PATHS } from '../../../config/security.config.js';
 
-// Merge the centralized exempt list with middleware-specific routes
-// to ensure a single source of truth for CSRF exemptions.
 const EXEMPT_ROUTES = new Set([
   ...CSRF_EXEMPT_PATHS,
   '/api/auth/recovery/request',
@@ -13,23 +11,14 @@ const EXEMPT_ROUTES = new Set([
 ]);
 
 class CsrfMiddleware {
-  /**
-   * Generates a cryptographically secure random CSRF token.
-   */
   generateToken() {
     return crypto.randomBytes(24).toString('hex');
   }
 
-  /**
-   * Attaches a double-submit readable CSRF cookie to HTTP response.
-   */
   setCsrfCookie(reply, token) {
-    reply.setCookie('csrf_token', token, CSRF_COOKIE_OPTIONS);
+    cookieManager.setCsrfCookie(reply, token);
   }
 
-  /**
-   * Fastify PreHandler interceptor validating double-submit CSRF tokens.
-   */
   async verifyCsrf(request, reply) {
     const method = request.method?.toUpperCase();
     if (method === 'GET' || method === 'HEAD' || method === 'OPTIONS') {

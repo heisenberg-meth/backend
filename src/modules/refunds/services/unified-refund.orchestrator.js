@@ -20,6 +20,7 @@ class UnifiedRefundOrchestrator {
     reason,
     returnId = null,
     refundMethod = 'CASH',
+    sessionId = null,
   }) {
     const result = await prisma.$transaction(async (tx) => {
       // 1. Lock Invoice to prevent parallel refund race conditions
@@ -265,7 +266,7 @@ class UnifiedRefundOrchestrator {
           invoiceId,
           action: 'REFUNDED',
           performedBy: userId,
-          notes: `Unified refund processed for ₹${actualRefundAmount}. Reason: ${reason}`,
+          notes: `Unified refund processed for ₹${actualRefundAmount}. Reason: ${reason}${sessionId ? ` [Session: ${sessionId}]` : ''}`,
         },
       });
 

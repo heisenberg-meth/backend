@@ -14,23 +14,27 @@ class CategoryRepository {
     });
   }
 
-  async create(data) {
+  async create(data, options = {}) {
     return prisma.medicineCategory.create({
       data,
+      ...options,
     });
   }
 
-  async update(id, tenantId, data) {
+  async update(id, tenantId, data, options = {}) {
     return prisma.medicineCategory.update({
       where: { id, tenantId },
       data,
+      ...options,
     });
   }
 
-  async delete(id, tenantId) {
+  async delete(id, tenantId, options = {}) {
+    const { select } = options;
     return prisma.medicineCategory.update({
       where: { id, tenantId },
       data: { deletedAt: new Date() },
+      ...(select ? { select } : { select: { id: true } }),
     });
   }
 }

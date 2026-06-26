@@ -1,10 +1,8 @@
 import bcrypt from 'bcryptjs';
-import jwt from 'jsonwebtoken';
 import crypto from 'crypto';
 import prisma from '../../../config/prisma.js';
 import authRepository from '../repository/auth.prisma.repository.js';
 import sessionService from './session.service.js';
-import { JWT_CONFIG } from '../../../config/jwt.config.js';
 import eventBus from '../../../shared/services/eventbus.service.js';
 import logger from '../../../shared/utils/logger.js';
 import { TRIAL_DAYS } from '../../subscriptions/subscription.constants.js';
@@ -13,9 +11,9 @@ import otpAuditService from '../../../shared/services/otp-audit.service.js';
 import MediaService from '../../../shared/services/media.service.js';
 import { CURRENT_AUTH_VERSION } from '../auth.constants.js';
 import tokenService from './token.service.js';
+import AuthAuditService from './audit.service.js';
 import loginHistoryService from './login-history.service.js';
 import securityEngineService from './security-engine.service.js';
-import secretManager from '../../../config/secrets.js';
 import { RESET_OTP_TEMPLATE } from '../../notifications/templates/email.templates.js';
 import PasswordService from './password.service.js';
 import AUTH_ERRORS from '../../../config/auth.errors.js';
@@ -163,9 +161,14 @@ class AuthPrismaService {
   }) {
     const normalizedEmail = email.toLowerCase().trim();
     const user = await authRepository.findUserByEmail(normalizedEmail);
+    const context = { ipAddress, userAgent, requestId: headers['x-request-id'] || null };
 
     if (!user) {
-      logger.warn({ email: normalizedEmail }, 'Login failed: User not found');
+      AuthAuditService.logLoginFailure({
+        email: normalizedEmail,
+        reason: 'User not found',
+        context,
+      });
       throw new Error('Invalid credentials');
     }
 
@@ -180,27 +183,43 @@ class AuthPrismaService {
     });
 
     if (user.status === 'BLOCKED') {
-      logger.warn({ email: normalizedEmail }, 'Login failed: User is blocked');
+      AuthAuditService.logLoginFailure({ email: normalizedEmail, reason: 'User blocked', context });
       throw new Error('Your account has been blocked. Contact support.');
     }
 
     if (user.status === 'SUSPENDED') {
-      logger.warn({ email: normalizedEmail }, 'Login failed: User is suspended');
+      AuthAuditService.logLoginFailure({
+        email: normalizedEmail,
+        reason: 'User suspended',
+        context,
+      });
       throw new Error('Your account has been suspended. Contact support.');
     }
 
     if (user.tenant?.blacklisted) {
-      logger.warn({ email: normalizedEmail }, 'Login failed: Tenant is blacklisted');
+      AuthAuditService.logLoginFailure({
+        email: normalizedEmail,
+        reason: 'Tenant blacklisted',
+        context,
+      });
       throw new Error('Your organization has been blocked. Contact support.');
     }
 
     if (user.tenant?.status === 'SUSPENDED') {
-      logger.warn({ email: normalizedEmail }, 'Login failed: Tenant is suspended');
+      AuthAuditService.logLoginFailure({
+        email: normalizedEmail,
+        reason: 'Tenant suspended',
+        context,
+      });
       throw new Error('Your organization has been suspended. Contact support.');
     }
 
     if (user.tenant?.status === 'EXPIRED') {
-      logger.warn({ email: normalizedEmail }, 'Login failed: Tenant subscription expired');
+      AuthAuditService.logLoginFailure({
+        email: normalizedEmail,
+        reason: 'Tenant expired',
+        context,
+      });
       throw new Error('Your subscription has expired. Please renew.');
     }
 
@@ -210,10 +229,11 @@ class AuthPrismaService {
         user.password.startsWith('$2b$') ||
         user.password.startsWith('$2y$'));
     if (!isBcrypt) {
-      logger.error(
-        { email: normalizedEmail },
-        'Login failed: Password is not bcrypt-hashed. Run the password migration utility.',
-      );
+      AuthAuditService.logLoginFailure({
+        email: normalizedEmail,
+        reason: 'Invalid password format (legacy)',
+        context,
+      });
       throw new Error('Invalid credentials');
     }
 
@@ -225,7 +245,11 @@ class AuthPrismaService {
         email: normalizedEmail,
         ipAddress,
       });
-      logger.warn({ email: normalizedEmail }, 'Login failed: Password mismatch');
+      AuthAuditService.logLoginFailure({
+        email: normalizedEmail,
+        reason: 'Password mismatch',
+        context,
+      });
       throw new Error('Invalid credentials');
     }
 
@@ -332,8 +356,9 @@ class AuthPrismaService {
       ipAddress,
     });
 
-    const accessToken = this._signAccessToken(user, session.id);
-    const signedRefreshToken = this._signRefreshToken(session.id, jti);
+    AuthAuditService.logSessionCreated({ session, context });
+    const accessToken = tokenService.signAccessToken(user, session.id);
+    const signedRefreshToken = tokenService.signRefreshToken(session.id, jti);
 
     const isExpired = subscription?.status === 'EXPIRED';
     const subscriptionStatus = subscription?.status || 'PENDING';
@@ -344,6 +369,13 @@ class AuthPrismaService {
       ipAddress,
       userAgent,
       status: 'SUCCESS',
+    });
+
+    AuthAuditService.logLoginSuccess({
+      user,
+      session,
+      loginMethod: 'password',
+      context,
     });
 
     eventBus.publish('UserLoggedIn', {
@@ -373,13 +405,12 @@ class AuthPrismaService {
     };
   }
 
-  async refreshSession(oldRefreshToken) {
-    const startTime = Date.now();
+  async refreshSession(oldRefreshToken, context = {}) {
     let sessionId = null;
     let jti = null;
 
     try {
-      const payload = jwt.verify(oldRefreshToken, JWT_CONFIG.refreshSecret);
+      const payload = tokenService.verifyRefreshToken(oldRefreshToken);
       sessionId = payload.sessionId;
       jti = payload.jti;
       if (payload.authVersion !== CURRENT_AUTH_VERSION) {
@@ -406,92 +437,80 @@ class AuthPrismaService {
       session = await sessionService.findSessionByRefreshToken(jti);
     }
 
-    logger.info(
-      {
-        tokenHash,
-        sessionFound: !!session,
-        sessionId: session?.id,
-        lookupDuration: Date.now() - startTime,
-      },
-      'Session lookup during refresh',
-    );
-
     if (!session) {
-      logger.info({
-        route: '/auth/refresh',
-        cookieReceived: true,
-        sessionFound: false,
-        duration: Date.now() - startTime,
+      AuthAuditService.logRefreshFailure({
+        sessionId: sessionId || null,
+        reason: 'Session not found',
+        context,
       });
       throw new Error('Session not found');
     }
 
     if (session.revoked) {
+      AuthAuditService.logRefreshFailure({
+        sessionId: session.id,
+        reason: 'Invalid or reused refresh token',
+        context,
+      });
       throw new Error('Invalid or reused refresh token');
     }
 
     if (session.refreshToken !== tokenHash) {
       // REPLAY ATTACK! The session is active but the token presented doesn't match the active hash.
       await sessionService.revokeSession(session.id);
-      logger.warn(
-        { sessionId: session.id, userId: session.userId, jti },
-        'Replay attack detected! Revoked session immediately.',
-      );
+      AuthAuditService.logTokenReplay({ session, tokenHash: oldRefreshToken, context });
       throw new Error('Invalid or reused refresh token');
     }
 
     if (new Date() > session.expiresAt) {
       await sessionService.revokeSession(session.id);
-      logger.info({
-        route: '/auth/refresh',
-        cookieReceived: true,
-        sessionFound: true,
-        userFound: false,
-        duration: Date.now() - startTime,
+      AuthAuditService.logSessionExpired({ session, context });
+      AuthAuditService.logRefreshFailure({
+        sessionId: session.id,
+        reason: 'Refresh token expired',
+        context,
       });
       throw new Error('Refresh token expired');
     }
 
-    const userLookupStart = Date.now();
     const user = await authRepository.findUserById(session.userId);
-    logger.info(
-      { userFound: !!user, userLookupDuration: Date.now() - userLookupStart },
-      'User lookup during refresh',
-    );
 
     if (!user) {
-      logger.info({
-        route: '/auth/refresh',
-        cookieReceived: true,
-        sessionFound: true,
-        userFound: false,
-        duration: Date.now() - startTime,
+      AuthAuditService.logRefreshFailure({
+        sessionId: session.id,
+        reason: 'User not found',
+        context,
       });
       throw new Error('User not found');
     }
 
     if (user.status === 'BLOCKED') {
       await sessionService.revokeSession(session.id);
+      AuthAuditService.logSessionRevoked({ session, reason: 'Account blocked', context });
       throw new Error('Your account has been blocked. Contact support.');
     }
 
     if (user.status === 'SUSPENDED') {
       await sessionService.revokeSession(session.id);
+      AuthAuditService.logSessionRevoked({ session, reason: 'Account suspended', context });
       throw new Error('Your account has been suspended. Contact support.');
     }
 
     if (user.tenant?.blacklisted) {
       await sessionService.revokeSession(session.id);
+      AuthAuditService.logSessionRevoked({ session, reason: 'Organization blocked', context });
       throw new Error('Your organization has been blocked. Contact support.');
     }
 
     if (user.tenant?.status === 'SUSPENDED') {
       await sessionService.revokeSession(session.id);
+      AuthAuditService.logSessionRevoked({ session, reason: 'Organization suspended', context });
       throw new Error('Your organization has been suspended. Contact support.');
     }
 
     if (user.tenant?.status === 'EXPIRED') {
       await sessionService.revokeSession(session.id);
+      AuthAuditService.logSessionRevoked({ session, reason: 'Subscription expired', context });
       throw new Error('Your subscription has expired. Please renew.');
     }
 
@@ -499,8 +518,8 @@ class AuthPrismaService {
     const newJti = sessionService.generateDeviceToken();
     await sessionService.rotateRefreshToken(session.id, newJti);
 
-    const accessToken = this._signAccessToken(user, session.id);
-    const signedRefreshToken = this._signRefreshToken(session.id, newJti);
+    const accessToken = tokenService.signAccessToken(user, session.id);
+    const signedRefreshToken = tokenService.signRefreshToken(session.id, newJti);
     const subscription = user.tenant?.subscription;
 
     if (
@@ -517,6 +536,13 @@ class AuthPrismaService {
     }
 
     const isExpired = subscription?.status === 'EXPIRED';
+
+    AuthAuditService.logRefreshSuccess({
+      session,
+      previousTokenHash: tokenHash,
+      newTokenHash: sessionService.hashToken(newJti),
+      context,
+    });
 
     eventBus.publish('RefreshTokenRotated', {
       userId: user.id,
@@ -544,9 +570,13 @@ class AuthPrismaService {
     };
   }
 
-  async logout(sessionId) {
+  async logout(sessionId, context = {}) {
     if (sessionId) {
+      const session = await sessionService.findSessionById(sessionId);
       await sessionService.revokeSession(sessionId);
+      if (session) {
+        AuthAuditService.logLogout({ session, reason: 'USER_INITIATED', context });
+      }
       eventBus.publish('UserLoggedOut', { sessionId, timestamp: new Date().toISOString() });
     }
   }
@@ -722,11 +752,7 @@ class AuthPrismaService {
       throw err;
     }
 
-    const resetToken = jwt.sign(
-      { type: 'password-reset', userId: user.id },
-      secretManager.getPrimarySecret(),
-      { expiresIn: '5m', algorithm: 'HS256' },
-    );
+    const resetToken = tokenService.signPasswordResetToken(user.id);
 
     const hashedResetToken = crypto.createHash('sha256').update(resetToken).digest('hex');
 
@@ -753,7 +779,7 @@ class AuthPrismaService {
   async resetPassword(resetToken, newPassword) {
     let payload;
     try {
-      payload = jwt.verify(resetToken, secretManager.getPrimarySecret());
+      payload = tokenService.verifyPasswordResetToken(resetToken);
     } catch {
       const err = new Error('Invalid or expired reset token.');
       err.code = AUTH_ERRORS.INVALID_RESET_TOKEN;
@@ -871,14 +897,6 @@ class AuthPrismaService {
             daysRemaining: 0,
           },
     };
-  }
-
-  _signAccessToken(user, sessionId) {
-    return tokenService.signAccessToken(user, sessionId);
-  }
-
-  _signRefreshToken(sessionId, jti) {
-    return tokenService.signRefreshToken(sessionId, jti);
   }
 }
 

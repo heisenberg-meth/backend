@@ -1,13 +1,9 @@
 import bcrypt from 'bcryptjs';
-import jwt from 'jsonwebtoken';
+import tokenService from '../../auth/service/token.service.js';
 import prisma from '../../../config/prisma.js';
 import { adminRepository } from '../repository/admin.repository.js';
-import env from '../../../config/env.js';
 import logger from '../../../shared/utils/logger.js';
 import { SUPPORT_TICKET_STATUS } from '../../support/constants.js';
-
-const ACCESS_TOKEN_EXPIRY = '15m';
-const REFRESH_TOKEN_EXPIRY = '30d';
 
 async function adminAuditLog(
   adminId,
@@ -31,15 +27,8 @@ async function adminAuditLog(
 }
 
 function generateTokens(admin) {
-  const accessToken = jwt.sign({ adminId: admin.id, role: admin.role }, env.jwtSecrets[0], {
-    expiresIn: ACCESS_TOKEN_EXPIRY,
-    algorithm: 'HS256',
-  });
-
-  const refreshToken = jwt.sign({ adminId: admin.id, type: 'refresh' }, env.jwtSecrets[0], {
-    expiresIn: REFRESH_TOKEN_EXPIRY,
-    algorithm: 'HS256',
-  });
+  const accessToken = tokenService.signAdminAccessToken(admin.id, admin.role);
+  const refreshToken = tokenService.signAdminRefreshToken(admin.id);
 
   return { accessToken, refreshToken };
 }
@@ -124,7 +113,7 @@ export const adminService = {
 
   async refreshToken(refreshToken) {
     try {
-      const decoded = jwt.verify(refreshToken, env.jwtSecrets[0]);
+      const decoded = tokenService.verifyAdminRefreshToken(refreshToken);
       if (decoded.type !== 'refresh') throw new Error('Invalid refresh token');
 
       const admin = await adminRepository.findAdminById(decoded.adminId);

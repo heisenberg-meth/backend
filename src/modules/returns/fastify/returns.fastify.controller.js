@@ -186,7 +186,7 @@ class ReturnsFastifyController {
         request.params.id,
         request.tenantId,
         request.user.id,
-        request.body,
+        { ...request.body, sessionId: request.sessionId },
       );
       return reply.send({ success: true, data: result, message: 'Refund processed successfully' });
     } catch (error) {

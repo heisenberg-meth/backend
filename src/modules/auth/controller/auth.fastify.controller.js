@@ -71,7 +71,6 @@ class AuthFastifyController {
   }
 
   async login(request, reply) {
-    const startTime = Date.now();
     try {
       request.log.info(
         {
@@ -100,6 +99,7 @@ class AuthFastifyController {
 
       const responsePayload = { ...result };
       delete responsePayload.refreshToken;
+      delete responsePayload.token;
 
       request.log.info(
         {
@@ -111,19 +111,6 @@ class AuthFastifyController {
       );
 
       authMetricsService.recordLoginSuccess();
-      authMetricsService.logStructuredAuthEvent({
-        requestId: request.id,
-        method: request.method,
-        userId: result.user?.id,
-        tenantId: result.user?.tenantId,
-        branchId: result.user?.branchId,
-        role: result.user?.role,
-        endpoint: '/api/auth/login',
-        result: 'SUCCESS',
-        responseTime: Date.now() - startTime,
-        ipAddress: request.ip,
-        userAgent: request.headers['user-agent'],
-      });
 
       return reply.send(success(responsePayload));
     } catch (error) {
@@ -132,17 +119,6 @@ class AuthFastifyController {
       authMetricsService.recordLoginFailure(
         error?.message === 'Invalid credentials' ? 'invalid_password' : 'other',
       );
-      authMetricsService.logStructuredAuthEvent({
-        requestId: request.id,
-        method: request.method,
-        endpoint: '/api/auth/login',
-        result: 'FAILURE',
-        errorCode: error?.message || 'UnknownError',
-        failureReason: error?.message || 'Invalid login attempt',
-        responseTime: Date.now() - startTime,
-        ipAddress: request.ip,
-        userAgent: request.headers['user-agent'],
-      });
 
       if (error instanceof ZodError) {
         const firstIssue = error.issues?.[0];
@@ -256,7 +232,11 @@ class AuthFastifyController {
           .send(errorResponse('Refresh token required', AUTH_ERRORS.REFRESH_TOKEN_REQUIRED));
       }
 
-      const result = await authService.refreshSession(refreshToken);
+      const result = await authService.refreshSession(refreshToken, {
+        ipAddress: request.ip,
+        userAgent: request.headers['user-agent'],
+        requestId: request.id,
+      });
       sessionFound = true;
       userFound = true;
 
@@ -267,6 +247,7 @@ class AuthFastifyController {
 
       const responsePayload = { ...result };
       delete responsePayload.refreshToken;
+      delete responsePayload.token;
 
       request.log.info(
         {
@@ -280,20 +261,6 @@ class AuthFastifyController {
       );
 
       authMetricsService.recordRefreshSuccess();
-      authMetricsService.logStructuredAuthEvent({
-        requestId: request.id,
-        method: request.method,
-        userId: result.user?.id,
-        tenantId: result.user?.tenantId,
-        branchId: result.user?.branchId,
-        role: result.user?.role,
-        sessionId: result.id,
-        endpoint: '/api/auth/refresh',
-        result: 'SUCCESS',
-        responseTime: Date.now() - startTime,
-        ipAddress: request.ip,
-        userAgent: request.headers['user-agent'],
-      });
 
       return reply.send(success(responsePayload));
     } catch (error) {
@@ -301,17 +268,6 @@ class AuthFastifyController {
 
       const isReused = error?.message === 'Invalid or reused refresh token';
       authMetricsService.recordRefreshFailure(isReused ? 'replay' : 'expired');
-      authMetricsService.logStructuredAuthEvent({
-        requestId: request.id,
-        method: request.method,
-        endpoint: '/api/auth/refresh',
-        result: 'FAILURE',
-        errorCode: error?.message || 'RefreshFailed',
-        failureReason: isReused ? 'Replay attack detected' : 'Token expired or invalid',
-        responseTime: Date.now() - startTime,
-        ipAddress: request.ip,
-        userAgent: request.headers['user-agent'],
-      });
 
       const isInvalidToken =
         error?.message === 'Invalid refresh token' ||
@@ -351,9 +307,12 @@ class AuthFastifyController {
   }
 
   async logout(request, reply) {
-    const startTime = Date.now();
     try {
-      await authService.logout(request.sessionId);
+      await authService.logout(request.sessionId, {
+        ipAddress: request.ip,
+        userAgent: request.headers['user-agent'],
+        requestId: request.id,
+      });
 
       cookieManager.clearAuthCookies(reply);
 
@@ -366,37 +325,12 @@ class AuthFastifyController {
       );
 
       authMetricsService.recordLogoutSuccess();
-      authMetricsService.logStructuredAuthEvent({
-        requestId: request.id,
-        method: request.method,
-        userId: request.user?.id,
-        tenantId: request.user?.tenantId,
-        branchId: request.user?.branchId,
-        role: request.user?.role,
-        sessionId: request.sessionId,
-        endpoint: '/api/auth/logout',
-        result: 'SUCCESS',
-        responseTime: Date.now() - startTime,
-        ipAddress: request.ip,
-        userAgent: request.headers['user-agent'],
-      });
 
       return reply.send(success({ message: 'Logged out successfully' }));
     } catch (error) {
       request.log.error(error);
 
       authMetricsService.recordLogoutFailure();
-      authMetricsService.logStructuredAuthEvent({
-        requestId: request.id,
-        method: request.method,
-        endpoint: '/api/auth/logout',
-        result: 'FAILURE',
-        errorCode: error?.message || 'LogoutFailed',
-        failureReason: error?.message || 'Failed to clear session',
-        responseTime: Date.now() - startTime,
-        ipAddress: request.ip,
-        userAgent: request.headers['user-agent'],
-      });
 
       return reply
         .code(400)

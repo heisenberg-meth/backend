@@ -361,18 +361,17 @@ class MedicinePrismaRepository {
     };
   }
 
-  async create(data, tx = prisma) {
+  async create(data, tx = prisma, options = {}) {
+    const { select, include } = options;
     return tx.medicine.create({
       data,
-      include: {
-        category: true,
-        manufacturer: true,
-      },
+      ...(select ? { select } : { include: include || { category: true, manufacturer: true } }),
     });
   }
 
-  async update(id, tenantId, data) {
+  async update(id, tenantId, data, options = {}) {
     const { rackLocation, ...medicineData } = data;
+    const { select, include } = options;
 
     if (rackLocation !== undefined) {
       await prisma.inventory.updateMany({
@@ -384,17 +383,16 @@ class MedicinePrismaRepository {
     return prisma.medicine.update({
       where: { id, tenantId },
       data: medicineData,
-      include: {
-        category: true,
-        manufacturer: true,
-      },
+      ...(select ? { select } : { include: include || { category: true, manufacturer: true } }),
     });
   }
 
-  async delete(id, tenantId) {
+  async delete(id, tenantId, options = {}) {
+    const { select } = options;
     return prisma.medicine.update({
       where: { id, tenantId },
       data: { deletedAt: new Date() },
+      ...(select ? { select } : { select: { id: true } }),
     });
   }
 

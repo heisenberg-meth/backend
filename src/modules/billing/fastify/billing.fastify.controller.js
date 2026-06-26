@@ -178,6 +178,7 @@ class BillingFastifyController {
         reason,
         refundAmount,
         branchId: request.branchId,
+        sessionId: request.sessionId,
       });
 
       return reply.send({ success: true, data: result });

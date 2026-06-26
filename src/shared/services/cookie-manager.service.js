@@ -50,22 +50,23 @@ class CookieManager {
     logger.info('Cookie Configuration Matrix is VALID.');
   }
 
-  _clearLegacyCookies(reply, cookieNames) {
+  _clearConflictingCookies(reply, cookieNames) {
     const currentDomain = resolvedCookieDomain;
 
     for (const name of cookieNames) {
-      // Clear for explicit current domain
       if (currentDomain) {
+        // We are going to set a domain cookie, so clear any existing host-only cookie.
+        reply.clearCookie(name, { path: '/', secure: true, sameSite: 'none' });
+      } else {
+        // We are going to set a host-only cookie, so try to clear any generic domain cookie
+        // that might have been accidentally set in the past.
         reply.clearCookie(name, {
           path: '/',
-          domain: currentDomain,
+          domain: '.medassist.viyaninfo.com',
           secure: true,
           sameSite: 'none',
         });
       }
-
-      // Clear host-only cookie (no domain)
-      reply.clearCookie(name, { path: '/', secure: true, sameSite: 'none' });
     }
 
     logger.info(
@@ -80,7 +81,7 @@ class CookieManager {
 
   setAuthCookies(reply, { accessToken, refreshToken }) {
     // 1. Prevent duplicate active cookies
-    this._clearLegacyCookies(reply, [COOKIE_NAMES.ACCESS_TOKEN, COOKIE_NAMES.REFRESH_TOKEN]);
+    this._clearConflictingCookies(reply, [COOKIE_NAMES.ACCESS_TOKEN, COOKIE_NAMES.REFRESH_TOKEN]);
 
     // 2. Set new cookies using consistent exact configuration
     if (refreshToken) {
@@ -105,7 +106,26 @@ class CookieManager {
     reply.clearCookie(COOKIE_NAMES.REFRESH_TOKEN, CLEAR_COOKIE_OPTIONS);
     reply.clearCookie(COOKIE_NAMES.ACCESS_TOKEN, CLEAR_COOKIE_OPTIONS);
     reply.clearCookie(COOKIE_NAMES.CSRF_TOKEN, CLEAR_COOKIE_OPTIONS);
-    this._clearLegacyCookies(reply, [COOKIE_NAMES.ACCESS_TOKEN, COOKIE_NAMES.REFRESH_TOKEN]);
+
+    // Also explicitly clear the alternative (host-only/domain) to ensure total logout
+    const currentDomain = resolvedCookieDomain;
+    if (currentDomain) {
+      reply.clearCookie(COOKIE_NAMES.REFRESH_TOKEN, { path: '/', secure: true, sameSite: 'none' });
+      reply.clearCookie(COOKIE_NAMES.ACCESS_TOKEN, { path: '/', secure: true, sameSite: 'none' });
+    } else {
+      reply.clearCookie(COOKIE_NAMES.REFRESH_TOKEN, {
+        path: '/',
+        domain: '.medassist.viyaninfo.com',
+        secure: true,
+        sameSite: 'none',
+      });
+      reply.clearCookie(COOKIE_NAMES.ACCESS_TOKEN, {
+        path: '/',
+        domain: '.medassist.viyaninfo.com',
+        secure: true,
+        sameSite: 'none',
+      });
+    }
 
     logger.info(
       {
@@ -125,7 +145,7 @@ class CookieManager {
   }
 
   setAdminAuthCookies(reply, { accessToken, refreshToken }) {
-    this._clearLegacyCookies(reply, [
+    this._clearConflictingCookies(reply, [
       COOKIE_NAMES.ADMIN_ACCESS_TOKEN,
       COOKIE_NAMES.ADMIN_REFRESH_TOKEN,
     ]);
@@ -150,10 +170,34 @@ class CookieManager {
   clearAdminAuthCookies(reply) {
     reply.clearCookie(COOKIE_NAMES.ADMIN_REFRESH_TOKEN, CLEAR_COOKIE_OPTIONS);
     reply.clearCookie(COOKIE_NAMES.ADMIN_ACCESS_TOKEN, CLEAR_COOKIE_OPTIONS);
-    this._clearLegacyCookies(reply, [
-      COOKIE_NAMES.ADMIN_ACCESS_TOKEN,
-      COOKIE_NAMES.ADMIN_REFRESH_TOKEN,
-    ]);
+
+    // Also explicitly clear the alternative
+    const currentDomain = resolvedCookieDomain;
+    if (currentDomain) {
+      reply.clearCookie(COOKIE_NAMES.ADMIN_REFRESH_TOKEN, {
+        path: '/',
+        secure: true,
+        sameSite: 'none',
+      });
+      reply.clearCookie(COOKIE_NAMES.ADMIN_ACCESS_TOKEN, {
+        path: '/',
+        secure: true,
+        sameSite: 'none',
+      });
+    } else {
+      reply.clearCookie(COOKIE_NAMES.ADMIN_REFRESH_TOKEN, {
+        path: '/',
+        domain: '.medassist.viyaninfo.com',
+        secure: true,
+        sameSite: 'none',
+      });
+      reply.clearCookie(COOKIE_NAMES.ADMIN_ACCESS_TOKEN, {
+        path: '/',
+        domain: '.medassist.viyaninfo.com',
+        secure: true,
+        sameSite: 'none',
+      });
+    }
   }
 }
 

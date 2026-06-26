@@ -28,7 +28,7 @@ class RefundEngine {
       throw new Error('Refund already completed');
     }
 
-    const { refundMethod } = refundDetails || {};
+    const { refundMethod, sessionId } = refundDetails || {};
 
     const result = await unifiedRefundOrchestrator.processRefund({
       tenantId,
@@ -38,6 +38,7 @@ class RefundEngine {
       refundAmount: returnRecord.totalReturnAmount,
       refundMethod: refundMethod || 'CASH',
       reason: returnRecord.returnReason,
+      sessionId,
     });
 
     emitLocalEvent(DOMAIN_EVENTS.REFUND_COMPLETED, {

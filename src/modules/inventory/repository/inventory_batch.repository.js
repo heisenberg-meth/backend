@@ -15,26 +15,30 @@ class InventoryBatchRepository {
     });
   }
 
-  async create(data) {
+  async create(data, options = {}) {
     return prisma.inventoryBatch.create({
       data,
+      ...options,
     });
   }
 
-  async update(id, data) {
+  async update(id, data, options = {}) {
     return prisma.inventoryBatch.update({
       where: { id },
       data,
+      ...options,
     });
   }
 
-  async delete(id) {
+  async delete(id, options = {}) {
+    const { select } = options;
     return prisma.inventoryBatch.update({
       where: { id },
       data: {
         status: 'ARCHIVED',
         deletedAt: new Date(),
       },
+      ...(select ? { select } : { select: { id: true } }),
     });
   }
 

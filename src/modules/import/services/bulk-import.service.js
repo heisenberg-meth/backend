@@ -9,6 +9,10 @@ import {
 
 class BulkImportService {
   async analyzeOrCommit(payload, tenantId, branchId, userId) {
+    if (!payload || typeof payload !== 'object') {
+      throw new Error('Invalid payload');
+    }
+
     const {
       medicines = [],
       supplier: supplierName = 'None',
@@ -16,6 +20,10 @@ class BulkImportService {
       barcodeOptions = { autoGen: true, overwrite: false, validate: true },
       dryRun = true,
     } = payload;
+
+    if (!Array.isArray(medicines)) {
+      throw new Error('medicines must be an array');
+    }
 
     let resolvedSupplierId = null;
     if (supplierName && supplierName !== 'None') {
@@ -122,12 +130,22 @@ class BulkImportService {
       const validationWarnings = [];
 
       if (!name) {
-        validationErrors.push('Medicine name is required');
+        validationErrors.push({
+          field: 'name',
+          value: '',
+          errorCode: 'MISSING_REQUIRED_FIELD',
+          message: 'Medicine name is required',
+        });
       }
 
       const qty = this._parseQuantity(qtyStr);
       if (isNaN(qty) || qty <= 0) {
-        validationErrors.push('Invalid quantity (must be greater than zero)');
+        validationErrors.push({
+          field: 'quantity',
+          value: qtyStr,
+          errorCode: 'INVALID_QUANTITY',
+          message: 'Quantity must be greater than zero',
+        });
       }
 
       let expiryDate = null;
@@ -135,7 +153,12 @@ class BulkImportService {
       if (expiryStr) {
         expiryDate = this.parseExpiryDate(expiryStr);
         if (!expiryDate) {
-          validationErrors.push(`Invalid expiry date format: "${expiryStr}"`);
+          validationErrors.push({
+            field: 'expiryDate',
+            value: expiryStr,
+            errorCode: 'INVALID_DATE',
+            message: `Invalid expiry date format: "${expiryStr}"`,
+          });
         } else if (expiryDate < new Date()) {
           isExpired = true;
           validationWarnings.push(
@@ -151,7 +174,12 @@ class BulkImportService {
         mrp: price * 1.2,
       });
       if (pricingError) {
-        validationErrors.push(pricingError);
+        validationErrors.push({
+          field: 'price',
+          value: priceStr,
+          errorCode: 'INVALID_PRICE',
+          message: pricingError,
+        });
       }
 
       if (barcode) {
@@ -167,13 +195,15 @@ class BulkImportService {
       }
 
       if (validationErrors.length > 0) {
-        analysis.errors.push({
-          row: rowNum,
-          name: name || '[blank]',
-          reason: validationErrors.join('; '),
-          warnings: validationWarnings,
-          action: 'Skip',
-        });
+        for (const err of validationErrors) {
+          analysis.errors.push({
+            row: rowNum,
+            field: err.field,
+            value: err.value,
+            errorCode: err.errorCode,
+            message: err.message,
+          });
+        }
         continue;
       }
 
@@ -385,222 +415,233 @@ class BulkImportService {
 
       logger.info(
         {
-          chunk: i / CHUNK_SIZE + 1,
+          chunk: Math.floor(i / CHUNK_SIZE) + 1,
           totalChunks: Math.ceil(validatedRows.length / CHUNK_SIZE),
         },
-        'Bulk import chunk',
+        'Bulk import chunk processing',
       );
 
-      await prisma.$transaction(
-        async (tx) => {
-          const batchesToCreate = [];
-          const movementsToCreate = [];
-          const inventoryUpdates = [];
+      const newMedicines = [];
+      const newBatches = [];
+      const newMovements = [];
+      const inventoryAggregated = new Map();
+      const updatePayloads = [];
+      const defaultExpiry = new Date(new Date().setFullYear(new Date().getFullYear() + 2));
 
-          for (const row of chunk) {
-            let medicineId = null;
+      for (const row of chunk) {
+        let medicineId = null;
 
-            const normName = row.name.toLowerCase().trim();
-            const normBarcode = row.barcode ? row.barcode.trim() : '';
+        const normName = row.name.toLowerCase().trim();
+        const normBarcode = row.barcode ? row.barcode.trim() : '';
 
-            let currentMatch =
-              medicineMapByName.get(normName) ||
-              (normBarcode ? medicineMapByBarcode.get(normBarcode) : null);
+        let currentMatch =
+          medicineMapByName.get(normName) ||
+          (normBarcode ? medicineMapByBarcode.get(normBarcode) : null);
 
-            if (currentMatch) {
-              medicineId = currentMatch.id;
+        if (currentMatch) {
+          medicineId = currentMatch.id;
 
-              if (row.isDuplicate) {
-                if (duplicateStrategy === 'Skip') {
-                  commitSummary.skippedCount++;
-                  continue;
-                }
+          if (row.isDuplicate) {
+            if (duplicateStrategy === 'Skip') {
+              commitSummary.skippedCount++;
+              continue;
+            }
 
-                if (duplicateStrategy === 'Overwrite') {
-                  commitSummary.overwrittenCount++;
-                  const updatePayload = {};
-                  if (row.barcode && (barcodeOptions.overwrite || !currentMatch.barcode)) {
-                    updatePayload.barcode = row.barcode;
-                    currentMatch.barcode = row.barcode;
-                    medicineMapByBarcode.set(row.barcode.trim(), currentMatch);
-                  }
-                  if (row.category) {
-                    const resolvedCatId = categoryMap.get(row.category.trim().toLowerCase());
-                    if (resolvedCatId) {
-                      updatePayload.categoryId = resolvedCatId;
-                      currentMatch.categoryId = resolvedCatId;
-                    }
-                  }
-                  if (row.manufacturer) {
-                    const resolvedMfrId = manufacturerMap.get(
-                      row.manufacturer.trim().toLowerCase(),
-                    );
-                    if (resolvedMfrId) {
-                      updatePayload.manufacturerId = resolvedMfrId;
-                      currentMatch.manufacturerId = resolvedMfrId;
-                    }
-                  }
-                  if (Object.keys(updatePayload).length > 0) {
-                    await tx.medicine.update({
-                      where: { id: medicineId },
-                      data: updatePayload,
-                    });
-                  }
-                } else if (duplicateStrategy === 'Merge') {
-                  commitSummary.mergedCount++;
-                  const updatePayload = {};
-                  if (row.barcode && !currentMatch.barcode) {
-                    updatePayload.barcode = row.barcode;
-                    currentMatch.barcode = row.barcode;
-                    medicineMapByBarcode.set(row.barcode.trim(), currentMatch);
-                  }
-                  if (row.category && !currentMatch.categoryId) {
-                    const resolvedCatId = categoryMap.get(row.category.trim().toLowerCase());
-                    if (resolvedCatId) {
-                      updatePayload.categoryId = resolvedCatId;
-                      currentMatch.categoryId = resolvedCatId;
-                    }
-                  }
-                  if (row.manufacturer && !currentMatch.manufacturerId) {
-                    const resolvedMfrId = manufacturerMap.get(
-                      row.manufacturer.trim().toLowerCase(),
-                    );
-                    if (resolvedMfrId) {
-                      updatePayload.manufacturerId = resolvedMfrId;
-                      currentMatch.manufacturerId = resolvedMfrId;
-                    }
-                  }
-                  if (Object.keys(updatePayload).length > 0) {
-                    await tx.medicine.update({
-                      where: { id: medicineId },
-                      data: updatePayload,
-                    });
-                  }
+            if (duplicateStrategy === 'Overwrite' || duplicateStrategy === 'Merge') {
+              if (duplicateStrategy === 'Overwrite') commitSummary.overwrittenCount++;
+              if (duplicateStrategy === 'Merge') commitSummary.mergedCount++;
+
+              const updatePayload = {};
+              if (row.barcode && (barcodeOptions.overwrite || !currentMatch.barcode)) {
+                updatePayload.barcode = row.barcode;
+                currentMatch.barcode = row.barcode;
+                medicineMapByBarcode.set(row.barcode.trim(), currentMatch);
+              }
+              if (row.category && (duplicateStrategy === 'Overwrite' || !currentMatch.categoryId)) {
+                const resolvedCatId = categoryMap.get(row.category.trim().toLowerCase());
+                if (resolvedCatId) {
+                  updatePayload.categoryId = resolvedCatId;
+                  currentMatch.categoryId = resolvedCatId;
                 }
               }
-            } else {
-              let categoryId = row.category
-                ? categoryMap.get(row.category.trim().toLowerCase()) || null
-                : null;
-
-              let manufacturerId = row.manufacturer
-                ? manufacturerMap.get(row.manufacturer.trim().toLowerCase()) || null
-                : null;
-
-              const newMed = await tx.medicine.create({
-                data: {
-                  tenantId,
-                  userId,
-                  name: row.name,
-                  genericName: row.genericName || null,
-                  barcode: row.barcode,
-                  hsnCode: row.hsnCode || null,
-                  dosageForm: row.dosageForm || null,
-                  packagingType: mapDosageFormToPackaging(row.dosageForm),
-                  strength: row.strength || null,
-                  sku: `SKU-${crypto.randomUUID()}`,
-                  gstPercentage: row.gstPercentage || 0,
-                  reorderLevel: 10,
-                  status: 'ACTIVE',
-                  isActive: true,
-                  categoryId: categoryId || null,
-                  manufacturerId: manufacturerId || null,
-                },
-              });
-              medicineId = newMed.id;
-              commitSummary.newMedicinesCount++;
-
-              const cachedMed = { id: medicineId, name: row.name, barcode: row.barcode };
-              medicineMapByName.set(normName, cachedMed);
-              if (row.barcode) {
-                medicineMapByBarcode.set(row.barcode.trim(), cachedMed);
+              if (
+                row.manufacturer &&
+                (duplicateStrategy === 'Overwrite' || !currentMatch.manufacturerId)
+              ) {
+                const resolvedMfrId = manufacturerMap.get(row.manufacturer.trim().toLowerCase());
+                if (resolvedMfrId) {
+                  updatePayload.manufacturerId = resolvedMfrId;
+                  currentMatch.manufacturerId = resolvedMfrId;
+                }
+              }
+              if (Object.keys(updatePayload).length > 0) {
+                updatePayloads.push({ id: medicineId, data: updatePayload });
               }
             }
+          }
+        } else {
+          let categoryId = row.category
+            ? categoryMap.get(row.category.trim().toLowerCase()) || null
+            : null;
 
-            if (row.qty > 0) {
-              const defaultExpiry = new Date(new Date().setFullYear(new Date().getFullYear() + 2));
-              const _tempBatchId = crypto.randomUUID();
-              batchesToCreate.push({
-                _tempBatchId,
-                tenantId,
-                medicineId,
-                branchId,
-                batchNumber: row.batch,
-                quantity: row.qty,
-                receivedQuantity: row.qty,
-                availableQuantity: row.qty,
-                expiryDate: row.expiryDate || defaultExpiry,
-                purchasePrice: row.price || 0,
-                sellingPrice: (row.price || 0) * 1.2,
-                mrp: (row.price || 0) * 1.2,
-                status: 'ACTIVE',
-                supplierId: resolvedSupplierId,
-              });
+          let manufacturerId = row.manufacturer
+            ? manufacturerMap.get(row.manufacturer.trim().toLowerCase()) || null
+            : null;
 
-              movementsToCreate.push({
-                _tempBatchId,
-                tenantId,
-                branchId,
-                medicineId,
-                movementType: 'STOCK_IN',
-                quantity: row.qty,
-                referenceType: 'BULK_IMPORT',
-                performedBy: userId,
-                notes: `Bulk imported from ${supplierName !== 'None' ? supplierName : 'spreadsheet'}`,
-              });
+          medicineId = crypto.randomUUID();
+          newMedicines.push({
+            id: medicineId,
+            tenantId,
+            userId,
+            name: row.name,
+            genericName: row.genericName || null,
+            barcode: row.barcode,
+            hsnCode: row.hsnCode || null,
+            dosageForm: row.dosageForm || null,
+            packagingType: mapDosageFormToPackaging(row.dosageForm),
+            strength: row.strength || null,
+            sku: `SKU-${crypto.randomUUID()}`,
+            gstPercentage: row.gstPercentage || 0,
+            reorderLevel: 10,
+            status: 'ACTIVE',
+            isActive: true,
+            categoryId: categoryId || null,
+            manufacturerId: manufacturerId || null,
+          });
+          commitSummary.newMedicinesCount++;
 
-              inventoryUpdates.push({ medicineId, qty: row.qty });
-              commitSummary.newBatchesCount++;
+          const cachedMed = { id: medicineId, name: row.name, barcode: row.barcode };
+          medicineMapByName.set(normName, cachedMed);
+          if (row.barcode) {
+            medicineMapByBarcode.set(row.barcode.trim(), cachedMed);
+          }
+        }
+
+        if (row.qty > 0) {
+          const batchId = crypto.randomUUID();
+          newBatches.push({
+            id: batchId,
+            tenantId,
+            medicineId,
+            branchId,
+            batchNumber: row.batch,
+            quantity: row.qty,
+            receivedQuantity: row.qty,
+            availableQuantity: row.qty,
+            expiryDate: row.expiryDate || defaultExpiry,
+            purchasePrice: row.price || 0,
+            sellingPrice: (row.price || 0) * 1.2,
+            mrp: (row.price || 0) * 1.2,
+            status: 'ACTIVE',
+            supplierId: resolvedSupplierId,
+          });
+
+          newMovements.push({
+            batchId,
+            tenantId,
+            branchId,
+            medicineId,
+            movementType: 'STOCK_IN',
+            quantity: row.qty,
+            referenceType: 'BULK_IMPORT',
+            performedBy: userId,
+            notes: `Bulk imported from ${supplierName !== 'None' ? supplierName : 'spreadsheet'}`,
+          });
+
+          inventoryAggregated.set(medicineId, (inventoryAggregated.get(medicineId) || 0) + row.qty);
+          commitSummary.newBatchesCount++;
+        }
+
+        commitSummary.importedCount++;
+      }
+
+      try {
+        const commitStart = Date.now();
+        await prisma.$transaction(async (tx) => {
+          if (newMedicines.length > 0) {
+            await tx.medicine.createMany({ data: newMedicines });
+          }
+
+          if (updatePayloads.length > 0) {
+            for (let i = 0; i < updatePayloads.length; i += 500) {
+              const batch = updatePayloads.slice(i, i + 500);
+              await Promise.all(
+                batch.map((up) =>
+                  tx.medicine.update({
+                    where: { id: up.id },
+                    data: up.data,
+                    select: { id: true },
+                  }),
+                ),
+              );
             }
-
-            commitSummary.importedCount++;
           }
 
-          const batchIdMap = new Map();
-          if (batchesToCreate.length > 0) {
-            for (const b of batchesToCreate) {
-              const { _tempBatchId, ...data } = b;
-              const created = await tx.inventoryBatch.create({ data });
-              batchIdMap.set(_tempBatchId, created.id);
+          if (newBatches.length > 0) {
+            await tx.inventoryBatch.createMany({ data: newBatches });
+          }
+
+          if (newMovements.length > 0) {
+            await tx.stockMovement.createMany({ data: newMovements });
+          }
+
+          if (inventoryAggregated.size > 0) {
+            const upsertEntries = Array.from(inventoryAggregated.entries());
+            for (let i = 0; i < upsertEntries.length; i += 500) {
+              const batch = upsertEntries.slice(i, i + 500);
+              await Promise.all(
+                batch.map(([medId, qty]) =>
+                  tx.inventory.upsert({
+                    where: {
+                      tenantId_branchId_medicineId: { tenantId, branchId, medicineId: medId },
+                    },
+                    update: { currentStock: { increment: qty } },
+                    create: {
+                      tenantId,
+                      branchId,
+                      medicineId: medId,
+                      currentStock: qty,
+                      reorderPoint: 10,
+                    },
+                    select: { id: true },
+                  }),
+                ),
+              );
             }
           }
+        });
 
-          if (movementsToCreate.length > 0) {
-            const resolvedMovements = movementsToCreate.map((m) => {
-              const { _tempBatchId, ...data } = m;
-              return { ...data, batchId: batchIdMap.get(_tempBatchId) || undefined };
-            });
-            await tx.stockMovement.createMany({ data: resolvedMovements });
-          }
-
-          const stockMap = new Map();
-          for (const inv of inventoryUpdates) {
-            stockMap.set(inv.medicineId, (stockMap.get(inv.medicineId) || 0) + inv.qty);
-          }
-
-          for (const [medicineId, qty] of stockMap) {
-            await tx.inventory.upsert({
-              where: {
-                tenantId_branchId_medicineId: { tenantId, branchId, medicineId },
-              },
-              update: { currentStock: { increment: qty } },
-              create: {
-                tenantId,
-                branchId,
-                medicineId,
-                currentStock: qty,
-                reorderPoint: 10,
-              },
-            });
-          }
-        },
-        { timeout: 60000 },
-      );
+        logger.info(
+          {
+            event: 'IMPORT_PERFORMANCE',
+            phase: 'CHUNK_COMMIT',
+            chunk: Math.floor(i / CHUNK_SIZE) + 1,
+            durationMs: Date.now() - commitStart,
+            rows: chunk.length,
+          },
+          'Chunk committed successfully',
+        );
+      } catch (err) {
+        logger.warn(
+          { chunkIdx: Math.floor(i / CHUNK_SIZE) + 1, err: err.message },
+          'Chunk import transaction failed',
+        );
+        analysis.errors.push({
+          row: i + 1,
+          field: 'chunk',
+          value: '',
+          errorCode: err.code === 'P2002' ? 'DUPLICATE_BARCODE_OR_SKU' : 'DATABASE_ERROR',
+          message: err.message || 'Chunk transaction failed',
+        });
+      }
 
       logger.info(
         {
-          chunk: i / CHUNK_SIZE + 1,
+          event: 'IMPORT_PERFORMANCE',
+          phase: 'CHUNK_TOTAL',
+          chunk: Math.floor(i / CHUNK_SIZE) + 1,
           durationMs: Date.now() - start,
+          rows: chunk.length,
         },
         'Chunk completed',
       );
@@ -637,17 +678,18 @@ class BulkImportService {
     return {
       success: true,
       dryRun: false,
+      message:
+        analysis.errors.length > 0
+          ? 'Bulk import completed with validation errors.'
+          : 'Bulk import completed successfully.',
       summary: {
-        new: commitSummary.newMedicinesCount,
+        totalRows: medicines.length,
+        imported: commitSummary.importedCount,
         duplicates: commitSummary.overwrittenCount + commitSummary.mergedCount,
-        conflicts: commitSummary.skippedCount,
-        rows: [],
-        errors: analysis.errors,
-        readyCount: commitSummary.importedCount,
-        importedCount: commitSummary.importedCount,
-        skippedCount: analysis.errors.length,
-        newBatchesCount: commitSummary.newBatchesCount,
+        failed: analysis.errors.length,
+        warnings: 0,
       },
+      errors: analysis.errors,
     };
   }
 

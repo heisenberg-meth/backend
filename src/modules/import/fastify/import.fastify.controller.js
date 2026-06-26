@@ -129,7 +129,34 @@ class ImportFastifyController {
         supplier: supplierName,
       } = request.body || {};
       if (!fileContent) {
-        return reply.code(400).send({ success: false, message: 'fileContent is required' });
+        return reply.code(400).send({
+          success: false,
+          errorCode: 'FILE_NOT_FOUND',
+          message: 'fileContent is required',
+        });
+      }
+
+      const validExtensions = ['.csv', '.xlsx'];
+      const ext = fileName ? path.extname(fileName).toLowerCase() : '';
+      if (!fileName || !validExtensions.includes(ext)) {
+        return reply.code(400).send({
+          success: false,
+          errorCode: 'INVALID_FILE',
+          message: 'Unsupported file type. Supported formats: .csv, .xlsx',
+        });
+      }
+
+      if (ext === '.csv') {
+        const firstLine = fileContent.split('\n')[0] || '';
+        const lowerLine = firstLine.toLowerCase();
+        const hasName = lowerLine.includes('name') || lowerLine.includes('medicine');
+        if (!hasName) {
+          return reply.code(400).send({
+            success: false,
+            errorCode: 'INVALID_TEMPLATE',
+            message: 'Missing required columns in template. Ensure Medicine Name is present.',
+          });
+        }
       }
 
       const uploadsDir = new URL('../../../uploads/imports', import.meta.url).pathname;
@@ -208,7 +235,10 @@ class ImportFastifyController {
       return reply.send({ success: true, data: progress });
     } catch (err) {
       request.log.error({ err, jobId }, 'Import status lookup failed');
-      return reply.code(500).send({ success: false, error: { message: 'Failed to retrieve import status', code: 'IMPORT_STATUS_FAILED' } });
+      return reply.code(500).send({
+        success: false,
+        error: { message: 'Failed to retrieve import status', code: 'IMPORT_STATUS_FAILED' },
+      });
     }
   }
 }

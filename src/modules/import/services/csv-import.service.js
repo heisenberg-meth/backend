@@ -188,10 +188,10 @@ class CsvImportService {
 
     const summary = {
       totalRows,
-      importedCount,
-      newMedicinesCount: newMedicines.length,
-      newBatchesCount: newBatches.length,
-      errors: errors.slice(0, 100),
+      imported: importedCount,
+      duplicates: 0,
+      failed: errors.length,
+      warnings: 0,
     };
 
     try {
@@ -319,7 +319,10 @@ class CsvImportService {
 
   _parseQuantity(val) {
     if (val === undefined || val === null) return NaN;
-    const clean = String(val).trim().replace(/,/g, '').replace(/[^0-9.-]/g, '');
+    const clean = String(val)
+      .trim()
+      .replace(/,/g, '')
+      .replace(/[^0-9.-]/g, '');
     if (clean === '') return NaN;
     const num = parseFloat(clean);
     return isNaN(num) ? NaN : Math.round(num);
@@ -327,7 +330,10 @@ class CsvImportService {
 
   _parsePrice(val) {
     if (val === undefined || val === null) return NaN;
-    const clean = String(val).trim().replace(/,/g, '').replace(/[^0-9.-]/g, '');
+    const clean = String(val)
+      .trim()
+      .replace(/,/g, '')
+      .replace(/[^0-9.-]/g, '');
     if (clean === '') return NaN;
     const num = parseFloat(clean);
     return isNaN(num) ? NaN : num;
@@ -335,7 +341,11 @@ class CsvImportService {
 
   _parseGst(val) {
     if (val === undefined || val === null) return 0;
-    const clean = String(val).trim().replace(/%/g, '').replace(/,/g, '').replace(/[^0-9.-]/g, '');
+    const clean = String(val)
+      .trim()
+      .replace(/%/g, '')
+      .replace(/,/g, '')
+      .replace(/[^0-9.-]/g, '');
     if (clean === '') return 0;
     const num = parseFloat(clean);
     return isNaN(num) ? 0 : num;
@@ -346,36 +356,148 @@ class CsvImportService {
       ctx;
 
     for (const row of rows) {
-      const name = this._getColumn(row, ['name', 'med', 'medicine', 'drug', 'item'], ['generic', 'price', 'rate', 'cost', 'qty', 'quantity', 'stock', 'expiry', 'date', 'batch', 'barcode', 'sku']);
-      const qtyStr = this._getColumn(row, ['qty', 'quantity', 'stock', 'unit', 'units', 'count', 'on hand', 'available'], ['price', 'rate', 'cost', 'inr', 'date', 'expiry', 'name', 'med', 'batch', 'barcode', 'sku']);
-      const expiryStr = this._getColumn(row, ['expiry', 'exp', 'date', 'valid'], ['name', 'med', 'price', 'qty', 'batch', 'barcode', 'sku']);
-      const priceStr = this._getColumn(row, ['price', 'rate', 'cost', 'inr'], ['qty', 'quantity', 'stock', 'units', 'count', 'name', 'med', 'expiry', 'date', 'batch', 'barcode', 'sku']);
-      const batchNo = this._getColumn(row, ['batch', 'lot', 'no', 'code'], ['name', 'med', 'price', 'qty', 'expiry', 'date', 'barcode', 'hsn']);
-      const barcode = this._getColumn(row, ['barcode', 'upc', 'ean', 'sku'], ['name', 'med', 'price', 'qty', 'expiry', 'date', 'batch']);
-      const category = this._getColumn(row, ['category', 'cat', 'type', 'group', 'classification'], ['name', 'med', 'price', 'qty', 'expiry', 'date', 'batch', 'barcode', 'generic']);
-      const manufacturer = this._getColumn(row, ['manufacturer', 'mfr', 'maker', 'brand', 'company', 'vendor'], ['name', 'med', 'price', 'qty', 'expiry', 'date', 'batch', 'barcode', 'generic', 'category']);
-      const genericName = this._getColumn(row, ['generic', 'gen', 'salt', 'composition'], ['name', 'med', 'price', 'qty', 'expiry', 'date', 'batch', 'barcode']);
-      const strength = this._getColumn(row, ['strength', 'mg', 'ml', 'dose', 'concentration'], ['name', 'med', 'price', 'qty', 'expiry', 'date', 'batch', 'barcode']);
-      const dosageForm = this._getColumn(row, ['dosage', 'form', 'type', 'drug_form'], ['name', 'med', 'price', 'qty', 'expiry', 'date', 'batch', 'barcode']);
-      const hsnCode = this._getColumn(row, ['hsn', 'hsn_code', 'hsncode', 'sac', 'tariff'], ['name', 'med', 'price', 'qty', 'expiry', 'date', 'batch', 'barcode']);
-      const gstStr = this._getColumn(row, ['gst', 'gst%', 'tax', 'tax_percent', 'gst_percent'], ['name', 'med', 'price', 'qty', 'expiry', 'date', 'batch', 'barcode']);
+      const name = this._getColumn(
+        row,
+        ['name', 'med', 'medicine', 'drug', 'item'],
+        [
+          'generic',
+          'price',
+          'rate',
+          'cost',
+          'qty',
+          'quantity',
+          'stock',
+          'expiry',
+          'date',
+          'batch',
+          'barcode',
+          'sku',
+        ],
+      );
+      const qtyStr = this._getColumn(
+        row,
+        ['qty', 'quantity', 'stock', 'unit', 'units', 'count', 'on hand', 'available'],
+        [
+          'price',
+          'rate',
+          'cost',
+          'inr',
+          'date',
+          'expiry',
+          'name',
+          'med',
+          'batch',
+          'barcode',
+          'sku',
+        ],
+      );
+      const expiryStr = this._getColumn(
+        row,
+        ['expiry', 'exp', 'date', 'valid'],
+        ['name', 'med', 'price', 'qty', 'batch', 'barcode', 'sku'],
+      );
+      const priceStr = this._getColumn(
+        row,
+        ['price', 'rate', 'cost', 'inr'],
+        [
+          'qty',
+          'quantity',
+          'stock',
+          'units',
+          'count',
+          'name',
+          'med',
+          'expiry',
+          'date',
+          'batch',
+          'barcode',
+          'sku',
+        ],
+      );
+      const batchNo = this._getColumn(
+        row,
+        ['batch', 'lot', 'no', 'code'],
+        ['name', 'med', 'price', 'qty', 'expiry', 'date', 'barcode', 'hsn'],
+      );
+      const barcode = this._getColumn(
+        row,
+        ['barcode', 'upc', 'ean', 'sku'],
+        ['name', 'med', 'price', 'qty', 'expiry', 'date', 'batch'],
+      );
+      const category = this._getColumn(
+        row,
+        ['category', 'cat', 'type', 'group', 'classification'],
+        ['name', 'med', 'price', 'qty', 'expiry', 'date', 'batch', 'barcode', 'generic'],
+      );
+      const manufacturer = this._getColumn(
+        row,
+        ['manufacturer', 'mfr', 'maker', 'brand', 'company', 'vendor'],
+        [
+          'name',
+          'med',
+          'price',
+          'qty',
+          'expiry',
+          'date',
+          'batch',
+          'barcode',
+          'generic',
+          'category',
+        ],
+      );
+      const genericName = this._getColumn(
+        row,
+        ['generic', 'gen', 'salt', 'composition'],
+        ['name', 'med', 'price', 'qty', 'expiry', 'date', 'batch', 'barcode'],
+      );
+      const strength = this._getColumn(
+        row,
+        ['strength', 'mg', 'ml', 'dose', 'concentration'],
+        ['name', 'med', 'price', 'qty', 'expiry', 'date', 'batch', 'barcode'],
+      );
+      const dosageForm = this._getColumn(
+        row,
+        ['dosage', 'form', 'type', 'drug_form'],
+        ['name', 'med', 'price', 'qty', 'expiry', 'date', 'batch', 'barcode'],
+      );
+      const hsnCode = this._getColumn(
+        row,
+        ['hsn', 'hsn_code', 'hsncode', 'sac', 'tariff'],
+        ['name', 'med', 'price', 'qty', 'expiry', 'date', 'batch', 'barcode'],
+      );
+      const gstStr = this._getColumn(
+        row,
+        ['gst', 'gst%', 'tax', 'tax_percent', 'gst_percent'],
+        ['name', 'med', 'price', 'qty', 'expiry', 'date', 'batch', 'barcode'],
+      );
 
       if (!name) {
-        logger.warn({ rowNum: ctx.importedCount + ctx.newMedicines.length + 1, rawRow: row }, '[CSV-Import] Medicine name is required');
+        logger.warn(
+          { rowNum: ctx.importedCount + ctx.newMedicines.length + 1, rawRow: row },
+          '[CSV-Import] Medicine name is required',
+        );
         ctx.errors.push({
           row: ctx.importedCount + ctx.newMedicines.length + 1,
-          reason: 'Medicine name is required',
+          field: 'name',
+          value: '',
+          errorCode: 'MISSING_REQUIRED_FIELD',
+          message: 'Medicine name is required',
         });
         continue;
       }
 
       const qty = this._parseQuantity(qtyStr);
       if (isNaN(qty) || qty <= 0) {
-        logger.warn({ rowNum: ctx.importedCount + ctx.newMedicines.length + 1, name, qtyStr, rawRow: row }, '[CSV-Import] Invalid quantity during import');
+        logger.warn(
+          { rowNum: ctx.importedCount + ctx.newMedicines.length + 1, name, qtyStr, rawRow: row },
+          '[CSV-Import] Invalid quantity during import',
+        );
         ctx.errors.push({
           row: ctx.importedCount + ctx.newMedicines.length + 1,
-          name,
-          reason: 'Quantity must be greater than zero',
+          field: 'quantity',
+          value: qtyStr,
+          errorCode: 'INVALID_QUANTITY',
+          message: 'Quantity must be greater than zero',
         });
         continue;
       }
@@ -387,11 +509,22 @@ class CsvImportService {
         mrp: price * 1.2,
       });
       if (pricingError) {
-        logger.warn({ rowNum: ctx.importedCount + ctx.newMedicines.length + 1, name, priceStr, pricingError, rawRow: row }, '[CSV-Import] Pricing validation failed');
+        logger.warn(
+          {
+            rowNum: ctx.importedCount + ctx.newMedicines.length + 1,
+            name,
+            priceStr,
+            pricingError,
+            rawRow: row,
+          },
+          '[CSV-Import] Pricing validation failed',
+        );
         ctx.errors.push({
           row: ctx.importedCount + ctx.newMedicines.length + 1,
-          name,
-          reason: pricingError,
+          field: 'price',
+          value: priceStr,
+          errorCode: 'INVALID_PRICE',
+          message: pricingError,
         });
         continue;
       }
@@ -474,7 +607,8 @@ class CsvImportService {
               ? manufacturer.trim()
               : null,
         };
-        medicineId = `new:${crypto.randomUUID()}`;
+        medicineId = crypto.randomUUID();
+        newMed.id = medicineId;
         newMed._tempId = medicineId;
         ctx.newMedicines.push(newMed);
         medicineMap.set(normalizedName, { id: medicineId, name: name.trim(), barcode });
@@ -488,14 +622,22 @@ class CsvImportService {
 
       const batchKey = `${medicineId}:${finalBatchNo}`.toLowerCase();
       const existingEntry = batchMap.get(batchKey);
-      const isExistingDbBatch = existingEntry && typeof existingEntry === 'object';
-      let existingBatchId = null;
 
-      if (isExistingDbBatch) {
-        existingBatchId = existingEntry.id;
-        ctx.batchQuantityUpdates.push({ batchId: existingEntry.id, qty });
-      } else if (!existingEntry) {
+      let targetBatchId = null;
+
+      if (existingEntry) {
+        targetBatchId = existingEntry.id;
+        if (existingEntry.isNew) {
+          ctx.newBatches[existingEntry.index].quantity += qty;
+          ctx.newBatches[existingEntry.index].receivedQuantity += qty;
+          ctx.newBatches[existingEntry.index].availableQuantity += qty;
+        } else {
+          ctx.batchQuantityUpdates.push({ batchId: targetBatchId, qty });
+        }
+      } else {
+        targetBatchId = crypto.randomUUID();
         ctx.newBatches.push({
+          id: targetBatchId,
           tenantId,
           medicineId,
           branchId,
@@ -511,10 +653,15 @@ class CsvImportService {
           status: 'ACTIVE',
           supplierId: ctx.supplierId || null,
         });
-        batchMap.set(batchKey, true);
+        batchMap.set(batchKey, {
+          id: targetBatchId,
+          isNew: true,
+          index: ctx.newBatches.length - 1,
+        });
       }
 
       ctx.newMovements.push({
+        id: crypto.randomUUID(),
         tenantId,
         branchId,
         medicineId,
@@ -523,8 +670,8 @@ class CsvImportService {
         referenceType: 'BULK_IMPORT',
         performedBy: userId,
         notes: `Bulk imported from CSV`,
-        _existingBatchId: existingBatchId,
-        _pendingBatchNo: existingBatchId ? null : finalBatchNo,
+        batchId: targetBatchId,
+        idempotencyKey: `import-${ctx.jobId}-${targetBatchId}-${crypto.randomUUID()}`,
       });
 
       ctx.inventoryUpdates.push({ medicineId, qty });
@@ -543,7 +690,7 @@ class CsvImportService {
       inventoryUpdates,
       errors,
     } = ctx;
-    const medicineIdMap = new Map();
+    const commitStart = Date.now();
 
     await prisma.$transaction(async (tx) => {
       const categoryNameToId = new Map();
@@ -568,29 +715,25 @@ class CsvImportService {
         }
       }
 
+      const newMedicinesData = [];
       for (const m of newMedicines) {
-        const { _tempId, _categoryName, _manufacturerName, ...data } = m;
+        const { _categoryName, _manufacturerName, ...data } = m;
         if (!data.categoryId && _categoryName) {
           data.categoryId = categoryNameToId.get(_categoryName.toLowerCase().trim());
         }
         if (!data.manufacturerId && _manufacturerName) {
           data.manufacturerId = manufacturerNameToId.get(_manufacturerName.toLowerCase().trim());
         }
-        const created = await tx.medicine.create({ data });
-        medicineIdMap.set(_tempId, created.id);
+        newMedicinesData.push(data);
+      }
+      if (newMedicinesData.length > 0) {
+        await tx.medicine.createMany({ data: newMedicinesData });
       }
       logger.info({ count: newMedicines.length }, '[CSV-Import] Created medicines');
 
-      const batchIdMap = new Map();
       if (newBatches.length > 0) {
-        for (const b of newBatches) {
-          const resolvedMedId = medicineIdMap.get(b.medicineId) || b.medicineId;
-          const created = await tx.inventoryBatch.create({
-            data: { ...b, medicineId: resolvedMedId },
-          });
-          batchIdMap.set(`${resolvedMedId}:${b.batchNumber}`.toLowerCase(), created.id);
-        }
-        logger.info({ count: newBatches.length }, '[CSV-Import] Created batches');
+        await tx.inventoryBatch.createMany({ data: newBatches });
+        logger.info({ count: newBatches.length }, '[CSV-Import] Created batches (batch)');
       }
 
       if (ctx.batchQuantityUpdates && ctx.batchQuantityUpdates.length > 0) {
@@ -604,49 +747,44 @@ class CsvImportService {
             },
           });
         }
-        logger.info({ count: ctx.batchQuantityUpdates.length }, '[CSV-Import] Updated existing batch quantities');
+        logger.info(
+          { count: ctx.batchQuantityUpdates.length },
+          '[CSV-Import] Updated existing batch quantities',
+        );
       }
 
+      const inventoryAggregated = new Map();
       for (const inv of inventoryUpdates) {
-        const resolvedMedId = medicineIdMap.get(inv.medicineId) || inv.medicineId;
-        await tx.inventory.upsert({
-          where: {
-            tenantId_branchId_medicineId: { tenantId, branchId, medicineId: resolvedMedId },
-          },
-          update: { currentStock: { increment: inv.qty } },
-          create: {
-            tenantId,
-            branchId,
-            medicineId: resolvedMedId,
-            currentStock: inv.qty,
-            reorderPoint: 10,
-          },
-        });
+        const resolvedMedId = inv.medicineId; // medicineId is already the actual UUID
+        inventoryAggregated.set(
+          resolvedMedId,
+          (inventoryAggregated.get(resolvedMedId) || 0) + inv.qty,
+        );
+      }
+
+      if (inventoryAggregated.size > 0) {
+        await Promise.all(
+          Array.from(inventoryAggregated.entries()).map(([medId, qty]) =>
+            tx.inventory.upsert({
+              where: {
+                tenantId_branchId_medicineId: { tenantId, branchId, medicineId: medId },
+              },
+              update: { currentStock: { increment: qty } },
+              create: {
+                tenantId,
+                branchId,
+                medicineId: medId,
+                currentStock: qty,
+                reorderPoint: 10,
+              },
+            }),
+          ),
+        );
       }
 
       if (newMovements.length > 0) {
-        const resolved = newMovements.map((m) => {
-          const medId = medicineIdMap.get(m.medicineId) || m.medicineId;
-          let batchId = m._existingBatchId || null;
-          if (!batchId && m._pendingBatchNo) {
-            const key = `${medId}:${m._pendingBatchNo}`.toLowerCase();
-            batchId = batchIdMap.get(key) || null;
-          }
-          return {
-            tenantId: m.tenantId,
-            branchId: m.branchId,
-            medicineId: medId,
-            movementType: m.movementType,
-            quantity: m.quantity,
-            referenceType: m.referenceType,
-            performedBy: m.performedBy,
-            notes: m.notes,
-            batchId,
-            idempotencyKey: `import-${jobId}-${m.medicineId}-${crypto.randomUUID()}`,
-          };
-        });
-        await tx.stockMovement.createMany({ data: resolved });
-        logger.info({ count: resolved.length }, '[CSV-Import] Created movements');
+        await tx.stockMovement.createMany({ data: newMovements });
+        logger.info({ count: newMovements.length }, '[CSV-Import] Created movements (batch)');
       }
 
       await tx.importJob.update({
@@ -663,6 +801,17 @@ class CsvImportService {
         },
       });
     });
+
+    logger.info(
+      {
+        event: 'IMPORT_PERFORMANCE',
+        phase: 'CHUNK_COMMIT',
+        chunk: 1, // csv is processed chunk by chunk anyway, or this is final commit
+        durationMs: Date.now() - commitStart,
+        rows: ctx.importedCount,
+      },
+      'Chunk committed successfully',
+    );
   }
 
   _parseDate(str) {
