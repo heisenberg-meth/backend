@@ -1,5 +1,5 @@
 import jwt from 'jsonwebtoken';
-import secretManager from '../config/secrets.js';
+import secretManager from '../../config/secrets.js';
 
 /**
  * Sign a new JWT access token.

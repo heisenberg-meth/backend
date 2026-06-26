@@ -2,7 +2,7 @@ import jwt from 'jsonwebtoken';
 import { JWT_CONFIG } from '../../../config/jwt.config.js';
 import { CURRENT_AUTH_VERSION } from '../auth.constants.js';
 import env from '../../../config/env.js';
-import secretManager from '../../../shared/services/secret-manager.service.js';
+import secretManager from '../../../config/secrets.js';
 
 class TokenService {
   signAccessToken(user, sessionId) {

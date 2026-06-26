@@ -127,16 +127,22 @@ class SettlementService {
         tenantId,
       });
     } catch (eventError) {
-      logger.error({ err: eventError, tenantId, paymentId: result?.payment?.id }, 'Failed to publish supplier payment event — scheduling retry');
+      logger.error(
+        { err: eventError, tenantId, paymentId: result?.payment?.id },
+        'Failed to publish supplier payment event — scheduling retry',
+      );
       try {
-        const { mainQueue } = await import('../../../queue/index.js');
+        const { mainQueue } = await import('../../../../queue/index.js');
         await mainQueue.add(
           'retry-supplier-payment-events',
           { paymentId: result?.payment?.id, tenantId, attempt: 1 },
           { attempts: 5, backoff: { type: 'exponential', delay: 15000 } },
         );
       } catch (queueErr) {
-        logger.error({ err: queueErr, tenantId }, 'CRITICAL: Failed to queue supplier payment event retry');
+        logger.error(
+          { err: queueErr, tenantId },
+          'CRITICAL: Failed to queue supplier payment event retry',
+        );
       }
     }
 
