@@ -14,7 +14,7 @@ class AnalyticsRepository {
       FROM (
         SELECT
           m.id,
-          COALESCE(SUM(b.quantity), 0) as stock,
+          COALESCE(SUM(b."availableQuantity"), 0) as stock,
           m."reorderLevel"
         FROM "Medicine" m
         LEFT JOIN "InventoryBatch" b

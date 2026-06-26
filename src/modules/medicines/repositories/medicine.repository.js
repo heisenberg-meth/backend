@@ -67,12 +67,13 @@ class MedicineRepository {
 
     // Format medicines with stock summary
     const formattedMedicines = medicines.map((m) => {
+      const now = new Date();
       const batches = m.inventoryBatches || [];
-      const totalStock = batches.reduce((sum, b) => sum + (b.quantity || 0), 0);
-      const availableStock = batches.reduce(
-        (sum, b) => sum + (b.availableQuantity || b.quantity || 0),
-        0,
+      const activeBatches = batches.filter(
+        (b) => b.availableQuantity > 0 && b.status === 'ACTIVE' && new Date(b.expiryDate) > now,
       );
+      const availableStock = activeBatches.reduce((sum, b) => sum + (b.availableQuantity || 0), 0);
+      const totalStock = availableStock;
 
       return {
         id: m.id,
@@ -147,12 +148,13 @@ class MedicineRepository {
 
     if (!medicine) return null;
 
+    const now = new Date();
     const batches = medicine.inventoryBatches || [];
-    const totalStock = batches.reduce((sum, b) => sum + (b.quantity || 0), 0);
-    const availableStock = batches.reduce(
-      (sum, b) => sum + (b.availableQuantity || b.quantity || 0),
-      0,
+    const activeBatches = batches.filter(
+      (b) => b.availableQuantity > 0 && b.status === 'ACTIVE' && new Date(b.expiryDate) > now,
     );
+    const availableStock = activeBatches.reduce((sum, b) => sum + (b.availableQuantity || 0), 0);
+    const totalStock = availableStock;
 
     return {
       id: medicine.id,
@@ -272,12 +274,13 @@ class MedicineRepository {
 
     if (!medicine) return null;
 
+    const now = new Date();
     const batches = medicine.inventoryBatches || [];
-    const totalStock = batches.reduce((sum, b) => sum + (b.quantity || 0), 0);
-    const availableStock = batches.reduce(
-      (sum, b) => sum + (b.availableQuantity || b.quantity || 0),
-      0,
+    const activeBatches = batches.filter(
+      (b) => b.availableQuantity > 0 && b.status === 'ACTIVE' && new Date(b.expiryDate) > now,
     );
+    const availableStock = activeBatches.reduce((sum, b) => sum + (b.availableQuantity || 0), 0);
+    const totalStock = availableStock;
 
     return {
       id: medicine.id,

@@ -9,7 +9,10 @@ const safeMetric = async (fn, fallback = 0, metricName = 'unknown') => {
   try {
     return await fn();
   } catch (error) {
-    logger.error({ err: error, metric: metricName }, `Dashboard metric "${metricName}" query failed — returning fallback ${fallback}`);
+    logger.error(
+      { err: error, metric: metricName },
+      `Dashboard metric "${metricName}" query failed — returning fallback ${fallback}`,
+    );
     return fallback;
   }
 };
@@ -157,7 +160,7 @@ class DashboardAggregationService {
       topRisks: topRisks.map((m) => ({
         medicine: m.name,
         totalStock: m.inventoryBatches
-          ? m.inventoryBatches.reduce((sum, b) => sum + b.quantity, 0)
+          ? m.inventoryBatches.reduce((sum, b) => sum + b.availableQuantity, 0)
           : 0,
       })),
       computedAt: new Date().toISOString(),
@@ -700,8 +703,8 @@ class DashboardAggregationService {
       type: 'CRITICAL',
       severity: 'BLOCKER',
       message: `${b.medicine.name} (Batch: ${b.batchNumber}) expired on ${b.expiryDate.toISOString().split('T')[0]}`,
-      quantity: b.quantity,
-      lossValue: b.quantity * b.purchasePrice,
+      quantity: b.availableQuantity,
+      lossValue: b.availableQuantity * b.purchasePrice,
       batchId: b.id,
       medicineId: b.medicine.id,
       medicineName: b.medicine.name,

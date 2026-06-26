@@ -11,7 +11,7 @@ class AnalyticsService {
     const batchExposure = [];
 
     batches.forEach((batch) => {
-      const value = batch.quantity * (batch.purchasePrice || 0);
+      const value = batch.availableQuantity * (batch.purchasePrice || 0);
       totalInventoryValue += value;
       batchExposure.push({ medicine: batch.medicine.name, value });
     });
@@ -35,7 +35,7 @@ class AnalyticsService {
       where: {
         tenantId,
         expiryDate: { lte: expiryDate, gte: new Date() },
-        quantity: { gt: 0 },
+        availableQuantity: { gt: 0 },
         status: 'ACTIVE',
         deletedAt: null,
       },

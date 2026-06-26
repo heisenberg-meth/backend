@@ -3,6 +3,7 @@ import medicineSearchCache from '../cache/medicine-search.cache.js';
 import { emitLocalEvent } from '../../../shared/events/local-event-bus.js';
 import { emitEvent } from '../../../shared/events/erp-event-bus.js';
 import { DOMAIN_EVENTS } from '../../../shared/constants/events.js';
+import inventoryCalculationService from '../../inventory/service/inventory-calculation.service.js';
 
 class BarcodeLookupService {
   async lookup(barcode, tenantId) {
@@ -51,9 +52,23 @@ class BarcodeLookupService {
 
   enrichWithBarcodeData(medicine) {
     const batches = medicine.inventoryBatches || [];
-    const totalStock = batches.reduce((sum, b) => sum + b.quantity, 0);
-    const reservedStock = batches.reduce((sum, b) => sum + (b.reservedQuantity || 0), 0);
-    const availableStock = totalStock - reservedStock;
+    const availableStock = inventoryCalculationService.calculateAvailableStock(batches);
+    const reservedStock = inventoryCalculationService.calculateReservedStock(batches);
+    const totalStock = availableStock + reservedStock;
+
+    const branchAvailability = batches.reduce((acc, batch) => {
+      const branchKey = batch.branchId || 'unassigned';
+      if (!acc[branchKey]) {
+        acc[branchKey] = {
+          branchId: batch.branchId,
+          totalStock: 0,
+          availableStock: 0,
+        };
+      }
+      acc[branchKey].totalStock += (batch.availableQuantity || 0) + (batch.reservedQuantity || 0);
+      acc[branchKey].availableStock += batch.availableQuantity || 0;
+      return acc;
+    }, {});
 
     const earliestExpiry =
       batches.length > 0
@@ -112,6 +127,7 @@ class BarcodeLookupService {
         isNearExpiry,
         isExpired,
         batchCount: batches.length,
+        branchAvailability: Object.values(branchAvailability),
       },
       compliance: {
         prescriptionRequired: medicine.prescriptionRequired,

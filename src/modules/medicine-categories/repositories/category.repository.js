@@ -78,12 +78,12 @@ class CategoryRepository {
 
     return categories.map((c) => {
       const totalStock = c.medicines.reduce(
-        (sum, m) => sum + m.inventoryBatches.reduce((bs, b) => bs + b.quantity, 0),
+        (sum, m) => sum + m.inventoryBatches.reduce((bs, b) => bs + b.availableQuantity, 0),
         0,
       );
       const totalValue = c.medicines.reduce(
         (sum, m) =>
-          sum + m.inventoryBatches.reduce((bv, b) => bv + b.quantity * b.purchasePrice, 0),
+          sum + m.inventoryBatches.reduce((bv, b) => bv + b.availableQuantity * b.purchasePrice, 0),
         0,
       );
 

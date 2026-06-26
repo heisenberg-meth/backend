@@ -45,7 +45,7 @@ class InventoryBatchRepository {
 
     const where = {
       tenantId,
-      quantity: { gt: 0 },
+      availableQuantity: { gt: 0 },
       deletedAt: null,
     };
 

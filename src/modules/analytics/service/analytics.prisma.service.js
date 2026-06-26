@@ -16,24 +16,25 @@ class AnalyticsPrismaService {
       return JSON.parse(cachedStats);
     }
 
-    const [kpis, transactions, outstandingPayables, paidPurchases, pendingPayments] = await Promise.all([
-      kpiService.getTenantKPIs(tenantId),
-      prisma.transaction.aggregate({
-        where: { tenantId, status: 'SUCCESS' },
-        _sum: { amount: true },
-      }),
-      prisma.purchaseInvoice.aggregate({
-        where: { tenantId, paymentStatus: { not: 'PAID' } },
-        _sum: { balanceAmount: true },
-      }),
-      prisma.purchaseInvoice.aggregate({
-        where: { tenantId, paymentStatus: 'PAID' },
-        _sum: { totalAmount: true },
-      }),
-      prisma.purchaseInvoice.count({
-        where: { tenantId, paymentStatus: 'PENDING' },
-      }),
-    ]);
+    const [kpis, transactions, outstandingPayables, paidPurchases, pendingPayments] =
+      await Promise.all([
+        kpiService.getTenantKPIs(tenantId),
+        prisma.transaction.aggregate({
+          where: { tenantId, status: 'SUCCESS' },
+          _sum: { amount: true },
+        }),
+        prisma.purchaseInvoice.aggregate({
+          where: { tenantId, paymentStatus: { not: 'PAID' } },
+          _sum: { balanceAmount: true },
+        }),
+        prisma.purchaseInvoice.aggregate({
+          where: { tenantId, paymentStatus: 'PAID' },
+          _sum: { totalAmount: true },
+        }),
+        prisma.purchaseInvoice.count({
+          where: { tenantId, paymentStatus: 'PENDING' },
+        }),
+      ]);
 
     const stats = {
       totalMedicines: kpis.totalSku,
@@ -59,7 +60,7 @@ class AnalyticsPrismaService {
         deletedAt: null,
       },
       _count: { id: true },
-      _sum: { quantity: true },
+      _sum: { availableQuantity: true },
     });
     return distribution;
   }
@@ -238,7 +239,7 @@ class AnalyticsPrismaService {
       include: {
         inventoryBatches: {
           where: { deletedAt: null, status: 'ACTIVE' },
-          select: { quantity: true },
+          select: { availableQuantity: true },
         },
       },
     });
@@ -246,7 +247,7 @@ class AnalyticsPrismaService {
     return allMedicines
       .filter((m) => !soldIds.has(m.id))
       .map((m) => {
-        const totalQuantity = m.inventoryBatches.reduce((sum, b) => sum + b.quantity, 0);
+        const totalQuantity = m.inventoryBatches.reduce((sum, b) => sum + b.availableQuantity, 0);
         return {
           medicineId: m.id,
           name: m.name,
@@ -291,13 +292,13 @@ class AnalyticsPrismaService {
       where: {
         medicine: { tenantId, deletedAt: null },
         OR: [{ expiryDate: { lt: now } }, { status: 'EXPIRED' }],
-        quantity: { gt: 0 },
+        availableQuantity: { gt: 0 },
         deletedAt: null,
       },
       select: {
         id: true,
         batchNumber: true,
-        quantity: true,
+        availableQuantity: true,
         purchasePrice: true,
         sellingPrice: true,
         expiryDate: true,
@@ -306,8 +307,14 @@ class AnalyticsPrismaService {
       },
     });
 
-    const totalValue = expiredBatches.reduce((sum, b) => sum + b.quantity * b.purchasePrice, 0);
-    const totalRevenue = expiredBatches.reduce((sum, b) => sum + b.quantity * b.sellingPrice, 0);
+    const totalValue = expiredBatches.reduce(
+      (sum, b) => sum + b.availableQuantity * b.purchasePrice,
+      0,
+    );
+    const totalRevenue = expiredBatches.reduce(
+      (sum, b) => sum + b.availableQuantity * b.sellingPrice,
+      0,
+    );
 
     const supplierExpiryMap = {};
     for (const b of expiredBatches) {
@@ -320,8 +327,8 @@ class AnalyticsPrismaService {
             batchCount: 0,
           };
         }
-        supplierExpiryMap[b.supplierId].expiredValue += b.quantity * b.purchasePrice;
-        supplierExpiryMap[b.supplierId].expiredQuantity += b.quantity;
+        supplierExpiryMap[b.supplierId].expiredValue += b.availableQuantity * b.purchasePrice;
+        supplierExpiryMap[b.supplierId].expiredQuantity += b.availableQuantity;
         supplierExpiryMap[b.supplierId].batchCount += 1;
       }
     }
@@ -350,7 +357,7 @@ class AnalyticsPrismaService {
     return {
       totalLossValue: totalValue,
       totalLostRevenue: totalRevenue,
-      totalItems: expiredBatches.reduce((sum, b) => sum + b.quantity, 0),
+      totalItems: expiredBatches.reduce((sum, b) => sum + b.availableQuantity, 0),
       itemCount: expiredBatches.length,
       expiryLossPercentage:
         totalValue > 0 ? Math.round((totalValue / (totalValue + totalRevenue)) * 10000) / 100 : 0,
@@ -359,10 +366,10 @@ class AnalyticsPrismaService {
         medicineId: b.medicine.id,
         medicineName: b.medicine.name,
         batchNumber: b.batchNumber,
-        quantity: b.quantity,
+        quantity: b.availableQuantity,
         purchasePrice: b.purchasePrice,
         sellingPrice: b.sellingPrice,
-        lossValue: b.quantity * b.purchasePrice,
+        lossValue: b.availableQuantity * b.purchasePrice,
         expiryDate: b.expiryDate,
         supplierId: b.supplierId,
       })),
@@ -381,7 +388,7 @@ class AnalyticsPrismaService {
         id: true,
         purchasePrice: true,
         sellingPrice: true,
-        quantity: true,
+        availableQuantity: true,
         medicine: { select: { id: true, name: true } },
       },
     });
@@ -411,15 +418,15 @@ class AnalyticsPrismaService {
     for (const b of batches) {
       const margin =
         b.sellingPrice > 0 ? ((b.sellingPrice - b.purchasePrice) / b.sellingPrice) * 100 : 0;
-      totalMarginPct += margin * b.quantity;
-      totalPotentialProfit += (b.sellingPrice - b.purchasePrice) * b.quantity;
-      totalQty += b.quantity;
+      totalMarginPct += margin * b.availableQuantity;
+      totalPotentialProfit += (b.sellingPrice - b.purchasePrice) * b.availableQuantity;
+      totalQty += b.availableQuantity;
 
       if (margin < 0) {
-        negativeMarginCount += b.quantity;
+        negativeMarginCount += b.availableQuantity;
         const flagReason =
           margin < -10 ? 'CRITICAL - Likely pricing error' : 'NEGATIVE - Selling below cost';
-        if (b.quantity > 0) {
+        if (b.availableQuantity > 0) {
           negativeMarginItems.push({
             medicineId: b.medicine.id,
             medicineName: b.medicine.name,
@@ -430,13 +437,13 @@ class AnalyticsPrismaService {
           });
         }
       } else if (margin <= 10) {
-        marginRanges.below10 += b.quantity;
+        marginRanges.below10 += b.availableQuantity;
       } else if (margin <= 20) {
-        marginRanges.between10and20 += b.quantity;
+        marginRanges.between10and20 += b.availableQuantity;
       } else if (margin <= 30) {
-        marginRanges.between20and30 += b.quantity;
+        marginRanges.between20and30 += b.availableQuantity;
       } else {
-        marginRanges.above30 += b.quantity;
+        marginRanges.above30 += b.availableQuantity;
       }
     }
 
@@ -749,7 +756,7 @@ class AnalyticsPrismaService {
         SELECT
           m.id as "medicineId",
           m.name as "medicineName",
-          COALESCE(SUM(ib.quantity), 0) as currentStock,
+          COALESCE(SUM(ib."availableQuantity"), 0) as currentStock,
           m."reorderLevel",
           df."predictedQuantity" as predictedDemand,
           df."confidenceScore"
@@ -761,8 +768,8 @@ class AnalyticsPrismaService {
           AND df."forecastDate" >= CURRENT_DATE
           AND df."forecastDate" <= CURRENT_DATE + INTERVAL '30 days'
         GROUP BY m.id, m.name, m."reorderLevel", df."predictedQuantity", df."confidenceScore"
-        HAVING COALESCE(SUM(ib.quantity), 0) < df."predictedQuantity"
-        ORDER BY (df."predictedQuantity" - COALESCE(SUM(ib.quantity), 0)) DESC
+        HAVING COALESCE(SUM(ib."availableQuantity"), 0) < df."predictedQuantity"
+        ORDER BY (df."predictedQuantity" - COALESCE(SUM(ib."availableQuantity"), 0)) DESC
         LIMIT 15
       `,
 

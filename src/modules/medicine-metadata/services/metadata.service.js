@@ -113,8 +113,8 @@ class MetadataService {
     return {
       medicineId,
       summary: {
-        totalExpiredQty: expiredBatches.reduce((sum, b) => sum + b.quantity, 0),
-        nearExpiryQty: nearExpiryBatches.reduce((sum, b) => sum + b.quantity, 0),
+        totalExpiredQty: expiredBatches.reduce((sum, b) => sum + b.availableQuantity, 0),
+        nearExpiryQty: nearExpiryBatches.reduce((sum, b) => sum + b.availableQuantity, 0),
       },
       expiredBatches: expiredBatches.map((b) => ({
         batchNumber: b.batchNumber,

@@ -114,7 +114,7 @@ class TransferService {
         const sourceBatches = await tx.inventoryBatch.findMany({
           where: { medicineId: sourceBatch.medicineId, branchId: transfer.sourceBranchId },
         });
-        const prevSourceStock = sourceBatches.reduce((sum, b) => sum + b.quantity, 0);
+        const prevSourceStock = sourceBatches.reduce((sum, b) => sum + b.availableQuantity, 0);
 
         await ledgerRepository.createTransaction(
           {
@@ -210,7 +210,8 @@ class TransferService {
         const destBatches = await tx.inventoryBatch.findMany({
           where: { medicineId: sourceBatch.medicineId, branchId: transfer.destinationBranchId },
         });
-        const prevDestStock = destBatches.reduce((sum, b) => sum + b.quantity, 0) - item.quantity;
+        const prevDestStock =
+          destBatches.reduce((sum, b) => sum + b.availableQuantity, 0) - item.quantity;
 
         await ledgerRepository.createTransaction(
           {

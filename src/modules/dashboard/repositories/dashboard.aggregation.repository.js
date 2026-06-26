@@ -80,7 +80,7 @@ class DashboardAggregationRepository {
       FROM (
         SELECT
             m.id,
-            COALESCE(SUM(ib."quantity"), 0) as stock,
+            COALESCE(SUM(ib."availableQuantity"), 0) as stock,
             COALESCE(MAX(i."reorderPoint"), m."reorderLevel", 10) as reorder_level
         FROM "Medicine" m
         LEFT JOIN "InventoryBatch" ib

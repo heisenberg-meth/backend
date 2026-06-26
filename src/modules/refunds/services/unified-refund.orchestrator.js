@@ -4,6 +4,7 @@ import cacheInvalidator from '../../inventory/service/cache-invalidator.service.
 import logger from '../../../shared/utils/logger.js';
 import refundCalculationService from './refund-calculation.service.js';
 import pricingService from '../../billing/services/pricing.service.js';
+import sequenceService from '../../../shared/services/sequence.service.js';
 
 class UnifiedRefundOrchestrator {
   /**
@@ -47,8 +48,10 @@ class UnifiedRefundOrchestrator {
       // We need to resolve items if this comes from Billing Route directly
       let actualRefundAmount = refundAmount;
       const resolvedItems = [];
+      const inventoryMovements = []; // Store movements for later
+      const invoiceItemUpdates = []; // Store item updates for later
 
-      // If items are passed, we calculate amount and reverse inventory
+      // If items are passed, we calculate amount and prepare inventory adjustments
       if (items.length > 0) {
         // Find invoice items for validation
         const invoiceItems = await tx.invoiceItem.findMany({
@@ -74,34 +77,30 @@ class UnifiedRefundOrchestrator {
           );
           refundItemsData.push(calculatedItemRefund);
 
-          // Restore inventory (fraud protection ensures idempotency)
+          // Prepare to restore inventory (executed AFTER Return creation)
           if (invItem.batchId) {
             const idempotencyKey = `refund-${invoiceId}-item-${invItem.id}-qty-${item.quantity}-${Date.now()}`;
-            await movementService.recordMovement(
-              tenantId,
-              {
-                medicineId: invItem.medicineId,
-                batchId: invItem.batchId,
-                branchId: targetInvoice.branchId,
-                movementType: 'RETURN',
-                quantity: item.quantity,
-                referenceType: 'REFUND',
-                referenceId: invoiceId,
-                notes: `Unified Refund return: ${reason}`,
-                idempotencyKey,
-              },
-              userId,
-              tx,
-            );
+            inventoryMovements.push({
+              medicineId: invItem.medicineId,
+              batchId: invItem.batchId,
+              branchId: targetInvoice.branchId,
+              movementType: 'RETURN',
+              quantity: item.quantity,
+              referenceType: 'REFUND',
+              referenceId: invoiceId,
+              notes: `Unified Refund return: ${reason}`,
+              idempotencyKey,
+            });
           }
 
-          await tx.invoiceItem.update({
-            where: { id: invItem.id },
-            data: { quantity: { decrement: item.quantity } },
+          invoiceItemUpdates.push({
+            id: invItem.id,
+            quantity: item.quantity,
           });
 
           resolvedItems.push({
             invoiceItemId: invItem.id,
+            medicineId: invItem.medicineId,
             batchId: invItem.batchId,
             quantity: item.quantity,
             amount: calculatedItemRefund.totalRefund,
@@ -117,7 +116,7 @@ class UnifiedRefundOrchestrator {
       actualRefundAmount = Number(actualRefundAmount || 0);
 
       if (actualRefundAmount <= 0) {
-        throw new Error('Refund amount must be greater than zero');
+        throw new Error('INVALID_REFUND_AMOUNT: Refund amount must be greater than zero');
       }
 
       // 3. Mandatory Refund Ledger Validation
@@ -133,27 +132,45 @@ class UnifiedRefundOrchestrator {
       // 4. Create Unified Refund Ledger Entry
       const transactionId = `REF-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
 
-      // If called from Billing, we might still create a SalesReturn for legacy compatibility, or just use Return.
+      let finalReturnId = returnId;
       let createdSalesReturn = null;
+      let updatedReturn = null;
+
+      // FR-1: Create Sale Return First
       if (!returnId && items.length > 0) {
-        createdSalesReturn = await tx.salesReturn.create({
+        const returnNumber = await sequenceService.nextRefundNumber(tenantId, tx);
+        createdSalesReturn = await tx.return.create({
           data: {
             tenantId,
+            branchId: targetInvoice.branchId,
+            returnNumber,
             invoiceId,
             saleId: targetInvoice.saleId,
-            batchId: resolvedItems[0]?.batchId,
-            quantity: items.reduce((sum, i) => sum + i.quantity, 0),
-            reason: reason || 'UNIFIED_REFUND',
-            refundAmount: actualRefundAmount,
+            patientId: targetInvoice.patientId,
+            returnReason: reason || 'UNIFIED_REFUND',
+            returnType: 'PATIENT_RETURN',
             status: 'REFUNDED',
+            totalReturnAmount: actualRefundAmount,
+            refundMethod,
+            refundStatus: 'COMPLETED',
+            refundTransactionId: transactionId,
             createdBy: userId,
-          },
+            items: {
+              create: resolvedItems.map(ri => ({
+                invoiceItemId: ri.invoiceItemId,
+                medicineId: ri.medicineId,
+                batchId: ri.batchId,
+                returnedQuantity: ri.quantity,
+                returnAmount: ri.amount,
+                disposition: 'PENDING'
+              }))
+            }
+          }
         });
-      }
-
-      // If called from Returns, update Return record
-      let updatedReturn = null;
-      if (returnId) {
+        finalReturnId = createdSalesReturn.id;
+        
+        logger.info(`[Refund] Created Return ID: ${finalReturnId} for Invoice: ${invoiceId}`);
+      } else if (returnId) {
         updatedReturn = await tx.return.update({
           where: { id: returnId },
           data: {
@@ -165,8 +182,14 @@ class UnifiedRefundOrchestrator {
         });
       }
 
-      const finalReturnId = returnId || (createdSalesReturn ? createdSalesReturn.id : undefined);
+      // FR-2: Validate SaleReturn Creation
+      if (!finalReturnId) {
+        throw new Error('SALE_RETURN_CREATION_FAILED: Failed to resolve Return record ID');
+      }
 
+      logger.info(`[Refund] Preparing RefundPayment for Return ID: ${finalReturnId}, Invoice: ${invoiceId}`);
+
+      // FR-3: Correct Foreign Key Assignment (RefundPayment references Return)
       const refundPayment = await tx.refundPayment.create({
         data: {
           tenantId,
@@ -179,6 +202,18 @@ class UnifiedRefundOrchestrator {
           createdBy: userId,
         },
       });
+
+      // FR-7: Inventory Update Order (Only AFTER successful creation of business records)
+      for (const movement of inventoryMovements) {
+        await movementService.recordMovement(tenantId, movement, userId, tx);
+      }
+
+      for (const update of invoiceItemUpdates) {
+        await tx.invoiceItem.update({
+          where: { id: update.id },
+          data: { quantity: { decrement: update.quantity } },
+        });
+      }
 
       // 5. Update Invoice aggregates strictly via Unified rules
       const isFullRefund = proposedTotal >= invoiceTotal;
@@ -219,10 +254,12 @@ class UnifiedRefundOrchestrator {
         },
       });
 
+      logger.info(`[Refund] Completed transaction for Return ID: ${finalReturnId}`);
+
       return {
         refundPayment,
         salesReturn: createdSalesReturn,
-        returnRecord: updatedReturn,
+        returnRecord: updatedReturn || createdSalesReturn,
         isFullRefund,
         invoiceId,
         tenantId,

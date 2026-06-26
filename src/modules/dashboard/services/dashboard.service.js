@@ -172,13 +172,13 @@ class DashboardService {
       where: {
         medicine: { tenantId, deletedAt: null },
         OR: [{ expiryDate: { lt: now } }, { status: 'EXPIRED' }],
-        quantity: { gt: 0 },
+        availableQuantity: { gt: 0 },
         deletedAt: null,
       },
       select: {
         id: true,
         batchNumber: true,
-        quantity: true,
+        availableQuantity: true,
         expiryDate: true,
         purchasePrice: true,
         medicine: { select: { id: true, name: true } },
@@ -189,14 +189,14 @@ class DashboardService {
       where: {
         tenantId,
         expiryDate: { gte: now, lt: thirtyDaysLater },
-        quantity: { gt: 0 },
+        availableQuantity: { gt: 0 },
         status: 'ACTIVE',
         deletedAt: null,
       },
       select: {
         id: true,
         batchNumber: true,
-        quantity: true,
+        availableQuantity: true,
         expiryDate: true,
         purchasePrice: true,
         medicine: { select: { id: true, name: true } },
@@ -212,8 +212,8 @@ class DashboardService {
     const critical = expiredBatches.map((b) => ({
       type: 'critical',
       message: `${b.medicine.name} (Batch: ${b.batchNumber}) expired on ${b.expiryDate.toISOString().split('T')[0]}`,
-      quantity: b.quantity,
-      lossValue: b.quantity * b.purchasePrice,
+      quantity: b.availableQuantity,
+      lossValue: b.availableQuantity * b.purchasePrice,
       batchId: b.id,
       medicineId: b.medicine.id,
       medicineName: b.medicine.name,
@@ -222,7 +222,7 @@ class DashboardService {
     const warnings = expiringBatches.map((b) => ({
       type: 'warning',
       message: `${b.medicine.name} (Batch: ${b.batchNumber}) expires in ${Math.ceil((b.expiryDate - now) / (1000 * 60 * 60 * 24))} days`,
-      quantity: b.quantity,
+      quantity: b.availableQuantity,
       expiryDate: b.expiryDate,
       batchId: b.id,
       medicineId: b.medicine.id,

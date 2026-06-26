@@ -21,8 +21,8 @@ class DeadStockService {
         id: true,
         reorderLevel: true,
         inventoryBatches: {
-          where: { status: 'ACTIVE', deletedAt: null, quantity: { gt: 0 } },
-          select: { quantity: true, purchasePrice: true, expiryDate: true },
+          where: { status: 'ACTIVE', deletedAt: null, availableQuantity: { gt: 0 } },
+          select: { availableQuantity: true, purchasePrice: true, expiryDate: true },
         },
         saleItems: {
           where: { sale: { status: 'COMPLETED' } },
@@ -34,7 +34,7 @@ class DeadStockService {
     });
 
     for (const med of medicines) {
-      const totalStock = med.inventoryBatches.reduce((sum, b) => sum + b.quantity, 0);
+      const totalStock = med.inventoryBatches.reduce((sum, b) => sum + b.availableQuantity, 0);
       if (totalStock === 0) continue;
 
       const lastSaleDate = med.saleItems.length > 0 ? med.saleItems[0].sale.soldAt : null;
@@ -78,7 +78,7 @@ class DeadStockService {
 
       if (daysSinceLastSale > 120) {
         const stockValue = med.inventoryBatches.reduce(
-          (sum, b) => sum + b.quantity * b.purchasePrice,
+          (sum, b) => sum + b.availableQuantity * b.purchasePrice,
           0,
         );
 
@@ -89,7 +89,7 @@ class DeadStockService {
             Math.floor((batch.expiryDate - now) / (1000 * 60 * 60 * 24)),
           );
           if (daysToExpiry < 90) {
-            expiryRiskScore += (batch.quantity / daysToExpiry) * 10;
+            expiryRiskScore += (batch.availableQuantity / daysToExpiry) * 10;
           }
         }
         expiryRiskScore = Math.min(100, Math.round(expiryRiskScore * 100) / 100);

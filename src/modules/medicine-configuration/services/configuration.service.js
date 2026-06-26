@@ -3,6 +3,7 @@ import forecastingService from '../../medicine-alerts/forecasting/forecasting.se
 import { emitEvent } from '../../../shared/events/erp-event-bus.js';
 import redisClient from '../../../config/redis.js';
 import logger from '../../../shared/utils/logger.js';
+import inventoryCalculationService from '../../inventory/service/inventory-calculation.service.js';
 import prisma from '../../../config/prisma.js';
 import { scanKeys } from '../../../shared/utils/scan-keys.js';
 
@@ -122,7 +123,9 @@ class ConfigurationService {
 
     const newStatus = status;
     if (newStatus === 'INACTIVE' || newStatus === 'DISCONTINUED' || newStatus === 'BLOCKED') {
-      const activeStock = medicine.inventoryBatches.reduce((sum, b) => sum + b.quantity, 0);
+      const activeStock = inventoryCalculationService.calculateAvailableStock(
+        medicine.inventoryBatches,
+      );
       if (activeStock > 0) {
         logger.warn(
           { medicineId, tenantId, activeStock, newStatus },
@@ -158,7 +161,7 @@ class ConfigurationService {
       newStatus,
       scheduleType: medicine.scheduleType,
       reason,
-      activeStock: medicine.inventoryBatches.reduce((sum, b) => sum + b.quantity, 0),
+      activeStock: inventoryCalculationService.calculateAvailableStock(medicine.inventoryBatches),
     });
 
     await this._invalidateMedicineCache(tenantId, medicineId);

@@ -2,8 +2,16 @@ import prisma from '../../../config/prisma.js';
 import { Prisma } from '@prisma/client';
 
 const ALLOWED_SORT_COLUMNS = new Set([
-  'name', 'genericName', 'createdAt', 'updatedAt', 'reorderLevel',
-  'hsnCode', 'category', 'manufacturer', 'mrp', 'sellingPrice',
+  'name',
+  'genericName',
+  'createdAt',
+  'updatedAt',
+  'reorderLevel',
+  'hsnCode',
+  'category',
+  'manufacturer',
+  'mrp',
+  'sellingPrice',
 ]);
 
 class MedicinePrismaRepository {
@@ -205,17 +213,13 @@ class MedicinePrismaRepository {
       const fefo = activeBatches[0] || null;
 
       // ── Compute available stock from InventoryBatch (authoritative source)
-      const batchTotalStock = (m.inventoryBatches || []).reduce(
-        (sum, b) => sum + (b.quantity || 0),
-        0,
-      );
       const batchAvailableStock = activeBatches.reduce(
         (sum, b) => sum + (b.availableQuantity || 0),
         0,
       );
 
-      // Fall back to Inventory table if batches missing (legacy)
-      let stock = batchTotalStock || 0;
+      // Use authoritative stock source
+      let stock = batchAvailableStock || 0;
       let reservedStock = 0;
       let reorderLevel = m.reorderLevel ?? 10;
       let rackLocation = null;
@@ -297,16 +301,12 @@ class MedicinePrismaRepository {
     const fefo = activeBatches[0] || null;
 
     // Compute from batches (ground truth)
-    const batchTotalStock = (medicine.inventoryBatches || []).reduce(
-      (sum, b) => sum + (b.quantity || 0),
-      0,
-    );
     const batchAvailableStock = activeBatches.reduce(
       (sum, b) => sum + (b.availableQuantity || 0),
       0,
     );
 
-    let stock = batchTotalStock || 0;
+    let stock = batchAvailableStock || 0;
     let reservedStock = 0;
     let reorderLevel = medicine.reorderLevel ?? 10;
     let rackLocation = null;
@@ -423,23 +423,30 @@ class MedicinePrismaRepository {
 
     if (!medicine) return null;
 
-    let stock = 0;
+    const now = new Date();
+    const activeBatches = (medicine.inventoryBatches || []).filter(
+      (b) => b.availableQuantity > 0 && b.status === 'ACTIVE' && new Date(b.expiryDate) > now,
+    );
+    const batchAvailableStock = activeBatches.reduce(
+      (sum, b) => sum + (b.availableQuantity || 0),
+      0,
+    );
+
     let reservedStock = 0;
 
     if (targetBranchId) {
       const inv = medicine.inventory?.[0] || null;
-      stock = inv?.currentStock ?? 0;
       reservedStock = inv?.reservedStock ?? 0;
     } else {
-      stock = medicine.inventory?.reduce((sum, inv) => sum + (inv.currentStock ?? 0), 0) ?? 0;
       reservedStock =
         medicine.inventory?.reduce((sum, inv) => sum + (inv.reservedStock ?? 0), 0) ?? 0;
     }
 
     return {
       ...medicine,
-      currentStock: stock,
-      availableStock: stock - reservedStock,
+      currentStock: batchAvailableStock,
+      availableStock: batchAvailableStock,
+      reservedStock,
     };
   }
 

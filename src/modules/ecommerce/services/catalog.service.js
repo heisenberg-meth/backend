@@ -58,7 +58,7 @@ class CatalogService {
       medicines: medicines.map((m) => ({
         ...m,
         stockStatus:
-          m.inventoryBatches.reduce((acc, b) => acc + (b.quantity - b.reservedQuantity), 0) > 0
+          m.inventoryBatches.reduce((acc, b) => acc + b.availableQuantity, 0) > 0
             ? 'IN_STOCK'
             : 'OUT_OF_STOCK',
         inventoryBatches: undefined,

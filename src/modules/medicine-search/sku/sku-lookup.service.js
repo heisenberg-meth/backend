@@ -2,6 +2,7 @@ import medicineSearchRepository from '../repositories/medicine-search.repository
 import medicineSearchCache from '../cache/medicine-search.cache.js';
 import { emitLocalEvent } from '../../../shared/events/local-event-bus.js';
 import { DOMAIN_EVENTS } from '../../../shared/constants/events.js';
+import inventoryCalculationService from '../../inventory/service/inventory-calculation.service.js';
 
 class SkuLookupService {
   async lookup(sku, tenantId) {
@@ -40,9 +41,9 @@ class SkuLookupService {
 
   enrichWithSkuData(medicine) {
     const batches = medicine.inventoryBatches || [];
-    const totalStock = batches.reduce((sum, b) => sum + b.quantity, 0);
-    const reservedStock = batches.reduce((sum, b) => sum + (b.reservedQuantity || 0), 0);
-    const availableStock = totalStock - reservedStock;
+    const availableStock = inventoryCalculationService.calculateAvailableStock(batches);
+    const reservedStock = inventoryCalculationService.calculateReservedStock(batches);
+    const totalStock = availableStock + reservedStock;
 
     const branchAvailability = batches.reduce((acc, batch) => {
       const branchKey = batch.branchId || 'unassigned';
@@ -53,8 +54,8 @@ class SkuLookupService {
           availableStock: 0,
         };
       }
-      acc[branchKey].totalStock += batch.quantity;
-      acc[branchKey].availableStock += batch.quantity - (batch.reservedQuantity || 0);
+      acc[branchKey].totalStock += (batch.availableQuantity || 0) + (batch.reservedQuantity || 0);
+      acc[branchKey].availableStock += batch.availableQuantity || 0;
       return acc;
     }, {});
 

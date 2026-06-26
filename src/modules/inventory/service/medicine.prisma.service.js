@@ -93,7 +93,7 @@ class MedicinePrismaService {
             ...(bId ? { branchId: bId } : {}),
           },
           select: {
-            quantity: true,
+            availableQuantity: true,
             purchasePrice: true,
           },
         },
@@ -113,7 +113,7 @@ class MedicinePrismaService {
     const alerts = [];
 
     for (const m of medicines) {
-      const stock = m.inventoryBatches.reduce((acc, b) => acc + (b.quantity || 0), 0);
+      const stock = m.inventoryBatches.reduce((acc, b) => acc + (b.availableQuantity || 0), 0);
 
       const relevantInventory = m.inventory.filter((i) => (bId ? i.branchId === bId : true));
 

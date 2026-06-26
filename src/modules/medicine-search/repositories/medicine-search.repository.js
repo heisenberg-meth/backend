@@ -1,4 +1,5 @@
 import prisma from '../../../config/prisma.js';
+import inventoryCalculationService from '../../inventory/service/inventory-calculation.service.js';
 
 class MedicineSearchRepository {
   async search(tenantId, query, options = {}) {
@@ -326,9 +327,9 @@ class MedicineSearchRepository {
 
   enrichWithInventory(medicine, inStockOnly = false) {
     const batches = medicine.inventoryBatches || [];
-    const totalStock = batches.reduce((sum, b) => sum + b.quantity, 0);
-    const reservedStock = batches.reduce((sum, b) => sum + (b.reservedQuantity || 0), 0);
-    const availableStock = totalStock - reservedStock;
+    const availableStock = inventoryCalculationService.calculateAvailableStock(batches);
+    const reservedStock = inventoryCalculationService.calculateReservedStock(batches);
+    const totalStock = availableStock + reservedStock;
 
     const earliestExpiry =
       batches.length > 0

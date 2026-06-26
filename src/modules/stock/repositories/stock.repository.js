@@ -1,4 +1,5 @@
 import prisma from '../../../config/prisma.js';
+import inventoryCalculationService from '../../inventory/service/inventory-calculation.service.js';
 
 class StockRepository {
   async getCurrentStock(tenantId, medicineId, client) {
@@ -13,7 +14,7 @@ class StockRepository {
       orderBy: { expiryDate: 'asc' },
     });
 
-    const totalQuantity = batches.reduce((sum, b) => sum + b.quantity, 0);
+    const totalQuantity = inventoryCalculationService.calculateAvailableStock(batches);
     return { totalQuantity, batches };
   }
 

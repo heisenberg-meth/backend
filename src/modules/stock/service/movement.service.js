@@ -4,6 +4,7 @@ import logger from '../../../shared/utils/logger.js';
 import stockRepository from '../repositories/stock.repository.js';
 import ledgerRepository from '../repositories/ledger.repository.js';
 import cacheInvalidatorService from '../../inventory/service/cache-invalidator.service.js';
+import inventoryCalculationService from '../../inventory/service/inventory-calculation.service.js';
 
 class MovementService {
   async stockOut(tenantId, { medicineId, quantity, type, branchId, batchId }, userId) {
@@ -71,8 +72,8 @@ class MovementService {
           branchId: targetBranchId,
           type: type || 'SALE',
           quantity: totalDeducted,
-          previousStock: batches.reduce((s, b) => s + b.quantity, 0),
-          newStock: batches.reduce((s, b) => s + b.quantity, 0) - totalDeducted,
+          previousStock: inventoryCalculationService.calculateAvailableStock(batches),
+          newStock: inventoryCalculationService.calculateAvailableStock(batches) - totalDeducted,
           createdBy: userId,
         },
         tx,
@@ -255,8 +256,8 @@ class MovementService {
           branchId: resolvedBranchId,
           type: movementType,
           quantity: Math.abs(quantity),
-          previousStock: updatedBatch.quantity - quantity,
-          newStock: updatedBatch.quantity,
+          previousStock: updatedBatch.availableQuantity - quantity,
+          newStock: updatedBatch.availableQuantity,
           createdBy: userId,
           referenceType,
           referenceId,
