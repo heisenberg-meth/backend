@@ -11,14 +11,20 @@ const isTest = process.env.NODE_ENV === 'test';
 
 const handlers = {
   'process-approval': async (data) => {
-    const { returnId, action, userId, reason } = data;
+    const { returnId, action, userId, tenantId, reason } = data;
+    // FIX #04: tenantId must be in the job payload — injected by the controller from request.tenantId
+    if (!tenantId) {
+      throw new Error(
+        '[Refund Worker] tenantId missing from job data — cannot approve/reject without tenant context',
+      );
+    }
     if (action === 'approve') {
-      logger.info(`[Refund Worker] Approving refund ${returnId}`);
-      return refundApproval.approveRefund(returnId, userId, { notes: reason });
+      logger.info(`[Refund Worker] Approving refund ${returnId} for tenant ${tenantId}`);
+      return refundApproval.approveRefund(returnId, userId, tenantId, { notes: reason });
     }
     if (action === 'reject') {
-      logger.info(`[Refund Worker] Rejecting refund ${returnId}`);
-      return refundApproval.rejectRefund(returnId, userId, reason);
+      logger.info(`[Refund Worker] Rejecting refund ${returnId} for tenant ${tenantId}`);
+      return refundApproval.rejectRefund(returnId, userId, tenantId, reason);
     }
   },
 

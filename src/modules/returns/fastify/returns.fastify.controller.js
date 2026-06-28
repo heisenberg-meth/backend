@@ -1,6 +1,10 @@
 import returnService from '../services/return.service.js';
 import creditNoteService from '../services/credit-note.service.js';
-import refundEngine from '../refund-engine/refund.engine.js';
+// FIX #08: Import from the single canonical refund engine (billing module).
+// The duplicate src/modules/returns/refund-engine/refund.engine.js is deprecated
+// and should be deleted. Using one engine ensures SELECT FOR UPDATE orchestrator
+// protection is always applied and eliminates the double-refund code path risk.
+import refundEngine from '../../billing/refund-engine/refund.engine.js';
 import inventoryReversalService from '../inventory-reversal/inventory-reversal.service.js';
 import gstAdjustmentService from '../gst-adjustments/gst-adjustment.service.js';
 import fraudDetectionService from '../fraud-detection/fraud-detection.service.js';

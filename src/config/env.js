@@ -30,11 +30,33 @@ const envSchema = z
     SENTRY_DSN: z.string().url().optional(),
   })
   .superRefine((data, ctx) => {
+    // #17: REFRESH_SECRET is required in production — sharing it with JWT_SECRET
+    // means you can't independently rotate refresh tokens without invalidating all access tokens
+    if (data.NODE_ENV === 'production' && !data.REFRESH_SECRET) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message:
+          'REFRESH_SECRET must be separately configured in production (cannot fall back to JWT_SECRET)',
+        path: ['REFRESH_SECRET'],
+      });
+    }
+
     if (data.NODE_ENV === 'production' && !data.COOKIE_DOMAIN) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
         message: 'COOKIE_DOMAIN must be explicitly configured in production',
         path: ['COOKIE_DOMAIN'],
+      });
+    }
+
+    // #03/#15: LOG_OTP must never be enabled in production — OTPs in logs
+    // allow any log-reader to take over user accounts.
+    if (data.NODE_ENV === 'production' && data.LOG_OTP === 'true') {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message:
+          'LOG_OTP must not be set to "true" in production — this exposes active OTPs in logs',
+        path: ['LOG_OTP'],
       });
     }
   });

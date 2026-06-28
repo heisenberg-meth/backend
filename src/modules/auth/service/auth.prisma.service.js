@@ -169,6 +169,10 @@ class AuthPrismaService {
         reason: 'User not found',
         context,
       });
+      // FIX #12: Perform dummy bcrypt compare to equalize response time whether the
+      // user exists or not. Without this, an attacker can enumerate valid emails
+      // by measuring the response latency difference.
+      await bcrypt.compare(password, '$2b$12$invalidhashfortimingprotectiononly000000000000000000000000');
       throw new Error('Invalid credentials');
     }
 

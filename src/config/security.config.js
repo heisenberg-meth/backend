@@ -1,6 +1,10 @@
 // ─── Security Configuration ──────────────────────────────────────────────────
 // Centralized configuration for all Fastify security plugins.
 
+// FIX #09: Removed 'unsafe-eval' entirely. Removed 'unsafe-inline' from scriptSrc/scriptSrcElem.
+// Razorpay Checkout.js is loaded from their CDN and works without unsafe-eval.
+// If a nonce-based CSP is needed for inline scripts, generate per-request nonces
+// in a preHandler hook and inject them here.
 export const HELMET_CONFIG = {
   contentSecurityPolicy: {
     directives: {
@@ -11,25 +15,16 @@ export const HELMET_CONFIG = {
       frameAncestors: ["'self'"],
       imgSrc: ["'self'", 'data:', 'https:', 'validator.swagger.io', 'https://*.razorpay.com'],
       objectSrc: ["'none'"],
-      scriptSrc: [
-        "'self'",
-        "'unsafe-inline'",
-        "'unsafe-eval'",
-        'https://checkout.razorpay.com',
-        'https://*.razorpay.com',
-      ],
-      scriptSrcElem: [
-        "'self'",
-        "'unsafe-inline'",
-        "'unsafe-eval'",
-        'https://checkout.razorpay.com',
-        'https://*.razorpay.com',
-      ],
+      // FIX #09: No unsafe-eval, no unsafe-inline — these nullify XSS protection entirely
+      scriptSrc: ["'self'", 'https://checkout.razorpay.com', 'https://*.razorpay.com'],
+      scriptSrcElem: ["'self'", 'https://checkout.razorpay.com', 'https://*.razorpay.com'],
       scriptSrcAttr: ["'none'"],
       styleSrc: [
         "'self'",
         'https:',
         'https://fonts.googleapis.com',
+        // unsafe-inline in styleSrc is acceptable (no code execution risk) but can be
+        // replaced with nonces if a strict CSP is desired in future.
         "'unsafe-inline'",
         'https://*.razorpay.com',
       ],
@@ -73,8 +68,14 @@ export const CSRF_EXEMPT_PATHS = [
   '/api/admin/refresh',
 ];
 
+// FIX #11: Reduced global rate limit from 500/min to 100/min.
+// Apply stricter per-route overrides on sensitive endpoints:
+//   POST /api/auth/login    → 10/min  (in auth routes)
+//   POST /api/auth/*/otp    → 5/min   (in auth routes)
+//   POST /api/refunds/*     → 20/min  (in refund routes)
+//   GET  /api/patients      → 30/min  (in patient routes)
 export const getRateLimitConfig = (redisInstance) => ({
-  max: 500,
+  max: 100,
   timeWindow: '1 minute',
   redis: redisInstance,
   keyGenerator: (request) => {

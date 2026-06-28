@@ -1,12 +1,21 @@
 import prisma from '../../../config/prisma.js';
+import sequenceService from '../../../shared/services/sequence.service.js';
 import movementService from '../../stock/service/movement.service.js';
 import ledgerService from '../../vendors/services/ledger.service.js';
 import logger from '../../../shared/utils/logger.js';
 
 class StockInService {
   async receiveGoods(tenantId, data, userId) {
-    const { purchaseOrderId, supplierId, supplierInvoiceNumber, invoiceDate, items, receivedItems, notes } = data;
-    
+    const {
+      purchaseOrderId,
+      supplierId,
+      supplierInvoiceNumber,
+      invoiceDate,
+      items,
+      receivedItems,
+      notes,
+    } = data;
+
     // Support both `items` and `receivedItems` for backward compatibility
     const itemsToProcess = items || receivedItems;
 
@@ -17,7 +26,9 @@ class StockInService {
     });
 
     if (!po) throw new Error('Purchase Order not found');
-    if (!['APPROVED', 'SENT_TO_SUPPLIER', 'ACKNOWLEDGED', 'PARTIALLY_RECEIVED'].includes(po.status)) {
+    if (
+      !['APPROVED', 'SENT_TO_SUPPLIER', 'ACKNOWLEDGED', 'PARTIALLY_RECEIVED'].includes(po.status)
+    ) {
       throw new Error(`PO status ${po.status} does not allow receiving`);
     }
 
@@ -48,7 +59,9 @@ class StockInService {
 
       const remaining = poItem.quantity - poItem.receivedQuantity;
       if (item.receivedQuantity > remaining) {
-        throw new Error(`Received quantity ${item.receivedQuantity} exceeds remaining ${remaining} for ${poItem.medicineName}`);
+        throw new Error(
+          `Received quantity ${item.receivedQuantity} exceeds remaining ${remaining} for ${poItem.medicineName}`,
+        );
       }
 
       // 4. Create GRN Item
@@ -95,14 +108,15 @@ class StockInService {
         userId,
       );
 
-      totalAmount += item.receivedQuantity * (Number(item.purchasePrice) || Number(poItem.unitPrice));
+      totalAmount +=
+        item.receivedQuantity * (Number(item.purchasePrice) || Number(poItem.unitPrice));
     }
 
     // 7. Create Purchase Invoice
-    const invoiceCount = await prisma.purchaseInvoice.count({
-      where: { tenantId, supplierId },
-    });
-    const invoiceNumber = `PINV-${String(invoiceCount + 1).padStart(5, '0')}`;
+    // FIX #05: Replace COUNT+1 race condition with atomic sequenceService
+    // sequenceService uses PostgreSQL INSERT ... ON CONFLICT DO UPDATE RETURNING — guaranteed unique
+    const seq = await sequenceService.getNextValue(tenantId, 'PURCHASE_INVOICE');
+    const invoiceNumber = `PINV-${String(seq).padStart(5, '0')}`;
 
     const invoice = await prisma.purchaseInvoice.create({
       data: {

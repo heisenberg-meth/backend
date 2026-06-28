@@ -34,3 +34,11 @@ tests/load/setup-token.sh
 scratch/schema_diff.py
 prisma/remediation.sql
 scripts/remediate-db.sh
+
+# Security: scratch/debug scripts — use scripts/ directory instead
+scratch*.js
+scratch/
+# Security: never commit local env
+.env
+# Security: never commit test-* utility files in root
+test-*.js

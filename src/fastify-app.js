@@ -271,6 +271,13 @@ const setupFastify = async () => {
     });
   }
 
+  // FIX #06: Protect /metrics with an IP allowlist — the endpoint exposes
+  // route paths, error rates, queue depths, and DB health to anyone who can
+  // reach the server. Restrict to monitoring infrastructure only.
+  const METRICS_ALLOWED_IPS = (process.env.METRICS_ALLOWED_IPS || '127.0.0.1,::1,::ffff:127.0.0.1')
+    .split(',')
+    .map((ip) => ip.trim());
+
   await fastify.register(metrics, {
     endpoint: '/metrics',
     routeMetrics: {
@@ -279,6 +286,27 @@ const setupFastify = async () => {
       name: 'http_request_duration_seconds',
       buckets: [0.1, 0.5, 1, 2, 5],
     },
+  });
+
+  // Override the /metrics route to enforce the allowlist preHandler
+  fastify.addHook('onRoute', (routeOptions) => {
+    if (routeOptions.url === '/metrics') {
+      const original = routeOptions.preHandler || [];
+      const originalHandlers = Array.isArray(original) ? original : [original];
+      routeOptions.preHandler = [
+        async (request, reply) => {
+          const clientIp = request.ip;
+          if (!METRICS_ALLOWED_IPS.includes(clientIp)) {
+            fastify.log.warn(
+              { clientIp },
+              '[METRICS] Unauthorized access attempt to /metrics blocked',
+            );
+            reply.code(403).send({ error: 'Forbidden' });
+          }
+        },
+        ...originalHandlers,
+      ];
+    }
   });
 
   fastify.get('/health', async (request, reply) => {

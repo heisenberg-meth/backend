@@ -1,4 +1,5 @@
 import bcrypt from 'bcryptjs';
+import crypto from 'crypto';
 import tokenService from '../../auth/service/token.service.js';
 import prisma from '../../../config/prisma.js';
 import { adminRepository } from '../repository/admin.repository.js';
@@ -864,7 +865,10 @@ export const adminService = {
   async generateInvoice({ tenantId, amount, description }) {
     const tenant = await adminRepository.getShopDetail(tenantId);
     if (!tenant) throw new Error('Shop not found');
-    const invoiceNumber = `INV-${Date.now()}-${Math.random().toString(36).slice(2, 6).toUpperCase()}`;
+    // FIX #14: Use crypto.randomUUID() for guaranteed collision-free invoice numbers.
+    // Math.random() + Date.now() provides only ~28 bits of entropy and can collide
+    // at high volume or with clock skew between workers.
+    const invoiceNumber = `INV-${Date.now()}-${crypto.randomUUID().slice(0, 8).toUpperCase()}`;
     const payment = await adminRepository.createPayment({
       tenantId,
       amount,

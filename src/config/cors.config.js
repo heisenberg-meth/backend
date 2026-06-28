@@ -38,7 +38,9 @@ export const CORS_CONFIG = {
     'x-session-id',
     'ngrok-skip-browser-warning',
   ],
-  exposedHeaders: ['set-cookie'],
+  // FIX #07: 'set-cookie' removed — browsers handle Set-Cookie automatically when
+  // withCredentials/credentials:true is set. Exposing it to JS weakens cookie security.
+  exposedHeaders: ['x-request-id', 'x-ratelimit-limit', 'x-ratelimit-remaining'],
 };
 
 export default CORS_CONFIG;
