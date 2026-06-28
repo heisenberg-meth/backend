@@ -12,10 +12,11 @@ export default async function (fastify) {
       summary: 'Create a support ticket',
       body: {
         type: 'object',
-        required: ['subject', 'message'],
+        required: ['title', 'description'],
         properties: {
-          subject: { type: 'string' },
-          message: { type: 'string' },
+          title: { type: 'string' },
+          description: { type: 'string' },
+          category: { type: 'string' },
           priority: { type: 'string', enum: Object.values(SUPPORT_TICKET_PRIORITY) },
         },
       },

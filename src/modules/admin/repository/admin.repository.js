@@ -543,20 +543,19 @@ export const adminRepository = {
     return prisma.supportTicket.findUnique({
       where: { id },
       include: {
-        createdBy: { select: { id: true, fullName: true, email: true, role: true } },
-        assignedTo: { select: { id: true, fullName: true, email: true } },
-        messages: {
-          include: { sender: { select: { id: true, fullName: true, role: true } } },
+        creator: { select: { id: true, fullName: true, email: true, role: true } },
+        assignee: { select: { id: true, fullName: true, email: true } },
+        replies: {
+          include: { author: { select: { id: true, fullName: true, role: true } } },
           orderBy: { createdAt: 'asc' },
         },
-        attachments: true,
       },
     });
   },
 
   async createSupportReply(ticketId, message, authorId) {
-    const reply = await prisma.supportMessage.create({
-      data: { ticketId, senderId: authorId, senderRole: 'ADMIN', message },
+    const reply = await prisma.supportTicketReply.create({
+      data: { ticketId, authorId, authorRole: 'ADMIN', message },
     });
     await prisma.supportTicket.update({
       where: { id: ticketId },
@@ -579,7 +578,6 @@ export const adminRepository = {
     const ticket = await prisma.supportTicket.findUnique({ where: { id: ticketId } });
     const data = { status };
     if (status === 'RESOLVED') data.resolvedAt = new Date();
-    if (status === 'CLOSED') data.closedAt = new Date();
 
     const updated = await prisma.supportTicket.update({ where: { id: ticketId }, data });
 
@@ -601,7 +599,7 @@ export const adminRepository = {
     const updated = await prisma.supportTicket.update({
       where: { id: ticketId },
       data: {
-        assignedToId,
+        assignedTo: assignedToId,
         status: ticket?.status === 'OPEN' ? 'IN_PROGRESS' : ticket?.status,
       },
     });
@@ -610,7 +608,7 @@ export const adminRepository = {
       data: {
         ticketId,
         action: 'ASSIGNED',
-        oldValue: ticket?.assignedToId,
+        oldValue: ticket?.assignedTo,
         newValue: assignedToId,
         performedBy,
       },

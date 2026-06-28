@@ -1,4 +1,4 @@
-import prisma from './src/config/prisma.js';
+import prisma from '../src/config/prisma.js';
 
 async function run() {
   console.log("Running reconciliation...");

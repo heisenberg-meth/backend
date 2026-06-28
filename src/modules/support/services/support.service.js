@@ -11,7 +11,7 @@ class SupportService {
           message,
           notificationType: 'SUPPORT_TICKET',
           subject: metadata.subject || 'Support Ticket Update',
-          metadata: JSON.stringify(metadata),
+          metadata,
         },
       });
     } catch (err) {
@@ -60,12 +60,11 @@ class SupportService {
       data: {
         ticketNumber,
         tenantId,
-        title: data.title,
-        description: data.description,
-        category: data.category,
+        subject: data.title || data.subject,
+        message: data.description || data.message,
         priority: data.priority || 'MEDIUM',
         status: 'OPEN',
-        createdById: userId,
+        createdBy: userId,
       },
     });
 
@@ -81,7 +80,7 @@ class SupportService {
     // Notify all admins about new ticket
     await this._notifyAdmins(
       tenantId,
-      `New support ticket ${ticketNumber}: ${data.title}`,
+      `New support ticket ${ticketNumber}: ${data.title || data.subject}`,
       userId,
       { ticketId: ticket.id, ticketNumber, priority: data.priority || 'MEDIUM' },
     );
@@ -93,7 +92,7 @@ class SupportService {
     const { status, priority, page = 1, limit = 20 } = query;
     const where = {
       tenantId,
-      createdById: userId,
+      createdBy: userId,
       ...(status ? { status } : {}),
       ...(priority ? { priority } : {}),
     };
@@ -102,8 +101,8 @@ class SupportService {
       prisma.supportTicket.findMany({
         where,
         include: {
-          assignedTo: { select: { id: true, fullName: true, email: true } },
-          _count: { select: { messages: true } },
+          assignee: { select: { id: true, fullName: true, email: true } },
+          _count: { select: { replies: true } },
         },
         orderBy: { createdAt: 'desc' },
         skip: (page - 1) * limit,
@@ -127,21 +126,20 @@ class SupportService {
     const ticket = await prisma.supportTicket.findFirst({
       where: { id: ticketId, tenantId },
       include: {
-        createdBy: { select: { id: true, fullName: true, email: true, role: true } },
-        assignedTo: { select: { id: true, fullName: true, email: true } },
-        messages: {
+        creator: { select: { id: true, fullName: true, email: true, role: true } },
+        assignee: { select: { id: true, fullName: true, email: true } },
+        replies: {
           include: {
-            sender: { select: { id: true, fullName: true, role: true } },
+            author: { select: { id: true, fullName: true, role: true } },
           },
           orderBy: { createdAt: 'asc' },
         },
-        attachments: true,
       },
     });
 
     if (!ticket) return null;
 
-    if (ticket.createdById !== userId) {
+    if (ticket.createdBy !== userId) {
       const user = await prisma.user.findUnique({ where: { id: userId } });
       if (user?.role !== 'OWNER' && user?.role !== 'ADMIN') {
         return null;
@@ -161,11 +159,11 @@ class SupportService {
     const user = await prisma.user.findUnique({ where: { id: userId } });
     const senderRole = user?.role === 'OWNER' || user?.role === 'ADMIN' ? 'ADMIN' : 'STAFF';
 
-    const reply = await prisma.supportMessage.create({
+    const reply = await prisma.supportTicketReply.create({
       data: {
         ticketId,
-        senderId: userId,
-        senderRole,
+        authorId: userId,
+        authorRole: senderRole,
         message,
       },
     });
@@ -196,41 +194,20 @@ class SupportService {
       // Admin replied → notify ticket creator
       await this._notify(
         tenantId,
-        ticket.createdById,
+        ticket.createdBy,
         `Admin replied to your ticket ${ticket.ticketNumber}`,
         { ticketId, ticketNumber: ticket.ticketNumber, action: 'REPLY' },
       );
     } else {
       // Staff replied → notify admins
-      await this._notifyAdmins(
-        tenantId,
-        `New reply on ticket ${ticket.ticketNumber}`,
-        userId,
-        { ticketId, ticketNumber: ticket.ticketNumber, action: 'REPLY' },
-      );
+      await this._notifyAdmins(tenantId, `New reply on ticket ${ticket.ticketNumber}`, userId, {
+        ticketId,
+        ticketNumber: ticket.ticketNumber,
+        action: 'REPLY',
+      });
     }
 
     return reply;
-  }
-
-  async uploadAttachment(tenantId, ticketId, userId, fileData) {
-    const ticket = await prisma.supportTicket.findFirst({
-      where: { id: ticketId, tenantId },
-    });
-
-    if (!ticket) throw new Error('Ticket not found');
-
-    const attachment = await prisma.supportAttachment.create({
-      data: {
-        ticketId,
-        fileName: fileData.fileName,
-        fileUrl: fileData.fileUrl,
-        fileSize: fileData.fileSize,
-        uploadedBy: userId,
-      },
-    });
-
-    return attachment;
   }
 
   async resolveTicket(tenantId, ticketId, userId, resolution) {
@@ -244,33 +221,21 @@ class SupportService {
       where: { id: ticketId },
       data: {
         status: 'RESOLVED',
-        resolutionSummary: resolution,
         resolvedAt: new Date(),
       },
     });
 
-    await prisma.supportAuditLog.create({
-      data: {
-        ticketId,
-        action: 'RESOLVED',
-        oldValue: ticket.status,
-        newValue: 'RESOLVED',
-        performedBy: userId,
-      },
-    });
-
     // Notify ticket creator
-    await this._notify(
-      tenantId,
-      ticket.createdById,
-      `Your ticket ${ticket.ticketNumber} has been resolved`,
-      { ticketId, ticketNumber: ticket.ticketNumber, action: 'RESOLVED', resolution },
-    );
+    await this._notify(tenantId, ticket.createdBy, `Your ticket has been resolved`, {
+      ticketId,
+      action: 'RESOLVED',
+      resolution,
+    });
 
     return updated;
   }
 
-  async closeTicket(tenantId, ticketId, userId) {
+  async closeTicket(tenantId, ticketId) {
     const ticket = await prisma.supportTicket.findFirst({
       where: { id: ticketId, tenantId },
     });
@@ -281,27 +246,14 @@ class SupportService {
       where: { id: ticketId },
       data: {
         status: 'CLOSED',
-        closedAt: new Date(),
-      },
-    });
-
-    await prisma.supportAuditLog.create({
-      data: {
-        ticketId,
-        action: 'CLOSED',
-        oldValue: ticket.status,
-        newValue: 'CLOSED',
-        performedBy: userId,
       },
     });
 
     // Notify ticket creator
-    await this._notify(
-      tenantId,
-      ticket.createdById,
-      `Your ticket ${ticket.ticketNumber} has been closed`,
-      { ticketId, ticketNumber: ticket.ticketNumber, action: 'CLOSED' },
-    );
+    await this._notify(tenantId, ticket.createdBy, `Your ticket has been closed`, {
+      ticketId,
+      action: 'CLOSED',
+    });
 
     return updated;
   }
@@ -318,26 +270,15 @@ class SupportService {
       data: {
         status: 'OPEN',
         resolvedAt: null,
-        resolutionSummary: null,
       },
     });
 
-    await prisma.supportMessage.create({
+    await prisma.supportTicketReply.create({
       data: {
         ticketId,
-        senderId: userId,
-        senderRole: 'STAFF',
+        authorId: userId,
+        authorRole: 'STAFF',
         message: `Ticket reopened. Reason: ${reason}`,
-      },
-    });
-
-    await prisma.supportAuditLog.create({
-      data: {
-        ticketId,
-        action: 'REOPENED',
-        oldValue: ticket.status,
-        newValue: 'OPEN',
-        performedBy: userId,
       },
     });
 
@@ -346,25 +287,28 @@ class SupportService {
 
   async getStaffDashboard(tenantId, userId) {
     const [open, inProgress, resolved, closed] = await Promise.all([
-      prisma.supportTicket.count({ where: { tenantId, createdById: userId, status: 'OPEN' } }),
-      prisma.supportTicket.count({ where: { tenantId, createdById: userId, status: 'IN_PROGRESS' } }),
-      prisma.supportTicket.count({ where: { tenantId, createdById: userId, status: 'RESOLVED' } }),
-      prisma.supportTicket.count({ where: { tenantId, createdById: userId, status: 'CLOSED' } }),
+      prisma.supportTicket.count({ where: { tenantId, createdBy: userId, status: 'OPEN' } }),
+      prisma.supportTicket.count({ where: { tenantId, createdBy: userId, status: 'IN_PROGRESS' } }),
+      prisma.supportTicket.count({ where: { tenantId, createdBy: userId, status: 'RESOLVED' } }),
+      prisma.supportTicket.count({ where: { tenantId, createdBy: userId, status: 'CLOSED' } }),
     ]);
 
     return { open, inProgress, resolved, closed };
   }
 
   async getAdminDashboard(tenantId) {
-    const [total, open, inProgress, waitingForStaff, resolved, closed, critical] = await Promise.all([
-      prisma.supportTicket.count({ where: { tenantId } }),
-      prisma.supportTicket.count({ where: { tenantId, status: 'OPEN' } }),
-      prisma.supportTicket.count({ where: { tenantId, status: 'IN_PROGRESS' } }),
-      prisma.supportTicket.count({ where: { tenantId, status: 'WAITING_FOR_STAFF' } }),
-      prisma.supportTicket.count({ where: { tenantId, status: 'RESOLVED' } }),
-      prisma.supportTicket.count({ where: { tenantId, status: 'CLOSED' } }),
-      prisma.supportTicket.count({ where: { tenantId, priority: 'CRITICAL', status: { notIn: ['RESOLVED', 'CLOSED'] } } }),
-    ]);
+    const [total, open, inProgress, waitingForStaff, resolved, closed, critical] =
+      await Promise.all([
+        prisma.supportTicket.count({ where: { tenantId } }),
+        prisma.supportTicket.count({ where: { tenantId, status: 'OPEN' } }),
+        prisma.supportTicket.count({ where: { tenantId, status: 'IN_PROGRESS' } }),
+        prisma.supportTicket.count({ where: { tenantId, status: 'WAITING_FOR_STAFF' } }),
+        prisma.supportTicket.count({ where: { tenantId, status: 'RESOLVED' } }),
+        prisma.supportTicket.count({ where: { tenantId, status: 'CLOSED' } }),
+        prisma.supportTicket.count({
+          where: { tenantId, priority: 'CRITICAL', status: { notIn: ['RESOLVED', 'CLOSED'] } },
+        }),
+      ]);
 
     const resolvedTickets = await prisma.supportTicket.findMany({
       where: { tenantId, status: { in: ['RESOLVED', 'CLOSED'] }, resolvedAt: { not: null } },
@@ -374,7 +318,10 @@ class SupportService {
     let avgResolutionHours = 0;
     if (resolvedTickets.length > 0) {
       const totalHours = resolvedTickets.reduce((sum, t) => {
-        return sum + (new Date(t.resolvedAt).getTime() - new Date(t.createdAt).getTime()) / (1000 * 60 * 60);
+        return (
+          sum +
+          (new Date(t.resolvedAt).getTime() - new Date(t.createdAt).getTime()) / (1000 * 60 * 60)
+        );
       }, 0);
       avgResolutionHours = Math.round(totalHours / resolvedTickets.length);
     }

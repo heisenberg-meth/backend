@@ -4,18 +4,19 @@ import logger from '../../../shared/utils/logger.js';
 class SupportController {
   async createTicket(request, reply) {
     try {
-      const { subject, message, priority } = request.body;
+      const { title, description, category, priority } = request.body;
 
-      if (!subject || !message) {
+      if (!title || !description) {
         return reply.code(400).send({
           success: false,
-          error: 'Subject and message are required',
+          error: 'Title and description are required',
         });
       }
 
       const ticket = await supportService.createTicket(request.tenantId, request.user.id, {
-        subject,
-        message,
+        title,
+        description,
+        category,
         priority,
       });
 
@@ -82,11 +83,13 @@ class SupportController {
   async resolveTicket(request, reply) {
     try {
       const { ticketId } = request.params;
+      const { resolution } = request.body;
 
       const ticket = await supportService.resolveTicket(
         request.tenantId,
         ticketId,
         request.user.id,
+        resolution,
       );
 
       return reply.send({ success: true, status: ticket.status });

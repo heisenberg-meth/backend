@@ -121,7 +121,7 @@ jest.unstable_mockModule(loggerPath, () => ({
 
 const { default: returnService } = await import('../services/return.service.js');
 const { default: creditNoteService } = await import('../services/credit-note.service.js');
-const { default: refundEngine } = await import('../refund-engine/refund.engine.js');
+const { default: refundEngine } = await import('../../billing/refund-engine/refund.engine.js');
 const { default: inventoryReversalService } =
   await import('../inventory-reversal/inventory-reversal.service.js');
 const { default: fraudDetectionService } =

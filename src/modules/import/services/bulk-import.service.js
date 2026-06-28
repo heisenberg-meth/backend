@@ -155,7 +155,7 @@ class BulkImportService {
           field: 'quantity',
           value: qtyStr,
           errorCode: 'INVALID_QUANTITY',
-          message: 'Quantity must be greater than zero',
+          message: qtyStr ? `Expected a positive number, received "${qtyStr}"` : 'Quantity is empty or zero',
         });
       }
 
@@ -179,18 +179,27 @@ class BulkImportService {
       }
 
       const price = this._parsePrice(priceStr);
-      const pricingError = validatePricing({
-        purchasePrice: price,
-        sellingPrice: price * 1.2,
-        mrp: price * 1.2,
-      });
-      if (pricingError) {
+      if (isNaN(price) || price < 0) {
         validationErrors.push({
           field: 'price',
           value: priceStr,
           errorCode: 'INVALID_PRICE',
-          message: pricingError,
+          message: priceStr ? `Expected a valid number (≥ 0), received "${priceStr}"` : 'Price is empty or invalid',
         });
+      } else {
+        const pricingError = validatePricing({
+          purchasePrice: price,
+          sellingPrice: price * 1.2,
+          mrp: price * 1.2,
+        });
+        if (pricingError) {
+          validationErrors.push({
+            field: 'price',
+            value: priceStr,
+            errorCode: 'INVALID_PRICE',
+            message: pricingError,
+          });
+        }
       }
 
       if (barcode) {

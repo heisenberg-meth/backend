@@ -4018,6 +4018,7 @@ model SupportTicket {
   assignee   User?                 @relation("TicketAssignee", fields: [assignedTo], references: [id])
   tenant     Tenant                @relation(fields: [tenantId], references: [id])
   replies    SupportTicketReply[]
+  auditLogs  SupportAuditLog[]
 
   @@index([tenantId])
   @@index([status])
@@ -4036,6 +4037,20 @@ model SupportTicketReply {
 
   ticket     SupportTicket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
   author     User          @relation(fields: [authorId], references: [id])
+
+  @@index([ticketId])
+}
+
+model SupportAuditLog {
+  id          String   @id @default(uuid())
+  ticketId    String
+  action      String
+  oldValue    String?
+  newValue    String?
+  performedBy String
+  createdAt   DateTime @default(now())
+
+  ticket SupportTicket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
 
   @@index([ticketId])
 }

@@ -170,6 +170,12 @@ export default async function (fastify) {
         required: ['ticketId'],
         properties: { ticketId: { type: 'string', format: 'uuid' } },
       },
+      body: {
+        type: 'object',
+        properties: {
+          resolution: { type: 'string' },
+        },
+      },
     },
     handler: controller.resolveTicket,
   });
