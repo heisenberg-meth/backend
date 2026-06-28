@@ -1172,6 +1172,7 @@ model Supplier {
   drugLicenseNumber  String?
   paymentTermsDays   Int                  @default(30)
   address            String?
+  notes              String?
   leadTimeDays       Int                  @default(7)
   rating             Float                @default(5.0)
   totalPurchases     Decimal              @default(0) @db.Decimal(12, 2)

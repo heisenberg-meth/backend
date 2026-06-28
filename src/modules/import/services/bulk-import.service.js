@@ -8,7 +8,15 @@ import {
 } from '../../../shared/utils/medicine-helpers.js';
 
 class BulkImportService {
-  async analyzeOrCommit(payload, tenantId, branchId, userId) {
+  async analyze(payload, tenantId, branchId, userId) {
+    return this._processBulkImport(payload, tenantId, branchId, userId, true);
+  }
+
+  async commit(payload, tenantId, branchId, userId) {
+    return this._processBulkImport(payload, tenantId, branchId, userId, false);
+  }
+
+  async _processBulkImport(payload, tenantId, branchId, userId, isDryRun) {
     if (!payload || typeof payload !== 'object') {
       throw new Error('Invalid payload');
     }
@@ -18,7 +26,6 @@ class BulkImportService {
       supplier: supplierName = 'None',
       duplicateStrategy = 'Skip',
       barcodeOptions = { autoGen: true, overwrite: false, validate: true },
-      dryRun = true,
     } = payload;
 
     if (!Array.isArray(medicines)) {
@@ -334,7 +341,7 @@ class BulkImportService {
       });
     }
 
-    if (dryRun) {
+    if (isDryRun) {
       return { success: true, dryRun: true, summary: analysis };
     }
 
@@ -641,19 +648,11 @@ class BulkImportService {
         commitSummary.newBatchesCount += chunkBatchesCount;
         commitSummary.importedCount += chunkImportedCount;
       } catch (err) {
-        logger.warn(
-          { chunkIdx: Math.floor(i / CHUNK_SIZE) + 1, err: err.message },
+        logger.error(
+          { chunkIdx: Math.floor(i / CHUNK_SIZE) + 1, err: err.message, stack: err.stack },
           'Chunk import transaction failed',
         );
-        analysis.errors.push({
-          row: i + 1,
-          name: chunk[0]?.name || 'Chunk',
-          reason: err.message || 'Chunk transaction failed',
-          field: 'chunk',
-          value: '',
-          errorCode: err.code === 'P2002' ? 'DUPLICATE_BARCODE_OR_SKU' : 'DATABASE_ERROR',
-          message: err.message || 'Chunk transaction failed',
-        });
+        throw new Error(`Import failed during chunk processing: ${err.message}`);
       }
 
       logger.info(

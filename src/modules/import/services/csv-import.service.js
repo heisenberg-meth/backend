@@ -38,191 +38,212 @@ class CsvImportService {
       supplier: supplierName,
     },
   ) {
-    logger.info({ jobId, filePath }, '[CSV-Import] Starting bulk import');
-
-    let resolvedSupplierId = null;
-    if (supplierName && supplierName !== 'None') {
-      try {
-        const supplier = await prisma.supplier.findFirst({
-          where: { tenantId, name: { equals: supplierName, mode: 'insensitive' }, deletedAt: null },
-          select: { id: true },
-        });
-        if (supplier) {
-          resolvedSupplierId = supplier.id;
-        } else {
-          throw new Error(`Supplier "${supplierName}" not found in system.`);
-        }
-      } catch (err) {
-        logger.warn({ err }, '[CSV-Import] Supplier lookup failed');
-        throw err;
-      }
-    }
-
-    await updateProgress(jobId, { processed: 0, total: 0, status: 'preloading' });
-
-    const preloadStart = Date.now();
-    const medicineMap = await this._preloadMedicines(tenantId);
-    const batchMap = await this._preloadBatches(tenantId, branchId);
-    const inventoryMap = await this._preloadInventory(tenantId, branchId);
-    const categoryMap = await this._preloadCategories(tenantId);
-    const manufacturerMap = await this._preloadManufacturers(tenantId);
-    logger.info(
-      { jobId, elapsed: Date.now() - preloadStart, size: medicineMap.size },
-      '[CSV-Import] Preload complete',
-    );
-
-    await updateProgress(jobId, { processed: 0, total: 0, status: 'parsing' });
-
-    let totalRows = 0;
-    let chunk = [];
-    let newMedicines = [];
-    let newBatches = [];
-    let newMovements = [];
-    let inventoryUpdates = [];
-    let errors = [];
-    let batchQuantityUpdates = [];
-    let importedCount = 0;
-    const categoriesToCreate = [];
-    const manufacturersToCreate = [];
-
-    await new Promise((resolve, reject) => {
-      const stream = fs
-        .createReadStream(filePath, { encoding: 'utf-8' })
-        .pipe(
-          csv({
-            mapHeaders: ({ header }) => header.trim(),
-            mapValues: ({ value }) => (value ? value.trim() : ''),
-            skipLines: 0,
-          }),
-        )
-        .on('data', (row) => {
-          totalRows++;
-          chunk.push(row);
-          if (chunk.length >= CHUNK_SIZE) {
-            stream.pause();
-            try {
-              this._processChunk(chunk, {
-                tenantId,
-                branchId,
-                userId,
-                duplicateStrategy,
-                barcodeOptions,
-                medicineMap,
-                batchMap,
-                inventoryMap,
-                categoryMap,
-                categoriesToCreate,
-                manufacturerMap,
-                manufacturersToCreate,
-                newMedicines,
-                newBatches,
-                newMovements,
-                inventoryUpdates,
-                errors,
-                batchQuantityUpdates,
-                supplierId: resolvedSupplierId,
-              });
-              importedCount += chunk.length;
-              chunk = [];
-              updateProgress(jobId, {
-                processed: importedCount,
-                total: totalRows,
-                status: 'processing',
-              });
-            } catch (err) {
-              logger.error({ err, jobId }, '[CSV-Import] Chunk process error');
-            }
-            stream.resume();
-          }
-        })
-        .on('end', async () => {
-          if (chunk.length > 0) {
-            try {
-              this._processChunk(chunk, {
-                tenantId,
-                branchId,
-                userId,
-                duplicateStrategy,
-                barcodeOptions,
-                medicineMap,
-                batchMap,
-                inventoryMap,
-                categoryMap,
-                categoriesToCreate,
-                manufacturerMap,
-                manufacturersToCreate,
-                newMedicines,
-                newBatches,
-                newMovements,
-                inventoryUpdates,
-                errors,
-                batchQuantityUpdates,
-                supplierId: resolvedSupplierId,
-              });
-              importedCount += chunk.length;
-            } catch (err) {
-              logger.error({ err, jobId }, '[CSV-Import] Final chunk process error');
-            }
-          }
-          resolve();
-        })
-        .on('error', (err) => reject(err));
-    });
-
-    await updateProgress(jobId, {
-      processed: importedCount,
-      total: totalRows,
-      status: 'committing',
-    });
-
-    const commitStart = Date.now();
-    await this._commitAll({
-      tenantId,
-      branchId,
-      jobId,
-      newMedicines,
-      newBatches,
-      newMovements,
-      inventoryUpdates,
-      errors,
-      batchQuantityUpdates,
-      categoriesToCreate,
-      manufacturersToCreate,
-    });
-    logger.info({ jobId, elapsed: Date.now() - commitStart }, '[CSV-Import] Commit complete');
-
-    const summary = {
-      totalRows,
-      imported: importedCount,
-      duplicates: 0,
-      failed: errors.length,
-      warnings: 0,
-    };
-
     try {
-      fs.unlinkSync(filePath);
-    } catch {
-      logger.warn({ filePath }, '[CSV-Import] Cleanup failed');
+      logger.info({ jobId, filePath }, '[CSV-Import] Starting bulk import');
+
+      let resolvedSupplierId = null;
+      if (supplierName && supplierName !== 'None') {
+        try {
+          const supplier = await prisma.supplier.findFirst({
+            where: {
+              tenantId,
+              name: { equals: supplierName, mode: 'insensitive' },
+              deletedAt: null,
+            },
+            select: { id: true },
+          });
+          if (supplier) {
+            resolvedSupplierId = supplier.id;
+          } else {
+            throw new Error(`Supplier "${supplierName}" not found in system.`);
+          }
+        } catch (err) {
+          logger.warn({ err }, '[CSV-Import] Supplier lookup failed');
+          throw err;
+        }
+      }
+
+      await updateProgress(jobId, { processed: 0, total: 0, status: 'preloading' });
+
+      const preloadStart = Date.now();
+      const medicineMap = await this._preloadMedicines(tenantId);
+      const batchMap = await this._preloadBatches(tenantId, branchId);
+      const inventoryMap = await this._preloadInventory(tenantId, branchId);
+      const categoryMap = await this._preloadCategories(tenantId);
+      const manufacturerMap = await this._preloadManufacturers(tenantId);
+      logger.info(
+        { jobId, elapsed: Date.now() - preloadStart, size: medicineMap.size },
+        '[CSV-Import] Preload complete',
+      );
+
+      await updateProgress(jobId, { processed: 0, total: 0, status: 'parsing' });
+
+      let totalRows = 0;
+      let chunk = [];
+      let newMedicines = [];
+      let newBatches = [];
+      let newMovements = [];
+      let inventoryUpdates = [];
+      let errors = [];
+      let batchQuantityUpdates = [];
+      let importedCount = 0;
+      const categoriesToCreate = [];
+      const manufacturersToCreate = [];
+
+      await new Promise((resolve, reject) => {
+        const stream = fs
+          .createReadStream(filePath, { encoding: 'utf-8' })
+          .pipe(
+            csv({
+              mapHeaders: ({ header }) => header.trim(),
+              mapValues: ({ value }) => (value ? value.trim() : ''),
+              skipLines: 0,
+            }),
+          )
+          .on('data', (row) => {
+            totalRows++;
+            chunk.push(row);
+            if (chunk.length >= CHUNK_SIZE) {
+              stream.pause();
+              try {
+                this._processChunk(chunk, {
+                  tenantId,
+                  branchId,
+                  userId,
+                  duplicateStrategy,
+                  barcodeOptions,
+                  medicineMap,
+                  batchMap,
+                  inventoryMap,
+                  categoryMap,
+                  categoriesToCreate,
+                  manufacturerMap,
+                  manufacturersToCreate,
+                  newMedicines,
+                  newBatches,
+                  newMovements,
+                  inventoryUpdates,
+                  errors,
+                  batchQuantityUpdates,
+                  supplierId: resolvedSupplierId,
+                });
+                importedCount += chunk.length;
+                chunk = [];
+                updateProgress(jobId, {
+                  processed: importedCount,
+                  total: totalRows,
+                  status: 'processing',
+                });
+              } catch (err) {
+                logger.error({ err, jobId }, '[CSV-Import] Chunk process error');
+              }
+              stream.resume();
+            }
+          })
+          .on('end', async () => {
+            if (chunk.length > 0) {
+              try {
+                this._processChunk(chunk, {
+                  tenantId,
+                  branchId,
+                  userId,
+                  duplicateStrategy,
+                  barcodeOptions,
+                  medicineMap,
+                  batchMap,
+                  inventoryMap,
+                  categoryMap,
+                  categoriesToCreate,
+                  manufacturerMap,
+                  manufacturersToCreate,
+                  newMedicines,
+                  newBatches,
+                  newMovements,
+                  inventoryUpdates,
+                  errors,
+                  batchQuantityUpdates,
+                  supplierId: resolvedSupplierId,
+                });
+                importedCount += chunk.length;
+              } catch (err) {
+                logger.error({ err, jobId }, '[CSV-Import] Final chunk process error');
+              }
+            }
+            resolve();
+          })
+          .on('error', (err) => reject(err));
+      });
+
+      await updateProgress(jobId, {
+        processed: importedCount,
+        total: totalRows,
+        status: 'committing',
+      });
+
+      const commitStart = Date.now();
+      await this._commitAll({
+        tenantId,
+        branchId,
+        jobId,
+        newMedicines,
+        newBatches,
+        newMovements,
+        inventoryUpdates,
+        errors,
+        batchQuantityUpdates,
+        categoriesToCreate,
+        manufacturersToCreate,
+      });
+      logger.info({ jobId, elapsed: Date.now() - commitStart }, '[CSV-Import] Commit complete');
+
+      const summary = {
+        totalRows,
+        imported: importedCount,
+        duplicates: 0,
+        failed: errors.length,
+        warnings: 0,
+      };
+
+      try {
+        fs.unlinkSync(filePath);
+      } catch {
+        logger.warn({ filePath }, '[CSV-Import] Cleanup failed');
+      }
+
+      await updateProgress(jobId, {
+        processed: importedCount,
+        total: totalRows,
+        status: 'complete',
+        summary,
+      });
+
+      await auditService.log({
+        tenantId,
+        userId,
+        action: 'BULK_IMPORT_COMPLETED',
+        target: jobId,
+        type: 'INVENTORY',
+        metadata: summary,
+      });
+
+      logger.info({ jobId, summary }, '[CSV-Import] Import complete');
+      return summary;
+    } catch (error) {
+      logger.error({ jobId, error }, '[CSV-Import] Import failed');
+      await updateProgress(jobId, { status: 'failed', error: error.message });
+      try {
+        await prisma.importJob.update({
+          where: { id: jobId },
+          data: {
+            importStatus: 'FAILED',
+            extractedData: { error: error.message },
+          },
+        });
+      } catch (dbErr) {
+        logger.error({ jobId, dbErr }, '[CSV-Import] Failed to update importJob status to FAILED');
+      }
+      throw error;
     }
-
-    await updateProgress(jobId, {
-      processed: importedCount,
-      total: totalRows,
-      status: 'complete',
-      summary,
-    });
-
-    await auditService.log({
-      tenantId,
-      userId,
-      action: 'BULK_IMPORT_COMPLETED',
-      target: jobId,
-      type: 'INVENTORY',
-      metadata: summary,
-    });
-
-    logger.info({ jobId, summary }, '[CSV-Import] Import complete');
-    return summary;
   }
 
   async _preloadCategories(tenantId) {

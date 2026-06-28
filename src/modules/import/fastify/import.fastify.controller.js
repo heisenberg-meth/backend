@@ -95,9 +95,9 @@ class ImportFastifyController {
     }
   }
 
-  async bulkImport(request, reply) {
+  async analyzeBulkImport(request, reply) {
     try {
-      const result = await bulkImportService.analyzeOrCommit(
+      const result = await bulkImportService.analyze(
         request.body,
         request.tenantId,
         request.branchId,
@@ -105,10 +105,30 @@ class ImportFastifyController {
       );
       return reply.send(result);
     } catch (error) {
-      console.error('BULK IMPORT ERROR');
+      console.error('BULK IMPORT ANALYZE ERROR');
       console.error(error);
-      console.error(error.stack);
+      request.log.error(error);
 
+      return reply.code(400).send({
+        success: false,
+        message: error.message,
+        stack: error.stack,
+      });
+    }
+  }
+
+  async commitBulkImport(request, reply) {
+    try {
+      const result = await bulkImportService.commit(
+        request.body,
+        request.tenantId,
+        request.branchId,
+        request.user.id,
+      );
+      return reply.send(result);
+    } catch (error) {
+      console.error('BULK IMPORT COMMIT ERROR');
+      console.error(error);
       request.log.error(error);
 
       return reply.code(400).send({

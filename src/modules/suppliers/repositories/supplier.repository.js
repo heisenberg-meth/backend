@@ -33,6 +33,7 @@ class SupplierRepository {
           email: true,
           gstNumber: true,
           address: true,
+          notes: true,
           status: true,
           isPreferred: true,
           rating: true,

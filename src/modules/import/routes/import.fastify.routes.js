@@ -58,11 +58,18 @@ export default async function (fastify) {
     handler: controller.approveImport,
   });
 
-  fastify.post('/bulk', {
+  fastify.post('/bulk/analyze', {
     bodyLimit: 50 * 1024 * 1024,
-    schema: { tags: ['Import'], summary: 'Bulk medicine import' },
+    schema: { tags: ['Import'], summary: 'Analyze bulk medicine import' },
     preHandler: [requirePermission('CREATE_BILL')],
-    handler: controller.bulkImport,
+    handler: controller.analyzeBulkImport,
+  });
+
+  fastify.post('/bulk/commit', {
+    bodyLimit: 50 * 1024 * 1024,
+    schema: { tags: ['Import'], summary: 'Commit bulk medicine import' },
+    preHandler: [requirePermission('CREATE_BILL')],
+    handler: controller.commitBulkImport,
   });
 
   fastify.post('/upload', {

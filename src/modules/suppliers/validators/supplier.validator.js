@@ -44,6 +44,8 @@ export const createSupplierSchema = z.object({
   paymentTerms: z.string().optional(),
   leadTimeDays: z.coerce.number().int().min(1).optional(),
   leadTime: z.coerce.number().int().min(1).optional(),
+  address: z.string().optional(),
+  notes: z.string().optional(),
   status: z
     .enum(['ACTIVE', 'SUSPENDED', 'INACTIVE', 'BLOCKED', 'BLACKLISTED', 'ARCHIVED'])
     .optional()
@@ -60,6 +62,7 @@ export const updateSupplierSchema = z.object({
   drugCategories: z.array(z.string()).optional(),
   paymentTermsDays: z.coerce.number().int().min(0).optional(),
   address: z.string().optional(),
+  notes: z.string().optional(),
   leadTimeDays: z.coerce.number().int().min(1).optional(),
   rating: z.coerce.number().min(0).max(5).optional(),
   status: z
