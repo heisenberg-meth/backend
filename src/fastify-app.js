@@ -219,6 +219,14 @@ const setupFastify = async () => {
       message = error.message || 'Validation failed';
       code = 'VALIDATION_ERROR';
     } else if (error instanceof Prisma.PrismaClientKnownRequestError) {
+      request.log.error({
+        code: error.code,
+        meta: error.meta,
+        message: error.message,
+        stack: error.stack,
+        clientVersion: error.clientVersion,
+      });
+
       statusCode = 400;
       if (error.code === 'P2002') {
         statusCode = 409;

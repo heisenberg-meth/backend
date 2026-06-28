@@ -9,6 +9,7 @@ import {
   mapDosageFormToPackaging,
   validatePricing,
 } from '../../../shared/utils/medicine-helpers.js';
+import sharedImportEngine from './shared-import.engine.js';
 
 const CHUNK_SIZE = 1000;
 
@@ -660,7 +661,7 @@ class CsvImportService {
           ctx.newBatches[existingEntry.index].receivedQuantity += qty;
           ctx.newBatches[existingEntry.index].availableQuantity += qty;
         } else {
-          ctx.batchQuantityUpdates.push({ batchId: targetBatchId, qty });
+          ctx.batchQuantityUpdates.push({ batchId: targetBatchId, qty, medicineId });
         }
       } else {
         targetBatchId = crypto.randomUUID();
@@ -708,137 +709,31 @@ class CsvImportService {
   }
 
   async _commitAll(ctx) {
-    const {
-      tenantId,
-      branchId,
-      jobId,
-      newMedicines,
-      newBatches,
-      newMovements,
-      inventoryUpdates,
-      errors,
-    } = ctx;
     const commitStart = Date.now();
+    await sharedImportEngine.commitChunks(ctx);
 
-    await prisma.$transaction(async (tx) => {
-      const categoryNameToId = new Map();
-      for (const cat of ctx.categoriesToCreate) {
-        const key = cat.name.toLowerCase().trim();
-        if (!categoryNameToId.has(key)) {
-          const created = await tx.medicineCategory.create({
-            data: { tenantId, name: cat.name },
-          });
-          categoryNameToId.set(key, created.id);
-        }
-      }
-
-      const manufacturerNameToId = new Map();
-      for (const mfr of ctx.manufacturersToCreate) {
-        const key = mfr.name.toLowerCase().trim();
-        if (!manufacturerNameToId.has(key)) {
-          const created = await tx.manufacturer.create({
-            data: { tenantId, name: mfr.name },
-          });
-          manufacturerNameToId.set(key, created.id);
-        }
-      }
-
-      const newMedicinesData = [];
-      for (const m of newMedicines) {
-        const { _categoryName, _manufacturerName, ...data } = m;
-        if (!data.categoryId && _categoryName) {
-          data.categoryId = categoryNameToId.get(_categoryName.toLowerCase().trim());
-        }
-        if (!data.manufacturerId && _manufacturerName) {
-          data.manufacturerId = manufacturerNameToId.get(_manufacturerName.toLowerCase().trim());
-        }
-        newMedicinesData.push(data);
-      }
-      if (newMedicinesData.length > 0) {
-        await tx.medicine.createMany({ data: newMedicinesData, skipDuplicates: true });
-      }
-      logger.info({ count: newMedicines.length }, '[CSV-Import] Created medicines');
-
-      if (newBatches.length > 0) {
-        await tx.inventoryBatch.createMany({ data: newBatches, skipDuplicates: true });
-        logger.info({ count: newBatches.length }, '[CSV-Import] Created batches (batch)');
-      }
-
-      if (ctx.batchQuantityUpdates && ctx.batchQuantityUpdates.length > 0) {
-        for (const upd of ctx.batchQuantityUpdates) {
-          await tx.inventoryBatch.update({
-            where: { id: upd.batchId },
-            data: {
-              quantity: { increment: upd.qty },
-              receivedQuantity: { increment: upd.qty },
-              availableQuantity: { increment: upd.qty },
-            },
-          });
-        }
-        logger.info(
-          { count: ctx.batchQuantityUpdates.length },
-          '[CSV-Import] Updated existing batch quantities',
-        );
-      }
-
-      const inventoryAggregated = new Map();
-      for (const inv of inventoryUpdates) {
-        const resolvedMedId = inv.medicineId; // medicineId is already the actual UUID
-        inventoryAggregated.set(
-          resolvedMedId,
-          (inventoryAggregated.get(resolvedMedId) || 0) + inv.qty,
-        );
-      }
-
-      if (inventoryAggregated.size > 0) {
-        await Promise.all(
-          Array.from(inventoryAggregated.entries()).map(([medId, qty]) =>
-            tx.inventory.upsert({
-              where: {
-                tenantId_branchId_medicineId: { tenantId, branchId, medicineId: medId },
-              },
-              update: { currentStock: { increment: qty } },
-              create: {
-                tenantId,
-                branchId,
-                medicineId: medId,
-                currentStock: qty,
-                reorderPoint: 10,
-              },
-            }),
-          ),
-        );
-      }
-
-      if (newMovements.length > 0) {
-        await tx.stockMovement.createMany({ data: newMovements, skipDuplicates: true });
-        logger.info({ count: newMovements.length }, '[CSV-Import] Created movements (batch)');
-      }
-
-      await tx.importJob.update({
-        where: { id: jobId },
-        data: {
-          importStatus: 'COMPLETED',
-          processedAt: new Date(),
-          extractedData: {
-            totalRows: ctx.importedCount,
-            errors: errors.slice(0, 100),
-            newMedicines: newMedicines.length,
-            newBatches: newBatches.length,
-          },
+    await prisma.importJob.update({
+      where: { id: ctx.jobId },
+      data: {
+        importStatus: 'COMPLETED',
+        processedAt: new Date(),
+        extractedData: {
+          totalRows: ctx.importedCount,
+          errors: ctx.errors.slice(0, 100),
+          newMedicines: ctx.newMedicines.length,
+          newBatches: ctx.newBatches.length,
         },
-      });
+      },
     });
 
     logger.info(
       {
         event: 'IMPORT_PERFORMANCE',
         phase: 'CHUNK_COMMIT',
-        chunk: 1, // csv is processed chunk by chunk anyway, or this is final commit
         durationMs: Date.now() - commitStart,
         rows: ctx.importedCount,
       },
-      'Chunk committed successfully',
+      'All chunks committed successfully',
     );
   }
 

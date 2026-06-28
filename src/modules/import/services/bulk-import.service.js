@@ -419,252 +419,161 @@ class BulkImportService {
       }
     }
 
-    const CHUNK_SIZE = 500;
+    const newMedicines = [];
+    const newBatches = [];
+    const newMovements = [];
+    const inventoryUpdates = [];
+    const medicineUpdates = [];
+    const batchQuantityUpdates = []; // We don't have batch quantity updates in BulkImportService right now since it doesn't do Overwrite on batches
+    const defaultExpiry = new Date(new Date().setFullYear(new Date().getFullYear() + 2));
 
-    for (let i = 0; i < validatedRows.length; i += CHUNK_SIZE) {
-      const chunk = validatedRows.slice(i, i + CHUNK_SIZE);
+    for (const row of validatedRows) {
+      let medicineId = null;
 
-      const start = Date.now();
+      const normName = row.name.toLowerCase().trim();
+      const normBarcode = row.barcode ? row.barcode.trim() : '';
 
-      logger.info(
-        {
-          chunk: Math.floor(i / CHUNK_SIZE) + 1,
-          totalChunks: Math.ceil(validatedRows.length / CHUNK_SIZE),
-        },
-        'Bulk import chunk processing',
-      );
+      let currentMatch =
+        medicineMapByName.get(normName) ||
+        (normBarcode ? medicineMapByBarcode.get(normBarcode) : null);
 
-      const newMedicines = [];
-      const newBatches = [];
-      const newMovements = [];
-      const inventoryAggregated = new Map();
-      const updatePayloads = [];
-      const defaultExpiry = new Date(new Date().setFullYear(new Date().getFullYear() + 2));
+      if (currentMatch) {
+        medicineId = currentMatch.id;
 
-      let chunkMedicinesCount = 0;
-      let chunkBatchesCount = 0;
-      let chunkImportedCount = 0;
+        if (row.isDuplicate) {
+          if (duplicateStrategy === 'Skip') {
+            commitSummary.skippedCount++;
+            continue;
+          }
 
-      for (const row of chunk) {
-        let medicineId = null;
+          if (duplicateStrategy === 'Overwrite' || duplicateStrategy === 'Merge') {
+            if (duplicateStrategy === 'Overwrite') commitSummary.overwrittenCount++;
+            if (duplicateStrategy === 'Merge') commitSummary.mergedCount++;
 
-        const normName = row.name.toLowerCase().trim();
-        const normBarcode = row.barcode ? row.barcode.trim() : '';
-
-        let currentMatch =
-          medicineMapByName.get(normName) ||
-          (normBarcode ? medicineMapByBarcode.get(normBarcode) : null);
-
-        if (currentMatch) {
-          medicineId = currentMatch.id;
-
-          if (row.isDuplicate) {
-            if (duplicateStrategy === 'Skip') {
-              commitSummary.skippedCount++;
-              continue;
+            const updatePayload = {};
+            if (row.barcode && (barcodeOptions.overwrite || !currentMatch.barcode)) {
+              updatePayload.barcode = row.barcode;
+              currentMatch.barcode = row.barcode;
+              medicineMapByBarcode.set(row.barcode.trim(), currentMatch);
             }
-
-            if (duplicateStrategy === 'Overwrite' || duplicateStrategy === 'Merge') {
-              if (duplicateStrategy === 'Overwrite') commitSummary.overwrittenCount++;
-              if (duplicateStrategy === 'Merge') commitSummary.mergedCount++;
-
-              const updatePayload = {};
-              if (row.barcode && (barcodeOptions.overwrite || !currentMatch.barcode)) {
-                updatePayload.barcode = row.barcode;
-                currentMatch.barcode = row.barcode;
-                medicineMapByBarcode.set(row.barcode.trim(), currentMatch);
-              }
-              if (row.category && (duplicateStrategy === 'Overwrite' || !currentMatch.categoryId)) {
-                const resolvedCatId = categoryMap.get(row.category.trim().toLowerCase());
-                if (resolvedCatId) {
-                  updatePayload.categoryId = resolvedCatId;
-                  currentMatch.categoryId = resolvedCatId;
-                }
-              }
-              if (
-                row.manufacturer &&
-                (duplicateStrategy === 'Overwrite' || !currentMatch.manufacturerId)
-              ) {
-                const resolvedMfrId = manufacturerMap.get(row.manufacturer.trim().toLowerCase());
-                if (resolvedMfrId) {
-                  updatePayload.manufacturerId = resolvedMfrId;
-                  currentMatch.manufacturerId = resolvedMfrId;
-                }
-              }
-              if (Object.keys(updatePayload).length > 0) {
-                updatePayloads.push({ id: medicineId, data: updatePayload });
+            if (row.category && (duplicateStrategy === 'Overwrite' || !currentMatch.categoryId)) {
+              const resolvedCatId = categoryMap.get(row.category.trim().toLowerCase());
+              if (resolvedCatId) {
+                updatePayload.categoryId = resolvedCatId;
+                currentMatch.categoryId = resolvedCatId;
               }
             }
-          }
-        } else {
-          let categoryId = row.category
-            ? categoryMap.get(row.category.trim().toLowerCase()) || null
-            : null;
-
-          let manufacturerId = row.manufacturer
-            ? manufacturerMap.get(row.manufacturer.trim().toLowerCase()) || null
-            : null;
-
-          medicineId = crypto.randomUUID();
-          newMedicines.push({
-            id: medicineId,
-            tenantId,
-            userId,
-            name: row.name,
-            genericName: row.genericName || null,
-            barcode: row.barcode,
-            hsnCode: row.hsnCode || null,
-            dosageForm: row.dosageForm || null,
-            packagingType: mapDosageFormToPackaging(row.dosageForm),
-            strength: row.strength || null,
-            sku: `SKU-${crypto.randomUUID()}`,
-            gstPercentage: parseFloat(row.gstPercentage) || 0,
-            reorderLevel: 10,
-            status: 'ACTIVE',
-            isActive: true,
-            categoryId: categoryId || null,
-            manufacturerId: manufacturerId || null,
-          });
-          chunkMedicinesCount++;
-
-          const cachedMed = { id: medicineId, name: row.name, barcode: row.barcode };
-          medicineMapByName.set(normName, cachedMed);
-          if (row.barcode) {
-            medicineMapByBarcode.set(row.barcode.trim(), cachedMed);
+            if (
+              row.manufacturer &&
+              (duplicateStrategy === 'Overwrite' || !currentMatch.manufacturerId)
+            ) {
+              const resolvedMfrId = manufacturerMap.get(row.manufacturer.trim().toLowerCase());
+              if (resolvedMfrId) {
+                updatePayload.manufacturerId = resolvedMfrId;
+                currentMatch.manufacturerId = resolvedMfrId;
+              }
+            }
+            if (Object.keys(updatePayload).length > 0) {
+              medicineUpdates.push({ id: medicineId, data: updatePayload });
+            }
           }
         }
+      } else {
+        let categoryId = row.category
+          ? categoryMap.get(row.category.trim().toLowerCase()) || null
+          : null;
 
-        const parsedQty = parseInt(row.qty, 10);
-        if (!isNaN(parsedQty) && parsedQty > 0) {
-          const parsedPrice = parseFloat(row.price) || 0;
-          const batchId = crypto.randomUUID();
-          newBatches.push({
-            id: batchId,
-            tenantId,
-            medicineId,
-            branchId,
-            batchNumber: row.batch,
-            quantity: parsedQty,
-            receivedQuantity: parsedQty,
-            availableQuantity: parsedQty,
-            expiryDate: row.expiryDate || defaultExpiry,
-            purchasePrice: parsedPrice,
-            sellingPrice: parsedPrice * 1.2,
-            mrp: parsedPrice * 1.2,
-            status: 'ACTIVE',
-            supplierId: resolvedSupplierId,
-          });
+        let manufacturerId = row.manufacturer
+          ? manufacturerMap.get(row.manufacturer.trim().toLowerCase()) || null
+          : null;
 
-          newMovements.push({
-            batchId,
-            tenantId,
-            branchId,
-            medicineId,
-            movementType: 'STOCK_IN',
-            quantity: parsedQty,
-            referenceType: 'BULK_IMPORT',
-            performedBy: userId,
-            notes: `Bulk imported from ${supplierName !== 'None' ? supplierName : 'spreadsheet'}`,
-          });
+        medicineId = crypto.randomUUID();
+        newMedicines.push({
+          id: medicineId,
+          tenantId,
+          userId,
+          name: row.name,
+          genericName: row.genericName || null,
+          barcode: row.barcode,
+          hsnCode: row.hsnCode || null,
+          dosageForm: row.dosageForm || null,
+          packagingType: mapDosageFormToPackaging(row.dosageForm),
+          strength: row.strength || null,
+          sku: `SKU-${crypto.randomUUID()}`,
+          gstPercentage: parseFloat(row.gstPercentage) || 0,
+          reorderLevel: 10,
+          status: 'ACTIVE',
+          isActive: true,
+          categoryId: categoryId || null,
+          manufacturerId: manufacturerId || null,
+        });
+        commitSummary.newMedicinesCount++;
 
-          inventoryAggregated.set(
-            medicineId,
-            (inventoryAggregated.get(medicineId) || 0) + parsedQty,
-          );
-          chunkBatchesCount++;
+        const cachedMed = { id: medicineId, name: row.name, barcode: row.barcode };
+        medicineMapByName.set(normName, cachedMed);
+        if (row.barcode) {
+          medicineMapByBarcode.set(row.barcode.trim(), cachedMed);
         }
-
-        chunkImportedCount++;
       }
 
-      try {
-        const commitStart = Date.now();
-        await prisma.$transaction(async (tx) => {
-          if (newMedicines.length > 0) {
-            await tx.medicine.createMany({ data: newMedicines, skipDuplicates: true });
-          }
-
-          if (updatePayloads.length > 0) {
-            for (let i = 0; i < updatePayloads.length; i += 500) {
-              const batch = updatePayloads.slice(i, i + 500);
-              await Promise.all(
-                batch.map((up) =>
-                  tx.medicine.update({
-                    where: { id: up.id },
-                    data: up.data,
-                    select: { id: true },
-                  }),
-                ),
-              );
-            }
-          }
-
-          if (newBatches.length > 0) {
-            await tx.inventoryBatch.createMany({ data: newBatches, skipDuplicates: true });
-          }
-
-          if (newMovements.length > 0) {
-            await tx.stockMovement.createMany({ data: newMovements, skipDuplicates: true });
-          }
-
-          if (inventoryAggregated.size > 0) {
-            const upsertEntries = Array.from(inventoryAggregated.entries());
-            for (let i = 0; i < upsertEntries.length; i += 500) {
-              const batch = upsertEntries.slice(i, i + 500);
-              await Promise.all(
-                batch.map(([medId, qty]) =>
-                  tx.inventory.upsert({
-                    where: {
-                      tenantId_branchId_medicineId: { tenantId, branchId, medicineId: medId },
-                    },
-                    update: { currentStock: { increment: qty } },
-                    create: {
-                      tenantId,
-                      branchId,
-                      medicineId: medId,
-                      currentStock: qty,
-                      reorderPoint: 10,
-                    },
-                    select: { id: true },
-                  }),
-                ),
-              );
-            }
-          }
+      const parsedQty = parseInt(row.qty, 10);
+      if (!isNaN(parsedQty) && parsedQty > 0) {
+        const parsedPrice = parseFloat(row.price) || 0;
+        const batchId = crypto.randomUUID();
+        newBatches.push({
+          id: batchId,
+          tenantId,
+          medicineId,
+          branchId,
+          batchNumber: row.batch,
+          quantity: parsedQty,
+          receivedQuantity: parsedQty,
+          availableQuantity: parsedQty,
+          expiryDate: row.expiryDate || defaultExpiry,
+          purchasePrice: parsedPrice,
+          sellingPrice: parsedPrice * 1.2,
+          mrp: parsedPrice * 1.2,
+          status: 'ACTIVE',
+          supplierId: resolvedSupplierId,
         });
 
-        logger.info(
-          {
-            event: 'IMPORT_PERFORMANCE',
-            phase: 'CHUNK_COMMIT',
-            chunk: Math.floor(i / CHUNK_SIZE) + 1,
-            durationMs: Date.now() - commitStart,
-            rows: chunk.length,
-          },
-          'Chunk committed successfully',
-        );
+        newMovements.push({
+          id: crypto.randomUUID(),
+          batchId,
+          tenantId,
+          branchId,
+          medicineId,
+          movementType: 'STOCK_IN',
+          quantity: parsedQty,
+          referenceType: 'BULK_IMPORT',
+          performedBy: userId,
+          notes: `Bulk imported from ${supplierName !== 'None' ? supplierName : 'spreadsheet'}`,
+        });
 
-        commitSummary.newMedicinesCount += chunkMedicinesCount;
-        commitSummary.newBatchesCount += chunkBatchesCount;
-        commitSummary.importedCount += chunkImportedCount;
-      } catch (err) {
-        logger.error(
-          { chunkIdx: Math.floor(i / CHUNK_SIZE) + 1, err: err.message, stack: err.stack },
-          'Chunk import transaction failed',
-        );
-        throw new Error(`Import failed during chunk processing: ${err.message}`);
+        inventoryUpdates.push({ medicineId, qty: parsedQty });
+        commitSummary.newBatchesCount++;
       }
 
-      logger.info(
-        {
-          event: 'IMPORT_PERFORMANCE',
-          phase: 'CHUNK_TOTAL',
-          chunk: Math.floor(i / CHUNK_SIZE) + 1,
-          durationMs: Date.now() - start,
-          rows: chunk.length,
-        },
-        'Chunk completed',
-      );
+      commitSummary.importedCount++;
+    }
+
+    try {
+      const { default: sharedImportEngine } = await import('./shared-import.engine.js');
+      await sharedImportEngine.commitChunks({
+        tenantId,
+        branchId,
+        userId,
+        jobId: `bulk-api-${Date.now()}`,
+        newMedicines,
+        newBatches,
+        newMovements,
+        inventoryUpdates,
+        batchQuantityUpdates,
+        medicineUpdates,
+      });
+    } catch (err) {
+      logger.error({ err: err.message, stack: err.stack }, 'Bulk import transaction failed');
+      throw new Error(`Import failed: ${err.message}`);
     }
 
     const importJob = await prisma.importJob.create({
