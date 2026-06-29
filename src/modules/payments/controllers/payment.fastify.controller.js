@@ -8,6 +8,50 @@ import razorpayWebhookHandler from '../webhooks/razorpay.webhook.js';
 import { enqueueWebhook, getQueueMetrics } from '../queue/payment.queue.js';
 import { getConfig } from '../../../config/payment.config.js';
 
+const formatStatusResponse = (statusObj) => {
+  if (!statusObj) return { success: false, paymentStatus: 'PENDING' };
+
+  const statusMap = {
+    SUCCESS: 'SUCCESS',
+    CAPTURED: 'SUCCESS',
+    FAILED: 'FAILED',
+    PENDING: 'PENDING',
+    CREATED: 'PENDING',
+    AUTHORIZED: 'PENDING',
+    EXPIRED: 'TIMEOUT',
+    TIMEOUT: 'TIMEOUT',
+    CANCELLED: 'CANCELLED',
+  };
+
+  const paymentStatus = statusMap[statusObj.status] || 'PENDING';
+
+  if (paymentStatus === 'SUCCESS') {
+    return {
+      success: true,
+      paymentStatus: 'SUCCESS',
+      subscriptionActive: true,
+      plan: statusObj.planName || 'Professional',
+      data: statusObj,
+    };
+  } else if (paymentStatus === 'FAILED') {
+    return {
+      success: false,
+      paymentStatus: 'FAILED',
+      reason: statusObj.failureReason || 'Payment failed',
+    };
+  } else if (paymentStatus === 'TIMEOUT' || paymentStatus === 'CANCELLED') {
+    return {
+      success: false,
+      paymentStatus: paymentStatus,
+    };
+  }
+
+  return {
+    success: false,
+    paymentStatus: 'PENDING',
+  };
+};
+
 class PaymentFastifyController {
   async createOrder(request, reply) {
     const { amount, receipt } = request.body;
@@ -92,13 +136,23 @@ class PaymentFastifyController {
     try {
       await ensureDbConnection();
       const result = await paymentOrchestratorService.verifyPayment(tenantId, request.body);
-      return reply.send({ success: true, ...result });
+      return reply.send({
+        success: true,
+        paymentStatus: 'SUCCESS',
+        subscriptionActive: true,
+        plan: 'Professional',
+        data: result,
+      });
     } catch (error) {
       if (error.message === 'Payment signature verification failed') {
-        return reply.code(400).send({ success: false, error: error.message });
+        return reply
+          .code(400)
+          .send({ success: false, paymentStatus: 'FAILED', reason: error.message });
       }
       if (error.message?.includes('Invalid payment state transition')) {
-        return reply.code(409).send({ success: false, error: error.message });
+        return reply
+          .code(409)
+          .send({ success: false, paymentStatus: 'FAILED', reason: error.message });
       }
       logger.error(
         {
@@ -109,7 +163,9 @@ class PaymentFastifyController {
         },
         '[PAYMENT] Verify failed',
       );
-      return reply.code(400).send({ success: false, error: 'Payment verification failed' });
+      return reply
+        .code(400)
+        .send({ success: false, paymentStatus: 'FAILED', reason: 'Payment verification failed' });
     }
   }
 
@@ -120,12 +176,12 @@ class PaymentFastifyController {
     try {
       const status = await paymentOrchestratorService.getPaymentStatus(tenantId, orderId);
       if (!status) {
-        return reply.code(404).send({ success: false, error: 'Payment not found' });
+        return reply.code(404).send({ success: false, paymentStatus: 'PENDING' });
       }
-      return reply.send({ success: true, data: status });
+      return reply.send(formatStatusResponse(status));
     } catch (error) {
       logger.error({ error, orderId, tenantId }, '[PAYMENT] Status failed');
-      return reply.code(500).send({ success: false, error: 'Failed to get payment status' });
+      return reply.code(500).send({ success: false, paymentStatus: 'PENDING' });
     }
   }
 
@@ -138,14 +194,14 @@ class PaymentFastifyController {
       if (!status) {
         return reply.code(404).send({
           success: false,
-          error: 'Payment not found',
+          paymentStatus: 'PENDING',
           code: 'PAYMENT_NOT_FOUND',
         });
       }
-      return reply.send({ success: true, data: status });
+      return reply.send(formatStatusResponse(status));
     } catch (error) {
       logger.error({ error, orderId, tenantId }, '[PAYMENT] Status by orderId failed');
-      return reply.code(500).send({ success: false, error: 'Failed to get payment status' });
+      return reply.code(500).send({ success: false, paymentStatus: 'PENDING' });
     }
   }
 

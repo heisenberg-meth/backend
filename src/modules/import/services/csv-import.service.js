@@ -10,6 +10,7 @@ import {
   validatePricing,
 } from '../../../shared/utils/medicine-helpers.js';
 import sharedImportEngine from './shared-import.engine.js';
+import { SUBSCRIPTION_PLANS } from '../../subscriptions/subscription.constants.js';
 
 const CHUNK_SIZE = 1000;
 
@@ -72,6 +73,20 @@ class CsvImportService {
       const inventoryMap = await this._preloadInventory(tenantId, branchId);
       const categoryMap = await this._preloadCategories(tenantId);
       const manufacturerMap = await this._preloadManufacturers(tenantId);
+
+      // Get subscription limits
+      const subscription = await prisma.subscription.findUnique({
+        where: { tenantId },
+        include: { plan: true },
+      });
+      const planId = subscription?.planId || 'free';
+      const planConfig = SUBSCRIPTION_PLANS[planId] || SUBSCRIPTION_PLANS['free'];
+      const maxMedicines = planConfig.limits ? planConfig.limits['medicines'] : undefined;
+
+      const currentMedicinesCount = await prisma.medicine.count({
+        where: { tenantId, deletedAt: null },
+      });
+
       logger.info(
         { jobId, elapsed: Date.now() - preloadStart, size: medicineMap.size },
         '[CSV-Import] Preload complete',
@@ -127,6 +142,8 @@ class CsvImportService {
                   errors,
                   batchQuantityUpdates,
                   supplierId: resolvedSupplierId,
+                  maxMedicines,
+                  currentMedicinesCount,
                 });
                 importedCount += chunk.length;
                 chunk = [];
@@ -164,6 +181,8 @@ class CsvImportService {
                   errors,
                   batchQuantityUpdates,
                   supplierId: resolvedSupplierId,
+                  maxMedicines,
+                  currentMedicinesCount,
                 });
                 importedCount += chunk.length;
               } catch (err) {
@@ -581,6 +600,47 @@ class CsvImportService {
       if (existingMedicine) {
         medicineId = existingMedicine.id;
       } else {
+        /*
+        ======================================================
+        Future Feature
+
+        Medicine Count Limits
+
+        Enable this block only if subscription plans
+        need medicine quantity restrictions.
+
+        Current Business Decision:
+        Unlimited medicines for all tenants.
+
+        Date Disabled:
+        2026
+
+        ======================================================
+        if (ctx.maxMedicines !== undefined && ctx.maxMedicines !== -1) {
+          const currentTotal = ctx.currentMedicinesCount + ctx.newMedicines.length;
+          if (currentTotal >= ctx.maxMedicines) {
+            logger.warn(
+              {
+                rowNum: ctx.importedCount + ctx.newMedicines.length + 1,
+                name,
+                maxMedicines: ctx.maxMedicines,
+              },
+              '[CSV-Import] Plan Limit Reached',
+            );
+            ctx.errors.push({
+              row: ctx.importedCount + ctx.newMedicines.length + 1,
+              name: name || 'Unknown',
+              reason: 'Plan Limit Reached',
+              field: 'plan',
+              value: ctx.maxMedicines,
+              errorCode: 'PLAN_LIMIT_REACHED',
+              message: 'Plan Limit Reached',
+            });
+            continue;
+          }
+        }
+        */
+
         let resolvedCategoryId = null;
         if (category) {
           const normalizedCat = category.toLowerCase().trim();

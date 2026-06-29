@@ -15,7 +15,7 @@ export const SUBSCRIPTION_PLANS = {
       'ADVANCED_REPORTS',
       'PREMIUM_ANALYTICS',
     ],
-    limits: { users: 5, branches: 1, medicines: 1000, batches: 5000 },
+    limits: { users: 5, branches: 1, /* medicines: 1000, */ batches: 5000 },
   },
   free: {
     id: 'free',
@@ -23,7 +23,7 @@ export const SUBSCRIPTION_PLANS = {
     price: 0,
     billingCycle: 'monthly',
     features: [],
-    limits: { users: 1, branches: 1, medicines: 100, batches: 500 },
+    limits: { users: 1, branches: 1, /* medicines: 100, */ batches: 500 },
   },
   starter: {
     id: 'starter',
@@ -31,7 +31,7 @@ export const SUBSCRIPTION_PLANS = {
     price: 999,
     billingCycle: 'monthly',
     features: ['CREDIT_NOTES', 'REPORTS_PDF'],
-    limits: { users: 3, branches: 2, medicines: 5000, batches: 10000 },
+    limits: { users: 3, branches: 2, /* medicines: 5000, */ batches: 10000 },
   },
   professional: {
     id: 'professional',
@@ -39,7 +39,7 @@ export const SUBSCRIPTION_PLANS = {
     price: 2999,
     billingCycle: 'monthly',
     features: ['CREDIT_NOTES', 'REPORTS_PDF', 'REPORTS_EXCEL', 'PREMIUM_ANALYTICS'],
-    limits: { users: 10, branches: 5, medicines: 20000, batches: 50000 },
+    limits: { users: 10, branches: 5, /* medicines: 20000, */ batches: 50000 },
   },
   enterprise: {
     id: 'enterprise',
@@ -53,7 +53,7 @@ export const SUBSCRIPTION_PLANS = {
       'ADVANCED_REPORTS',
       'PREMIUM_ANALYTICS',
     ],
-    limits: { users: -1, branches: -1, medicines: -1, batches: -1 }, // -1 implies unlimited
+    limits: { users: -1, branches: -1, /* medicines: -1, */ batches: -1 }, // -1 implies unlimited
   },
 };
 

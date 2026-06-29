@@ -98,6 +98,19 @@ export const checkLimit = (resourceType) => {
     const limit = planConfig.limits[resourceType];
     if (limit === -1) return; // Unlimited
 
+    // =====================================================
+    // MEDICINE LIMIT CHECK TEMPORARILY DISABLED
+    //
+    // Business Decision:
+    // MedAssist allows unlimited medicines for every tenant.
+    // This validation is intentionally bypassed.
+    // Do NOT remove this code.
+    // It may be re-enabled in future subscription versions.
+    // =====================================================
+    if (resourceType === 'medicines') {
+      return;
+    }
+
     // Count current usage
     let currentCount = 0;
     switch (resourceType) {

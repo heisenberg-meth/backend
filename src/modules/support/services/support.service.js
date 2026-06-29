@@ -19,25 +19,6 @@ class SupportService {
     }
   }
 
-  async _notifyAdmins(tenantId, message, excludeUserId, metadata = {}) {
-    try {
-      const admins = await prisma.user.findMany({
-        where: {
-          tenantId,
-          role: { in: ['OWNER', 'ADMIN'] },
-          id: { not: excludeUserId },
-          deletedAt: null,
-        },
-        select: { id: true },
-      });
-
-      for (const admin of admins) {
-        await this._notify(tenantId, admin.id, message, metadata);
-      }
-    } catch (err) {
-      logger.warn({ err: err.message, tenantId }, 'Failed to notify admins');
-    }
-  }
   async generateTicketNumber(tenantId) {
     const today = new Date();
     const dateStr = today.toISOString().slice(0, 10).replace(/-/g, '');
@@ -64,6 +45,7 @@ class SupportService {
         message: data.description || data.message,
         priority: data.priority || 'MEDIUM',
         status: 'OPEN',
+        assignedTo: null,
         createdBy: userId,
       },
     });
@@ -76,14 +58,6 @@ class SupportService {
         performedBy: userId,
       },
     });
-
-    // Notify all admins about new ticket
-    await this._notifyAdmins(
-      tenantId,
-      `New support ticket ${ticketNumber}: ${data.title || data.subject}`,
-      userId,
-      { ticketId: ticket.id, ticketNumber, priority: data.priority || 'MEDIUM' },
-    );
 
     return ticket;
   }
@@ -199,12 +173,7 @@ class SupportService {
         { ticketId, ticketNumber: ticket.ticketNumber, action: 'REPLY' },
       );
     } else {
-      // Staff replied → notify admins
-      await this._notifyAdmins(tenantId, `New reply on ticket ${ticket.ticketNumber}`, userId, {
-        ticketId,
-        ticketNumber: ticket.ticketNumber,
-        action: 'REPLY',
-      });
+      // Staff replied → Platform Admin can see this on their dashboard. No tenant-admin notification needed.
     }
 
     return reply;

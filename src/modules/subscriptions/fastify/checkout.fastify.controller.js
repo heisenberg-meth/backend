@@ -1,6 +1,57 @@
 import paymentSessionService from '../payment-session.service.js';
 import logger from '../../../shared/utils/logger.js';
 
+const formatStatusResponse = (statusObj) => {
+  if (!statusObj) return { success: false, paymentStatus: 'PENDING' };
+
+  const statusMap = {
+    SUCCESS: 'SUCCESS',
+    PAYMENT_SUCCESS: 'SUCCESS',
+    SUBSCRIPTION_ACTIVATED: 'SUCCESS',
+    WEBHOOK_VERIFIED: 'SUCCESS',
+    CAPTURED: 'SUCCESS',
+    FAILED: 'FAILED',
+    PAYMENT_FAILED: 'FAILED',
+    PENDING: 'PENDING',
+    CREATED: 'PENDING',
+    CHECKOUT_OPENED: 'PENDING',
+    AUTHORIZED: 'PENDING',
+    EXPIRED: 'TIMEOUT',
+    PAYMENT_EXPIRED: 'TIMEOUT',
+    TIMEOUT: 'TIMEOUT',
+    CANCELLED: 'CANCELLED',
+  };
+
+  const paymentStatus = statusMap[statusObj.status] || 'PENDING';
+  const plan = statusObj.planName || 'Professional';
+
+  if (paymentStatus === 'SUCCESS') {
+    return {
+      success: true,
+      paymentStatus: 'SUCCESS',
+      subscriptionActive: true,
+      plan: plan,
+      data: statusObj,
+    };
+  } else if (paymentStatus === 'FAILED') {
+    return {
+      success: false,
+      paymentStatus: 'FAILED',
+      reason: statusObj.failureReason || 'Payment failed',
+    };
+  } else if (paymentStatus === 'TIMEOUT' || paymentStatus === 'CANCELLED') {
+    return {
+      success: false,
+      paymentStatus: paymentStatus,
+    };
+  }
+
+  return {
+    success: false,
+    paymentStatus: 'PENDING',
+  };
+};
+
 class CheckoutController {
   async createCheckout(request, reply) {
     try {
@@ -38,10 +89,7 @@ class CheckoutController {
 
       const status = await paymentSessionService.getPaymentStatus(sessionId);
 
-      return reply.send({
-        success: true,
-        data: status,
-      });
+      return reply.send(formatStatusResponse(status));
     } catch (error) {
       logger.error(
         { error: error.message, sessionId: request.params.sessionId },
@@ -50,6 +98,7 @@ class CheckoutController {
 
       return reply.code(404).send({
         success: false,
+        paymentStatus: 'PENDING',
         error: error.message,
       });
     }
@@ -70,6 +119,9 @@ class CheckoutController {
 
       return reply.send({
         success: true,
+        paymentStatus: 'SUCCESS',
+        subscriptionActive: true,
+        plan: 'Professional',
         data: result,
       });
     } catch (error) {

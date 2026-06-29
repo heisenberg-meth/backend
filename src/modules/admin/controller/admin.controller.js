@@ -707,6 +707,7 @@ class AdminController {
         status: request.query.status,
         priority: request.query.priority,
         search: request.query.search,
+        tenantId: request.query.tenantId,
       };
       const tickets = await adminService.listSupportTickets(query);
       return reply.send(success(tickets));

@@ -510,12 +510,13 @@ export const adminRepository = {
     return { tenants, users, subscriptions, payments, devices, openTickets: tickets };
   },
 
-  async listSupportTickets({ status, priority, search, page = 1, limit = 20 }) {
+  async listSupportTickets({ status, priority, search, tenantId, page = 1, limit = 20 }) {
     const pageNum = parseInt(page) || 1;
     const limitNum = parseInt(limit) || 20;
     const where = {};
     if (status) where.status = status;
     if (priority) where.priority = priority;
+    if (tenantId) where.tenantId = tenantId;
     if (search) {
       where.OR = [
         { subject: { contains: search, mode: 'insensitive' } },

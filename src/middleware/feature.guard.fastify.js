@@ -78,6 +78,23 @@ export const requireLimit = (limitKey, currentCountFn) => {
         return;
       }
 
+      // =====================================================
+      // MEDICINE LIMIT CHECK TEMPORARILY DISABLED
+      //
+      // Business Decision:
+      // MedAssist allows unlimited medicines for every tenant.
+      // This validation is intentionally bypassed.
+      // Do NOT remove this code.
+      // It may be re-enabled in future subscription versions.
+      // =====================================================
+      if (limitKey === 'medicines') {
+        logger.info(
+          { tenantId },
+          '[LIMIT GUARD] Medicine limit validation skipped (Unlimited Inventory Policy)',
+        );
+        return;
+      }
+
       const currentCount = await currentCountFn(request);
 
       if (currentCount >= limit) {
@@ -88,6 +105,12 @@ export const requireLimit = (limitKey, currentCountFn) => {
 
         return reply.code(403).send({
           success: false,
+          code: 'PLAN_LIMIT_REACHED',
+          resource: limitKey.toUpperCase().replace(/S$/, ''),
+          current: currentCount,
+          limit: limit,
+          remaining: Math.max(0, limit - currentCount),
+          plan: planConfig.name,
           error: {
             message: `${usageMessage} Please upgrade your plan to create new ${limitKey}.`,
             code: 'PLAN_LIMIT_REACHED',
