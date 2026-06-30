@@ -510,19 +510,21 @@ export const adminRepository = {
     return { tenants, users, subscriptions, payments, devices, openTickets: tickets };
   },
 
-  async listSupportTickets({ status, priority, search, tenantId, page = 1, limit = 20 }) {
+  async listSupportTickets({ status, priority, search, tenantId, userId, page = 1, limit = 20 }) {
     const pageNum = parseInt(page) || 1;
     const limitNum = parseInt(limit) || 20;
     const where = {};
     if (status) where.status = status;
     if (priority) where.priority = priority;
     if (tenantId) where.tenantId = tenantId;
+    if (userId) where.createdBy = userId;
     if (search) {
       where.OR = [
         { subject: { contains: search, mode: 'insensitive' } },
         { message: { contains: search, mode: 'insensitive' } },
       ];
     }
+
     const [tickets, total] = await Promise.all([
       prisma.supportTicket.findMany({
         where,
@@ -538,6 +540,7 @@ export const adminRepository = {
       }),
       prisma.supportTicket.count({ where }),
     ]);
+
     return { tickets, total, page: pageNum, limit: limitNum };
   },
 
