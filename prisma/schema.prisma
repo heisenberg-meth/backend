@@ -1617,6 +1617,18 @@ model Patient {
   gender                      String?
   dateOfBirth                 DateTime?
   address                     String?
+  addressLine1                String?
+  addressLine2                String?
+  landmark                    String?
+  area                        String?
+  city                        String?
+  district                    String?
+  state                       String?
+  country                     String?
+  pincode                     String?
+  gstNumber                   String?
+  panNumber                   String?
+  aadhaarNumber               String?
   medicalHistory              String?
   allergies                   Json?
   chronicConditions           Json?
@@ -1918,6 +1930,18 @@ model Invoice {
   paidAmount         Decimal              @default(0) @db.Decimal(12, 2)
   balanceAmount      Decimal              @default(0) @db.Decimal(12, 2)
   notes              String?
+  customerName         String?
+  customerPhone        String?
+  customerAddressLine1 String?
+  customerAddressLine2 String?
+  customerLandmark     String?
+  customerArea         String?
+  customerCity         String?
+  customerDistrict     String?
+  customerState        String?
+  customerCountry      String?
+  customerPincode      String?
+  customerGST          String?
   createdBy          String?
   createdAt          DateTime             @default(now())
   updatedAt          DateTime             @updatedAt

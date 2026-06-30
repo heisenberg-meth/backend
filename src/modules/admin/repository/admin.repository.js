@@ -531,7 +531,7 @@ export const adminRepository = {
         include: {
           creator: { select: { id: true, fullName: true, email: true } },
           assignee: { select: { id: true, fullName: true, email: true } },
-          tenant: { select: { id: true, shopName: true } },
+          tenant: { select: { id: true, name: true } },
           replies: { include: { author: { select: { id: true, fullName: true, role: true } } } },
         },
         orderBy: { createdAt: 'desc' },
@@ -541,7 +541,12 @@ export const adminRepository = {
       prisma.supportTicket.count({ where }),
     ]);
 
-    return { tickets, total, page: pageNum, limit: limitNum };
+    const formattedTickets = tickets.map((t) => ({
+      ...t,
+      tenant: t.tenant ? { ...t.tenant, shopName: t.tenant.name } : null,
+    }));
+
+    return { tickets: formattedTickets, total, page: pageNum, limit: limitNum };
   },
 
   async getSupportTicket(id) {
@@ -625,11 +630,11 @@ export const adminRepository = {
   async getSubscriptionsExpiringBetween(start, end) {
     const subs = await prisma.subscription.findMany({
       where: { endDate: { gte: start, lte: end }, status: 'ACTIVE' },
-      include: { tenant: { select: { id: true, shopName: true, email: true, phone: true } } },
+      include: { tenant: { select: { id: true, name: true, email: true, phone: true } } },
     });
     return subs.map((s) => ({
       tenantId: s.tenantId,
-      shopName: s.tenant.shopName,
+      shopName: s.tenant.name,
       email: s.tenant.email,
       phone: s.tenant.phone,
       endDate: s.endDate,
@@ -640,11 +645,11 @@ export const adminRepository = {
   async getSubscriptionsExpiringBefore(date) {
     const subs = await prisma.subscription.findMany({
       where: { endDate: { lte: date }, status: { not: 'EXPIRED' } },
-      include: { tenant: { select: { id: true, shopName: true, email: true, phone: true } } },
+      include: { tenant: { select: { id: true, name: true, email: true, phone: true } } },
     });
     return subs.map((s) => ({
       tenantId: s.tenantId,
-      shopName: s.tenant.shopName,
+      shopName: s.tenant.name,
       email: s.tenant.email,
       phone: s.tenant.phone,
       endDate: s.endDate,
@@ -662,7 +667,7 @@ export const adminRepository = {
     if (filters.plan) where.plan = filters.plan;
     return prisma.tenant.findMany({
       where,
-      select: { id: true, shopName: true, email: true, phone: true },
+      select: { id: true, name: true, email: true, phone: true },
     });
   },
 

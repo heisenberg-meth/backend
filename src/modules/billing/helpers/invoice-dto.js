@@ -4,8 +4,18 @@ export function normalizeInvoice(invoice) {
   const items = (invoice.items || []).map((item) => ({
     id: item.id || item.medicineId,
     medicineId: item.medicineId,
-    medicineName: item.medicine?.medicineName || item.medicine?.name || item.medicineName || item.name || 'Unknown',
-    name: item.medicine?.medicineName || item.medicine?.name || item.medicineName || item.name || 'Unknown',
+    medicineName:
+      item.medicine?.medicineName ||
+      item.medicine?.name ||
+      item.medicineName ||
+      item.name ||
+      'Unknown',
+    name:
+      item.medicine?.medicineName ||
+      item.medicine?.name ||
+      item.medicineName ||
+      item.name ||
+      'Unknown',
     qty: Number(item.quantity || 0),
     quantity: Number(item.quantity || 0),
     price: Number(item.unitPrice || 0),
@@ -64,8 +74,21 @@ export function normalizeInvoice(invoice) {
       'CASH',
     patient,
     patientName: patient?.name || invoice.patientName || invoice.customerName || 'Walk-in Customer',
-    patientPhone: patient?.phone || invoice.patientPhone || invoice.phone || 'N/A',
-    phone: patient?.phone || invoice.patientPhone || invoice.phone || 'N/A',
+    patientPhone: patient?.phone || invoice.patientPhone || invoice.customerPhone || 'N/A',
+    phone: patient?.phone || invoice.patientPhone || invoice.customerPhone || 'N/A',
+    customerName:
+      invoice.customerName || invoice.patientName || patient?.name || 'Walk-in Customer',
+    customerPhone: invoice.customerPhone || invoice.patientPhone || patient?.phone || null,
+    customerAddressLine1: invoice.customerAddressLine1 || null,
+    customerAddressLine2: invoice.customerAddressLine2 || null,
+    customerLandmark: invoice.customerLandmark || null,
+    customerArea: invoice.customerArea || null,
+    customerCity: invoice.customerCity || null,
+    customerDistrict: invoice.customerDistrict || null,
+    customerState: invoice.customerState || null,
+    customerCountry: invoice.customerCountry || null,
+    customerPincode: invoice.customerPincode || null,
+    customerGST: invoice.customerGST || null,
     items,
     subtotal: Number(invoice.subtotal || 0),
     discountAmount: Number(invoice.discountAmount || 0),

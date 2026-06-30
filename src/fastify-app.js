@@ -5,7 +5,6 @@ import helmet from '@fastify/helmet';
 import swagger from '@fastify/swagger';
 import swaggerUi from '@fastify/swagger-ui';
 import cookie from '@fastify/cookie';
-
 import metrics from 'fastify-metrics';
 import redis from '@fastify/redis';
 import fastifyJwt from '@fastify/jwt';

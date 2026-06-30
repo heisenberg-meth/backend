@@ -57,13 +57,14 @@ class InvoiceEngine {
 
       let defaultPatientName = null;
       let defaultPatientPhone = null;
+      let patientData = null;
       if (patientId) {
         const patient = await t.patient.findUnique({
           where: { id: patientId },
-          select: { fullName: true, phone: true },
         });
         defaultPatientName = patient?.fullName || null;
         defaultPatientPhone = patient?.phone || null;
+        patientData = patient;
       }
 
       const totals = await this._calculateTotals(
@@ -87,6 +88,19 @@ class InvoiceEngine {
           patientId,
           patientName: patientName || defaultPatientName || 'Walk-in Customer',
           patientPhone: patientPhone || defaultPatientPhone || null,
+          customerName:
+            patientData?.fullName || patientName || defaultPatientName || 'Walk-in Customer',
+          customerPhone: patientData?.phone || patientPhone || defaultPatientPhone || null,
+          customerAddressLine1: patientData?.addressLine1 || null,
+          customerAddressLine2: patientData?.addressLine2 || null,
+          customerLandmark: patientData?.landmark || null,
+          customerArea: patientData?.area || null,
+          customerCity: patientData?.city || null,
+          customerDistrict: patientData?.district || null,
+          customerState: patientData?.state || null,
+          customerCountry: patientData?.country || null,
+          customerPincode: patientData?.pincode || null,
+          customerGST: patientData?.gstNumber || null,
           subtotal: this._safeNumber(totals.subtotal),
           discountAmount: this._safeNumber(totals.discountAmount),
           discountPercentage: this._safeNumber(discountPercentage),
@@ -218,13 +232,14 @@ class InvoiceEngine {
 
       let defaultPatientName = null;
       let defaultPatientPhone = null;
+      let patientData = null;
       if (patientId) {
         const patient = await t.patient.findUnique({
           where: { id: patientId },
-          select: { fullName: true, phone: true },
         });
         defaultPatientName = patient?.fullName || null;
         defaultPatientPhone = patient?.phone || null;
+        patientData = patient;
       }
 
       const totals = await this._calculateTotals(
@@ -249,6 +264,19 @@ class InvoiceEngine {
           patientId,
           patientName: patientName || defaultPatientName || 'Walk-in Customer',
           patientPhone: patientPhone || defaultPatientPhone || null,
+          customerName:
+            patientData?.fullName || patientName || defaultPatientName || 'Walk-in Customer',
+          customerPhone: patientData?.phone || patientPhone || defaultPatientPhone || null,
+          customerAddressLine1: patientData?.addressLine1 || null,
+          customerAddressLine2: patientData?.addressLine2 || null,
+          customerLandmark: patientData?.landmark || null,
+          customerArea: patientData?.area || null,
+          customerCity: patientData?.city || null,
+          customerDistrict: patientData?.district || null,
+          customerState: patientData?.state || null,
+          customerCountry: patientData?.country || null,
+          customerPincode: patientData?.pincode || null,
+          customerGST: patientData?.gstNumber || null,
           subtotal: this._safeNumber(totals.subtotal),
           discountAmount: this._safeNumber(totals.discountAmount),
           discountPercentage: this._safeNumber(discountPercentage),
