@@ -21,7 +21,7 @@ class IntegrationController {
     try {
       const tenantId = request.tenantId;
       const branchId = request.body.branchId || request.branchId;
-      const userId = request.user?.id;
+      const userId = request.user?.userId || request.user?.id;
       const settings = request.body.settings;
 
       if (!settings) {

@@ -521,6 +521,80 @@ export const adminService = {
     return adminRepository.findSubscription(id);
   },
 
+  async extendTrial(id, { days }) {
+    const sub = await adminRepository.findSubscription(id);
+    if (!sub) throw new Error('Subscription not found');
+    if (sub.status !== 'TRIAL') throw new Error('Can only extend active trials');
+
+    const daysNum = parseInt(days) || 0;
+    if (daysNum <= 0) throw new Error('Days must be positive');
+
+    const currentExpiry = sub.trialExpiresAt || sub.endDate || new Date();
+    const newExpiry = new Date(new Date(currentExpiry).getTime() + daysNum * 86400000);
+
+    await adminRepository.updateSubscription(id, {
+      trialExpiresAt: newExpiry,
+      endDate: newExpiry,
+      trialDays: (sub.trialDays || 0) + daysNum,
+    });
+
+    await adminRepository.createAuditLog({
+      action: 'SUBSCRIPTION_EXTENDED',
+      targetType: 'SUBSCRIPTION',
+      targetId: id,
+      metadata: { daysAdded: daysNum, oldExpiry: currentExpiry, newExpiry, type: 'trial' },
+    });
+
+    return adminRepository.findSubscription(id);
+  },
+
+  async reduceTrial(id, { days }) {
+    const sub = await adminRepository.findSubscription(id);
+    if (!sub) throw new Error('Subscription not found');
+    if (sub.status !== 'TRIAL') throw new Error('Can only reduce active trials');
+
+    const daysNum = parseInt(days) || 0;
+    if (daysNum <= 0) throw new Error('Days must be positive');
+
+    const currentExpiry = sub.trialExpiresAt || sub.endDate || new Date();
+    const newExpiryMs = new Date(currentExpiry).getTime() - daysNum * 86400000;
+    const now = new Date();
+    const newExpiry = new Date(Math.max(newExpiryMs, now.getTime()));
+
+    const newTrialDays = Math.max(0, (sub.trialDays || 0) - daysNum);
+    let newStatus = sub.status;
+
+    if (newExpiry <= now) {
+      newStatus = 'EXPIRED';
+    }
+
+    await adminRepository.updateSubscription(id, {
+      trialExpiresAt: newExpiry,
+      endDate: newExpiry,
+      trialDays: newTrialDays,
+      status: newStatus,
+    });
+
+    await adminRepository.createAuditLog({
+      action: 'SUBSCRIPTION_DOWNGRADED',
+      targetType: 'SUBSCRIPTION',
+      targetId: id,
+      metadata: { daysRemoved: daysNum, oldExpiry: currentExpiry, newExpiry, type: 'trial' },
+    });
+
+    return adminRepository.findSubscription(id);
+  },
+
+  async getSubscriptionHistory(id) {
+    const sub = await adminRepository.findSubscription(id);
+    if (!sub) throw new Error('Subscription not found');
+    return prisma.subscriptionHistory.findMany({
+      where: { subscriptionId: id },
+      orderBy: { createdAt: 'desc' },
+      take: 50,
+    });
+  },
+
   async listShops(query) {
     return adminRepository.listShops(query);
   },

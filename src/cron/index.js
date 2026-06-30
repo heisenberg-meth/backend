@@ -90,6 +90,14 @@ const cronManager = {
         repeat: { pattern: '0 * * * *' },
       },
     );
+
+    await mainQueue.add(
+      'daily-subscription-checks',
+      {},
+      {
+        repeat: { pattern: '0 0 * * *' },
+      },
+    );
   },
 };
 

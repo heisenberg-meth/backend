@@ -387,6 +387,33 @@ class AdminController {
     }
   }
 
+  async extendTrial(request, reply) {
+    try {
+      const sub = await adminService.extendTrial(request.params.id, request.body);
+      return reply.send(success(sub));
+    } catch (error) {
+      return reply.code(400).send(errorResponse(error.message, 'EXTEND_TRIAL_FAILED'));
+    }
+  }
+
+  async reduceTrial(request, reply) {
+    try {
+      const sub = await adminService.reduceTrial(request.params.id, request.body);
+      return reply.send(success(sub));
+    } catch (error) {
+      return reply.code(400).send(errorResponse(error.message, 'REDUCE_TRIAL_FAILED'));
+    }
+  }
+
+  async getSubscriptionHistory(request, reply) {
+    try {
+      const history = await adminService.getSubscriptionHistory(request.params.id);
+      return reply.send(success(history));
+    } catch (error) {
+      return reply.code(400).send(errorResponse(error.message, 'GET_HISTORY_FAILED'));
+    }
+  }
+
   async deleteUser(request, reply) {
     try {
       const { tenantId, userId } = request.params;

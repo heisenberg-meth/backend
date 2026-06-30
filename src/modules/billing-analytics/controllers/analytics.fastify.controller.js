@@ -56,10 +56,12 @@ class AnalyticsFastifyController {
    * POST /api/billing/cash-register (Open)
    */
   async handleCashRegister(request, reply) {
-    const { tenantId, branchId, id: cashierId } = request.user;
+    const { tenantId, branchId, userId: cashierId } = request.user;
+    // Fallback if userId is not in user object
+    const finalCashierId = cashierId || request.user.id;
 
     if (request.method === 'GET') {
-      const session = await cashRegisterService.getActiveSession(tenantId, cashierId);
+      const session = await cashRegisterService.getActiveSession(tenantId, finalCashierId);
       return reply.send({ success: true, data: session });
     }
 
@@ -69,7 +71,7 @@ class AnalyticsFastifyController {
         const session = await cashRegisterService.openSession(
           tenantId,
           branchId,
-          cashierId,
+          finalCashierId,
           openingCash,
           notes,
         );

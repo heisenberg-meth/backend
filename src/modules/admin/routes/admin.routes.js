@@ -59,6 +59,24 @@ async function adminRoutes(fastify) {
     adminController.cancelSubscription,
   );
 
+  fastify.post(
+    '/subscriptions/:id/trial/extend',
+    { preHandler: [authenticateAdmin, requireAdminRole('ROOT_ADMIN', 'ADMIN')] },
+    adminController.extendTrial,
+  );
+
+  fastify.post(
+    '/subscriptions/:id/trial/reduce',
+    { preHandler: [authenticateAdmin, requireAdminRole('ROOT_ADMIN', 'ADMIN')] },
+    adminController.reduceTrial,
+  );
+
+  fastify.get(
+    '/subscriptions/:id/history',
+    { preHandler: [authenticateAdmin] },
+    adminController.getSubscriptionHistory,
+  );
+
   // ---- Admin User Management (ROOT_ADMIN only) ----
   fastify.get(
     '/admins',

@@ -43,7 +43,7 @@ class MedicineFastifyController {
    * POST /api/medicines
    */
   async createMedicine(request, reply) {
-    const { tenantId, id: userId } = request.user;
+    const { tenantId, userId: userId } = request.user;
     const body = { ...request.body };
 
     // Map legacy field names to new field names
@@ -89,7 +89,7 @@ class MedicineFastifyController {
    * PUT /api/medicines/:id
    */
   async updateMedicine(request, reply) {
-    const { tenantId, id: userId, role: userRole } = request.user;
+    const { tenantId, userId: userId, role: userRole } = request.user;
     const { id } = request.params;
 
     try {
@@ -112,7 +112,7 @@ class MedicineFastifyController {
    * DELETE /api/medicines/:id
    */
   async deleteMedicine(request, reply) {
-    const { tenantId, id: userId } = request.user;
+    const { tenantId, userId: userId } = request.user;
     const { id } = request.params;
 
     try {

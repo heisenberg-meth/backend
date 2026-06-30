@@ -8,6 +8,7 @@ class TokenService {
   signAccessToken(user, sessionId) {
     return jwt.sign(
       {
+        id: user.id,
         userId: user.id,
         tenantId: user.tenantId,
         role: user.role,

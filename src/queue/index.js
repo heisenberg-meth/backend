@@ -384,23 +384,57 @@ const handlers = {
       },
     });
 
+    const now = new Date();
+
     for (const tenant of tenants) {
       const sub = tenant.subscription;
-      if (!sub || !sub.endDate) continue;
+      if (!sub) continue;
 
-      const daysLeft = Math.ceil((new Date(sub.endDate) - new Date()) / (1000 * 60 * 60 * 24));
+      const expiryDate = sub.status === 'TRIAL' ? sub.trialExpiresAt : sub.endDate;
+      if (!expiryDate) continue;
+
+      const daysLeft = Math.ceil((new Date(expiryDate) - now) / (1000 * 60 * 60 * 24));
       const owner = tenant.users[0];
-      if (!owner) continue;
 
       if (sub.status === 'TRIAL' && daysLeft <= 0) {
         await prisma.subscription.update({
           where: { id: sub.id },
           data: { status: 'EXPIRED' },
         });
-        await sendSubscriptionExpiredEmail(owner.email, owner.fullName);
+
+        await prisma.subscriptionHistory.create({
+          data: {
+            tenantId: tenant.id,
+            subscriptionId: sub.id,
+            action: 'TRIAL_EXPIRED',
+            oldStatus: 'TRIAL',
+            newStatus: 'EXPIRED',
+            oldExpiry: sub.trialExpiresAt,
+            newExpiry: sub.trialExpiresAt,
+          },
+        });
+
+        if (owner) {
+          await sendSubscriptionExpiredEmail(owner.email, owner.fullName);
+        }
+
         logger.info(`[SUBSCRIPTION] Expired trial for tenant: ${tenant.id}`);
-      } else if (sub.status === 'TRIAL' && [21, 25, 27].includes(daysLeft)) {
-        await sendTrialEndingReminder(owner.email, owner.fullName, daysLeft);
+      } else if (sub.status === 'TRIAL' && [7, 3, 1].includes(daysLeft)) {
+        if (owner) {
+          await sendTrialEndingReminder(owner.email, owner.fullName, daysLeft);
+
+          await prisma.notification.create({
+            data: {
+              tenantId: tenant.id,
+              userId: owner.id,
+              message: daysLeft === 1
+                ? 'Your trial expires tomorrow. Upgrade now to avoid interruption.'
+                : `Your trial expires in ${daysLeft} days. Upgrade now to avoid interruption.`,
+              notificationType: 'TRIAL_WARNING',
+            },
+          });
+        }
+
         logger.info(
           `[SUBSCRIPTION] Sent trial ending reminder (${daysLeft}d) for tenant: ${tenant.id}`,
         );

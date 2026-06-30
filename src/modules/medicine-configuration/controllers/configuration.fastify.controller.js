@@ -8,7 +8,7 @@ class ConfigurationController {
    */
   async updateReorderPoint(request, reply) {
     const { id } = request.params;
-    const { tenantId, id: userId } = request.user;
+    const { tenantId, userId: userId } = request.user;
     const { reorderPoint, safetyStock, maxStockLimit, branchId } = request.body;
 
     try {
@@ -32,7 +32,7 @@ class ConfigurationController {
    */
   async updatePricing(request, reply) {
     const { id } = request.params;
-    const { tenantId, id: userId } = request.user;
+    const { tenantId, userId: userId } = request.user;
     const { mrp, sellingPrice, purchasePrice } = request.body;
 
     try {
@@ -55,7 +55,7 @@ class ConfigurationController {
    */
   async updateStatus(request, reply) {
     const { id } = request.params;
-    const { tenantId, id: userId } = request.user;
+    const { tenantId, userId: userId } = request.user;
     const { status, reason } = request.body;
 
     try {
@@ -108,7 +108,7 @@ class ConfigurationController {
    * PATCH /api/medicines/bulk-pricing
    */
   async bulkUpdatePricing(request, reply) {
-    const { tenantId, id: userId } = request.user;
+    const { tenantId, userId: userId } = request.user;
     const { updates } = request.body; // Array of { medicineId, mrp, sellingPrice, purchasePrice }
 
     try {

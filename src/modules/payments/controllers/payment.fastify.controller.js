@@ -58,7 +58,7 @@ class PaymentFastifyController {
     const idempotencyKey =
       request.body.idempotencyKey || request.headers['x-idempotency-key'] || null;
     const tenantId = request.tenantId;
-    const userId = request.user?.id;
+    const userId = request.user?.userId || request.user?.id;
 
     request.log.info(
       {
@@ -140,7 +140,6 @@ class PaymentFastifyController {
         success: true,
         paymentStatus: 'SUCCESS',
         subscriptionActive: true,
-        plan: 'Professional',
         data: result,
       });
     } catch (error) {
@@ -255,7 +254,8 @@ class PaymentFastifyController {
 
   async settleInvoice(request, reply) {
     const settlementService = (await import('../settlement/settlement.service.js')).default;
-    const { tenantId, id: userId } = request.user;
+    const tenantId = request.user.tenantId;
+    const userId = request.user.userId || request.user.id;
     const { id: invoiceId } = request.params;
     const { payments } = request.body;
     const idempotencyKey = request.body.idempotencyKey || request.headers['x-idempotency-key'];
@@ -277,7 +277,8 @@ class PaymentFastifyController {
 
   async refundAllocation(request, reply) {
     const refundService = (await import('../refunds/refund.service.js')).default;
-    const { tenantId, id: userId } = request.user;
+    const tenantId = request.user.tenantId;
+    const userId = request.user.userId || request.user.id;
     const { id: allocationId } = request.params;
     const { amount, reason } = request.body;
 

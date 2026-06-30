@@ -13,7 +13,8 @@ class SupportController {
         });
       }
 
-      const ticket = await supportService.createTicket(request.tenantId, request.user.id, {
+      const userId = request.user?.userId || request.user?.id;
+      const ticket = await supportService.createTicket(request.tenantId, userId, {
         title,
         description,
         category,
@@ -70,7 +71,8 @@ class SupportController {
         return reply.code(400).send({ success: false, error: 'Message is required' });
       }
 
-      await supportService.addReply(request.tenantId, ticketId, request.user.id, message);
+      const userId = request.user?.userId || request.user?.id;
+      await supportService.addReply(request.tenantId, ticketId, userId, message);
       return reply.send({ success: true, message: 'Reply added' });
     } catch (error) {
       logger.error({ error }, '[SUPPORT] Add reply failed');
@@ -102,7 +104,8 @@ class SupportController {
   async closeTicket(request, reply) {
     try {
       const { ticketId } = request.params;
-      const ticket = await supportService.closeTicket(request.tenantId, ticketId, request.user.id);
+      const userId = request.user?.userId || request.user?.id;
+      const ticket = await supportService.closeTicket(request.tenantId, ticketId, userId);
 
       return reply.send({ success: true, status: ticket.status });
     } catch (error) {
@@ -136,7 +139,8 @@ class SupportController {
 
   async getStaffDashboard(request, reply) {
     try {
-      const dashboard = await supportService.getStaffDashboard(request.tenantId, request.user.id);
+      const userId = request.user?.userId || request.user?.id;
+      const dashboard = await supportService.getStaffDashboard(request.tenantId, userId);
       return reply.send({ success: true, data: dashboard });
     } catch (error) {
       logger.error({ error }, '[SUPPORT] Staff dashboard failed');

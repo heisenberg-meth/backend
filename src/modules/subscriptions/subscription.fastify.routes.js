@@ -18,6 +18,23 @@ export default async function (fastify) {
     handler: controller.getStatus,
   });
 
+  fastify.get('/current', {
+    schema: {
+      tags: ['Subscriptions'],
+      summary: 'Get current subscription with trial details',
+    },
+    handler: async (request, reply) => {
+      try {
+        const { default: subscriptionService } = await import('./subscription.service.js');
+        const status = await subscriptionService.getSubscriptionStatus(request.tenantId);
+        return reply.send({ success: true, data: status });
+      } catch (error) {
+        request.log.error(error);
+        return reply.code(500).send({ success: false, message: 'Failed to fetch subscription' });
+      }
+    },
+  });
+
   fastify.get('/usage', {
     schema: {
       tags: ['Subscriptions'],

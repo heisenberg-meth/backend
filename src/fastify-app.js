@@ -1,5 +1,6 @@
 import Fastify from 'fastify';
 import crypto from 'crypto';
+import os from 'os';
 import cors from '@fastify/cors';
 import helmet from '@fastify/helmet';
 import swagger from '@fastify/swagger';
@@ -23,6 +24,7 @@ import { JWT_CONFIG } from './config/jwt.config.js';
 import { HELMET_CONFIG, getRateLimitConfig } from './config/security.config.js';
 import { initSentry } from './config/sentry.js';
 import uptimeMonitor from './shared/services/uptime-monitor.js';
+import eventBus from './shared/services/eventbus.service.js';
 import csrfMiddleware from './modules/auth/middleware/csrf.middleware.js';
 import cookieManager from './shared/services/cookie-manager.service.js';
 import authRoutes from './modules/auth/routes/auth.fastify.routes.js';
@@ -308,32 +310,67 @@ const setupFastify = async () => {
   });
 
   fastify.get('/health', async (request, reply) => {
-    const health = {
-      status: 'online',
-      db: 'connected',
-      redis: 'connected',
-      timestamp: new Date(),
-    };
+    let dbStatus = 'connected';
+    let redisStatus = 'connected';
+    let rabbitmqStatus = 'connected';
+    let isHealthy = true;
 
     try {
       await prisma.$queryRaw`SELECT 1`;
       dbHealthGauge.set(1);
     } catch {
-      health.status = 'degraded';
-      health.db = 'disconnected';
+      dbStatus = 'disconnected';
       dbHealthGauge.set(0);
+      isHealthy = false;
     }
 
     try {
       await fastify.redis.ping();
       redisHealthGauge.set(1);
     } catch {
-      health.status = 'degraded';
-      health.redis = 'disconnected';
+      redisStatus = 'disconnected';
       redisHealthGauge.set(0);
+      isHealthy = false;
     }
 
-    const statusCode = health.status === 'online' ? 200 : 500;
+    if (env.rabbitmq?.enabled) {
+      if (!eventBus.connection) {
+        rabbitmqStatus = 'disconnected';
+        isHealthy = false;
+      }
+    } else {
+      rabbitmqStatus = 'disabled';
+    }
+
+    const freeMem = os.freemem();
+    const totalMem = os.totalmem();
+    const memUsage = (totalMem - freeMem) / totalMem;
+    const memoryHealth = memUsage > 0.95 ? 'unhealthy' : 'healthy';
+    if (memoryHealth === 'unhealthy') isHealthy = false;
+
+    const loadAvg = os.loadavg()[0];
+    const numCores = os.cpus().length || 1;
+    const cpuHealth = (loadAvg / numCores) > 1.5 ? 'unhealthy' : 'healthy';
+    if (cpuHealth === 'unhealthy') isHealthy = false;
+
+    const clientIp = request.headers['x-forwarded-for']?.split(',')[0].trim() || request.ip;
+    const HEALTH_ALLOWED_IPS = (process.env.HEALTH_ALLOWED_IPS || '127.0.0.1,::1,::ffff:127.0.0.1').split(',');
+    const isInternal = HEALTH_ALLOWED_IPS.includes(clientIp);
+
+    const health = {
+      status: isHealthy ? 'healthy' : 'unhealthy',
+    };
+
+    if (isInternal) {
+      health.database = dbStatus;
+      health.redis = redisStatus;
+      health.rabbitmq = rabbitmqStatus;
+      health.memory = memoryHealth;
+      health.cpu = cpuHealth;
+      health.uptime = Math.floor(process.uptime());
+    }
+
+    const statusCode = isHealthy ? 200 : 503;
     return reply.code(statusCode).send(health);
   });
 

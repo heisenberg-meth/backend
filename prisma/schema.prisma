@@ -143,6 +143,7 @@ model Tenant {
   storeProfileVersions       StoreProfileVersion[]
   supportTickets             SupportTicket[]
   subscription               Subscription?
+  subscriptionHistories      SubscriptionHistory[]
   paymentSessions            PaymentSession[]
   suppliers                  Supplier[]
   supplierCreditNotes        SupplierCreditNote[]
@@ -464,11 +465,16 @@ model Subscription {
   autoRenew              Boolean            @default(false)
   paymentProvider        String?            @default("razorpay")
   externalSubscriptionId String?            @unique
+  trialDays              Int?
+  trialStartedAt         DateTime?
+  trialExpiresAt         DateTime?
+  isTrial                Boolean            @default(false)
   createdAt              DateTime           @default(now())
   updatedAt              DateTime           @updatedAt
   plan                   SubscriptionPlan   @relation(fields: [planId], references: [id])
   tenant                 Tenant             @relation(fields: [tenantId], references: [id])
   paymentSessions        PaymentSession[]   @relation("PaymentSessionToSubscription")
+  histories              SubscriptionHistory[]
 }
 
 model PaymentSession {
@@ -650,6 +656,26 @@ model PaymentReconciliation {
 
   @@index([tenantId])
   @@index([reconciledAt])
+}
+
+model SubscriptionHistory {
+  id             String   @id @default(uuid())
+  tenantId       String
+  subscriptionId String
+  action         String
+  oldStatus      String?
+  newStatus      String?
+  oldExpiry      DateTime?
+  newExpiry      DateTime?
+  performedBy    String?
+  reason         String?
+  metadata       Json?
+  createdAt      DateTime @default(now())
+  tenant         Tenant   @relation(fields: [tenantId], references: [id])
+  subscription   Subscription @relation(fields: [subscriptionId], references: [id])
+
+  @@index([tenantId, createdAt])
+  @@index([subscriptionId])
 }
 
 model MedicineCategory {

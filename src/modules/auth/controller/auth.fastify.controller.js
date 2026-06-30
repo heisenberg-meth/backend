@@ -560,7 +560,8 @@ class AuthFastifyController {
 
   async updateProfile(request, reply) {
     try {
-      const result = await authService.updateProfile(request.user.id, request.body);
+      const userId = request.user.userId || request.user.id;
+      const result = await authService.updateProfile(userId, request.body);
       return reply.send(success(result));
     } catch (error) {
       request.log.error(error);
@@ -967,7 +968,8 @@ class AuthFastifyController {
 
   async getMe(request, reply) {
     try {
-      const result = await authService.getMe(request.user.id);
+      const userId = request.user.userId || request.user.id;
+      const result = await authService.getMe(userId);
       return reply.send(success(result));
     } catch (error) {
       request.log.error(error);

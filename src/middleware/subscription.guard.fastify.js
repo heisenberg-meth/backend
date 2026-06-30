@@ -9,6 +9,13 @@ const PUBLIC_PREFIXES = [
   '/api-docs',
 ];
 
+const ALLOWED_WHEN_EXPIRED = [
+  '/api/subscriptions',
+  '/api/users/profile',
+  '/api/support',
+  '/api/auth/logout',
+];
+
 export const subscriptionGuard = async (request, reply) => {
   const url = request.url || '';
   if (PUBLIC_PREFIXES.some((p) => url.startsWith(p))) return;
@@ -27,61 +34,59 @@ export const subscriptionGuard = async (request, reply) => {
     }
 
     const now = new Date();
-    let needsUpdate = false;
+    let status = subscription.status;
 
-    if (
-      (subscription.status === 'TRIAL' || subscription.status === 'ACTIVE') &&
-      subscription.endDate < now
-    ) {
-      if (
-        subscription.status === 'TRIAL' ||
-        !subscription.graceEndDate ||
-        subscription.graceEndDate < now
-      ) {
+    if (status === 'TRIAL') {
+      const expiryDate = subscription.trialExpiresAt || subscription.endDate;
+      if (expiryDate && expiryDate < now) {
+        status = 'EXPIRED';
         await prisma.subscription.update({
           where: { tenantId },
           data: { status: 'EXPIRED' },
         });
-        subscription.status = 'EXPIRED';
-      } else if (subscription.graceEndDate >= now) {
-        await prisma.subscription.update({
-          where: { tenantId },
-          data: { status: 'GRACE_PERIOD' },
-        });
-        subscription.status = 'GRACE_PERIOD';
-        needsUpdate = true;
       }
-    }
-
-    if (subscription.status === 'GRACE_PERIOD') {
+    } else if (status === 'ACTIVE') {
+      if (subscription.endDate && subscription.endDate < now) {
+        if (!subscription.graceEndDate || subscription.graceEndDate < now) {
+          status = 'EXPIRED';
+          await prisma.subscription.update({
+            where: { tenantId },
+            data: { status: 'EXPIRED' },
+          });
+        } else {
+          status = 'GRACE_PERIOD';
+          await prisma.subscription.update({
+            where: { tenantId },
+            data: { status: 'GRACE_PERIOD' },
+          });
+        }
+      }
+    } else if (status === 'GRACE_PERIOD') {
       if (subscription.graceEndDate && subscription.graceEndDate < now) {
+        status = 'EXPIRED';
         await prisma.subscription.update({
           where: { tenantId },
           data: { status: 'EXPIRED' },
         });
-        subscription.status = 'EXPIRED';
       }
     }
 
     if (
-      subscription.status === 'EXPIRED' ||
-      subscription.status === 'SUSPENDED' ||
-      subscription.status === 'CANCELLED'
+      status === 'EXPIRED' ||
+      status === 'SUSPENDED' ||
+      status === 'CANCELLED'
     ) {
-      if (request.method !== 'GET') {
+      const isAllowed = ALLOWED_WHEN_EXPIRED.some((p) => url.startsWith(p));
+      if (!isAllowed) {
         return reply.code(403).send({
           success: false,
           error: {
-            message: `Your subscription is ${subscription.status.toLowerCase()}. Your account is in read-only mode. Please renew to continue.`,
+            message: `Your subscription is ${status.toLowerCase()}. Please renew to continue.`,
             code: 'SUBSCRIPTION_EXPIRED',
             redirectTo: '/subscription',
           },
         });
       }
-    }
-
-    if (needsUpdate) {
-      request.subscriptionStatus = 'GRACE_PERIOD';
     }
   } catch (error) {
     logger.error(

@@ -106,7 +106,12 @@ class PaymentOrchestratorService {
         });
       } catch (prismaTxErr) {
         logger.error(
-          { event: 'PAYMENT_TRANSACTION_RECORD_FAILED', tenantId, razorpayOrderId: razorpayOrder.id, error: prismaTxErr.message },
+          {
+            event: 'PAYMENT_TRANSACTION_RECORD_FAILED',
+            tenantId,
+            razorpayOrderId: razorpayOrder.id,
+            error: prismaTxErr.message,
+          },
           'Payment transaction record creation failed — payment order exists but transaction record missing',
         );
         // Queue retry to create the missing transaction record
@@ -239,6 +244,23 @@ class PaymentOrchestratorService {
               const billingCycle = notes.billingCycle || 'monthly';
 
               await subscriptionService.createSubscription(tenantId, planId, billingCycle, tx);
+
+              await tx.tenant.update({
+                where: { id: tenantId },
+                data: {
+                  isVerified: true,
+                  verifiedAt: new Date(),
+                },
+              });
+
+              await tx.auditLog.create({
+                data: {
+                  tenantId,
+                  action: 'SUBSCRIPTION_ACTIVATED',
+                  target: planId,
+                  type: 'SUBSCRIPTION',
+                },
+              });
             }
           } catch (bizErr) {
             logger.error(

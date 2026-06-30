@@ -22,7 +22,7 @@ class MetadataFastifyController {
    * POST /api/medicines/:id/suppliers
    */
   async addSupplier(request, reply) {
-    const { tenantId, id: userId } = request.user;
+    const { tenantId, userId: userId } = request.user;
     const { id } = request.params;
 
     try {
