@@ -12,19 +12,6 @@ export default [
     plugins: {
       import: importPlugin,
     },
-    rules: {
-      'import/no-unresolved': [
-        'error',
-        { ignore: ['^typescript-eslint$', '^k6(/.*)?$', '^vitest$', '^file-type$'] },
-      ],
-    },
-    settings: {
-      'import/resolver': {
-        node: {
-          extensions: ['.js', '.jsx', '.ts', '.tsx'],
-        },
-      },
-    },
   },
 
   js.configs.recommended,
