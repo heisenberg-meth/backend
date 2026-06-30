@@ -14,6 +14,11 @@ class SubscriptionService {
     let plan = await client.subscriptionPlan.findUnique({ where: { id: planId } });
 
     console.log('Plan found', plan);
+    
+    const inputCycle = (SUBSCRIPTION_PLANS[planId]?.billingCycle || billingCycle || 'monthly').toUpperCase();
+    let finalBillingCycle = 'MONTHLY';
+    if (inputCycle === 'YEARLY' || inputCycle === 'ANNUAL') finalBillingCycle = 'YEARLY';
+    else if (inputCycle === 'QUARTERLY') finalBillingCycle = 'QUARTERLY';
 
     if (!plan) {
       console.log('Creating subscription plan...');
@@ -22,7 +27,7 @@ class SubscriptionService {
           id: planId,
           name: SUBSCRIPTION_PLANS[planId]?.name || `${planId} Plan`,
           price: SUBSCRIPTION_PLANS[planId]?.price ?? 0,
-          billingCycle: SUBSCRIPTION_PLANS[planId]?.billingCycle || billingCycle,
+          billingCycle: finalBillingCycle,
           features: SUBSCRIPTION_PLANS[planId]?.features || ['All Features Included'],
         },
       });
@@ -31,7 +36,7 @@ class SubscriptionService {
 
     const startDate = new Date();
     const endDate = new Date(startDate);
-    if (billingCycle === 'yearly') {
+    if (finalBillingCycle === 'YEARLY' || billingCycle === 'yearly') {
       endDate.setFullYear(endDate.getFullYear() + 1);
     } else {
       endDate.setMonth(endDate.getMonth() + 1);
