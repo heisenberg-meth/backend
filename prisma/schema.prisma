@@ -4003,6 +4003,7 @@ model AdminFeatureFlag {
 
 model SupportTicket {
   id         String                @id @default(uuid())
+  ticketNumber String
   tenantId   String
   subject    String
   message    String
@@ -4013,7 +4014,6 @@ model SupportTicket {
   resolvedAt DateTime?
   createdAt  DateTime              @default(now())
   updatedAt  DateTime              @updatedAt
-
   creator    User                  @relation("TicketCreator", fields: [createdBy], references: [id])
   assignee   User?                 @relation("TicketAssignee", fields: [assignedTo], references: [id])
   tenant     Tenant                @relation(fields: [tenantId], references: [id])
