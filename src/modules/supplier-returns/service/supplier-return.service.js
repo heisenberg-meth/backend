@@ -42,26 +42,43 @@ class SupplierReturnService {
       }
       const batch = await prisma.inventoryBatch.findUnique({
         where: { id: item.batchId },
-        select: { purchasePrice: true, expiryDate: true, availableQuantity: true },
+        select: { purchasePrice: true, expiryDate: true, availableQuantity: true, medicine: true },
       });
       if (!batch) throw new Error(`Batch ${item.batchId} not found`);
 
       const qty = Math.min(item.quantity, batch.availableQuantity);
-      const loss = Number(batch.purchasePrice) * qty;
+
+      const purchasePrice = Number(batch.purchasePrice || 0);
+      const subtotal = purchasePrice * qty;
+      const gstPercentage = Number(batch.medicine?.gstPercentage || batch.medicine?.gst || 0);
+      const gstAmount = (subtotal * gstPercentage) / 100;
+      const totalAmount = subtotal + gstAmount;
 
       items.push({
         medicineId: item.medicineId,
         batchId: item.batchId,
+        purchaseInvoiceItemId: item.purchaseInvoiceItemId || null,
         quantity: qty,
         expiryDate: batch.expiryDate,
-        purchasePrice: batch.purchasePrice,
-        lossAmount: loss,
+        purchasePrice: purchasePrice,
+        gstPercentage: gstPercentage,
+        subtotal: subtotal,
+        gstAmount: gstAmount,
+        totalAmount: totalAmount,
+        lossAmount: 0,
         reason: item.reason || data.reason,
       });
     }
 
     const returnRecord = await supplierReturnRepository.createReturn(
-      { tenantId, supplierId: data.supplierId, returnNumber, notes: data.notes },
+      {
+        tenantId,
+        supplierId: data.supplierId,
+        purchaseInvoiceId: data.purchaseInvoiceId,
+        returnNumber,
+        notes: data.notes,
+        reason: data.reason,
+      },
       items,
       userId,
     );
@@ -172,19 +189,21 @@ class SupplierReturnService {
         `[SupplierReturn] ${returnRecord.returnNumber} status: ${returnRecord.status} -> ${status}`,
       );
 
-      auditService.log({
-        tenantId,
-        userId,
-        action: 'SUPPLIER_RETURN_STATUS_CHANGED',
-        target: returnRecord.returnNumber,
-        targetType: 'SUPPLIER_RETURN',
-        details: {
-          returnId: id,
-          from: returnRecord.status,
-          to: status,
-          returnAmount: returnRecord.returnAmount,
-        },
-      }).catch(() => {});
+      auditService
+        .log({
+          tenantId,
+          userId,
+          action: 'SUPPLIER_RETURN_STATUS_CHANGED',
+          target: returnRecord.returnNumber,
+          targetType: 'SUPPLIER_RETURN',
+          details: {
+            returnId: id,
+            from: returnRecord.status,
+            to: status,
+            returnAmount: returnRecord.returnAmount,
+          },
+        })
+        .catch(() => {});
 
       redisClient.del(`supplier-return:dashboard:${tenantId}`).catch(() => {});
 
@@ -205,7 +224,13 @@ class SupplierReturnService {
   }
 
   async updateDispatchStatus(id, tenantId, dispatchStatus) {
-    const validStatuses = ['PENDING', 'READY_TO_SEND', 'SENT_TO_SUPPLIER', 'RECEIVED_BY_SUPPLIER', 'CREDIT_NOTE_RECEIVED'];
+    const validStatuses = [
+      'PENDING',
+      'READY_TO_SEND',
+      'SENT_TO_SUPPLIER',
+      'RECEIVED_BY_SUPPLIER',
+      'CREDIT_NOTE_RECEIVED',
+    ];
     if (!validStatuses.includes(dispatchStatus)) {
       throw new Error(`Invalid dispatch status: ${dispatchStatus}`);
     }
@@ -213,19 +238,25 @@ class SupplierReturnService {
     const returnRecord = await supplierReturnRepository.findReturnById(id, tenantId);
     if (!returnRecord) throw new Error('Return not found');
 
-    const updated = await supplierReturnRepository.updateDispatchStatus(id, tenantId, dispatchStatus);
-
-    auditService.log({
+    const updated = await supplierReturnRepository.updateDispatchStatus(
+      id,
       tenantId,
-      action: 'SUPPLIER_RETURN_DISPATCH_STATUS_CHANGED',
-      target: returnRecord.returnNumber,
-      targetType: 'SUPPLIER_RETURN',
-      details: {
-        returnId: id,
-        from: returnRecord.dispatchStatus,
-        to: dispatchStatus,
-      },
-    }).catch(() => {});
+      dispatchStatus,
+    );
+
+    auditService
+      .log({
+        tenantId,
+        action: 'SUPPLIER_RETURN_DISPATCH_STATUS_CHANGED',
+        target: returnRecord.returnNumber,
+        targetType: 'SUPPLIER_RETURN',
+        details: {
+          returnId: id,
+          from: returnRecord.dispatchStatus,
+          to: dispatchStatus,
+        },
+      })
+      .catch(() => {});
 
     redisClient.del(`supplier-return:dashboard:${tenantId}`).catch(() => {});
 
@@ -239,17 +270,19 @@ class SupplierReturnService {
           notes: 'Auto-generated on credit note received from supplier',
         });
 
-        auditService.log({
-          tenantId,
-          action: 'SUPPLIER_RETURN_CREDIT_NOTE_AUTO_GENERATED',
-          target: returnRecord.returnNumber,
-          targetType: 'SUPPLIER_RETURN',
-          details: {
-            returnId: id,
-            creditNoteId: creditNote.id,
-            amount: returnRecord.returnAmount,
-          },
-        }).catch(() => {});
+        auditService
+          .log({
+            tenantId,
+            action: 'SUPPLIER_RETURN_CREDIT_NOTE_AUTO_GENERATED',
+            target: returnRecord.returnNumber,
+            targetType: 'SUPPLIER_RETURN',
+            details: {
+              returnId: id,
+              creditNoteId: creditNote.id,
+              amount: returnRecord.returnAmount,
+            },
+          })
+          .catch(() => {});
       }
     }
 
@@ -299,8 +332,12 @@ class SupplierReturnService {
         prisma.supplierReturn.count({ where: { tenantId, dispatchStatus: 'PENDING' } }),
         prisma.supplierReturn.count({ where: { tenantId, dispatchStatus: 'READY_TO_SEND' } }),
         prisma.supplierReturn.count({ where: { tenantId, dispatchStatus: 'SENT_TO_SUPPLIER' } }),
-        prisma.supplierReturn.count({ where: { tenantId, dispatchStatus: 'RECEIVED_BY_SUPPLIER' } }),
-        prisma.supplierReturn.count({ where: { tenantId, dispatchStatus: 'CREDIT_NOTE_RECEIVED' } }),
+        prisma.supplierReturn.count({
+          where: { tenantId, dispatchStatus: 'RECEIVED_BY_SUPPLIER' },
+        }),
+        prisma.supplierReturn.count({
+          where: { tenantId, dispatchStatus: 'CREDIT_NOTE_RECEIVED' },
+        }),
         prisma.supplierReturn.count({ where: { tenantId } }),
         prisma.supplierCreditNote.count({ where: { tenantId } }),
       ]);

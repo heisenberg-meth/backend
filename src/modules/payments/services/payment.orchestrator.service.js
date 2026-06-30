@@ -5,7 +5,6 @@ import eventBus from '../../../shared/services/eventbus.service.js';
 import paymentStateMachine, { VALID_STATES } from './payment.state-machine.js';
 import paymentIdempotencyService from './payment.idempotency.service.js';
 import paymentLockService from './payment.lock.service.js';
-import subscriptionService from '../../subscriptions/subscription.service.js';
 import { getConfig } from '../../../config/payment.config.js';
 import { mainQueue } from '../../../queue/index.js';
 
@@ -182,11 +181,9 @@ class PaymentOrchestratorService {
             where: { transactionId: razorpay_order_id },
           });
 
-          if (current.status === VALID_STATES.SUCCESS) {
-            return { success: true, status: VALID_STATES.SUCCESS, orderId: razorpay_order_id };
+          if (current.status === VALID_STATES.SUCCESS || current.status === VALID_STATES.CAPTURED) {
+            return { success: true, status: current.status, orderId: razorpay_order_id };
           }
-
-          paymentStateMachine.validateTransition(current.status, VALID_STATES.SUCCESS);
 
           const isValid = this._verifyRazorpaySignature(
             razorpay_order_id,
@@ -206,89 +203,33 @@ class PaymentOrchestratorService {
             throw new Error('Payment signature verification failed');
           }
 
-          // Atomic transition: CREATED -> SUCCESS in one write (eliminates crash window)
-          await this._transitionPayment(
-            current.id,
-            VALID_STATES.SUCCESS,
-            {
-              razorpayPaymentId: razorpay_payment_id,
-              razorpaySignature: razorpay_signature,
-              paidAt: new Date(),
-            },
-            tx,
-          );
+          if (current.status === VALID_STATES.CREATED || current.status === VALID_STATES.PENDING) {
+            await this._transitionPayment(
+              current.id,
+              VALID_STATES.AUTHORIZED,
+              {
+                razorpayPaymentId: razorpay_payment_id,
+                razorpaySignature: razorpay_signature,
+              },
+              tx,
+            );
 
-          await tx.transaction.update({
-            where: { razorpayOrderId: razorpay_order_id },
-            data: {
-              paymentId: razorpay_payment_id,
-              status: VALID_STATES.SUCCESS,
-            },
-          });
-
-          // --- Trigger Business Logic (Subscription Activation) ---
-          try {
-            const transaction = await tx.transaction.findUnique({
+            await tx.transaction.update({
               where: { razorpayOrderId: razorpay_order_id },
+              data: {
+                paymentId: razorpay_payment_id,
+              },
             });
-            const notes = transaction?.gatewayResponse;
-
-            if (notes?.type === 'SUBSCRIPTION_UPGRADE') {
-              logger.info({ tenantId, notes }, '[DEBUG] About to activate subscription');
-
-              // Use default plan IDs if specific ones aren't provided
-              const planId = notes.planId || 'pro';
-              const billingCycle = notes.billingCycle || 'monthly';
-
-              logger.info({ tenantId, planId, billingCycle }, '[DEBUG] Calling createSubscription');
-
-              await subscriptionService.createSubscription(
-                tenantId,
-                planId,
-                billingCycle,
-                null,
-                tx,
-              );
-
-              logger.info('[DEBUG] createSubscription completed');
-
-              await tx.tenant.update({
-                where: { id: tenantId },
-                data: {
-                  isVerified: true,
-                  verifiedAt: new Date(),
-                },
-              });
-
-              await tx.auditLog.create({
-                data: {
-                  tenantId,
-                  action: 'SUBSCRIPTION_ACTIVATED',
-                  target: planId,
-                  type: 'SUBSCRIPTION',
-                },
-              });
-            }
-          } catch (bizErr) {
-            console.error('========== SUBSCRIPTION ACTIVATION FAILED ==========');
-            console.error(bizErr);
-            console.error(bizErr.stack);
-            throw bizErr;
           }
 
-          await eventBus.publish('PAYMENT_SUCCESS', {
-            tenantId,
-            paymentId: current.id,
-            razorpayOrderId: razorpay_order_id,
-            razorpayPaymentId: razorpay_payment_id,
-            amount: current.amount,
-          });
-
-          logger.info({ razorpay_order_id, razorpay_payment_id }, '[PAYMENT] Verified');
+          logger.info(
+            { razorpay_order_id, razorpay_payment_id },
+            '[PAYMENT] Signature verified, waiting for webhook capture',
+          );
 
           return {
             success: true,
-            status: VALID_STATES.SUCCESS,
+            status: VALID_STATES.AUTHORIZED,
             paymentId: razorpay_payment_id,
             orderId: razorpay_order_id,
           };

@@ -7,7 +7,10 @@ class SupplierReturnController {
       const data = await supplierReturnService.getExpiredGroupedBySupplier(request.tenantId);
       return reply.send({ success: true, data });
     } catch (error) {
-      request.log.error({ err: error, endpoint: 'supplier-return-expired-grouped' }, 'Supplier return error');
+      request.log.error(
+        { err: error, endpoint: 'supplier-return-expired-grouped' },
+        'Supplier return error',
+      );
       return reply.code(500).send({ success: false, message: error.message });
     }
   }
@@ -20,7 +23,9 @@ class SupplierReturnController {
       }
       for (const item of items) {
         if (!item.batchId) {
-          return reply.code(400).send({ success: false, message: 'Batch ID is required for each return item' });
+          return reply
+            .code(400)
+            .send({ success: false, message: 'Batch ID is required for each return item' });
         }
       }
       const returnRecord = await supplierReturnService.createReturn(
@@ -30,7 +35,10 @@ class SupplierReturnController {
       );
       return reply.code(201).send({ success: true, data: returnRecord });
     } catch (error) {
-      request.log.error({ err: error, endpoint: 'supplier-return-create' }, 'Supplier return error');
+      request.log.error(
+        { err: error, endpoint: 'supplier-return-create' },
+        'Supplier return error',
+      );
       return reply.code(500).send({ success: false, message: error.message });
     }
   }
@@ -38,9 +46,15 @@ class SupplierReturnController {
   async listReturns(request, reply) {
     try {
       const result = await supplierReturnService.listReturns(request.tenantId, request.query);
+      const mappedReturns = result.returns.map((ret) => ({
+        ...ret,
+        refundAmount: ret.returnAmount,
+        value: ret.returnAmount,
+        originalInvoiceId: ret.purchaseInvoiceId,
+      }));
       return reply.send({
         success: true,
-        data: result.returns,
+        data: mappedReturns,
         pagination: {
           page: result.page,
           limit: result.limit,
@@ -60,9 +74,21 @@ class SupplierReturnController {
         request.params.id,
         request.tenantId,
       );
-      return reply.send({ success: true, data: returnRecord });
+      if (!returnRecord) {
+        return reply.code(404).send({ success: false, message: 'Return not found' });
+      }
+      const mappedReturn = {
+        ...returnRecord,
+        refundAmount: returnRecord.returnAmount,
+        value: returnRecord.returnAmount,
+        originalInvoiceId: returnRecord.purchaseInvoiceId,
+      };
+      return reply.send({ success: true, data: mappedReturn });
     } catch (error) {
-      request.log.error({ err: error, endpoint: 'supplier-return-detail' }, 'Supplier return error');
+      request.log.error(
+        { err: error, endpoint: 'supplier-return-detail' },
+        'Supplier return error',
+      );
       return reply.code(500).send({ success: false, message: error.message });
     }
   }
@@ -77,7 +103,10 @@ class SupplierReturnController {
       );
       return reply.send({ success: true, data: updated });
     } catch (error) {
-      request.log.error({ err: error, endpoint: 'supplier-return-update-status' }, 'Supplier return error');
+      request.log.error(
+        { err: error, endpoint: 'supplier-return-update-status' },
+        'Supplier return error',
+      );
       return reply.code(500).send({ success: false, message: error.message });
     }
   }
@@ -90,7 +119,10 @@ class SupplierReturnController {
       );
       return reply.code(201).send({ success: true, data: creditNote });
     } catch (error) {
-      request.log.error({ err: error, endpoint: 'supplier-return-credit-note' }, 'Supplier return error');
+      request.log.error(
+        { err: error, endpoint: 'supplier-return-credit-note' },
+        'Supplier return error',
+      );
       return reply.code(500).send({ success: false, message: error.message });
     }
   }
@@ -109,7 +141,10 @@ class SupplierReturnController {
         },
       });
     } catch (error) {
-      request.log.error({ err: error, endpoint: 'supplier-return-list-credit-notes' }, 'Supplier return error');
+      request.log.error(
+        { err: error, endpoint: 'supplier-return-list-credit-notes' },
+        'Supplier return error',
+      );
       return reply.code(500).send({ success: false, message: error.message });
     }
   }
@@ -132,7 +167,10 @@ class SupplierReturnController {
         },
       });
     } catch (error) {
-      request.log.error({ err: error, endpoint: 'supplier-return-inward' }, 'Supplier return error');
+      request.log.error(
+        { err: error, endpoint: 'supplier-return-inward' },
+        'Supplier return error',
+      );
       return reply.code(500).send({ success: false, message: error.message });
     }
   }
@@ -155,7 +193,10 @@ class SupplierReturnController {
         },
       });
     } catch (error) {
-      request.log.error({ err: error, endpoint: 'supplier-return-transactions' }, 'Supplier return error');
+      request.log.error(
+        { err: error, endpoint: 'supplier-return-transactions' },
+        'Supplier return error',
+      );
       return reply.code(500).send({ success: false, message: error.message });
     }
   }
@@ -169,7 +210,10 @@ class SupplierReturnController {
       );
       return reply.send({ success: true, ...result });
     } catch (error) {
-      request.log.error({ err: error, endpoint: 'supplier-return-ledger' }, 'Supplier return error');
+      request.log.error(
+        { err: error, endpoint: 'supplier-return-ledger' },
+        'Supplier return error',
+      );
       return reply.code(500).send({ success: false, message: error.message });
     }
   }
@@ -187,7 +231,10 @@ class SupplierReturnController {
       );
       return reply.send({ success: true, data: updated });
     } catch (error) {
-      request.log.error({ err: error, endpoint: 'supplier-return-dispatch-status' }, 'Supplier return error');
+      request.log.error(
+        { err: error, endpoint: 'supplier-return-dispatch-status' },
+        'Supplier return error',
+      );
       return reply.code(500).send({ success: false, message: error.message });
     }
   }
@@ -197,7 +244,10 @@ class SupplierReturnController {
       const summary = await supplierReturnService.getExpiredInventorySummary(request.tenantId);
       return reply.send({ success: true, data: summary });
     } catch (error) {
-      request.log.error({ err: error, endpoint: 'supplier-return-expired-summary' }, 'Supplier return error');
+      request.log.error(
+        { err: error, endpoint: 'supplier-return-expired-summary' },
+        'Supplier return error',
+      );
       return reply.code(500).send({ success: false, message: error.message });
     }
   }
@@ -207,7 +257,10 @@ class SupplierReturnController {
       const metrics = await supplierReturnService.getDashboardMetrics(request.tenantId);
       return reply.send({ success: true, data: metrics });
     } catch (error) {
-      request.log.error({ err: error, endpoint: 'supplier-return-dashboard-metrics' }, 'Supplier return error');
+      request.log.error(
+        { err: error, endpoint: 'supplier-return-dashboard-metrics' },
+        'Supplier return error',
+      );
       return reply.code(500).send({ success: false, message: error.message });
     }
   }

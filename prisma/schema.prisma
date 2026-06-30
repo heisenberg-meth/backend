@@ -1376,19 +1376,25 @@ model SupplierReturn {
 }
 
 model SupplierReturnItem {
-  id            String         @id @default(uuid())
-  returnId      String
-  medicineId    String
-  batchId       String
-  quantity      Int
-  expiryDate    DateTime?      @db.Date
-  purchasePrice Decimal        @default(0) @db.Decimal(12, 2)
-  lossAmount    Decimal        @default(0) @db.Decimal(12, 2)
-  reason        String?
-  createdAt     DateTime       @default(now())
-  batch         InventoryBatch @relation(fields: [batchId], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  medicine      Medicine       @relation(fields: [medicineId], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  return        SupplierReturn @relation(fields: [returnId], references: [id], onDelete: Cascade)
+  id                    String         @id @default(uuid())
+  returnId              String
+  purchaseInvoiceItemId String?
+  medicineId            String
+  batchId               String
+  quantity              Int
+  expiryDate            DateTime?      @db.Date
+  purchasePrice         Decimal        @default(0) @db.Decimal(12, 2) 
+  gstPercentage         Decimal        @default(0) @db.Decimal(5, 2)
+  subtotal              Decimal        @default(0) @db.Decimal(12, 2)
+  gstAmount             Decimal        @default(0) @db.Decimal(12, 2)
+  totalAmount           Decimal        @default(0) @db.Decimal(12, 2)
+  lossAmount            Decimal        @default(0) @db.Decimal(12, 2)
+  reason                String?
+  createdAt             DateTime       @default(now())
+  batch                 InventoryBatch @relation(fields: [batchId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  medicine              Medicine       @relation(fields: [medicineId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  return                SupplierReturn @relation(fields: [returnId], references: [id], onDelete: Cascade)
+  purchaseInvoiceItem   PurchaseInvoiceItem? @relation(fields: [purchaseInvoiceItemId], references: [id])
 
   @@index([returnId])
   @@index([batchId])

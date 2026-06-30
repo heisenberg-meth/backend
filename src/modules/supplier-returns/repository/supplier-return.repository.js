@@ -39,23 +39,33 @@ class SupplierReturnRepository {
 
   async createReturn(data, items, userId, tx) {
     const client = tx || prisma;
-    const totalAmount = items.reduce((sum, item) => sum + Number(item.lossAmount || 0), 0);
+    const totalAmount = items.reduce(
+      (sum, item) => sum + Number(item.totalAmount || item.lossAmount || 0),
+      0,
+    );
     const returnRecord = await client.supplierReturn.create({
       data: {
         tenantId: data.tenantId,
         supplierId: data.supplierId,
+        purchaseInvoiceId: data.purchaseInvoiceId,
         returnNumber: data.returnNumber,
         status: 'DRAFT',
         createdBy: userId,
         notes: data.notes,
         returnAmount: totalAmount,
+        reason: data.reason,
         items: {
           create: items.map((item) => ({
             medicineId: item.medicineId,
             batchId: item.batchId,
+            purchaseInvoiceItemId: item.purchaseInvoiceItemId,
             quantity: item.quantity,
             expiryDate: item.expiryDate,
             purchasePrice: item.purchasePrice,
+            gstPercentage: item.gstPercentage,
+            subtotal: item.subtotal,
+            gstAmount: item.gstAmount,
+            totalAmount: item.totalAmount,
             lossAmount: item.lossAmount,
             reason: item.reason,
           })),
@@ -72,9 +82,11 @@ class SupplierReturnRepository {
   async findReturns(tenantId, { page = 1, limit = 20, status, supplierId }) {
     const pageNum = Number(page) || 1;
     const limitNum = Number(limit) || 20;
-    const isUuid = (val) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(val);
+    const isUuid = (val) =>
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(val);
     const validStatuses = ['DRAFT', 'PENDING', 'APPROVED', 'PICKED_UP', 'COMPLETED', 'REJECTED'];
-    const statusVal = status && validStatuses.includes(status.toUpperCase()) ? status.toUpperCase() : undefined;
+    const statusVal =
+      status && validStatuses.includes(status.toUpperCase()) ? status.toUpperCase() : undefined;
     const supplierIdVal = supplierId && isUuid(supplierId) ? String(supplierId) : undefined;
 
     const where = { tenantId };
@@ -87,9 +99,15 @@ class SupplierReturnRepository {
         where,
         include: {
           supplier: { select: { id: true, name: true } },
-          items: { include: { medicine: { select: { id: true, name: true } } } },
+          items: {
+            include: {
+              medicine: { select: { id: true, name: true } },
+              batch: { select: { batchNumber: true } },
+            },
+          },
           creditNotes: { select: { id: true, creditNoteNumber: true, amount: true, status: true } },
           creator: { select: { id: true, fullName: true } },
+          purchaseInvoice: { select: { id: true, invoiceNumber: true } },
           _count: { select: { items: true } },
         },
         orderBy: { createdAt: 'desc' },
@@ -122,6 +140,7 @@ class SupplierReturnRepository {
         creditNotes: true,
         creator: { select: { id: true, fullName: true } },
         approver: { select: { id: true, fullName: true } },
+        purchaseInvoice: { select: { id: true, invoiceNumber: true } },
       },
     });
   }
@@ -220,9 +239,11 @@ class SupplierReturnRepository {
   async findCreditNotes(tenantId, { page = 1, limit = 20, supplierId, status }) {
     const pageNum = Number(page) || 1;
     const limitNum = Number(limit) || 20;
-    const isUuid = (val) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(val);
+    const isUuid = (val) =>
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(val);
     const validStatuses = ['ISSUED', 'APPLIED', 'VOIDED', 'EXPIRED'];
-    const statusVal = status && validStatuses.includes(status.toUpperCase()) ? status.toUpperCase() : undefined;
+    const statusVal =
+      status && validStatuses.includes(status.toUpperCase()) ? status.toUpperCase() : undefined;
     const supplierIdVal = supplierId && isUuid(supplierId) ? String(supplierId) : undefined;
 
     const where = { tenantId };
