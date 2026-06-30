@@ -5,9 +5,9 @@ import eventBus from '../../../shared/services/eventbus.service.js';
 import paymentStateMachine, { VALID_STATES } from './payment.state-machine.js';
 import paymentIdempotencyService from './payment.idempotency.service.js';
 import paymentLockService from './payment.lock.service.js';
+import subscriptionService from '../../subscriptions/subscription.service.js';
 import { getConfig } from '../../../config/payment.config.js';
 import { mainQueue } from '../../../queue/index.js';
-
 class PaymentOrchestratorService {
   async createPaymentOrder(tenantId, userId, amount, options = {}) {
     const { currency = 'INR', receipt, notes, idempotencyKey } = options;
@@ -204,12 +204,14 @@ class PaymentOrchestratorService {
           }
 
           if (current.status === VALID_STATES.CREATED || current.status === VALID_STATES.PENDING) {
+            // Atomic transition: CREATED -> SUCCESS in one write (eliminates crash window)
             await this._transitionPayment(
               current.id,
-              VALID_STATES.AUTHORIZED,
+              VALID_STATES.SUCCESS,
               {
                 razorpayPaymentId: razorpay_payment_id,
                 razorpaySignature: razorpay_signature,
+                paidAt: new Date(),
               },
               tx,
             );
@@ -218,18 +220,70 @@ class PaymentOrchestratorService {
               where: { razorpayOrderId: razorpay_order_id },
               data: {
                 paymentId: razorpay_payment_id,
+                status: VALID_STATES.SUCCESS,
               },
             });
+
+            // --- Trigger Business Logic (Subscription Activation) ---
+            const transaction = await tx.transaction.findUnique({
+              where: { razorpayOrderId: razorpay_order_id },
+            });
+            const notes = transaction?.gatewayResponse || {};
+
+            if (notes?.type === 'SUBSCRIPTION_UPGRADE') {
+              logger.info({ tenantId, notes }, '[DEBUG] About to activate subscription');
+
+              const planId = notes.planId || 'pro';
+              const billingCycle = notes.billingCycle || 'monthly';
+
+              logger.info({ tenantId, planId, billingCycle }, '[DEBUG] Calling createSubscription');
+
+              // Use correctly updated createSubscription signature
+              await subscriptionService.createSubscription(
+                tenantId,
+                planId,
+                billingCycle,
+                null,
+                tx,
+              );
+
+              logger.info('[DEBUG] createSubscription completed');
+
+              await tx.tenant.update({
+                where: { id: tenantId },
+                data: {
+                  isVerified: true,
+                  verifiedAt: new Date(),
+                },
+              });
+
+              await tx.auditLog.create({
+                data: {
+                  tenantId,
+                  action: 'SUBSCRIPTION_ACTIVATED',
+                  target: planId,
+                  type: 'SUBSCRIPTION',
+                },
+              });
+            }
           }
+
+          await eventBus.publish('PAYMENT_SUCCESS', {
+            tenantId,
+            paymentId: current.id,
+            razorpayOrderId: razorpay_order_id,
+            razorpayPaymentId: razorpay_payment_id,
+            amount: current.amount,
+          });
 
           logger.info(
             { razorpay_order_id, razorpay_payment_id },
-            '[PAYMENT] Signature verified, waiting for webhook capture',
+            '[PAYMENT] Verified and subscription activated',
           );
 
           return {
             success: true,
-            status: VALID_STATES.AUTHORIZED,
+            status: VALID_STATES.SUCCESS,
             paymentId: razorpay_payment_id,
             orderId: razorpay_order_id,
           };

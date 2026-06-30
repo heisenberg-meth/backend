@@ -72,17 +72,20 @@ class SubscriptionService {
     console.log('Subscription updated');
 
     console.log('Writing history...');
-    await this._logHistory({
-      tenantId,
-      subscriptionId: subscription.id,
-      action: 'SUBSCRIPTION_ACTIVATED',
-      oldStatus,
-      newStatus: 'ACTIVE',
-      oldExpiry,
-      newExpiry: endDate,
-      performedBy,
-      metadata: { planId, billingCycle },
-    });
+    await this._logHistory(
+      {
+        tenantId,
+        subscriptionId: subscription.id,
+        action: 'SUBSCRIPTION_ACTIVATED',
+        oldStatus,
+        newStatus: 'ACTIVE',
+        oldExpiry,
+        newExpiry: endDate,
+        performedBy,
+        metadata: { planId, billingCycle },
+      },
+      client,
+    );
 
     return subscription;
   }
@@ -121,16 +124,19 @@ class SubscriptionService {
           where: { tenantId },
           data: { status: 'EXPIRED' },
         });
-        await this._logHistory({
-          tenantId,
-          subscriptionId: subscription.id,
-          action: 'TRIAL_EXPIRED',
-          oldStatus: 'TRIAL',
-          newStatus: 'EXPIRED',
-          oldExpiry: subscription.trialExpiresAt,
-          newExpiry: subscription.trialExpiresAt,
-          performedBy: null,
-        });
+        await this._logHistory(
+          {
+            tenantId,
+            subscriptionId: subscription.id,
+            action: 'TRIAL_EXPIRED',
+            oldStatus: 'TRIAL',
+            newStatus: 'EXPIRED',
+            oldExpiry: subscription.trialExpiresAt,
+            newExpiry: subscription.trialExpiresAt,
+            performedBy: null,
+          },
+          prisma,
+        );
       } else if (!subscription.graceEndDate || subscription.graceEndDate < now) {
         status = 'EXPIRED';
         await prisma.subscription.update({
@@ -330,17 +336,20 @@ class SubscriptionService {
       },
     });
 
-    await this._logHistory({
-      tenantId,
-      subscriptionId: subscription.id,
-      action: 'TRIAL_REDUCED',
-      oldStatus: 'TRIAL',
-      newStatus,
-      oldExpiry: currentExpiry,
-      newExpiry,
-      performedBy,
-      metadata: { daysRemoved: daysNum },
-    });
+    await this._logHistory(
+      {
+        tenantId,
+        subscriptionId: subscription.id,
+        action: 'TRIAL_REDUCED',
+        oldStatus: 'TRIAL',
+        newStatus,
+        oldExpiry: currentExpiry,
+        newExpiry,
+        performedBy,
+        metadata: { daysRemoved: daysNum },
+      },
+      prisma,
+    );
 
     return updated;
   }
@@ -353,20 +362,23 @@ class SubscriptionService {
     });
   }
 
-  async _logHistory({
-    tenantId,
-    subscriptionId,
-    action,
-    oldStatus,
-    newStatus,
-    oldExpiry,
-    newExpiry,
-    performedBy,
-    reason,
-    metadata,
-  }) {
+  async _logHistory(
+    {
+      tenantId,
+      subscriptionId,
+      action,
+      oldStatus,
+      newStatus,
+      oldExpiry,
+      newExpiry,
+      performedBy,
+      reason,
+      metadata,
+    },
+    client = prisma,
+  ) {
     try {
-      await prisma.subscriptionHistory.create({
+      await client.subscriptionHistory.create({
         data: {
           tenantId,
           subscriptionId,
