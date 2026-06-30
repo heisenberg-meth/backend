@@ -890,7 +890,9 @@ class AuthPrismaService {
       subscription: subscription
         ? (() => {
             const isTrial = subscription.status === 'TRIAL';
-            const endDate = isTrial ? subscription.trialExpiresAt : subscription.endDate;
+            const endDate = isTrial
+              ? subscription.trialExpiresAt || subscription.endDate
+              : subscription.endDate;
             const daysRemaining = endDate
               ? Math.max(0, Math.ceil((new Date(endDate) - new Date()) / (1000 * 60 * 60 * 24)))
               : 0;

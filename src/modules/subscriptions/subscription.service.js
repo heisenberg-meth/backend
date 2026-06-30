@@ -141,7 +141,10 @@ class SubscriptionService {
     }
 
     const plan = subscription.plan;
-    const endDate = status === 'TRIAL' ? subscription.trialExpiresAt : subscription.endDate;
+    const endDate =
+      status === 'TRIAL'
+        ? subscription.trialExpiresAt || subscription.endDate
+        : subscription.endDate;
     const daysRemaining = endDate
       ? Math.max(0, Math.ceil((new Date(endDate) - now) / (1000 * 60 * 60 * 24)))
       : 0;
