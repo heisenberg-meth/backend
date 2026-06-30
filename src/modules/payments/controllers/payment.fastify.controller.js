@@ -131,9 +131,16 @@ class PaymentFastifyController {
   }
 
   async verifyPayment(request, reply) {
+    console.log('Verify Payment Request:', request.body);
     logger.info({ url: request.url, body: request.body }, 'VERIFY CONTROLLER HIT');
     const tenantId = request.tenantId || null;
     const { razorpay_order_id, razorpay_payment_id, razorpay_signature } = request.body || {};
+
+    console.log({
+      razorpay_order_id,
+      razorpay_payment_id,
+      razorpay_signature,
+    });
 
     logger.info(
       {
@@ -210,9 +217,12 @@ class PaymentFastifyController {
         },
         '[PAYMENT] Verify failed with unexpected error',
       );
-      return reply
-        .code(400)
-        .send({ success: false, paymentStatus: 'FAILED', reason: 'Payment verification failed' });
+      console.error(error);
+      return reply.code(400).send({
+        success: false,
+        paymentStatus: 'FAILED',
+        reason: error.message || 'Payment verification failed',
+      });
     }
   }
 
