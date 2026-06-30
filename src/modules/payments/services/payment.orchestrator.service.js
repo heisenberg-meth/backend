@@ -152,13 +152,23 @@ class PaymentOrchestratorService {
   }
 
   async verifyPayment(tenantId, verificationData) {
-    const { razorpay_order_id, razorpay_payment_id, razorpay_signature } = verificationData;
+    // Support calling verifyPayment(verificationData) directly for unauthenticated route
+    let actualTenantId = tenantId;
+    let actualVerificationData = verificationData;
+    if (typeof tenantId === 'object' && tenantId !== null && !verificationData) {
+      actualVerificationData = tenantId;
+      actualTenantId = null;
+    }
+
+    const { razorpay_order_id, razorpay_payment_id, razorpay_signature } = actualVerificationData;
 
     const payment = await prisma.payment.findUnique({
       where: { transactionId: razorpay_order_id },
     });
     if (!payment) throw new Error('Payment order not found');
-    if (payment.tenantId !== tenantId) throw new Error('Tenant mismatch');
+    if (actualTenantId && payment.tenantId !== actualTenantId) {
+      throw new Error('Tenant mismatch');
+    }
 
     if (payment.status === VALID_STATES.SUCCESS) {
       logger.info({ razorpay_order_id }, '[PAYMENT] Already verified, returning success');
@@ -196,6 +206,8 @@ class PaymentOrchestratorService {
             throw new Error('Payment signature verification failed');
           }
 
+          const targetTenantId = current.tenantId;
+
           if (current.status === VALID_STATES.CREATED || current.status === VALID_STATES.PENDING) {
             // Atomic transition: CREATED -> SUCCESS in one write (eliminates crash window)
             await this._transitionPayment(
@@ -224,16 +236,22 @@ class PaymentOrchestratorService {
             const notes = transaction?.gatewayResponse || {};
 
             if (notes?.type === 'SUBSCRIPTION_UPGRADE') {
-              logger.info({ tenantId, notes }, '[DEBUG] About to activate subscription');
+              logger.info(
+                { tenantId: targetTenantId, notes },
+                '[DEBUG] About to activate subscription',
+              );
 
               const planId = notes.planId || 'pro';
               const billingCycle = notes.billingCycle || 'monthly';
 
-              logger.info({ tenantId, planId, billingCycle }, '[DEBUG] Calling createSubscription');
+              logger.info(
+                { tenantId: targetTenantId, planId, billingCycle },
+                '[DEBUG] Calling createSubscription',
+              );
 
               // Use correctly updated createSubscription signature
               await subscriptionService.createSubscription(
-                tenantId,
+                targetTenantId,
                 planId,
                 billingCycle,
                 null,
@@ -243,7 +261,7 @@ class PaymentOrchestratorService {
               logger.info('[DEBUG] createSubscription completed');
 
               await tx.tenant.update({
-                where: { id: tenantId },
+                where: { id: targetTenantId },
                 data: {
                   isVerified: true,
                   verifiedAt: new Date(),
@@ -252,7 +270,7 @@ class PaymentOrchestratorService {
 
               await tx.auditLog.create({
                 data: {
-                  tenantId,
+                  tenantId: targetTenantId,
                   action: 'SUBSCRIPTION_ACTIVATED',
                   target: planId,
                   type: 'SUBSCRIPTION',
@@ -262,7 +280,7 @@ class PaymentOrchestratorService {
           }
 
           await eventBus.publish('PAYMENT_SUCCESS', {
-            tenantId,
+            tenantId: targetTenantId,
             paymentId: current.id,
             razorpayOrderId: razorpay_order_id,
             razorpayPaymentId: razorpay_payment_id,

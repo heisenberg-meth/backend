@@ -30,6 +30,26 @@ async function paymentRoutes(fastify) {
     paymentController.handleWebhook,
   );
 
+  fastify.post(
+    '/verify',
+    {
+      schema: {
+        tags: ['Payments'],
+        summary: 'Verify payment signature',
+        body: {
+          type: 'object',
+          required: ['razorpay_order_id', 'razorpay_payment_id', 'razorpay_signature'],
+          properties: {
+            razorpay_order_id: { type: 'string' },
+            razorpay_payment_id: { type: 'string' },
+            razorpay_signature: { type: 'string' },
+          },
+        },
+      },
+    },
+    paymentController.verifyPayment,
+  );
+
   // ── Authenticated Routes ──
   fastify.addHook('preHandler', authenticate);
   fastify.addHook('preHandler', requireTenant);
@@ -54,26 +74,6 @@ async function paymentRoutes(fastify) {
       preHandler: [requirePermission('payment.create')],
     },
     paymentController.createOrder,
-  );
-
-  fastify.post(
-    '/verify',
-    {
-      schema: {
-        tags: ['Payments'],
-        summary: 'Verify payment signature',
-        body: {
-          type: 'object',
-          required: ['razorpay_order_id', 'razorpay_payment_id', 'razorpay_signature'],
-          properties: {
-            razorpay_order_id: { type: 'string' },
-            razorpay_payment_id: { type: 'string' },
-            razorpay_signature: { type: 'string' },
-          },
-        },
-      },
-    },
-    paymentController.verifyPayment,
   );
 
   // ── Payment Recovery & Status ──

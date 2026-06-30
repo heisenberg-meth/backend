@@ -63,6 +63,7 @@ export const CSRF_EXEMPT_PATHS = [
   '/api/auth/reset-password',
   '/api/auth/resend-reset-otp',
   '/api/payments/webhook',
+  '/api/payments/verify',
   '/health',
   '/api/admin/login',
   '/api/admin/refresh',

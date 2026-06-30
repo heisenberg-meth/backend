@@ -44,7 +44,13 @@ export default async function (fastify) {
       summary: 'Verify payment and activate subscription',
       body: {
         type: 'object',
-        required: ['paymentSessionId', 'state', 'razorpayPaymentId', 'razorpayOrderId', 'razorpaySignature'],
+        required: [
+          'paymentSessionId',
+          'state',
+          'razorpayPaymentId',
+          'razorpayOrderId',
+          'razorpaySignature',
+        ],
         properties: {
           paymentSessionId: { type: 'string' },
           state: { type: 'string' },
