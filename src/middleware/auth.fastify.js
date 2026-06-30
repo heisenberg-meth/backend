@@ -76,14 +76,20 @@ export const authenticate = async (request, reply) => {
     logger.warn(
       {
         url: request.url,
+        method: request.method,
         hasCookies: !!request.cookies,
         cookieNames: Object.keys(request.cookies || {}),
+        authHeaderPresent: false,
       },
       '[AUTH] No Authorization header or accessToken cookie found',
     );
     return reply.code(401).send({
       success: false,
-      error: { message: 'No authorization provided', code: 'NO_AUTH' },
+      error: {
+        message: 'No authorization provided. Missing Authorization header or cookie.',
+        code: 'AUTHENTICATION_FAILED',
+        reason: 'Missing Authorization header',
+      },
     });
   }
 
@@ -96,13 +102,19 @@ export const authenticate = async (request, reply) => {
         event: isExpired ? 'AUTH_EXPIRED_TOKEN' : 'AUTH_INVALID_TOKEN',
         error: err.message,
         url: request.url,
+        method: request.method,
         ip: request.ip,
+        authHeaderPresent: true,
       },
       'Token validation failed',
     );
     return reply.code(401).send({
       success: false,
-      error: { message: 'Invalid or expired token', code: 'TOKEN_INVALID' },
+      error: {
+        message: 'Invalid or expired token',
+        code: 'AUTHENTICATION_FAILED',
+        reason: isExpired ? 'JWT token expired' : 'JWT token invalid',
+      },
     });
   }
 
@@ -223,9 +235,20 @@ export const requireSession = async (request, reply) => {
 };
 
 export const requireTenant = async (request) => {
+  logger.info(
+    {
+      url: request.url,
+      userId: request.user?.id,
+      tenantId: request.tenantId,
+    },
+    '[AUTH] requireTenant checking context',
+  );
+
   if (!request.tenantId) {
+    logger.warn({ url: request.url, userId: request.user?.id }, '[AUTH] Tenant context missing');
     const error = new Error('Tenant context required');
-    error.statusCode = 403;
+    error.statusCode = 401; // Changed to 401 as per the context of authorization failures
+    error.code = 'TENANT_MISSING';
     throw error;
   }
 };

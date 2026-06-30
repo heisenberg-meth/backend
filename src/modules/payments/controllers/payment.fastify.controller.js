@@ -131,6 +131,7 @@ class PaymentFastifyController {
   }
 
   async verifyPayment(request, reply) {
+    logger.info({ url: request.url, body: request.body }, 'VERIFY CONTROLLER HIT');
     const tenantId = request.tenantId || null;
     const { razorpay_order_id, razorpay_payment_id, razorpay_signature } = request.body || {};
 
@@ -193,10 +194,7 @@ class PaymentFastifyController {
           .send({ success: false, paymentStatus: 'FAILED', reason: error.message });
       }
       if (error.message === 'Payment order not found') {
-        logger.error(
-          { razorpay_order_id },
-          '[PAYMENT] Payment order not found in database',
-        );
+        logger.error({ razorpay_order_id }, '[PAYMENT] Payment order not found in database');
         return reply
           .code(404)
           .send({ success: false, paymentStatus: 'FAILED', reason: 'Payment order not found' });
