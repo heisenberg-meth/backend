@@ -268,7 +268,13 @@ class PaymentSessionService {
       const billingCycle = transaction?.gatewayResponse?.billingCycle || 'monthly';
       const planId = session.subscriptionPlanId;
 
-      await subscriptionService.createSubscription(session.tenantId, planId, billingCycle, prisma);
+      await subscriptionService.createSubscription(
+        session.tenantId,
+        planId,
+        billingCycle,
+        null,
+        prisma,
+      );
 
       await this._updateSessionStatus(session.id, 'SUBSCRIPTION_ACTIVATED');
 

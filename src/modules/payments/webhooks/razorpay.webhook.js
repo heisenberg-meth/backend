@@ -162,6 +162,7 @@ class RazorpayWebhookHandler {
           payment.tenantId,
           planId,
           billingCycle,
+          null,
           prisma,
         );
       } catch (err) {
@@ -190,7 +191,11 @@ class RazorpayWebhookHandler {
           );
         } catch (queueErr) {
           logger.error(
-            { event: 'SUBSCRIPTION_RETRY_QUEUE_FAILURE', tenantId: payment.tenantId, error: queueErr.message },
+            {
+              event: 'SUBSCRIPTION_RETRY_QUEUE_FAILURE',
+              tenantId: payment.tenantId,
+              error: queueErr.message,
+            },
             'Failed to queue subscription activation retry',
           );
         }

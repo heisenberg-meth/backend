@@ -889,18 +889,26 @@ class AuthPrismaService {
         : null,
       subscription: subscription
         ? (() => {
-            const endDate = subscription.endDate;
+            const isTrial = subscription.status === 'TRIAL';
+            const endDate = isTrial ? subscription.trialExpiresAt : subscription.endDate;
             const daysRemaining = endDate
               ? Math.max(0, Math.ceil((new Date(endDate) - new Date()) / (1000 * 60 * 60 * 24)))
               : 0;
+            const effectiveStatus =
+              (subscription.status === 'TRIAL' || subscription.status === 'ACTIVE') &&
+              daysRemaining === 0
+                ? 'EXPIRED'
+                : subscription.status;
             return {
               planId: plan?.id || null,
               planName: plan?.name || 'Unknown',
               price: plan?.price ?? 0,
-              status: subscription.status,
-              isTrial: subscription.status === 'TRIAL',
-              isExpired: subscription.status === 'EXPIRED',
+              status: effectiveStatus,
+              isTrial: effectiveStatus === 'TRIAL',
+              isExpired: effectiveStatus === 'EXPIRED',
               expiresAt: endDate,
+              trialStartedAt: subscription.trialStartedAt,
+              trialExpiresAt: subscription.trialExpiresAt,
               daysRemaining,
             };
           })()

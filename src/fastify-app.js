@@ -350,11 +350,13 @@ const setupFastify = async () => {
 
     const loadAvg = os.loadavg()[0];
     const numCores = os.cpus().length || 1;
-    const cpuHealth = (loadAvg / numCores) > 1.5 ? 'unhealthy' : 'healthy';
+    const cpuHealth = loadAvg / numCores > 1.5 ? 'unhealthy' : 'healthy';
     if (cpuHealth === 'unhealthy') isHealthy = false;
 
     const clientIp = request.headers['x-forwarded-for']?.split(',')[0].trim() || request.ip;
-    const HEALTH_ALLOWED_IPS = (process.env.HEALTH_ALLOWED_IPS || '127.0.0.1,::1,::ffff:127.0.0.1').split(',');
+    const HEALTH_ALLOWED_IPS = (
+      process.env.HEALTH_ALLOWED_IPS || '127.0.0.1,::1,::ffff:127.0.0.1'
+    ).split(',');
     const isInternal = HEALTH_ALLOWED_IPS.includes(clientIp);
 
     const health = {

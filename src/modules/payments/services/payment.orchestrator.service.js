@@ -234,16 +234,23 @@ class PaymentOrchestratorService {
             const notes = transaction?.gatewayResponse;
 
             if (notes?.type === 'SUBSCRIPTION_UPGRADE') {
-              logger.info(
-                { tenantId, planId: notes.planId },
-                '[PAYMENT] Activating subscription upgrade',
-              );
+              logger.info({ tenantId, notes }, '[DEBUG] About to activate subscription');
 
               // Use default plan IDs if specific ones aren't provided
               const planId = notes.planId || 'pro';
               const billingCycle = notes.billingCycle || 'monthly';
 
-              await subscriptionService.createSubscription(tenantId, planId, billingCycle, tx);
+              logger.info({ tenantId, planId, billingCycle }, '[DEBUG] Calling createSubscription');
+
+              await subscriptionService.createSubscription(
+                tenantId,
+                planId,
+                billingCycle,
+                null,
+                tx,
+              );
+
+              logger.info('[DEBUG] createSubscription completed');
 
               await tx.tenant.update({
                 where: { id: tenantId },
@@ -263,11 +270,10 @@ class PaymentOrchestratorService {
               });
             }
           } catch (bizErr) {
-            logger.error(
-              { error: bizErr.message, razorpay_order_id },
-              '[PAYMENT] Failed to trigger business logic after success',
-            );
-            // We don't throw here because the payment itself IS successful in the DB
+            console.error('========== SUBSCRIPTION ACTIVATION FAILED ==========');
+            console.error(bizErr);
+            console.error(bizErr.stack);
+            throw bizErr;
           }
 
           await eventBus.publish('PAYMENT_SUCCESS', {

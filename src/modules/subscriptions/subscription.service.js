@@ -3,10 +3,20 @@ import { TRIAL_DAYS, SUBSCRIPTION_PLANS, TRIAL_PLAN_ID } from './subscription.co
 
 class SubscriptionService {
   async createSubscription(tenantId, planId, billingCycle, performedBy = null, tx = null) {
+    console.log('ENTER createSubscription');
+    console.log({
+      tenantId,
+      planId,
+      billingCycle,
+    });
+
     const client = tx || prisma;
     let plan = await client.subscriptionPlan.findUnique({ where: { id: planId } });
 
+    console.log('Plan found', plan);
+
     if (!plan) {
+      console.log('Creating subscription plan...');
       plan = await client.subscriptionPlan.create({
         data: {
           id: planId,
@@ -16,6 +26,7 @@ class SubscriptionService {
           features: SUBSCRIPTION_PLANS[planId]?.features || ['All Features Included'],
         },
       });
+      console.log('Subscription plan created');
     }
 
     const startDate = new Date();
@@ -33,6 +44,7 @@ class SubscriptionService {
     const oldStatus = existing?.status;
     const oldExpiry = existing?.endDate;
 
+    console.log('Updating subscription...');
     const subscription = await client.subscription.upsert({
       where: { tenantId },
       update: {
@@ -57,7 +69,9 @@ class SubscriptionService {
         isTrial: false,
       },
     });
+    console.log('Subscription updated');
 
+    console.log('Writing history...');
     await this._logHistory({
       tenantId,
       subscriptionId: subscription.id,
@@ -336,7 +350,18 @@ class SubscriptionService {
     });
   }
 
-  async _logHistory({ tenantId, subscriptionId, action, oldStatus, newStatus, oldExpiry, newExpiry, performedBy, reason, metadata }) {
+  async _logHistory({
+    tenantId,
+    subscriptionId,
+    action,
+    oldStatus,
+    newStatus,
+    oldExpiry,
+    newExpiry,
+    performedBy,
+    reason,
+    metadata,
+  }) {
     try {
       await prisma.subscriptionHistory.create({
         data: {

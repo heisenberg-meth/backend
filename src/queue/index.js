@@ -427,9 +427,10 @@ const handlers = {
             data: {
               tenantId: tenant.id,
               userId: owner.id,
-              message: daysLeft === 1
-                ? 'Your trial expires tomorrow. Upgrade now to avoid interruption.'
-                : `Your trial expires in ${daysLeft} days. Upgrade now to avoid interruption.`,
+              message:
+                daysLeft === 1
+                  ? 'Your trial expires tomorrow. Upgrade now to avoid interruption.'
+                  : `Your trial expires in ${daysLeft} days. Upgrade now to avoid interruption.`,
               notificationType: 'TRIAL_WARNING',
             },
           });
@@ -460,15 +461,26 @@ const handlers = {
   'activate-subscription-retry': async (data) => {
     const { tenantId, planId, billingCycle, attempt } = data;
     logger.info({ tenantId, attempt }, 'Retrying subscription activation');
-    const { default: subscriptionService } = await import('../modules/subscriptions/subscription.service.js');
+    const { default: subscriptionService } =
+      await import('../modules/subscriptions/subscription.service.js');
     await prisma.$transaction(async (tx) => {
-      await subscriptionService.createSubscription(tenantId, planId, billingCycle, tx);
+      await subscriptionService.createSubscription(tenantId, planId, billingCycle, null, tx);
     });
     logger.info({ tenantId }, 'Subscription activation retry succeeded');
   },
 
   'create-transaction-record-retry': async (data) => {
-    const { paymentId, tenantId, userId, amount, currency, razorpayOrderId, receipt, notes, attempt } = data;
+    const {
+      paymentId,
+      tenantId,
+      userId,
+      amount,
+      currency,
+      razorpayOrderId,
+      receipt,
+      notes,
+      attempt,
+    } = data;
     logger.info({ paymentId, attempt }, 'Retrying transaction record creation');
     await prisma.transaction.create({
       data: {
@@ -523,9 +535,8 @@ const handlers = {
   },
 
   'cleanup-expired-payment-sessions': async () => {
-    const { default: paymentSessionCleanupWorker } = await import(
-      '../modules/payments/workers/payment-session-cleanup.worker.js'
-    );
+    const { default: paymentSessionCleanupWorker } =
+      await import('../modules/payments/workers/payment-session-cleanup.worker.js');
     await paymentSessionCleanupWorker.handle();
   },
 };
