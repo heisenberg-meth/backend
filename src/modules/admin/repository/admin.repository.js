@@ -529,7 +529,8 @@ export const adminRepository = {
         include: {
           creator: { select: { id: true, fullName: true, email: true } },
           assignee: { select: { id: true, fullName: true, email: true } },
-          _count: { select: { replies: true } },
+          tenant: { select: { id: true, shopName: true } },
+          replies: { include: { author: { select: { id: true, fullName: true, role: true } } } },
         },
         orderBy: { createdAt: 'desc' },
         skip: (pageNum - 1) * limitNum,
