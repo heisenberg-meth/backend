@@ -131,11 +131,42 @@ class PaymentFastifyController {
   }
 
   async verifyPayment(request, reply) {
-    const tenantId = request.tenantId;
+    const tenantId = request.tenantId || null;
+    const { razorpay_order_id, razorpay_payment_id, razorpay_signature } = request.body || {};
+
+    logger.info(
+      {
+        tenantId,
+        razorpay_order_id,
+        razorpay_payment_id,
+        hasSignature: !!razorpay_signature,
+      },
+      '[PAYMENT] Verification request received',
+    );
+
+    if (!razorpay_order_id || !razorpay_payment_id || !razorpay_signature) {
+      logger.error(
+        { razorpay_order_id, razorpay_payment_id, hasSignature: !!razorpay_signature },
+        '[PAYMENT] Verification failed - missing required fields',
+      );
+      return reply.code(400).send({
+        success: false,
+        paymentStatus: 'FAILED',
+        reason: 'Missing required payment verification fields',
+      });
+    }
 
     try {
       await ensureDbConnection();
+      logger.info({ razorpay_order_id }, '[PAYMENT] DB connection verified, starting verification');
+
       const result = await paymentOrchestratorService.verifyPayment(tenantId, request.body);
+
+      logger.info(
+        { razorpay_order_id, razorpay_payment_id, result },
+        '[PAYMENT] Verification completed successfully',
+      );
+
       return reply.send({
         success: true,
         paymentStatus: 'SUCCESS',
@@ -144,14 +175,31 @@ class PaymentFastifyController {
       });
     } catch (error) {
       if (error.message === 'Payment signature verification failed') {
+        logger.error(
+          { razorpay_order_id, razorpay_payment_id, error: error.message },
+          '[PAYMENT] Signature verification failed',
+        );
         return reply
           .code(400)
           .send({ success: false, paymentStatus: 'FAILED', reason: error.message });
       }
       if (error.message?.includes('Invalid payment state transition')) {
+        logger.error(
+          { razorpay_order_id, razorpay_payment_id, error: error.message },
+          '[PAYMENT] Invalid state transition',
+        );
         return reply
           .code(409)
           .send({ success: false, paymentStatus: 'FAILED', reason: error.message });
+      }
+      if (error.message === 'Payment order not found') {
+        logger.error(
+          { razorpay_order_id },
+          '[PAYMENT] Payment order not found in database',
+        );
+        return reply
+          .code(404)
+          .send({ success: false, paymentStatus: 'FAILED', reason: 'Payment order not found' });
       }
       logger.error(
         {
@@ -159,8 +207,10 @@ class PaymentFastifyController {
           stack: error.stack,
           code: error.code,
           tenantId,
+          razorpay_order_id,
+          razorpay_payment_id,
         },
-        '[PAYMENT] Verify failed',
+        '[PAYMENT] Verify failed with unexpected error',
       );
       return reply
         .code(400)

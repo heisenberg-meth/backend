@@ -162,11 +162,30 @@ class PaymentOrchestratorService {
 
     const { razorpay_order_id, razorpay_payment_id, razorpay_signature } = actualVerificationData;
 
+    logger.info(
+      {
+        razorpay_order_id,
+        razorpay_payment_id,
+        hasSignature: !!razorpay_signature,
+        tenantId: actualTenantId,
+      },
+      '[PAYMENT] Starting verification',
+    );
+
     const payment = await prisma.payment.findUnique({
       where: { transactionId: razorpay_order_id },
     });
-    if (!payment) throw new Error('Payment order not found');
+
+    if (!payment) {
+      logger.error({ razorpay_order_id }, '[PAYMENT] Payment order not found');
+      throw new Error('Payment order not found');
+    }
+
     if (actualTenantId && payment.tenantId !== actualTenantId) {
+      logger.error(
+        { razorpay_order_id, expectedTenant: actualTenantId, actualTenant: payment.tenantId },
+        '[PAYMENT] Tenant mismatch',
+      );
       throw new Error('Tenant mismatch');
     }
 
@@ -175,25 +194,41 @@ class PaymentOrchestratorService {
       return { success: true, status: VALID_STATES.SUCCESS, orderId: razorpay_order_id };
     }
 
+    logger.info(
+      { razorpay_order_id, currentStatus: payment.status },
+      '[PAYMENT] Acquiring lock for verification',
+    );
+
     const lockKey = `verify:${razorpay_order_id}`;
     return paymentLockService.executeWithLock(
       lockKey,
       async () => {
+        logger.info({ razorpay_order_id }, '[PAYMENT] Lock acquired, starting transaction');
+
         return prisma.$transaction(async (tx) => {
           const current = await tx.payment.findUnique({
             where: { transactionId: razorpay_order_id },
           });
 
+          logger.info(
+            { razorpay_order_id, status: current.status },
+            '[PAYMENT] Payment found in transaction',
+          );
+
           if (current.status === VALID_STATES.SUCCESS || current.status === VALID_STATES.CAPTURED) {
+            logger.info({ razorpay_order_id }, '[PAYMENT] Already completed in concurrent request');
             return { success: true, status: current.status, orderId: razorpay_order_id };
           }
 
+          logger.info({ razorpay_order_id }, '[PAYMENT] Verifying Razorpay signature');
           const isValid = this._verifyRazorpaySignature(
             razorpay_order_id,
             razorpay_payment_id,
             razorpay_signature,
           );
+
           if (!isValid) {
+            logger.error({ razorpay_order_id }, '[PAYMENT] Signature verification failed');
             await this._transitionPayment(
               current.id,
               VALID_STATES.FAILED,
@@ -206,10 +241,16 @@ class PaymentOrchestratorService {
             throw new Error('Payment signature verification failed');
           }
 
+          logger.info({ razorpay_order_id }, '[PAYMENT] Signature verified successfully');
+
           const targetTenantId = current.tenantId;
 
           if (current.status === VALID_STATES.CREATED || current.status === VALID_STATES.PENDING) {
-            // Atomic transition: CREATED -> SUCCESS in one write (eliminates crash window)
+            logger.info(
+              { razorpay_order_id, from: current.status, to: VALID_STATES.SUCCESS },
+              '[PAYMENT] Transitioning payment status',
+            );
+
             await this._transitionPayment(
               current.id,
               VALID_STATES.SUCCESS,
@@ -221,6 +262,8 @@ class PaymentOrchestratorService {
               tx,
             );
 
+            logger.info({ razorpay_order_id }, '[PAYMENT] Payment updated to SUCCESS');
+
             await tx.transaction.update({
               where: { razorpayOrderId: razorpay_order_id },
               data: {
@@ -229,27 +272,28 @@ class PaymentOrchestratorService {
               },
             });
 
+            logger.info({ razorpay_order_id }, '[PAYMENT] Transaction record updated');
+
             // --- Trigger Business Logic (Subscription Activation) ---
             const transaction = await tx.transaction.findUnique({
               where: { razorpayOrderId: razorpay_order_id },
             });
             const notes = transaction?.gatewayResponse || {};
 
+            logger.info(
+              { razorpay_order_id, hasNotes: !!notes, noteType: notes?.type },
+              '[PAYMENT] Checking for subscription activation',
+            );
+
             if (notes?.type === 'SUBSCRIPTION_UPGRADE') {
               logger.info(
                 { tenantId: targetTenantId, notes },
-                '[DEBUG] About to activate subscription',
+                '[PAYMENT] Activating subscription',
               );
 
               const planId = notes.planId || 'pro';
               const billingCycle = notes.billingCycle || 'monthly';
 
-              logger.info(
-                { tenantId: targetTenantId, planId, billingCycle },
-                '[DEBUG] Calling createSubscription',
-              );
-
-              // Use correctly updated createSubscription signature
               await subscriptionService.createSubscription(
                 targetTenantId,
                 planId,
@@ -258,7 +302,7 @@ class PaymentOrchestratorService {
                 tx,
               );
 
-              logger.info('[DEBUG] createSubscription completed');
+              logger.info({ razorpay_order_id, planId }, '[PAYMENT] Subscription activated');
 
               await tx.tenant.update({
                 where: { id: targetTenantId },
@@ -289,7 +333,7 @@ class PaymentOrchestratorService {
 
           logger.info(
             { razorpay_order_id, razorpay_payment_id },
-            '[PAYMENT] Verified and subscription activated',
+            '[PAYMENT] Verification completed successfully',
           );
 
           return {
