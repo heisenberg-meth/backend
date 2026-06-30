@@ -10,7 +10,11 @@ const ADMIN_ROLE_HIERARCHY = {
 
 export const authenticateAdmin = async (request, reply) => {
   const cookieToken = request.cookies?.adminAccessToken;
-  if (cookieToken && !request.headers.authorization) {
+
+  // ALWAYS prioritize the admin cookie if it exists.
+  // This prevents global frontend Authorization headers (like a User token)
+  // from accidentally overriding the legitimate Admin session cookie.
+  if (cookieToken) {
     request.headers.authorization = `Bearer ${cookieToken}`;
   }
 
