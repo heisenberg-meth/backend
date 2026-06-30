@@ -3,20 +3,13 @@ import razorpay from '../../../config/razorpay.js';
 import logger from '../../../shared/utils/logger.js';
 import eventBus from '../../../shared/services/eventbus.service.js';
 import paymentStateMachine, { VALID_STATES } from './payment.state-machine.js';
-import paymentIdempotencyService from './payment.idempotency.service.js';
 import paymentLockService from './payment.lock.service.js';
 import subscriptionService from '../../subscriptions/subscription.service.js';
 import { getConfig } from '../../../config/payment.config.js';
 import { mainQueue } from '../../../queue/index.js';
 class PaymentOrchestratorService {
   async createPaymentOrder(tenantId, userId, amount, options = {}) {
-    const { currency = 'INR', receipt, notes, idempotencyKey } = options;
-
-    if (idempotencyKey) {
-      return paymentIdempotencyService.processIdempotent(idempotencyKey, async () => {
-        return this._createOrderInternal(tenantId, userId, amount, currency, receipt, notes);
-      });
-    }
+    const { currency = 'INR', receipt, notes } = options;
 
     return this._createOrderInternal(tenantId, userId, amount, currency, receipt, notes);
   }
