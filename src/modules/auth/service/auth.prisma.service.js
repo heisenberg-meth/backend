@@ -172,7 +172,10 @@ class AuthPrismaService {
       // FIX #12: Perform dummy bcrypt compare to equalize response time whether the
       // user exists or not. Without this, an attacker can enumerate valid emails
       // by measuring the response latency difference.
-      await bcrypt.compare(password, '$2b$12$invalidhashfortimingprotectiononly000000000000000000000000');
+      await bcrypt.compare(
+        password,
+        '$2b$12$invalidhashfortimingprotectiononly000000000000000000000000',
+      );
       throw new Error('Invalid credentials');
     }
 
@@ -460,9 +463,20 @@ class AuthPrismaService {
     }
 
     if (session.refreshToken !== tokenHash) {
-      // REPLAY ATTACK! The session is active but the token presented doesn't match the active hash.
-      await sessionService.revokeSession(session.id);
-      AuthAuditService.logTokenReplay({ session, tokenHash: oldRefreshToken, context });
+      // Allow a 30-second grace period for concurrent refresh requests before revoking
+      const isGracePeriod =
+        session.lastActivity && new Date() - new Date(session.lastActivity) < 30000;
+
+      if (!isGracePeriod) {
+        // REPLAY ATTACK! The session is active but the token presented doesn't match the active hash.
+        await sessionService.revokeSession(session.id);
+        AuthAuditService.logTokenReplay({ session, tokenHash: oldRefreshToken, context });
+      } else {
+        logger.warn(
+          { sessionId: session.id },
+          'Concurrent refresh token request ignored due to grace period',
+        );
+      }
       throw new Error('Invalid or reused refresh token');
     }
 

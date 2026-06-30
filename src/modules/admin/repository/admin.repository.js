@@ -550,17 +550,23 @@ export const adminRepository = {
   },
 
   async getSupportTicket(id) {
-    return prisma.supportTicket.findUnique({
+    const ticket = await prisma.supportTicket.findUnique({
       where: { id },
       include: {
         creator: { select: { id: true, fullName: true, email: true, role: true } },
         assignee: { select: { id: true, fullName: true, email: true } },
+        tenant: { select: { id: true, name: true } },
         replies: {
           include: { author: { select: { id: true, fullName: true, role: true } } },
           orderBy: { createdAt: 'asc' },
         },
       },
     });
+
+    if (ticket && ticket.tenant) {
+      ticket.tenant = { ...ticket.tenant, shopName: ticket.tenant.name };
+    }
+    return ticket;
   },
 
   async createSupportReply(ticketId, message, authorId) {
@@ -569,7 +575,7 @@ export const adminRepository = {
     });
     await prisma.supportTicket.update({
       where: { id: ticketId },
-      data: { status: 'WAITING_FOR_STAFF' },
+      data: { status: 'WAITING_ON_CUSTOMER' },
     });
 
     await prisma.supportAuditLog.create({

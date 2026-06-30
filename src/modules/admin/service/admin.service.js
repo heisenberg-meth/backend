@@ -746,8 +746,12 @@ export const adminService = {
   },
 
   async replySupportTicket(ticketId, message, adminId) {
+    if (!message || typeof message !== 'string' || message.trim() === '') {
+      throw new Error('Reply cannot be empty');
+    }
     const ticket = await adminRepository.getSupportTicket(ticketId);
     if (!ticket) throw new Error('Ticket not found');
+    if (ticket.status === 'CLOSED') throw new Error('Ticket Closed');
     return adminRepository.createSupportReply(ticketId, message, adminId);
   },
 

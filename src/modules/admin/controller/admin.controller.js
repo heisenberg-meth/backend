@@ -710,9 +710,25 @@ class AdminController {
         tenantId: request.query.tenantId,
         userId: request.query.userId,
       };
-      const tickets = await adminService.listSupportTickets(query);
-      return reply.send(success(tickets));
+      const result = await adminService.listSupportTickets(query);
+      return reply.send({
+        success: true,
+        data: {
+          tickets: result.tickets,
+          pagination: {
+            page: result.page,
+            limit: result.limit,
+            total: result.total,
+            pages: Math.ceil(result.total / result.limit),
+          },
+        },
+      });
     } catch (error) {
+      if (request.log && request.log.error) {
+        request.log.error(error);
+      } else {
+        console.error('listSupportTickets Error:', error);
+      }
       return reply.code(500).send(errorResponse(error.message, 'LIST_TICKETS_FAILED'));
     }
   }
@@ -722,6 +738,11 @@ class AdminController {
       const ticket = await adminService.getSupportTicket(request.params.id);
       return reply.send(success(ticket));
     } catch (error) {
+      if (request.log && request.log.error) {
+        request.log.error(error);
+      } else {
+        console.error('getSupportTicket Error:', error);
+      }
       return reply.code(404).send(errorResponse(error.message, 'TICKET_NOT_FOUND'));
     }
   }
@@ -734,6 +755,14 @@ class AdminController {
       const result = await adminService.replySupportTicket(id, message, adminId);
       return reply.send(success(result));
     } catch (error) {
+      if (request.log && request.log.error) {
+        request.log.error(error);
+      } else {
+        console.error('replySupportTicket Error:', error);
+      }
+      if (error.message === 'Ticket Closed') {
+        return reply.code(409).send(errorResponse(error.message, 'TICKET_CLOSED'));
+      }
       return reply.code(400).send(errorResponse(error.message, 'TICKET_REPLY_FAILED'));
     }
   }
