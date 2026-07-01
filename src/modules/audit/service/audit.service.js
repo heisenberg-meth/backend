@@ -7,23 +7,16 @@ class AuditService {
    * @param {Object} data - Audit details
    * @param {Object} [tx] - Prisma transaction client (optional)
    */
-  async logAction(
-    { tenantId, userId, entityType, entityId, action, previousData, newData, ipAddress, userAgent },
-    tx,
-  ) {
+  async logAction({ tenantId, userId, entityType, entityId, action }, tx) {
     try {
       const client = tx || prisma;
       await client.auditLog.create({
         data: {
           tenantId,
           userId,
-          entityType,
-          entityId,
-          action,
-          previousData: previousData || {},
-          newData: newData || {},
-          ipAddress,
-          user_agent: userAgent,
+          action: action || 'UPDATE',
+          target: entityId || entityType || 'SYSTEM',
+          type: 'SYSTEM',
         },
       });
     } catch (error) {

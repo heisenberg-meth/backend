@@ -2657,6 +2657,7 @@ model NotificationSettings {
   emailEnabled                   Boolean                     @default(true)
   inAppEnabled                   Boolean                     @default(true)
   pushEnabled                    Boolean                     @default(false)
+  alertEmail                     String?                     @db.VarChar(255)
   refillReminderDaysBefore       Int                         @default(3)
   appointmentReminderHoursBefore Int                         @default(24)
   expiryReminderDaysBefore       Int                         @default(7)

@@ -58,13 +58,27 @@ class NotificationSettingsController {
       });
     } catch (err) {
       if (err.errors) {
+        logger.warn({ err, tenantId }, 'Zod validation failed for notification settings');
         return reply.code(400).send({
           success: false,
           error: 'Validation failed',
           details: err.errors,
         });
       }
-      logger.error({ err, tenantId }, 'Failed to update notification settings');
+
+      // Determine if it's a business logic error vs DB error
+      if (err.message && err.message.includes('Cannot enable')) {
+        logger.warn({ err, tenantId }, 'Business validation failed for notification settings');
+        return reply.code(400).send({
+          success: false,
+          error: err.message,
+        });
+      }
+
+      logger.error(
+        { err, tenantId, stack: err.stack },
+        'Database or unexpected error updating notification settings',
+      );
       return reply.code(500).send({
         success: false,
         error: err.message || 'Failed to update notification settings',

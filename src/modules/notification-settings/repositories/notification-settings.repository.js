@@ -2,9 +2,10 @@ import prisma from '../../../config/prisma.js';
 
 class NotificationSettingsRepository {
   async getByTenantAndBranch(tenantId, branchId = null) {
-    return prisma.notificationSettings.findUnique({
+    return prisma.notificationSettings.findFirst({
       where: {
-        tenantId_branchId: { tenantId, branchId },
+        tenantId,
+        branchId,
       },
       include: {
         channelConfigs: {

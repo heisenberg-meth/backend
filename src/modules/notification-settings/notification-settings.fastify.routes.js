@@ -38,6 +38,7 @@ async function notificationSettingsRoutes(fastify) {
             emailEnabled: { type: 'boolean' },
             inAppEnabled: { type: 'boolean' },
             pushEnabled: { type: 'boolean' },
+            alertEmail: { type: 'string', format: 'email', nullable: true },
             refillReminderDaysBefore: { type: 'integer', minimum: 1, maximum: 30 },
             appointmentReminderHoursBefore: { type: 'integer', minimum: 1, maximum: 168 },
             expiryReminderDaysBefore: { type: 'integer', minimum: 1, maximum: 90 },

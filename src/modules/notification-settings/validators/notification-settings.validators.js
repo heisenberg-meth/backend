@@ -7,6 +7,7 @@ export const notificationSettingsSchema = z.object({
   emailEnabled: z.boolean().optional(),
   inAppEnabled: z.boolean().optional(),
   pushEnabled: z.boolean().optional(),
+  alertEmail: z.string().email().optional().nullable(),
 
   // Reminder policies
   refillReminderDaysBefore: z.number().int().min(1).max(30).optional(),
