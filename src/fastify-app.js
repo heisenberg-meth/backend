@@ -275,9 +275,6 @@ const setupFastify = async () => {
     });
   }
 
-  // FIX #06: Protect /metrics with an IP allowlist — the endpoint exposes
-  // route paths, error rates, queue depths, and DB health to anyone who can
-  // reach the server. Restrict to monitoring infrastructure only.
   const METRICS_ALLOWED_IPS = (process.env.METRICS_ALLOWED_IPS || '127.0.0.1,::1,::ffff:127.0.0.1')
     .split(',')
     .map((ip) => ip.trim());
@@ -292,7 +289,6 @@ const setupFastify = async () => {
     },
   });
 
-  // Override the /metrics route to enforce the allowlist preHandler
   fastify.addHook('onRoute', (routeOptions) => {
     if (routeOptions.url === '/metrics') {
       const original = routeOptions.preHandler || [];
@@ -528,7 +524,6 @@ const setupFastify = async () => {
     await fastify.register(fastifyStatic, {
       root: frontendDist,
       prefix: '/',
-      wildcard: false,
     });
   } else {
     fastify.get('/', async () => ({
