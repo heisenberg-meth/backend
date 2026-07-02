@@ -2,7 +2,7 @@ import { beforeAll, afterAll, jest } from '@jest/globals';
 import logger from '../src/shared/utils/logger.js';
 import process from 'node:process';
 
-jest.unstable_mockModule('bullmq', () => {
+await jest.unstable_mockModule('bullmq', () => {
   return {
     Queue: class MockQueue {
       constructor(name) {
