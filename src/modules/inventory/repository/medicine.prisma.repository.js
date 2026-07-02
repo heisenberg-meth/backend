@@ -152,6 +152,7 @@ class MedicinePrismaRepository {
           include: {
             category: true,
             manufacturer: true,
+            supplier: { select: { id: true, name: true } },
             inventory: {
               where: targetBranchId ? { branchId: targetBranchId } : {},
             },
@@ -186,6 +187,7 @@ class MedicinePrismaRepository {
           include: {
             category: true,
             manufacturer: true,
+            supplier: { select: { id: true, name: true } },
             inventory: {
               where: targetBranchId ? { branchId: targetBranchId } : {},
             },
@@ -250,6 +252,8 @@ class MedicinePrismaRepository {
 
       return {
         ...m,
+        supplierId: m.supplierId,
+        supplier: m.supplier,
         stock,
         availableStock,
         reservedStock,
@@ -282,6 +286,7 @@ class MedicinePrismaRepository {
       include: {
         category: true,
         manufacturer: true,
+        supplier: { select: { id: true, name: true } },
         inventory: {
           where: targetBranchId ? { branchId: targetBranchId } : {},
         },
@@ -340,6 +345,8 @@ class MedicinePrismaRepository {
 
     return {
       ...medicine,
+      supplierId: medicine.supplierId,
+      supplier: medicine.supplier,
       stock,
       availableStock: batchAvailableStock,
       reservedStock,
@@ -365,7 +372,15 @@ class MedicinePrismaRepository {
     const { select, include } = options;
     return tx.medicine.create({
       data,
-      ...(select ? { select } : { include: include || { category: true, manufacturer: true } }),
+      ...(select
+        ? { select }
+        : {
+            include: include || {
+              category: true,
+              manufacturer: true,
+              supplier: { select: { id: true, name: true } },
+            },
+          }),
     });
   }
 
@@ -383,7 +398,15 @@ class MedicinePrismaRepository {
     return prisma.medicine.update({
       where: { id, tenantId },
       data: medicineData,
-      ...(select ? { select } : { include: include || { category: true, manufacturer: true } }),
+      ...(select
+        ? { select }
+        : {
+            include: include || {
+              category: true,
+              manufacturer: true,
+              supplier: { select: { id: true, name: true } },
+            },
+          }),
     });
   }
 

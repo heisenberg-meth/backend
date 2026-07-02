@@ -29,7 +29,15 @@ export const ScheduleType = z.enum(['OTC', 'SCHEDULE_H', 'SCHEDULE_H1', 'SCHEDUL
 
 export const PurchaseUnit = z.enum(['BOX', 'CARTON', 'BOTTLE', 'TUBE', 'PIECE']);
 
-export const SellingUnit = z.enum(['TABLET', 'CAPSULE', 'STRIP', 'BOTTLE', 'TUBE', 'PIECE', 'VIAL']);
+export const SellingUnit = z.enum([
+  'TABLET',
+  'CAPSULE',
+  'STRIP',
+  'BOTTLE',
+  'TUBE',
+  'PIECE',
+  'VIAL',
+]);
 
 export const StorageCondition = z.enum(['ROOM_TEMPERATURE', 'COLD_STORAGE', 'PROTECT_FROM_LIGHT']);
 
@@ -58,6 +66,7 @@ export const CreateMedicineSchema = z.object({
   sku: z.string().optional(),
   requiresPrescription: z.boolean().default(false),
   storageCondition: z.string().optional(),
+  supplierId: z.string().nullable().optional(),
   status: MedicineStatus.default('ACTIVE'),
   notes: z.string().optional(),
 });
@@ -65,44 +74,48 @@ export const CreateMedicineSchema = z.object({
 export const UpdateMedicineSchema = CreateMedicineSchema.partial();
 
 // Inventory Batch Schema - For creating stock
-export const CreateBatchSchema = z.object({
-  medicineId: z.string().uuid('Invalid medicine ID'),
-  supplierId: z.string().uuid('Invalid supplier ID'),
-  batchNumber: z.string().min(1, 'Batch number is required'),
-  expiryDate: z.string({ required_error: 'Expiry date is required' }),
-  purchasePrice: z.number().min(0, 'Purchase price must be non-negative'),
-  mrp: z.number().min(0, 'MRP must be non-negative'),
-  sellingPrice: z.number().min(0, 'Selling price must be non-negative'),
-  quantity: z.number().int().min(1, 'Quantity must be greater than 0'),
-  rackLocation: z.string().optional(),
-}).refine(
-  (data) => {
-    if (data.mrp <= data.purchasePrice) return false;
-    return true;
-  },
-  {
-    message: 'MRP must be greater than purchase price',
-    path: ['mrp'],
-  },
-).refine(
-  (data) => {
-    if (data.sellingPrice > data.mrp) return false;
-    return true;
-  },
-  {
-    message: 'Selling price cannot exceed MRP',
-    path: ['sellingPrice'],
-  },
-).refine(
-  (data) => {
-    if (new Date(data.expiryDate) <= new Date()) return false;
-    return true;
-  },
-  {
-    message: 'Expiry date must be a future date',
-    path: ['expiryDate'],
-  },
-);
+export const CreateBatchSchema = z
+  .object({
+    medicineId: z.string().uuid('Invalid medicine ID'),
+    supplierId: z.string().uuid('Invalid supplier ID'),
+    batchNumber: z.string().min(1, 'Batch number is required'),
+    expiryDate: z.string({ required_error: 'Expiry date is required' }),
+    purchasePrice: z.number().min(0, 'Purchase price must be non-negative'),
+    mrp: z.number().min(0, 'MRP must be non-negative'),
+    sellingPrice: z.number().min(0, 'Selling price must be non-negative'),
+    quantity: z.number().int().min(1, 'Quantity must be greater than 0'),
+    rackLocation: z.string().optional(),
+  })
+  .refine(
+    (data) => {
+      if (data.mrp <= data.purchasePrice) return false;
+      return true;
+    },
+    {
+      message: 'MRP must be greater than purchase price',
+      path: ['mrp'],
+    },
+  )
+  .refine(
+    (data) => {
+      if (data.sellingPrice > data.mrp) return false;
+      return true;
+    },
+    {
+      message: 'Selling price cannot exceed MRP',
+      path: ['sellingPrice'],
+    },
+  )
+  .refine(
+    (data) => {
+      if (new Date(data.expiryDate) <= new Date()) return false;
+      return true;
+    },
+    {
+      message: 'Expiry date must be a future date',
+      path: ['expiryDate'],
+    },
+  );
 
 // Legacy schemas for backward compatibility
 export const InitialBatchSchema = z

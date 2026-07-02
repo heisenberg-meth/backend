@@ -271,6 +271,7 @@ class MedicinePrismaService {
           composition: rawMedicineData.composition || null,
           categoryId,
           manufacturerId,
+          supplierId: rawMedicineData.supplierId || null,
           dosageForm: rawMedicineData.dosageForm || null,
           packagingType:
             rawMedicineData.packagingType || mapDosageFormToPackaging(rawMedicineData.dosageForm),
@@ -435,6 +436,20 @@ class MedicinePrismaService {
       }
     }
 
+    // Resolve Supplier ID if provided
+    let supplierId = data.supplierId;
+    if (supplierId) {
+      const existingSup = await prisma.supplier.findFirst({
+        where: { id: supplierId, deletedAt: null },
+      });
+      if (!existingSup) {
+        throw new Error('Supplier not found');
+      }
+      if (existingSup.tenantId !== tenantId) {
+        throw new Error('Supplier does not belong to your organization');
+      }
+    }
+
     // Map status enum safely
     let status = undefined;
     if (data.status) {
@@ -459,6 +474,7 @@ class MedicinePrismaService {
     if (data.composition !== undefined) updateData.composition = data.composition;
     if (categoryId !== undefined) updateData.categoryId = categoryId;
     if (manufacturerId !== undefined) updateData.manufacturerId = manufacturerId;
+    if (supplierId !== undefined) updateData.supplierId = supplierId;
     if (data.dosageForm !== undefined) {
       updateData.dosageForm = data.dosageForm;
       updateData.packagingType = mapDosageFormToPackaging(data.dosageForm);
