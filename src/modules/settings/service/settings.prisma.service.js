@@ -285,18 +285,26 @@ class SettingsPrismaService {
    */
   async invalidateCache(tenantId, category = null) {
     try {
+      const keysToDelete = [];
+
       if (category) {
         const cacheKey = `settings:${tenantId}:${category}:*`;
         const keys = await scanKeys(cacheKey);
-        if (keys.length > 0) {
-          await redisClient.del(...keys);
-        }
+        keysToDelete.push(...keys);
+
+        // Always invalidate the 'all' cache key since the global settings object has changed
+        const allCacheKey = `settings:${tenantId}:all:*`;
+        const allKeys = await scanKeys(allCacheKey);
+        keysToDelete.push(...allKeys);
       } else {
+        // If no category specified, invalidate everything for this tenant
         const cacheKey = `settings:${tenantId}:*`;
         const keys = await scanKeys(cacheKey);
-        if (keys.length > 0) {
-          await redisClient.del(...keys);
-        }
+        keysToDelete.push(...keys);
+      }
+
+      if (keysToDelete.length > 0) {
+        await redisClient.del(...keysToDelete);
       }
     } catch (err) {
       logger.error({ err }, 'Redis cache invalidation failed');

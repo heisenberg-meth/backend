@@ -524,6 +524,15 @@ const setupFastify = async () => {
     await fastify.register(fastifyStatic, {
       root: frontendDist,
       prefix: '/',
+      setHeaders: (res, path) => {
+        if (path.includes('/assets/')) {
+          res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+        } else if (path.endsWith('index.html')) {
+          res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+          res.setHeader('Pragma', 'no-cache');
+          res.setHeader('Expires', '0');
+        }
+      },
     });
   } else {
     fastify.get('/', async () => ({
@@ -536,13 +545,20 @@ const setupFastify = async () => {
     if (
       request.url.startsWith('/api/') ||
       request.url.startsWith('/avatars/') ||
-      request.url.startsWith('/uploads/')
+      request.url.startsWith('/uploads/') ||
+      request.url.startsWith('/assets/') ||
+      request.url.match(/\.(js|css|png|jpg|jpeg|gif|ico|svg|woff|woff2|ttf|eot)$/)
     ) {
-      return reply.code(404).send({ success: false, error: 'Route not found', code: 'NOT_FOUND' });
+      return reply
+        .code(404)
+        .send({ success: false, error: 'Route or asset not found', code: 'NOT_FOUND' });
     }
 
     if (isFrontendBuilt) {
       try {
+        reply.header('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+        reply.header('Pragma', 'no-cache');
+        reply.header('Expires', '0');
         return await reply.sendFile('index.html');
       } catch (err) {
         return reply.code(404).send('Frontend not built. index.html not found.', err);

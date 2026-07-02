@@ -1,16 +1,12 @@
 import js from '@eslint/js';
 import tseslint from 'typescript-eslint';
 import globals from 'globals';
-import importPlugin from 'eslint-plugin-import';
 
 export default [
   {
     files: ['**/*.js', '**/*.ts'],
     languageOptions: {
       globals: globals.node,
-    },
-    plugins: {
-      import: importPlugin,
     },
   },
 
