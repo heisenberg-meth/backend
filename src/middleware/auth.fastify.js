@@ -41,27 +41,36 @@ async function fetchAndCacheUser(userId) {
     return cached.user;
   }
 
-  const user = await prisma.user.findUnique({
-    where: { id: userId },
-    include: {
-      tenant: true,
-      assignedRole: {
-        include: {
-          permissions: { include: { permission: true } },
+  try {
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      include: {
+        tenant: true,
+        assignedRole: {
+          include: {
+            permissions: { include: { permission: true } },
+          },
         },
       },
-    },
-  });
+    });
 
-  if (user) {
-    if (userCache.size >= USER_CACHE_MAX) {
-      const oldest = userCache.keys().next().value;
-      userCache.delete(oldest);
+    if (user) {
+      if (userCache.size >= USER_CACHE_MAX) {
+        const oldest = userCache.keys().next().value;
+        userCache.delete(oldest);
+      }
+      userCache.set(userId, { user, expiresAt: Date.now() + USER_CACHE_TTL_MS });
     }
-    userCache.set(userId, { user, expiresAt: Date.now() + USER_CACHE_TTL_MS });
-  }
 
-  return user;
+    return user;
+  } catch (err) {
+    if (err.code === 'P2022') {
+      const customErr = new Error('Authentication schema mismatch. Missing database column.');
+      customErr.code = 'P2022';
+      throw customErr;
+    }
+    throw err;
+  }
 }
 
 export const authenticate = async (request, reply) => {
@@ -154,7 +163,22 @@ export const authenticate = async (request, reply) => {
     sessionService.touchSession(sessionId).catch(() => {});
   }
 
-  const user = await fetchAndCacheUser(request.user.userId);
+  let user;
+  try {
+    user = await fetchAndCacheUser(request.user.userId);
+  } catch (err) {
+    if (err.code === 'P2022') {
+      request.log.error(
+        { event: 'SCHEMA_MISMATCH' },
+        'Authentication schema mismatch. Missing database column.',
+      );
+      return reply.code(503).send({
+        success: false,
+        message: 'Authentication service temporarily unavailable.',
+      });
+    }
+    throw err;
+  }
 
   if (!user) {
     return reply.code(401).send({

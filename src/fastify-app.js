@@ -236,6 +236,10 @@ const setupFastify = async () => {
         statusCode = 404;
         message = 'Record not found.';
         code = 'RECORD_NOT_FOUND';
+      } else if (error.code === 'P2022') {
+        statusCode = 503;
+        message = 'Authentication service temporarily unavailable.';
+        code = 'SCHEMA_MISMATCH';
       } else {
         message = 'Database operation failed.';
         code = 'DATABASE_ERROR';
@@ -317,6 +321,7 @@ const setupFastify = async () => {
 
     try {
       await prisma.$queryRaw`SELECT 1`;
+      await prisma.$queryRaw`SELECT "failedLoginAttempts", "lockedUntil", "lastFailedLogin", "lastSuccessfulLogin" FROM "User" LIMIT 1`;
       dbHealthGauge.set(1);
     } catch {
       dbStatus = 'disconnected';
@@ -382,6 +387,7 @@ const setupFastify = async () => {
 
     try {
       await prisma.$queryRaw`SELECT 1`;
+      await prisma.$queryRaw`SELECT "failedLoginAttempts", "lockedUntil", "lastFailedLogin", "lastSuccessfulLogin" FROM "User" LIMIT 1`;
     } catch (error) {
       dbStatus = 'unhealthy';
       logger.info(error);
@@ -405,6 +411,7 @@ const setupFastify = async () => {
   fastify.get('/health/database', async (request, reply) => {
     try {
       await prisma.$queryRaw`SELECT 1`;
+      await prisma.$queryRaw`SELECT "failedLoginAttempts", "lockedUntil", "lastFailedLogin", "lastSuccessfulLogin" FROM "User" LIMIT 1`;
       return { status: 'healthy' };
     } catch (e) {
       return reply.code(500).send({ status: 'unhealthy', error: e.message });

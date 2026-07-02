@@ -74,6 +74,14 @@ async function validateDatabaseHealth() {
     }
 
     try {
+      await prisma.$queryRaw`SELECT "failedLoginAttempts", "lockedUntil", "lastFailedLogin", "lastSuccessfulLogin" FROM "User" LIMIT 1`;
+    } catch {
+      throw new Error(
+        'Schema inconsistency: "User" table is missing required authentication security columns (failedLoginAttempts, etc.)',
+      );
+    }
+
+    try {
       await prisma.$queryRaw`SELECT "status", "maxBranches", "maxUsers", "aiEnabled", "whatsappEnabled" FROM "Tenant" LIMIT 1`;
     } catch {
       throw new Error(

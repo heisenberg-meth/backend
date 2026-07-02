@@ -120,6 +120,17 @@ class AuthFastifyController {
         error?.message === 'Invalid credentials' ? 'invalid_password' : 'other',
       );
 
+      if (error.code === 'P2022') {
+        request.log.error(
+          { event: 'SCHEMA_MISMATCH' },
+          'Authentication schema mismatch. Missing database column.',
+        );
+        return reply.code(503).send({
+          success: false,
+          message: 'Authentication service temporarily unavailable.',
+        });
+      }
+
       if (error instanceof ZodError) {
         const firstIssue = error.issues?.[0];
         return reply
