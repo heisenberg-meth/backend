@@ -227,6 +227,7 @@ class SupplierReturnRepository {
         returnId,
         creditNoteNumber,
         amount: data.amount || returnRecord.returnAmount || 0,
+        remainingAmount: data.amount || returnRecord.returnAmount || 0,
         notes: data.notes,
       },
       include: {

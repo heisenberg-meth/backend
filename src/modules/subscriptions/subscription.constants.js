@@ -22,7 +22,7 @@ export const SUBSCRIPTION_PLANS = {
     name: 'Free Plan',
     price: 0,
     billingCycle: 'monthly',
-    features: [],
+    features: ['CREDIT_NOTES'],
     limits: { users: 1, branches: 1, /* medicines: 100, */ batches: 500 },
   },
   starter: {
