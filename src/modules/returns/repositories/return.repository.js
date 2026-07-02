@@ -78,7 +78,7 @@ class ReturnRepository {
             select: { invoiceNumber: true, totalAmount: true },
           },
           sale: {
-            select: { invoiceNumber: true, id: true },
+            select: { id: true },
           },
           items: true,
           patient: {
