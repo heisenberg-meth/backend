@@ -29,7 +29,7 @@ const mapNotification = (n) => {
 class NotificationFastifyController {
   async unifiedSend(request, reply) {
     try {
-      const { tenantId, userId: userId } = request.user;
+      const { tenantId, id: userId } = request.user;
       const { channel, recipient, template, variables, patientId, notificationType } = request.body;
 
       const result = await orchestratorService.send({
@@ -53,7 +53,7 @@ class NotificationFastifyController {
 
   async sendEmail(request, reply) {
     try {
-      const { tenantId, userId: userId } = request.user;
+      const { tenantId, id: userId } = request.user;
       const { to, subject, template, data, notificationType } = request.body;
 
       if (!to || !Array.isArray(to) || to.length === 0) {
@@ -123,7 +123,7 @@ class NotificationFastifyController {
 
   async sendSms(request, reply) {
     try {
-      const { tenantId, userId: userId } = request.user;
+      const { tenantId, id: userId } = request.user;
       const { phoneNumber, template, data, notificationType } = request.body;
 
       if (!phoneNumber) {
@@ -183,7 +183,7 @@ class NotificationFastifyController {
 
   async sendWhatsApp(request, reply) {
     try {
-      const { tenantId, userId: userId } = request.user;
+      const { tenantId, id: userId } = request.user;
       const { phoneNumber, template, data, notificationType } = request.body;
 
       if (!phoneNumber) {
@@ -620,7 +620,7 @@ class NotificationFastifyController {
 
   async updateSettings(request, reply) {
     try {
-      const { tenantId, userId: userId } = request.user;
+      const { tenantId, id: userId } = request.user;
       const { branchId, ...settingsData } = request.body;
 
       let settings = await prisma.notificationSettings.findFirst({
@@ -779,7 +779,7 @@ class NotificationFastifyController {
 
   async getUserNotifications(request, reply) {
     try {
-      const { tenantId, userId } = request.user;
+      const { tenantId, id: userId } = request.user;
       const { page = 1, limit = 50 } = request.query;
       const take = parseInt(limit);
       const skip = (parseInt(page) - 1) * take;
@@ -817,7 +817,7 @@ class NotificationFastifyController {
   async markNotificationRead(request, reply) {
     try {
       const { id } = request.params;
-      const { tenantId, userId: userId } = request.user;
+      const { tenantId, id: userId } = request.user;
 
       let notification = await prisma.notification.findFirst({
         where: { id, tenantId, userId },
@@ -847,7 +847,7 @@ class NotificationFastifyController {
 
   async markAllNotificationsRead(request, reply) {
     try {
-      const { tenantId, userId: userId } = request.user;
+      const { tenantId, id: userId } = request.user;
 
       await prisma.notification.updateMany({
         where: { tenantId, userId, isRead: false },
@@ -864,7 +864,7 @@ class NotificationFastifyController {
   async deleteUserNotification(request, reply) {
     try {
       const { id } = request.params;
-      const { tenantId, userId } = request.user;
+      const { tenantId, id: userId } = request.user;
 
       const notification = await prisma.notification.findFirst({
         where: { id, tenantId },
