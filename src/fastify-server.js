@@ -74,11 +74,27 @@ async function validateDatabaseHealth() {
     }
 
     try {
-      await prisma.$queryRaw`SELECT "failedLoginAttempts", "lockedUntil", "lastFailedLogin", "lastSuccessfulLogin" FROM "User" LIMIT 1`;
-    } catch {
-      throw new Error(
-        'Schema inconsistency: "User" table is missing required authentication security columns (failedLoginAttempts, etc.)',
-      );
+      const authColsResult = await prisma.$queryRaw`
+        SELECT column_name 
+        FROM information_schema.columns 
+        WHERE table_name = 'User' AND column_name IN ('failedLoginAttempts', 'lockedUntil', 'lastFailedLogin', 'lastSuccessfulLogin');
+      `;
+      const foundCols = authColsResult.map((r) => r.column_name);
+      const requiredCols = [
+        'failedLoginAttempts',
+        'lockedUntil',
+        'lastFailedLogin',
+        'lastSuccessfulLogin',
+      ];
+      const missingCols = requiredCols.filter((c) => !foundCols.includes(c));
+
+      if (missingCols.length > 0) {
+        throw new Error(
+          `"User" table is missing required authentication security columns: ${missingCols.join(', ')}`,
+        );
+      }
+    } catch (err) {
+      throw new Error(`Schema inconsistency: ${err.message}`);
     }
 
     try {

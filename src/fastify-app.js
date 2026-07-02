@@ -321,7 +321,9 @@ const setupFastify = async () => {
 
     try {
       await prisma.$queryRaw`SELECT 1`;
-      await prisma.$queryRaw`SELECT "failedLoginAttempts", "lockedUntil", "lastFailedLogin", "lastSuccessfulLogin" FROM "User" LIMIT 1`;
+      const authCols =
+        await prisma.$queryRaw`SELECT column_name FROM information_schema.columns WHERE table_name = 'User' AND column_name IN ('failedLoginAttempts', 'lockedUntil', 'lastFailedLogin', 'lastSuccessfulLogin')`;
+      if (authCols.length < 4) throw new Error('Schema mismatch');
       dbHealthGauge.set(1);
     } catch {
       dbStatus = 'disconnected';
@@ -387,7 +389,9 @@ const setupFastify = async () => {
 
     try {
       await prisma.$queryRaw`SELECT 1`;
-      await prisma.$queryRaw`SELECT "failedLoginAttempts", "lockedUntil", "lastFailedLogin", "lastSuccessfulLogin" FROM "User" LIMIT 1`;
+      const authCols =
+        await prisma.$queryRaw`SELECT column_name FROM information_schema.columns WHERE table_name = 'User' AND column_name IN ('failedLoginAttempts', 'lockedUntil', 'lastFailedLogin', 'lastSuccessfulLogin')`;
+      if (authCols.length < 4) throw new Error('Schema mismatch');
     } catch (error) {
       dbStatus = 'unhealthy';
       logger.info(error);
@@ -411,7 +415,9 @@ const setupFastify = async () => {
   fastify.get('/health/database', async (request, reply) => {
     try {
       await prisma.$queryRaw`SELECT 1`;
-      await prisma.$queryRaw`SELECT "failedLoginAttempts", "lockedUntil", "lastFailedLogin", "lastSuccessfulLogin" FROM "User" LIMIT 1`;
+      const authCols =
+        await prisma.$queryRaw`SELECT column_name FROM information_schema.columns WHERE table_name = 'User' AND column_name IN ('failedLoginAttempts', 'lockedUntil', 'lastFailedLogin', 'lastSuccessfulLogin')`;
+      if (authCols.length < 4) throw new Error('Schema mismatch');
       return { status: 'healthy' };
     } catch (e) {
       return reply.code(500).send({ status: 'unhealthy', error: e.message });
