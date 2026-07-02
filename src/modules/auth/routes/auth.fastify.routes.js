@@ -75,6 +75,18 @@ async function authRoutes(fastify) {
     authController.getMe,
   );
 
+  fastify.put(
+    '/me',
+    {
+      preHandler: [authenticate],
+      schema: {
+        tags: ['Auth'],
+        summary: 'Update current user profile',
+      },
+    },
+    authController.updateProfile,
+  );
+
   fastify.post(
     '/register',
     {

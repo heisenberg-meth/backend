@@ -630,6 +630,9 @@ class AuthPrismaService {
       const sanitized = phone.replace(/[^0-9+\-() ]/g, '').trim();
       updateData.phone = sanitized || null;
     }
+    if (data.avatar !== undefined) {
+      updateData.avatar = data.avatar;
+    }
 
     const user = await prisma.user.update({
       where: { id: userId },
