@@ -7,16 +7,22 @@ class SettingsFastifyController {
   async getSettings(request, reply) {
     const settings = await settingsService.getSettings(request.tenantId);
     if (settings?.invoiceTemplate?.logoUrl) {
-      settings.invoiceTemplate.logoUrl = MediaService.enforceHttps(settings.invoiceTemplate.logoUrl);
+      settings.invoiceTemplate.logoUrl = MediaService.enforceHttps(
+        settings.invoiceTemplate.logoUrl,
+      );
     }
     if (settings?.storeProfile?.logoUrl) {
       settings.storeProfile.logoUrl = MediaService.enforceHttps(settings.storeProfile.logoUrl);
     }
     if (settings?.storeProfile?.invoiceLogoUrl) {
-      settings.storeProfile.invoiceLogoUrl = MediaService.enforceHttps(settings.storeProfile.invoiceLogoUrl);
+      settings.storeProfile.invoiceLogoUrl = MediaService.enforceHttps(
+        settings.storeProfile.invoiceLogoUrl,
+      );
     }
     if (settings?.storeProfile?.whatsappLogoUrl) {
-      settings.storeProfile.whatsappLogoUrl = MediaService.enforceHttps(settings.storeProfile.whatsappLogoUrl);
+      settings.storeProfile.whatsappLogoUrl = MediaService.enforceHttps(
+        settings.storeProfile.whatsappLogoUrl,
+      );
     }
     return reply.send(settings);
   }
@@ -40,7 +46,7 @@ class SettingsFastifyController {
       request.user?.id || request.tenantId,
       request.ip,
     );
-    return reply.send(settings);
+    return reply.send({ [settings.category]: settings.data });
   }
 
   async getInvoiceTemplate(request, reply) {

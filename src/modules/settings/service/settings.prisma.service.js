@@ -62,7 +62,22 @@ class SettingsPrismaService {
     // If a specific category is requested, return only that
     if (category && CATEGORY_FIELD_MAP[category]) {
       const field = CATEGORY_FIELD_MAP[category];
-      const data = settings[field] || {};
+      let data = settings[field] || {};
+
+      if (category === 'storeProfile' && Object.keys(data).length === 0) {
+        data = { gstin: null, businessName: '', state: '', filingFrequency: 'Monthly' };
+      } else if (category === 'invoiceTemplate' && Object.keys(data).length === 0) {
+        data = {
+          templateName: 'Standard',
+          primaryColor: '#000000',
+          showLogo: false,
+          showUPI: false,
+          footerText: '',
+          termsAndConditions:
+            '1. Goods once sold will not be taken back.\n2. All disputes subject to local jurisdiction.',
+        };
+      }
+
       const result = { category, data };
 
       await this._cacheSet(cacheKey, result);
@@ -81,9 +96,28 @@ class SettingsPrismaService {
       tax: settings.taxSettings || {},
       loyalty: settings.loyaltySettings || {},
       security: settings.securitySettings || {},
-      invoiceTemplate: settings.invoiceTemplate || {},
+      invoiceTemplate:
+        Object.keys(settings.invoiceTemplate || {}).length > 0
+          ? settings.invoiceTemplate
+          : {
+              templateName: 'Standard',
+              primaryColor: '#000000',
+              showLogo: false,
+              showUPI: false,
+              footerText: '',
+              termsAndConditions:
+                '1. Goods once sold will not be taken back.\n2. All disputes subject to local jurisdiction.',
+            },
       alerts: settings.alertThresholds || {},
-      storeProfile: settings.storeProfile || {},
+      storeProfile:
+        Object.keys(settings.storeProfile || {}).length > 0
+          ? settings.storeProfile
+          : {
+              gstin: null,
+              businessName: '',
+              state: '',
+              filingFrequency: 'Monthly',
+            },
       integrations: settings.integrations || {},
     };
 
@@ -179,7 +213,22 @@ class SettingsPrismaService {
     const oldValue = oldSettings?.[field] || null;
 
     // Merge with existing data
-    const existing = oldSettings?.[field] || {};
+    let existing = oldSettings?.[field] || {};
+
+    if (category === 'storeProfile' && Object.keys(existing).length === 0) {
+      existing = { gstin: null, businessName: '', state: '', filingFrequency: 'Monthly' };
+    } else if (category === 'invoiceTemplate' && Object.keys(existing).length === 0) {
+      existing = {
+        templateName: 'Standard',
+        primaryColor: '#000000',
+        showLogo: false,
+        showUPI: false,
+        footerText: '',
+        termsAndConditions:
+          '1. Goods once sold will not be taken back.\n2. All disputes subject to local jurisdiction.',
+      };
+    }
+
     const merged = { ...existing, ...data };
 
     await prisma.settings.upsert({
@@ -295,6 +344,21 @@ class SettingsPrismaService {
           maxLoginAttempts: 5,
           passwordMinLength: 8,
           auditLogging: false,
+        },
+        storeProfile: {
+          gstin: null,
+          businessName: '',
+          state: '',
+          filingFrequency: 'Monthly',
+        },
+        invoiceTemplate: {
+          templateName: 'Standard',
+          primaryColor: '#000000',
+          showLogo: false,
+          showUPI: false,
+          footerText: '',
+          termsAndConditions:
+            '1. Goods once sold will not be taken back.\n2. All disputes subject to local jurisdiction.',
         },
       },
     });
