@@ -135,6 +135,18 @@ class AuthFastifyController {
         );
         return reply.code(401).send(errorResponse(error.message, AUTH_ERRORS.INVALID_CREDENTIALS));
       }
+      if (error?.code === 'ACCOUNT_TEMPORARILY_LOCKED') {
+        request.log.warn(
+          { event: 'AUTH_ACCOUNT_LOCKED', email: request.body?.email },
+          'Account Temporarily Locked',
+        );
+        return reply.code(423).send({
+          success: false,
+          code: 'ACCOUNT_TEMPORARILY_LOCKED',
+          retryAfter: error.retryAfter,
+          message: error.message,
+        });
+      }
       if (error?.message === 'Invalid 2FA code') {
         request.log.warn(
           { event: 'AUTH_LOGIN_FAILURE_2FA', email: request.body?.email },

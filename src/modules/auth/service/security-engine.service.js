@@ -83,12 +83,18 @@ class SecurityEngineService {
    */
   async checkBruteForce(userId, ipAddress) {
     if (userId) {
-      const lockout = await redis.get(`auth:lockout:${userId}`).catch(() => null);
-      if (lockout) {
+      const user = await prisma.user.findUnique({
+        where: { id: userId },
+        select: { lockedUntil: true },
+      });
+
+      if (user?.lockedUntil && user.lockedUntil > new Date()) {
+        const remainingSeconds = Math.ceil((user.lockedUntil.getTime() - Date.now()) / 1000);
         const err = new Error(
           'Account locked due to too many failed attempts. Please try again later.',
         );
-        err.code = AUTH_ERRORS.AUTH_ACCOUNT_LOCKED;
+        err.code = 'ACCOUNT_TEMPORARILY_LOCKED';
+        err.retryAfter = remainingSeconds;
         throw err;
       }
     }
@@ -110,16 +116,28 @@ class SecurityEngineService {
    */
   async recordFailedLogin({ userId, email, ipAddress }) {
     if (userId) {
-      const userAttemptsKey = `auth:attempts:${userId}`;
-      const attempts = await redis.incr(userAttemptsKey).catch(() => 1);
-      if (attempts === 1) await redis.expire(userAttemptsKey, 900).catch(() => {});
+      const user = await prisma.user.findUnique({
+        where: { id: userId },
+        select: { failedLoginAttempts: true },
+      });
 
-      if (attempts >= 5) {
-        // Lock account for 15 minutes
-        await redis.setex(`auth:lockout:${userId}`, 900, 'LOCKED').catch(() => {});
-        logger.warn({ userId, email }, 'Brute Force Defense: Account locked for 15 minutes');
+      if (user) {
+        const newAttempts = user.failedLoginAttempts + 1;
+        const updates = {
+          failedLoginAttempts: newAttempts,
+          lastFailedLogin: new Date(),
+        };
 
-        eventBus.publish('AccountLocked', { userId, email, ipAddress, timestamp: new Date() });
+        if (newAttempts >= 5) {
+          updates.lockedUntil = new Date(Date.now() + 15 * 60 * 1000); // Lock for 15 minutes
+          logger.warn({ userId, email }, 'Brute Force Defense: Account locked for 15 minutes');
+          eventBus.publish('AccountLocked', { userId, email, ipAddress, timestamp: new Date() });
+        }
+
+        await prisma.user.update({
+          where: { id: userId },
+          data: updates,
+        });
       }
     }
 
@@ -135,7 +153,16 @@ class SecurityEngineService {
    */
   async clearFailedLogin({ userId }) {
     if (!userId) return;
-    await redis.del(`auth:attempts:${userId}`, `auth:lockout:${userId}`).catch(() => {});
+    await prisma.user
+      .update({
+        where: { id: userId },
+        data: {
+          failedLoginAttempts: 0,
+          lockedUntil: null,
+          lastSuccessfulLogin: new Date(),
+        },
+      })
+      .catch(() => {});
   }
 }
 

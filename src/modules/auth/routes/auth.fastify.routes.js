@@ -107,12 +107,6 @@ async function authRoutes(fastify) {
   fastify.post(
     '/login',
     {
-      config: {
-        rateLimit: {
-          max: 5,
-          timeWindow: '15 minutes',
-        },
-      },
       schema: {
         tags: ['Auth'],
         summary: 'Login user (PostgreSQL) with device fingerprint',
@@ -126,8 +120,8 @@ async function authRoutes(fastify) {
     {
       config: {
         rateLimit: {
-          max: 10,
-          timeWindow: '15 minutes',
+          max: 100,
+          timeWindow: '1 minute',
         },
       },
       schema: {

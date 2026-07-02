@@ -251,6 +251,10 @@ model User {
   emailVerificationToken       String?
   emailVerificationExpiry      DateTime?
   pendingEmail                 String?
+  failedLoginAttempts          Int                        @default(0)
+  lastFailedLogin              DateTime?
+  lockedUntil                  DateTime?
+  lastSuccessfulLogin          DateTime?
   alertSettings                AlertSettings[]
   auditLogs                    AuditLog[]
   batchAuditLogs               BatchAuditLog[]
