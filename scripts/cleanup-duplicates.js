@@ -24,7 +24,9 @@ async function mergeDuplicates(model, nameField, tenantField, label) {
     const remove = entries.slice(1);
     const removeIds = remove.map((r) => r.id);
 
-    console.log(`  Merging ${removeIds.length} duplicates of "${entries[0][nameField]}" into id=${keep.id}`);
+    console.log(
+      `  Merging ${removeIds.length} duplicates of "${entries[0][nameField]}" into id=${keep.id}`,
+    );
 
     if (model === 'medicineCategory') {
       await prisma.medicine.updateMany({

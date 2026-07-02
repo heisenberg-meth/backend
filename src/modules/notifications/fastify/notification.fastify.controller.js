@@ -881,7 +881,11 @@ class NotificationFastifyController {
         });
       }
 
-      await prisma.notification.delete({ where: { id } });
+      await prisma.$transaction([
+        prisma.notificationDeliveryEvent.deleteMany({ where: { notificationId: id } }),
+        prisma.notificationDeadLetter.deleteMany({ where: { notificationId: id } }),
+        prisma.notification.delete({ where: { id } }),
+      ]);
 
       return reply.send({ success: true, message: 'Notification deleted successfully.' });
     } catch (error) {
