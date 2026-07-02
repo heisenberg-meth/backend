@@ -773,6 +773,8 @@ class PurchaseOrderService {
             );
           }
 
+          poItem.receivedQuantity += item.receivedQuantity;
+
           if (!item.batchNumber)
             throw new BadRequestError(`Batch number is required for ${poItem.medicineName}`);
           if (!item.expiryDate)
@@ -920,12 +922,11 @@ class PurchaseOrderService {
           }
 
           // 6. Update PO Item received quantity
-          const newReceived = poItem.receivedQuantity + item.receivedQuantity;
           await tx.purchaseOrderItem.update({
             where: { id: poItem.id },
             data: {
-              receivedQuantity: newReceived,
-              remainingQuantity: poItem.quantity - newReceived,
+              receivedQuantity: poItem.receivedQuantity,
+              remainingQuantity: poItem.quantity - poItem.receivedQuantity,
             },
           });
         }

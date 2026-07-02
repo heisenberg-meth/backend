@@ -26,6 +26,11 @@ jobs:
     - name: Install Dependencies
       run: npm ci
 
+    - name: Generate Prisma Client
+      env:
+        DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      run: npx prisma generate
+
     - name: Pre-migration Database Backup
       env:
         DATABASE_URL: ${{ secrets.DATABASE_URL }}
@@ -42,6 +47,13 @@ jobs:
       env:
         DATABASE_URL: ${{ secrets.DATABASE_URL }}
 
-    - name: Build and Deploy
-      run: echo "Triggering Render deployment..."
-      # Use render API or webhook here to actually deploy the backend
+    - name: Build Backend
+      run: npm run build
+
+    - name: Deploy to Render
+      run: curl -X POST "${{ secrets.RENDER_DEPLOY_HOOK }}"
+
+    - name: Verify Deployment
+      run: |
+        sleep 20
+        curl --fail https://api.medassist.viyaninfo.com/health
