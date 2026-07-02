@@ -55,7 +55,11 @@ class SalesRepository {
         },
         invoice: true,
         patient: true,
-        salesReturns: true,
+        salesReturns: {
+          include: {
+            items: true,
+          },
+        },
       },
     });
   }
