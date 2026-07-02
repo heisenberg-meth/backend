@@ -52,6 +52,7 @@ class MedicineRepository {
         include: {
           category: { select: { id: true, name: true } },
           manufacturer: { select: { id: true, name: true } },
+          supplier: { select: { id: true, name: true } },
           inventory: branchId ? { where: { branchId } } : true,
           inventoryBatches: {
             where: { branchId: branchId || null, deletedAt: null },
@@ -92,6 +93,8 @@ class MedicineRepository {
         availableStock,
         batchCount: batches.length,
         category: m.category,
+        supplierId: m.supplierId,
+        supplier: m.supplier,
         createdAt: m.createdAt,
       };
     });
@@ -113,6 +116,7 @@ class MedicineRepository {
       include: {
         category: { select: { id: true, name: true } },
         manufacturer: { select: { id: true, name: true } },
+        supplier: { select: { id: true, name: true } },
         pricingMaster: {
           where: { isActive: true },
           orderBy: { effectiveFrom: 'desc' },
@@ -181,6 +185,8 @@ class MedicineRepository {
       isActive: medicine.isActive,
       category: medicine.category,
       manufacturerData: medicine.manufacturer,
+      supplierId: medicine.supplierId,
+      supplier: medicine.supplier,
       createdAt: medicine.createdAt,
       updatedAt: medicine.updatedAt,
       batches: batches.map((b) => ({

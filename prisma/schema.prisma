@@ -729,6 +729,7 @@ model Medicine {
   manufacturerName         String?
   categoryId               String?
   manufacturerId           String?
+  supplierId               String?
   medicineType             MedicineType?
   dosageForm               String?
   strength                 String?
@@ -781,6 +782,7 @@ model Medicine {
   invoiceItems             InvoiceItem[]
   category                 MedicineCategory?          @relation(fields: [categoryId], references: [id])
   manufacturer             Manufacturer?              @relation(fields: [manufacturerId], references: [id])
+  supplier                 Supplier?                  @relation(fields: [supplierId], references: [id])
   tenant                   Tenant                     @relation(fields: [tenantId], references: [id])
   user                     User?                      @relation(fields: [userId], references: [id])
   medicineBarcodes         MedicineBarcode[]
@@ -1222,6 +1224,7 @@ model Supplier {
   drugCategories     String[]             @default([])
   inventoryBatches   InventoryBatch[]
   medicineSuppliers  MedicineSupplier[]
+  medicines          Medicine[]
   purchaseInvoices   PurchaseInvoice[]
   purchaseOrders     PurchaseOrder[]
   tenant             Tenant               @relation(fields: [tenantId], references: [id])

@@ -380,6 +380,20 @@ class MedicineIntelligenceService {
     delete cleanData.statusReason;
     delete cleanData.categoryId;
     delete cleanData.manufacturerId;
+    delete cleanData.supplierId;
+
+    let supplierId = data.supplierId;
+    if (supplierId) {
+      const existingSup = await prisma.supplier.findFirst({
+        where: { id: supplierId, deletedAt: null },
+      });
+      if (!existingSup) {
+        throw new Error('Supplier not found');
+      }
+      if (existingSup.tenantId !== tenantId) {
+        throw new Error('Supplier does not belong to your organization');
+      }
+    }
 
     if (cleanData.dosageForm !== undefined) {
       cleanData.packagingType = mapDosageFormToPackaging(cleanData.dosageForm);
@@ -392,6 +406,9 @@ class MedicineIntelligenceService {
       }),
       ...(manufacturerId !== undefined && {
         manufacturer: manufacturerId ? { connect: { id: manufacturerId } } : { disconnect: true },
+      }),
+      ...(supplierId !== undefined && {
+        supplier: supplierId ? { connect: { id: supplierId } } : { disconnect: true },
       }),
     };
 
