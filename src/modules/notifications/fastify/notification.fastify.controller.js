@@ -779,31 +779,24 @@ class NotificationFastifyController {
 
   async getUserNotifications(request, reply) {
     try {
-      const { userId: userId } = request.user;
+      const { tenantId, userId } = request.user;
       const { page = 1, limit = 50 } = request.query;
       const take = parseInt(limit);
+      const skip = (parseInt(page) - 1) * take;
 
-      console.log('User ID:', userId);
-
-      // TEMPORARILY BYPASSING USER FILTERING FOR STEP 5
-      const notifications = await prisma.notification.findMany({
-        take: 20,
-        orderBy: {
-          createdAt: 'desc',
-        },
-      });
-      const total = notifications.length;
-
-      console.log('Notifications:', notifications.length);
-
-      // Log latest database notifications to compare user IDs (Step 2)
-      console.log('--- Latest Database Notifications ---');
-      notifications.slice(0, 5).forEach((n, idx) => {
-        console.log(
-          `[${idx}] id: ${n.id}, userId: ${n.userId}, subject: "${n.subject}", isRead: ${n.isRead}`,
-        );
-      });
-      console.log('Logged-in user:', userId);
+      const [notifications, total] = await Promise.all([
+        prisma.notification.findMany({
+          where: { tenantId, userId },
+          take,
+          skip,
+          orderBy: {
+            createdAt: 'desc',
+          },
+        }),
+        prisma.notification.count({
+          where: { tenantId, userId },
+        }),
+      ]);
 
       return reply.send({
         success: true,
@@ -871,18 +864,26 @@ class NotificationFastifyController {
   async deleteUserNotification(request, reply) {
     try {
       const { id } = request.params;
-      const { tenantId, userId: userId } = request.user;
+      const { tenantId, userId } = request.user;
 
       const notification = await prisma.notification.findFirst({
-        where: { id, tenantId, userId },
+        where: { id, tenantId },
       });
+
       if (!notification) {
-        return reply.code(404).send({ success: false, message: 'Notification not found' });
+        return reply.code(404).send({ success: false, message: 'Notification not found.' });
+      }
+
+      if (notification.userId && notification.userId !== userId) {
+        return reply.code(403).send({
+          success: false,
+          message: 'You do not have permission to delete this notification.',
+        });
       }
 
       await prisma.notification.delete({ where: { id } });
 
-      return reply.send({ success: true, data: { message: 'Notification deleted' } });
+      return reply.send({ success: true, message: 'Notification deleted successfully.' });
     } catch (error) {
       logger.error({ error }, 'Failed to delete notification');
       return reply.code(500).send({ success: false, message: error.message });
