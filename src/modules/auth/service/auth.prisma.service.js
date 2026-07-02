@@ -652,7 +652,16 @@ class AuthPrismaService {
     const { invalidateUserCache } = await import('./auth.cache.js');
     invalidateUserCache(userId);
 
-    return { message: 'Profile updated successfully' };
+    return {
+      message: 'Profile updated successfully',
+      user: {
+        id: user.id,
+        email: user.email,
+        fullName: user.fullName,
+        phone: user.phone,
+        avatar: user.avatar,
+      },
+    };
   }
 
   async changePassword(userId, currentPassword, newPassword) {
@@ -875,6 +884,7 @@ class AuthPrismaService {
         id: user.id,
         email: user.email,
         fullName: user.fullName,
+        phone: user.phone,
         role: user.role,
         tenantId: user.tenantId,
         branchId: user.branchId,
