@@ -46,12 +46,30 @@ class SupplierReturnController {
   async listReturns(request, reply) {
     try {
       const result = await supplierReturnService.listReturns(request.tenantId, request.query);
-      const mappedReturns = result.returns.map((ret) => ({
-        ...ret,
-        refundAmount: ret.returnAmount,
-        value: ret.returnAmount,
-        originalInvoiceId: ret.purchaseInvoiceId,
-      }));
+      const mappedReturns = result.returns.map((ret) => {
+        const hasItems = ret.items && ret.items.length > 0;
+        const normalizedItems = hasItems
+          ? ret.items
+          : ret.batchId
+            ? [
+                {
+                  medicine: ret.medicine,
+                  batch: ret.batch,
+                  quantity: ret.quantity,
+                  purchasePrice: ret.returnAmount,
+                  reason: ret.reason,
+                },
+              ]
+            : [];
+
+        return {
+          ...ret,
+          items: normalizedItems,
+          refundAmount: ret.returnAmount,
+          value: ret.returnAmount,
+          originalInvoiceId: ret.purchaseInvoiceId,
+        };
+      });
       return reply.send({
         success: true,
         data: mappedReturns,
@@ -77,8 +95,24 @@ class SupplierReturnController {
       if (!returnRecord) {
         return reply.code(404).send({ success: false, message: 'Return not found' });
       }
+      const hasItems = returnRecord.items && returnRecord.items.length > 0;
+      const normalizedItems = hasItems
+        ? returnRecord.items
+        : returnRecord.batchId
+          ? [
+              {
+                medicine: returnRecord.medicine,
+                batch: returnRecord.batch,
+                quantity: returnRecord.quantity,
+                purchasePrice: returnRecord.returnAmount,
+                reason: returnRecord.reason,
+              },
+            ]
+          : [];
+
       const mappedReturn = {
         ...returnRecord,
+        items: normalizedItems,
         refundAmount: returnRecord.returnAmount,
         value: returnRecord.returnAmount,
         originalInvoiceId: returnRecord.purchaseInvoiceId,

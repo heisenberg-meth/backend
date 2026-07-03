@@ -57,7 +57,7 @@ class SalesRepository {
         patient: true,
         salesReturns: {
           include: {
-            items: true,
+            batch: true,
           },
         },
       },

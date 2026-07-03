@@ -108,6 +108,8 @@ class SupplierReturnRepository {
           creditNotes: { select: { id: true, creditNoteNumber: true, amount: true, status: true } },
           creator: { select: { id: true, fullName: true } },
           purchaseInvoice: { select: { id: true, invoiceNumber: true } },
+          medicine: { select: { id: true, name: true, genericName: true } },
+          batch: { select: { id: true, batchNumber: true, expiryDate: true } },
           _count: { select: { items: true } },
         },
         orderBy: { createdAt: 'desc' },
@@ -141,6 +143,8 @@ class SupplierReturnRepository {
         creator: { select: { id: true, fullName: true } },
         approver: { select: { id: true, fullName: true } },
         purchaseInvoice: { select: { id: true, invoiceNumber: true } },
+        medicine: { select: { id: true, name: true, genericName: true } },
+        batch: { select: { id: true, batchNumber: true, expiryDate: true, branchId: true } },
       },
     });
   }
