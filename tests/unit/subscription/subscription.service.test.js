@@ -1,11 +1,11 @@
-import { jest , describe, beforeEach, it, expect } from '@jest/globals';
+import { jest, describe, beforeEach, it, expect } from '@jest/globals';
 
 const mockSubscriptionPlanFindUnique = jest.fn();
 const mockSubscriptionUpsert = jest.fn();
 const mockSubscriptionUpdate = jest.fn();
 const mockSubscriptionFindUnique = jest.fn();
 
-jest.unstable_mockModule('../../../src/config/prisma.js', () => ({
+jest.unstable_mockModule('../src/config/prisma.js', () => ({
   default: {
     subscriptionPlan: { findUnique: mockSubscriptionPlanFindUnique },
     subscription: {
@@ -13,12 +13,14 @@ jest.unstable_mockModule('../../../src/config/prisma.js', () => ({
       update: mockSubscriptionUpdate,
       findUnique: mockSubscriptionFindUnique,
     },
+    subscriptionHistory: {
+      create: jest.fn().mockResolvedValue({}),
+    },
   },
 }));
 
-const { default: subscriptionService } = await import(
-  '../../../src/modules/subscriptions/subscription.service.js'
-);
+const { default: subscriptionService } =
+  await import('../../../src/modules/subscriptions/subscription.service.js');
 
 describe('Subscription Service', () => {
   beforeEach(() => {

@@ -9,5 +9,8 @@ export default {
     '^.+\\.tsx?$': ['ts-jest', { useESM: true }],
   },
   transformIgnorePatterns: ['/node_modules/'],
+  moduleNameMapper: {
+    '^(\\.{2,4})/src/(.*)$': '<rootDir>/src/$2',
+  },
   verbose: false,
 };

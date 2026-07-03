@@ -21,7 +21,8 @@ export const registerSchema = z
     shopName: z.string().trim().optional().nullable(),
     branchName: z.string().trim().optional().nullable(),
     fingerprint: z.string().optional().nullable(),
-    selectedPlanId: z.string().trim().optional().default('free-trial'),
+    selectedPlanId: z.string().trim().optional(),
+    planId: z.string().trim().optional(),
   })
   .superRefine((data, ctx) => {
     if (data.password !== data.confirmPassword) {
@@ -38,7 +39,25 @@ export const registerSchema = z
         path: ['shopName'],
       });
     }
-  });
+    const plan = data.selectedPlanId || data.planId;
+    if (!plan || plan.trim() === '') {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'Subscription plan selection is required',
+        path: ['selectedPlanId'],
+      });
+    } else if (!['free-trial', 'free', 'starter', 'professional', 'enterprise'].includes(plan)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'The selected subscription plan is unavailable or invalid',
+        path: ['selectedPlanId'],
+      });
+    }
+  })
+  .transform((data) => ({
+    ...data,
+    selectedPlanId: data.selectedPlanId || data.planId,
+  }));
 
 export const loginSchema = z.object({
   email: z

@@ -31,6 +31,7 @@ test.describe('Auth API (E2E)', () => {
         confirmPassword: testPassword,
         fullName: 'E2E Test User',
         shopName: 'E2E Pharmacy',
+        selectedPlanId: 'free-trial',
       },
     });
 

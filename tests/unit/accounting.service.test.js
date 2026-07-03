@@ -1,10 +1,10 @@
-import { jest , describe, afterEach, it, expect } from '@jest/globals';
+import { jest, describe, afterEach, it, expect } from '@jest/globals';
 
 const mockAccountingRepository = {
   upsertGstSummary: jest.fn(),
   findGstSummaries: jest.fn(),
   createExpense: jest.fn(),
-  findExpenses: jest.fn()
+  findExpenses: jest.fn(),
 };
 
 const mockPrisma = {
@@ -23,16 +23,17 @@ const mockPrisma = {
   },
 };
 
-jest.unstable_mockModule('../../src/config/prisma.js', () => ({
-  default: mockPrisma
+jest.unstable_mockModule('../src/config/prisma.js', () => ({
+  default: mockPrisma,
 }));
 
-jest.unstable_mockModule('../../src/modules/finance/repositories/accounting.repository.js', () => ({
-  default: mockAccountingRepository
+jest.unstable_mockModule('../src/modules/finance/repositories/accounting.repository.js', () => ({
+  default: mockAccountingRepository,
 }));
 
 const { default: gstService } = await import('../../src/modules/finance/services/gst.service.js');
-const { default: reconciliationService } = await import('../../src/modules/finance/services/reconciliation.service.js');
+const { default: reconciliationService } =
+  await import('../../src/modules/finance/services/reconciliation.service.js');
 
 describe('Accounting Module Unit Tests', () => {
   const tenantId = 'tenant-1';
@@ -61,13 +62,8 @@ describe('Accounting Module Unit Tests', () => {
 
   describe('GstService.generateMonthlySummary', () => {
     it('should aggregate sales and purchase GST correctly', async () => {
-      mockPrisma.sale.findMany.mockResolvedValue([
-        { gstAmount: 100 },
-        { gstAmount: 50 }
-      ]);
-      mockPrisma.purchaseInvoice.findMany.mockResolvedValue([
-        { gstAmount: 80 }
-      ]);
+      mockPrisma.sale.findMany.mockResolvedValue([{ gstAmount: 100 }, { gstAmount: 50 }]);
+      mockPrisma.purchaseInvoice.findMany.mockResolvedValue([{ gstAmount: 80 }]);
 
       await gstService.generateMonthlySummary(tenantId, new Date('2026-05-01'));
 
@@ -77,8 +73,8 @@ describe('Accounting Module Unit Tests', () => {
         expect.objectContaining({
           outputTax: 150,
           inputTaxCredit: 80,
-          netGstPayable: 70
-        })
+          netGstPayable: 70,
+        }),
       );
     });
   });
@@ -88,10 +84,14 @@ describe('Accounting Module Unit Tests', () => {
       mockPrisma.sale.aggregate.mockResolvedValue({ _sum: { subtotal: 5000 } });
       mockPrisma.expense.aggregate.mockResolvedValue({ _sum: { amount: 1000 } });
       mockPrisma.saleItem.findMany.mockResolvedValue([
-        { quantity: 10, batch: { purchasePrice: 200 } } // COGS = 2000
+        { quantity: 10, batch: { purchasePrice: 200 } }, // COGS = 2000
       ]);
 
-      const result = await reconciliationService.getProfitLossSummary(tenantId, '2026-05-01', '2026-05-31');
+      const result = await reconciliationService.getProfitLossSummary(
+        tenantId,
+        '2026-05-01',
+        '2026-05-31',
+      );
 
       expect(result.revenue).toBe(5000);
       expect(result.cogs).toBe(2000);

@@ -8,9 +8,9 @@ describe('Auth Integration Tests', () => {
 
   beforeAll(async () => {
     app = Fastify();
-    
+
     app.decorate('authenticate', authenticate);
-    
+
     // Mock fastify plugins if needed or register a dummy setup
     app.register(async (instance) => {
       await authRoutes(instance, {});
@@ -33,9 +33,9 @@ describe('Auth Integration Tests', () => {
       method: 'POST',
       url: '/login',
       payload: {
-        email: 'test@example.com'
+        email: 'test@example.com',
         // missing password
-      }
+      },
     });
 
     expect(response.statusCode).toBe(400);
@@ -48,13 +48,32 @@ describe('Auth Integration Tests', () => {
       method: 'POST',
       url: '/register',
       payload: {
-        email: 'test@example.com'
+        email: 'test@example.com',
         // missing password, fullName
-      }
+      },
     });
 
     expect(response.statusCode).toBe(400);
     const body = JSON.parse(response.payload);
     expect(body).toBeDefined();
+  });
+
+  it('should validate missing or invalid selectedPlanId on register', async () => {
+    const response = await app.inject({
+      method: 'POST',
+      url: '/register',
+      payload: {
+        email: 'test@example.com',
+        password: 'SecurePassword123!',
+        confirmPassword: 'SecurePassword123!',
+        fullName: 'Test User',
+        shopName: 'Test Shop',
+        selectedPlanId: 'invalid-plan-id',
+      },
+    });
+
+    expect(response.statusCode).toBe(400);
+    const body = JSON.parse(response.payload);
+    expect(body.error.message).toContain('unavailable or invalid');
   });
 });
