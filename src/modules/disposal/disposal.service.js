@@ -2,6 +2,7 @@ import prisma from '../../config/prisma.js';
 import logger from '../../shared/utils/logger.js';
 import auditService from '../audit/service/audit.prisma.service.js';
 import { mainQueue } from '../../queue/index.js';
+import unifiedInventorySummaryService from '../inventory/service/unified-inventory-summary.service.js';
 
 class DisposalService {
   async getExpiredBatches(tenantId, branchId = null) {
@@ -228,6 +229,7 @@ class DisposalService {
         type: 'INVENTORY',
       });
       try {
+        await unifiedInventorySummaryService.invalidateCache(tenantId);
         await mainQueue.add('update-analytics', { tenantId });
       } catch (e) {
         logger.error({ err: e }, 'Failed to queue analytics update after disposal');
@@ -365,7 +367,12 @@ class DisposalService {
 
     const eligibleBatches = await prisma.inventoryBatch.findMany({
       where: baseWhere,
-      select: { id: true, availableQuantity: true, status: true, disposals: { select: { id: true }, take: 1 } },
+      select: {
+        id: true,
+        availableQuantity: true,
+        status: true,
+        disposals: { select: { id: true }, take: 1 },
+      },
     });
 
     if (eligibleBatches.length === 0) {
@@ -429,6 +436,7 @@ class DisposalService {
 
       // Queue analytics refresh
       try {
+        await unifiedInventorySummaryService.invalidateCache(tenantId);
         await mainQueue.add('update-analytics', { tenantId });
       } catch (e) {
         logger.error({ err: e }, 'Failed to queue analytics update after clearExpired');

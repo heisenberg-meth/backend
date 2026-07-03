@@ -28,7 +28,7 @@ export const SUBSCRIPTION_PLANS = {
   starter: {
     id: 'starter',
     name: 'Starter Plan',
-    price: 999,
+    price: 599,
     billingCycle: 'monthly',
     features: ['CREDIT_NOTES', 'REPORTS_PDF'],
     limits: { users: 3, branches: 2, /* medicines: 5000, */ batches: 10000 },

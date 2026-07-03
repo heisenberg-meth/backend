@@ -47,6 +47,7 @@ class UnifiedInventorySummaryService {
           AND ib."deletedAt" IS NULL
           AND m."deletedAt" IS NULL
           AND m."isActive" = true
+          AND ib."isArchived" = false
           ${bId ? Prisma.sql`AND ib."branchId" = ${bId}` : Prisma.empty}
         GROUP BY ib."medicineId"
       ),
@@ -211,6 +212,7 @@ class UnifiedInventorySummaryService {
         AND ib."deletedAt" IS NULL
         AND ib."availableQuantity" > 0
         AND ib.status != 'ARCHIVED'
+        AND ib."isArchived" = false
         ${bId ? Prisma.sql`AND ib."branchId" = ${bId}` : Prisma.empty}
     `;
 
@@ -297,6 +299,7 @@ class UnifiedInventorySummaryService {
         AND m."deletedAt" IS NULL
         AND m."isActive" = true
         AND ib."availableQuantity" > 0
+        AND ib."isArchived" = false
         ${bId ? Prisma.sql`AND ib."branchId" = ${bId}` : Prisma.empty}
     `;
 
@@ -323,6 +326,7 @@ class UnifiedInventorySummaryService {
         AND m."deletedAt" IS NULL
         AND m."isActive" = true
         AND ib."availableQuantity" > 0
+        AND ib."isArchived" = false
         ${bId ? Prisma.sql`AND ib."branchId" = ${bId}` : Prisma.empty}
       GROUP BY c."name"
       ORDER BY value DESC
@@ -351,6 +355,7 @@ class UnifiedInventorySummaryService {
         AND m."deletedAt" IS NULL
         AND m."isActive" = true
         AND ib."availableQuantity" > 0
+        AND ib."isArchived" = false
         ${bId ? Prisma.sql`AND ib."branchId" = ${bId}` : Prisma.empty}
       GROUP BY m."id", m."name", m."genericName"
       ORDER BY "totalValue" DESC
@@ -385,6 +390,7 @@ class UnifiedInventorySummaryService {
         AND m."deletedAt" IS NULL
         AND m."isActive" = true
         AND ib."availableQuantity" > 0
+        AND ib."isArchived" = false
         ${bId ? Prisma.sql`AND ib."branchId" = ${bId}` : Prisma.empty}
       GROUP BY risk_category
     `;
