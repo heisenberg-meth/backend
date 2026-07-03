@@ -120,6 +120,7 @@ class MovementService {
           receivedQuantity: data.quantity,
           availableQuantity: data.quantity,
           expiryDate: new Date(data.expiryDate),
+          ...(data.manufacturingDate && { manufacturingDate: new Date(data.manufacturingDate) }),
           purchasePrice: data.purchasePrice || 0,
           sellingPrice: data.sellingPrice || 0,
           mrp: data.mrp || data.sellingPrice || 0,

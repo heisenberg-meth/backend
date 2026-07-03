@@ -98,6 +98,7 @@ class StockInService {
           batchNumber: item.batchNumber,
           quantity: item.receivedQuantity,
           expiryDate: item.expiryDate,
+          manufacturingDate: item.manufacturingDate,
           purchasePrice: item.purchasePrice,
           sellingPrice: item.sellingPrice,
           branchId: po.branchId,

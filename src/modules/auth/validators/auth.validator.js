@@ -21,6 +21,7 @@ export const registerSchema = z
     shopName: z.string().trim().optional().nullable(),
     branchName: z.string().trim().optional().nullable(),
     fingerprint: z.string().optional().nullable(),
+    selectedPlanId: z.string().trim().optional().default('free-trial'),
   })
   .superRefine((data, ctx) => {
     if (data.password !== data.confirmPassword) {

@@ -5,7 +5,7 @@ import authRepository from '../repository/auth.prisma.repository.js';
 import sessionService from './session.service.js';
 import eventBus from '../../../shared/services/eventbus.service.js';
 import logger from '../../../shared/utils/logger.js';
-import { TRIAL_DAYS } from '../../subscriptions/subscription.constants.js';
+import { TRIAL_DAYS, SUBSCRIPTION_PLANS } from '../../subscriptions/subscription.constants.js';
 import { queueEmail } from '../../../shared/services/email.service.js';
 import otpAuditService from '../../../shared/services/otp-audit.service.js';
 import MediaService from '../../../shared/services/media.service.js';
@@ -22,7 +22,13 @@ import { OTP_EXPIRY_MS, RESET_TOKEN_EXPIRY_MS, MAX_OTP_ATTEMPTS } from '../auth.
 class AuthPrismaService {
   async register(userData) {
     const email = userData.email.toLowerCase().trim();
-    const { password, fullName, shopName, branchName, fingerprint } = userData;
+    const { password, fullName, shopName, branchName, fingerprint, selectedPlanId } = userData;
+
+    // Validate selected plan exists
+    const planConfig = SUBSCRIPTION_PLANS[selectedPlanId];
+    if (!planConfig) {
+      throw new Error('The selected subscription plan is unavailable. Please choose another plan.');
+    }
 
     if (fingerprint) {
       const fingerprintId = sessionService.hashFingerprint(fingerprint);
@@ -43,9 +49,13 @@ class AuthPrismaService {
 
     const hashedPassword = await bcrypt.hash(password, 12);
 
-    const trialStart = new Date();
-    const trialEnd = new Date(trialStart);
+    const now = new Date();
+    const trialEnd = new Date(now);
     trialEnd.setDate(trialEnd.getDate() + TRIAL_DAYS);
+
+    // Determine subscription status based on selected plan
+    const isFreePlan = planConfig.price === 0;
+    const subscriptionStatus = isFreePlan ? 'TRIAL' : 'PENDING';
 
     const { user, registeredDeviceToken } = await prisma.$transaction(async (tx) => {
       const tenant = await tx.tenant.create({
@@ -99,26 +109,30 @@ class AuthPrismaService {
         }
       }
 
+      // Upsert the selected plan
       await tx.subscriptionPlan.upsert({
-        where: { id: 'free-trial' },
+        where: { id: selectedPlanId },
         update: {},
         create: {
-          id: 'free-trial',
-          name: 'Free Trial',
-          price: 0,
-          billingCycle: 'MONTHLY',
-          features: ['28-day free trial', 'Full feature access'],
+          id: selectedPlanId,
+          name: planConfig.name,
+          price: planConfig.price,
+          billingCycle: planConfig.billingCycle === 'one-time' ? 'MONTHLY' : planConfig.billingCycle.toUpperCase(),
+          features: planConfig.features,
         },
       });
 
+      // Create subscription with the selected plan
       await tx.subscription.create({
         data: {
           tenantId: tenant.id,
-          planId: 'free-trial',
-          status: 'TRIAL',
-          startDate: trialStart,
-          endDate: trialEnd,
+          planId: selectedPlanId,
+          status: subscriptionStatus,
+          startDate: now,
+          endDate: isFreePlan ? trialEnd : null,
           autoRenew: false,
+          isTrial: isFreePlan,
+          trialExpiresAt: isFreePlan ? trialEnd : null,
         },
       });
 
@@ -138,14 +152,35 @@ class AuthPrismaService {
       logger.warn({ err: eventError?.message }, '[AUTH] Event bus publish failed (non-critical)');
     }
 
-    const { mainQueue } = await import('../../../queue/index.js');
-    await mainQueue.add('subscription-trial-started', { tenantId: user.tenantId });
+    // Auto-login: create session and generate tokens
+    const jti = sessionService.generateDeviceToken();
+    const session = await sessionService.createSession({
+      userId: user.id,
+      refreshToken: jti,
+      fingerprint,
+      deviceName: null,
+      userAgent: null,
+      ipAddress: null,
+    });
+
+    const accessToken = tokenService.signAccessToken(user, session.id);
+    const signedRefreshToken = tokenService.signRefreshToken(session.id, jti);
+
+    if (isFreePlan) {
+      const { mainQueue } = await import('../../../queue/index.js');
+      await mainQueue.add('subscription-trial-started', { tenantId: user.tenantId });
+    }
 
     return {
       message: 'User registered successfully',
       userId: user.id,
       branchId: user.branchId,
       deviceToken: registeredDeviceToken,
+      token: accessToken,
+      refreshToken: signedRefreshToken,
+      sessionId: session.id,
+      subscriptionStatus,
+      selectedPlanId,
     };
   }
 
