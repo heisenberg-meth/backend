@@ -17,7 +17,7 @@ WORKDIR /app
 
 # Add security: run as non-root user
 RUN addgroup -g 1001 -S appgroup && \
-    adduser -S appuser -u 1001 -G appgroup
+  adduser -S appuser -u 1001 -G appgroup
 
 RUN apk add --no-cache openssl dumb-init
 
@@ -25,6 +25,8 @@ COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/package*.json ./
 COPY --from=builder /app/src ./src
 COPY --from=builder /app/prisma ./prisma
+
+RUN mkdir -p /app/uploads && chown -R appuser:appgroup /app/uploads
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
