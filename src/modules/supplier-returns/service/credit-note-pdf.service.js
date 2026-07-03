@@ -1,8 +1,6 @@
 import PDFDocument from 'pdfkit';
 import prisma from '../../../config/prisma.js';
 import logger from '../../../shared/utils/logger.js';
-import fs from 'fs';
-import path from 'path';
 
 class CreditNotePDFService {
   async generateCreditNotePdf(creditNoteId, tenantId) {
@@ -21,18 +19,7 @@ class CreditNotePDFService {
 
     if (!creditNote) throw new Error('Credit note not found');
 
-    const buffer = await this._render(creditNote);
-
-    const fileName = `credit-note-${creditNote.creditNoteNumber}.pdf`;
-    const storagePath = path.join(process.cwd(), 'uploads', 'credit-notes', fileName);
-
-    if (!fs.existsSync(path.dirname(storagePath))) {
-      fs.mkdirSync(path.dirname(storagePath), { recursive: true });
-    }
-
-    fs.writeFileSync(storagePath, buffer);
-
-    const pdfUrl = `/uploads/credit-notes/${fileName}`;
+    const pdfUrl = `/supplier-returns/credit-notes/${creditNoteId}/download`;
     await prisma.supplierCreditNote.update({
       where: { id: creditNoteId },
       data: { pdfUrl },
@@ -40,6 +27,25 @@ class CreditNotePDFService {
 
     logger.info({ creditNoteId, pdfUrl }, 'Credit note PDF generated');
     return pdfUrl;
+  }
+
+  async generateBuffer(creditNoteId, tenantId) {
+    const creditNote = await prisma.supplierCreditNote.findFirst({
+      where: { id: creditNoteId, tenantId },
+      include: {
+        return: {
+          include: {
+            supplier: true,
+            items: { include: { medicine: true } },
+          },
+        },
+        tenant: true,
+      },
+    });
+
+    if (!creditNote) throw new Error('Credit note not found');
+
+    return this._render(creditNote);
   }
 
   async _render(creditNote) {
@@ -121,12 +127,9 @@ class CreditNotePDFService {
       doc
         .fontSize(12)
         .text('Total Credit Amount:', 350, totalY + 10)
-        .text(
-          `₹${Number(creditNote.amount || 0).toFixed(2)}`,
-          450,
-          totalY + 10,
-          { align: 'right' },
-        );
+        .text(`₹${Number(creditNote.amount || 0).toFixed(2)}`, 450, totalY + 10, {
+          align: 'right',
+        });
 
       if (creditNote.status === 'APPLIED') {
         doc

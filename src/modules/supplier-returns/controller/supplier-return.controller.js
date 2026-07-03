@@ -311,6 +311,24 @@ class SupplierReturnController {
       return reply.code(500).send({ success: false, message: error.message });
     }
   }
+
+  async downloadCreditNotePdf(request, reply) {
+    try {
+      const buffer = await creditNotePdfService.generateBuffer(request.params.id, request.tenantId);
+      reply.header('Content-Type', 'application/pdf');
+      reply.header(
+        'Content-Disposition',
+        `inline; filename="credit-note-${request.params.id}.pdf"`,
+      );
+      return reply.send(buffer);
+    } catch (error) {
+      request.log.error(
+        { err: error, endpoint: 'credit-note-pdf-download' },
+        'Credit note PDF download error',
+      );
+      return reply.code(500).send({ success: false, message: error.message });
+    }
+  }
 }
 
 export default new SupplierReturnController();

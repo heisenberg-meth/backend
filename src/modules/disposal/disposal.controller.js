@@ -60,6 +60,43 @@ class DisposalController {
       return reply.code(500).send(errorResponse(error.message, 'DISPOSAL_ERROR'));
     }
   }
+
+  async getClearableCount(request, reply) {
+    try {
+      const { branchId } = request.query;
+      const result = await disposalService.clearableCount(
+        request.tenantId,
+        branchId || request.branchId,
+      );
+      return reply.send({ success: true, data: result });
+    } catch (error) {
+      request.log.error({ err: error, endpoint: 'expired-clearable-count' }, 'Clear-expired error');
+      return reply.code(500).send(errorResponse(error.message, 'CLEARABLE_COUNT_ERROR'));
+    }
+  }
+
+  async clearExpired(request, reply) {
+    try {
+      const { branchId } = request.query;
+      const result = await disposalService.clearExpired(
+        request.tenantId,
+        request.user.id,
+        branchId || request.branchId,
+      );
+      return reply.send({
+        success: result.success,
+        data: {
+          cleared: result.cleared,
+          skipped: result.skipped ?? 0,
+          failed: result.failed ?? 0,
+          remaining: result.remaining,
+        },
+      });
+    } catch (error) {
+      request.log.error({ err: error, endpoint: 'expired-clear' }, 'Clear-expired error');
+      return reply.code(500).send(errorResponse(error.message, 'CLEAR_EXPIRED_ERROR'));
+    }
+  }
 }
 
 export default new DisposalController();

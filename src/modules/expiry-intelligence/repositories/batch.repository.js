@@ -10,6 +10,7 @@ class BatchRepository {
         ...(medicineId && { medicineId }),
         ...(minQty !== undefined && { quantity: { gte: minQty } }),
         deletedAt: null,
+        isArchived: false, // exclude batches cleared by the Clear Expired feature
         medicine: {
           deletedAt: null,
         },
@@ -62,7 +63,7 @@ class BatchRepository {
           deletedAt: null,
         },
       },
-      include: { medicine: true },
+      include: { medicine: true, supplier: true },
       orderBy: { expiryDate: 'asc' },
     });
   }

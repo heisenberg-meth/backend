@@ -10,7 +10,7 @@ class ExpiryReportService {
         where: {
           medicine: { tenantId },
           expiryDate: { lte: thresholdDate },
-          quantity: { gt: 0 },
+          availableQuantity: { gt: 0 },
           deletedAt: null,
         },
         include: { medicine: true, supplier: true },
@@ -35,12 +35,23 @@ class ExpiryReportService {
           supplierId: batch.supplierId,
           medicineName: batch.medicine.name,
           batchNumber: batch.batchNumber,
-          quantity: batch.quantity,
+          quantity: batch.availableQuantity,
+          availableQuantity: batch.availableQuantity,
           expiryDate: batch.expiryDate,
+          manufacturingDate: batch.manufacturingDate,
           daysToExpiry: diffDays,
           severity,
-          purchasePrice: Number(batch.purchasePrice || 0),
-          estimatedLoss: batch.quantity * Number(batch.purchasePrice || 0),
+          purchasePrice: Number(
+            batch.purchasePrice || batch.medicine?.purchasePrice || batch.medicine?.unitPrice || 0,
+          ),
+          estimatedLoss:
+            batch.availableQuantity *
+            Number(
+              batch.purchasePrice ||
+                batch.medicine?.purchasePrice ||
+                batch.medicine?.unitPrice ||
+                0,
+            ),
           supplierName: batch.supplier?.name || 'Default Supplier',
         };
       });

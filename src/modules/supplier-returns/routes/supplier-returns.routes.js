@@ -167,7 +167,13 @@ async function supplierReturnsRoutes(fastify) {
           properties: {
             dispatchStatus: {
               type: 'string',
-              enum: ['PENDING', 'READY_TO_SEND', 'SENT_TO_SUPPLIER', 'RECEIVED_BY_SUPPLIER', 'CREDIT_NOTE_RECEIVED'],
+              enum: [
+                'PENDING',
+                'READY_TO_SEND',
+                'SENT_TO_SUPPLIER',
+                'RECEIVED_BY_SUPPLIER',
+                'CREDIT_NOTE_RECEIVED',
+              ],
             },
           },
           required: ['dispatchStatus'],
@@ -206,6 +212,23 @@ async function supplierReturnsRoutes(fastify) {
       preHandler: [requirePermission('purchases.create'), requireFeature('CREDIT_NOTES')],
     },
     supplierReturnController.generateCreditNotePdf,
+  );
+
+  fastify.get(
+    '/credit-notes/:id/download',
+    {
+      schema: {
+        tags: ['Supplier Returns'],
+        summary: 'Download credit note PDF',
+        params: {
+          type: 'object',
+          properties: { id: { type: 'string', format: 'uuid' } },
+          required: ['id'],
+        },
+      },
+      preHandler: [requirePermission('purchases.read'), requireFeature('CREDIT_NOTES')],
+    },
+    supplierReturnController.downloadCreditNotePdf,
   );
 
   fastify.get(

@@ -959,6 +959,12 @@ model InventoryBatch {
   purchaseDate          DateTime?
   receivedDate          DateTime?
   manufacturerName      String?                @db.VarChar(255)
+  // ── Clear-Expired archive fields ──────────────────────────────────────
+  isArchived            Boolean                @default(false)
+  archivedAt            DateTime?
+  archivedBy            String?
+  archiveReason         String?                @db.VarChar(255)
+  // ─────────────────────────────────────────────────────────────────────
   auditLogs             BatchAuditLog[]
   damagedRecords        DamagedStock[]
   expiryAlerts          ExpiryAlert[]
@@ -991,6 +997,7 @@ model InventoryBatch {
   @@index([barcode])
   @@index([tenantId, branchId, deletedAt])
   @@index([tenantId, deletedAt, branchId, medicineId])
+  @@index([tenantId, isArchived, status], map: "idx_batch_archive_lookup")
 }
 
 model BatchAuditLog {

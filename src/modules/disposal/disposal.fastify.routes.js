@@ -1,5 +1,6 @@
 import disposalController from './disposal.controller.js';
 import { authenticate, requireTenant } from '../../middleware/auth.fastify.js';
+import { requirePermission } from '../../middleware/permission.fastify.js';
 
 async function disposalRoutes(fastify) {
   fastify.addHook('preHandler', authenticate);
@@ -37,6 +38,82 @@ async function disposalRoutes(fastify) {
       },
     },
     disposalController.getExpiredOverview,
+  );
+
+  /**
+   * GET /api/inventory/expired/clearable
+   * Returns the count of disposed/archived batches eligible for inventory cleanup.
+   */
+  fastify.get(
+    '/expired/clearable',
+    {
+      schema: {
+        tags: ['Disposal'],
+        summary: 'Get count of disposed expired batches eligible for inventory cleanup',
+        querystring: {
+          type: 'object',
+          properties: {
+            branchId: { type: 'string' },
+          },
+        },
+        response: {
+          200: {
+            type: 'object',
+            properties: {
+              success: { type: 'boolean' },
+              data: {
+                type: 'object',
+                properties: {
+                  count: { type: 'integer' },
+                },
+              },
+            },
+          },
+        },
+      },
+      preHandler: [requirePermission('inventory.read')],
+    },
+    disposalController.getClearableCount,
+  );
+
+  /**
+   * POST /api/inventory/expired/clear
+   * Archives all disposed expired batches, removing them from active inventory views.
+   * Requires inventory.update permission (ADMIN / OWNER roles bypass).
+   */
+  fastify.post(
+    '/expired/clear',
+    {
+      schema: {
+        tags: ['Disposal'],
+        summary: 'Clear (archive) all disposed expired batches from active inventory',
+        querystring: {
+          type: 'object',
+          properties: {
+            branchId: { type: 'string' },
+          },
+        },
+        response: {
+          200: {
+            type: 'object',
+            properties: {
+              success: { type: 'boolean' },
+              data: {
+                type: 'object',
+                properties: {
+                  cleared: { type: 'integer' },
+                  skipped: { type: 'integer' },
+                  failed: { type: 'integer' },
+                  remaining: { type: 'integer' },
+                },
+              },
+            },
+          },
+        },
+      },
+      preHandler: [requirePermission('inventory.update')],
+    },
+    disposalController.clearExpired,
   );
 
   fastify.post(
@@ -90,3 +167,4 @@ async function disposalRoutes(fastify) {
 }
 
 export default disposalRoutes;
+

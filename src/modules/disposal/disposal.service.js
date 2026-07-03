@@ -14,6 +14,7 @@ class DisposalService {
       tenantId,
       OR: [{ expiryDate: { lt: today } }, { status: 'EXPIRED' }],
       status: { not: 'ARCHIVED' },
+      isArchived: false, // exclude cleared batches
       availableQuantity: { gt: 0 },
       deletedAt: null,
       medicine: { deletedAt: null },
@@ -63,6 +64,7 @@ class DisposalService {
       tenantId,
       OR: [{ expiryDate: { lt: today } }, { status: 'EXPIRED' }],
       status: { not: 'ARCHIVED' },
+      isArchived: false, // exclude cleared batches
       availableQuantity: { gt: 0 },
       deletedAt: null,
       medicine: { deletedAt: null },
@@ -291,6 +293,158 @@ class DisposalService {
     }));
 
     return { items, total, page, limit };
+  }
+
+  /**
+   * Returns the count of batches that are eligible for inventory cleanup.
+   * Eligible = status ARCHIVED  OR  (availableQuantity=0 AND a disposal record exists).
+   * These are already-disposed batches that still appear in stock views.
+   */
+  async clearableCount(tenantId, branchId = null) {
+    const targetBranchId =
+      branchId === 'null' || branchId === 'undefined' || !branchId ? null : branchId;
+
+    const where = {
+      tenantId,
+      deletedAt: null,
+      isArchived: false, // not yet cleaned up
+      OR: [
+        { status: 'ARCHIVED' },
+        {
+          availableQuantity: { lte: 0 },
+          disposals: { some: {} }, // at least one disposal record exists
+        },
+      ],
+      // Never clear active/low-stock/expiring-only batches
+      NOT: {
+        status: { in: ['ACTIVE', 'LOW_STOCK', 'EXPIRING', 'DAMAGED', 'RECALLED', 'QUARANTINED'] },
+        availableQuantity: { gt: 0 },
+      },
+    };
+
+    if (targetBranchId) where.branchId = targetBranchId;
+
+    const count = await prisma.inventoryBatch.count({ where });
+    return { count };
+  }
+
+  /**
+   * Archives all eligible disposed/expired batches in bulk so they no longer
+   * appear in active inventory views.
+   *
+   * Business rules enforced:
+   *  - Only ARCHIVED status batches OR zero-qty batches with a disposal record are cleared.
+   *  - Active, low-stock, expiring, or merely-expired (not disposed) batches are skipped.
+   *  - Tenant isolation is mandatory.
+   *  - Idempotent: re-running after a successful clear returns 0 remaining.
+   *  - Chunked in groups of 500 to handle large datasets gracefully.
+   */
+  async clearExpired(tenantId, userId, branchId = null) {
+    const targetBranchId =
+      branchId === 'null' || branchId === 'undefined' || !branchId ? null : branchId;
+
+    // --- Step 1: Fetch all clearable batch IDs ---
+    const baseWhere = {
+      tenantId,
+      deletedAt: null,
+      isArchived: false,
+      OR: [
+        { status: 'ARCHIVED' },
+        {
+          availableQuantity: { lte: 0 },
+          disposals: { some: {} },
+        },
+      ],
+      NOT: {
+        status: { in: ['ACTIVE', 'LOW_STOCK', 'EXPIRING', 'DAMAGED', 'RECALLED', 'QUARANTINED'] },
+        availableQuantity: { gt: 0 },
+      },
+    };
+
+    if (targetBranchId) baseWhere.branchId = targetBranchId;
+
+    const eligibleBatches = await prisma.inventoryBatch.findMany({
+      where: baseWhere,
+      select: { id: true, availableQuantity: true, status: true, disposals: { select: { id: true }, take: 1 } },
+    });
+
+    if (eligibleBatches.length === 0) {
+      return { success: true, cleared: 0, remaining: 0 };
+    }
+
+    // --- Step 2: Secondary validation – skip anything that doesn't truly qualify ---
+    const validated = [];
+    const skipped = [];
+    const failed = [];
+
+    for (const b of eligibleBatches) {
+      const isArchived = b.status === 'ARCHIVED';
+      const isDisposedAndEmpty = b.availableQuantity <= 0 && b.disposals.length > 0;
+
+      if (!isArchived && !isDisposedAndEmpty) {
+        skipped.push(b.id);
+        continue;
+      }
+      validated.push(b.id);
+    }
+
+    // --- Step 3: Chunk the update into batches of 500 ---
+    const CHUNK_SIZE = 500;
+    let totalCleared = 0;
+
+    for (let i = 0; i < validated.length; i += CHUNK_SIZE) {
+      const chunk = validated.slice(i, i + CHUNK_SIZE);
+      try {
+        await prisma.$transaction(async (tx) => {
+          await tx.inventoryBatch.updateMany({
+            where: {
+              id: { in: chunk },
+              tenantId, // extra safety: tenant isolation inside transaction
+              isArchived: false, // idempotency guard
+            },
+            data: {
+              isArchived: true,
+              archivedAt: new Date(),
+              archivedBy: userId,
+              archiveReason: 'Expired Cleanup',
+            },
+          });
+        });
+        totalCleared += chunk.length;
+      } catch (err) {
+        logger.error({ err, chunk: chunk.length }, 'Clear expired chunk failed');
+        failed.push(...chunk);
+      }
+    }
+
+    // --- Step 4: Audit log ---
+    if (totalCleared > 0) {
+      await auditService.log({
+        tenantId,
+        userId,
+        action: 'EXPIRED_BATCH_CLEANUP',
+        target: `${totalCleared} expired batches archived from active inventory`,
+        type: 'INVENTORY',
+      });
+
+      // Queue analytics refresh
+      try {
+        await mainQueue.add('update-analytics', { tenantId });
+      } catch (e) {
+        logger.error({ err: e }, 'Failed to queue analytics update after clearExpired');
+      }
+    }
+
+    // --- Step 5: Count remaining clearable batches ---
+    const remaining = await prisma.inventoryBatch.count({ where: baseWhere });
+
+    return {
+      success: true,
+      cleared: totalCleared,
+      skipped: skipped.length,
+      failed: failed.length,
+      remaining,
+    };
   }
 }
 

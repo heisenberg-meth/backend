@@ -255,6 +255,12 @@ class SupplierReturnService {
           supplier: {
             select: { id: true, name: true, phone: true },
           },
+          items: {
+            include: {
+              medicine: true,
+              batch: true,
+            },
+          },
           batch: {
             select: {
               id: true,
@@ -273,8 +279,25 @@ class SupplierReturnService {
       prisma.supplierReturn.count({ where: { tenantId } }),
     ]);
 
+    const normalizedReturns = returns.map(ret => {
+      if (ret.items && ret.items.length > 0) return ret;
+      if (ret.batchId) {
+        return {
+          ...ret,
+          items: [{
+            medicine: ret.batch?.medicine,
+            batch: ret.batch,
+            quantity: ret.quantity,
+            purchasePrice: ret.returnAmount,
+            reason: ret.reason
+          }]
+        };
+      }
+      return { ...ret, items: [] };
+    });
+
     return {
-      returns,
+      returns: normalizedReturns,
       pagination: {
         page,
         limit,
@@ -289,6 +312,9 @@ class SupplierReturnService {
       where: { id: returnId },
       include: {
         supplier: true,
+        items: {
+          include: { medicine: true, batch: true },
+        },
         batch: {
           include: { medicine: true },
         },
@@ -297,6 +323,20 @@ class SupplierReturnService {
 
     if (!returnRecord || returnRecord.tenantId !== tenantId) {
       throw new Error('Supplier return not found');
+    }
+
+    if (!returnRecord.items || returnRecord.items.length === 0) {
+      if (returnRecord.batchId) {
+        returnRecord.items = [{
+          medicine: returnRecord.batch?.medicine,
+          batch: returnRecord.batch,
+          quantity: returnRecord.quantity,
+          purchasePrice: returnRecord.returnAmount,
+          reason: returnRecord.reason
+        }];
+      } else {
+        returnRecord.items = [];
+      }
     }
 
     return returnRecord;
