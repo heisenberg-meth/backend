@@ -33,6 +33,66 @@ class BillingService {
     return invoice;
   }
 
+  async finalizeDraft(id, tenantId, data, userId) {
+    return await prisma.$transaction(async (tx) => {
+      if (data && (data.items || data.patientId !== undefined || data.patientName || data.discountPercentage !== undefined)) {
+        await invoiceService.updateDraft(id, tenantId, userId, data, tx);
+      }
+
+      const primaryPaymentMode =
+        data?.paymentMode ||
+        (data?.payments && data.payments.length > 0 ? data.payments[0].paymentMode : null);
+
+      const finalized = await invoiceService.finalize(id, tenantId, userId, tx, primaryPaymentMode);
+
+      const payments = data?.payments || [];
+      if (payments.length === 0 && data?.paymentMode) {
+        payments.push({
+          paymentMode: data.paymentMode,
+          amount: finalized.totalAmount,
+        });
+      }
+
+      if (payments.length > 0) {
+        for (const p of payments) {
+          await invoiceService.recordPayment(finalized.id, tenantId, userId, p, tx);
+        }
+      }
+
+      const completeInvoice = await invoiceService.getInvoice(finalized.id, tenantId, tx);
+
+      if (completeInvoice.patientId) {
+        this._sendInvoiceNotification(tenantId, completeInvoice);
+      }
+
+      try {
+        await anomalyService.detectSalesAnomaly(tenantId, finalized);
+      } catch (anomalyErr) {
+        logger.error({ err: anomalyErr, tenantId, invoiceId: finalized.id }, 'Sales anomaly detection failed after invoice finalization');
+      }
+
+      return completeInvoice;
+    });
+  }
+
+  async deleteDraft(id, tenantId, userId) {
+    const result = await invoiceService.deleteDraft(id, tenantId, userId);
+
+    await auditService.log({
+      tenantId,
+      userId,
+      action: 'DELETE_DRAFT_INVOICE',
+      target: id,
+      type: 'FINANCIAL',
+    });
+
+    return result;
+  }
+
+  async getDrafts(tenantId, query = {}) {
+    return this.getInvoices(tenantId, { ...query, status: 'DRAFT' });
+  }
+
   async recordPayment(id, tenantId, userId, paymentData) {
     return await invoiceService.recordPayment(id, tenantId, userId, paymentData);
   }

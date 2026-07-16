@@ -15,6 +15,19 @@ class BillingFastifyController {
     }
   }
 
+  async getDrafts(request, reply) {
+    try {
+      const result = await billingService.getDrafts(request.tenantId, request.query);
+      return {
+        success: true,
+        data: result.data,
+        pagination: result.pagination,
+      };
+    } catch (error) {
+      return reply.code(500).send({ success: false, message: error.message });
+    }
+  }
+
   async checkout(request, reply) {
     try {
       if (!request.branchId) {
@@ -111,6 +124,75 @@ class BillingFastifyController {
           invoiceId: request.params.id,
         },
         'Update draft failed',
+      );
+
+      return reply.code(400).send({
+        success: false,
+        message: error.message,
+        error: error.message,
+        errorType: error.name ?? 'BillingError',
+        details: process.env.NODE_ENV !== 'production' ? error.stack : undefined,
+      });
+    }
+  }
+
+  async finalizeDraft(request, reply) {
+    try {
+      if (!request.branchId) {
+        throw new Error('User branchId missing');
+      }
+
+      const payload = {
+        ...(request.body || {}),
+        branchId: request.branchId,
+      };
+
+      const invoice = await billingService.finalizeDraft(
+        request.params.id,
+        request.tenantId,
+        payload,
+        request.user.id,
+      );
+      return reply.code(200).send({ success: true, data: invoice });
+    } catch (error) {
+      request.log.error(
+        {
+          event: 'BILLING_FINALIZE_DRAFT_FAILURE',
+          error: error.message,
+          stack: error.stack,
+          payload: request.body,
+          invoiceId: request.params.id,
+        },
+        'Finalize draft failed',
+      );
+
+      return reply.code(400).send({
+        success: false,
+        message: error.message,
+        error: error.message,
+        errorType: error.name ?? 'BillingError',
+        details: process.env.NODE_ENV !== 'production' ? error.stack : undefined,
+      });
+    }
+  }
+
+  async deleteDraft(request, reply) {
+    try {
+      const result = await billingService.deleteDraft(
+        request.params.id,
+        request.tenantId,
+        request.user.id,
+      );
+      return reply.code(200).send({ success: true, data: result });
+    } catch (error) {
+      request.log.error(
+        {
+          event: 'BILLING_DELETE_DRAFT_FAILURE',
+          error: error.message,
+          stack: error.stack,
+          invoiceId: request.params.id,
+        },
+        'Delete draft failed',
       );
 
       return reply.code(400).send({

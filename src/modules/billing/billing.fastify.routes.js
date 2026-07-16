@@ -15,6 +15,12 @@ async function billingFastifyRoutes(fastify) {
     handler: billingController.getInvoices,
   });
 
+  fastify.get('/invoices/drafts', {
+    schema: { tags: ['Billing'], summary: 'List draft invoices' },
+    preHandler: [requirePermission('VIEW_BILL')],
+    handler: billingController.getDrafts,
+  });
+
   fastify.post('/invoices', {
     schema: { tags: ['Billing'], summary: 'Create invoice (checkout)' },
     preHandler: [requirePermission('CREATE_BILL')],
@@ -31,6 +37,30 @@ async function billingFastifyRoutes(fastify) {
     schema: { tags: ['Billing'], summary: 'Update draft invoice' },
     preHandler: [requirePermission('CREATE_BILL')],
     handler: billingController.updateDraft,
+  });
+
+  fastify.patch('/invoices/:id', {
+    schema: { tags: ['Billing'], summary: 'Patch draft invoice' },
+    preHandler: [requirePermission('CREATE_BILL')],
+    handler: billingController.updateDraft,
+  });
+
+  fastify.post('/invoices/:id/finalize', {
+    schema: { tags: ['Billing'], summary: 'Finalize draft invoice' },
+    preHandler: [requirePermission('CREATE_BILL')],
+    handler: billingController.finalizeDraft,
+  });
+
+  fastify.put('/invoices/:id/finalize', {
+    schema: { tags: ['Billing'], summary: 'Finalize draft invoice' },
+    preHandler: [requirePermission('CREATE_BILL')],
+    handler: billingController.finalizeDraft,
+  });
+
+  fastify.delete('/invoices/:id', {
+    schema: { tags: ['Billing'], summary: 'Delete draft invoice' },
+    preHandler: [requirePermission('CREATE_BILL')],
+    handler: billingController.deleteDraft,
   });
 
   fastify.get('/invoices/:id', {

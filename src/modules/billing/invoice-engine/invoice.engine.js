@@ -630,6 +630,26 @@ class InvoiceEngine {
     return result;
   }
 
+  async deleteDraft(invoiceId, tenantId, userId, tx = null) {
+    const execute = async (t) => {
+      const existing = await t.invoice.findFirst({
+        where: { id: invoiceId, tenantId },
+      });
+      if (!existing) throw new Error('Invoice not found');
+      if (existing.status !== 'DRAFT') throw new Error('Only DRAFT invoices can be deleted');
+
+      // delete existing items
+      await t.invoiceItem.deleteMany({ where: { invoiceId } });
+
+      // delete draft invoice
+      await t.invoice.delete({ where: { id: invoiceId } });
+
+      return { success: true };
+    };
+
+    return tx ? execute(tx) : prisma.$transaction(execute);
+  }
+
   async _calculateTotals(
     tenantId,
     branchId,

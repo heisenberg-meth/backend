@@ -29,6 +29,10 @@ class InvoiceService {
     return normalizeInvoice(invoice);
   }
 
+  async deleteDraft(id, tenantId, userId, tx = null) {
+    return await invoiceEngine.deleteDraft(id, tenantId, userId, tx);
+  }
+
   async getInvoice(id, tenantId, tx = null) {
     const invoice = await invoiceRepository.findById(id, tenantId, tx);
     if (!invoice) throw new Error('Invoice not found');
