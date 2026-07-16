@@ -213,11 +213,26 @@ const setupFastify = async () => {
     let statusCode = error.statusCode || 500;
     let message = error.message || 'Internal Server Error';
     let code = error.code || 'INTERNAL_ERROR';
+    let errors = undefined;
 
-    if (error.validation) {
+    if (error.name === 'ZodError' || error.issues) {
+      statusCode = 400;
+      message = 'Validation failed';
+      code = 'VALIDATION_ERROR';
+      errors = (error.issues || []).map(issue => ({
+        field: (issue.path || []).filter(p => p !== 'body').join('.'),
+        message: issue.message,
+      }));
+    } else if (error.validation) {
       statusCode = 400;
       message = error.message || 'Validation failed';
       code = 'VALIDATION_ERROR';
+      errors = Array.isArray(error.validation)
+        ? error.validation.map(v => ({
+            field: (v.instancePath || '').replace(/^\//, '') || v.params?.missingProperty || 'general',
+            message: v.message || 'Invalid field',
+          }))
+        : [{ field: 'general', message: error.message }];
     } else if (error instanceof Prisma.PrismaClientKnownRequestError) {
       request.log.error({
         code: error.code,
@@ -246,13 +261,16 @@ const setupFastify = async () => {
       }
     } else if (error instanceof Prisma.PrismaClientValidationError) {
       statusCode = 400;
-      message = 'Invalid data provided.';
+      message = 'Validation failed: Invalid database schema arguments provided.';
       code = 'VALIDATION_ERROR';
+      errors = [{ field: 'database_schema', message: 'The request payload contains invalid or missing fields for the database operation.' }];
     }
 
     reply.code(statusCode).send({
       success: false,
-      error: { message, code },
+      message,
+      error: { message, code, details: errors },
+      errors,
       requestId: request.id,
       stack: env.nodeEnv === 'production' ? undefined : error.stack,
     });

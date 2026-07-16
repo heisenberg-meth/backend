@@ -58,6 +58,15 @@ class AccountingRepository {
     });
   }
 
+  async findCategoryByName(tenantId, name) {
+    return prisma.expenseCategory.findFirst({
+      where: {
+        tenantId,
+        name: { equals: name, mode: 'insensitive' },
+      },
+    });
+  }
+
   async upsertGstSummary(tenantId, reportMonth, data) {
     const month = new Date(reportMonth);
     month.setDate(1);
