@@ -152,12 +152,12 @@ class SupplierCreditNoteService {
       });
 
       // Update Invoice
-      const newInvoiceBalance = invoiceBalance - amountToApply;
+      const newInvoiceBalance = Number((invoiceBalance - amountToApply).toFixed(2));
       await tx.purchaseInvoice.update({
         where: { id: purchaseInvoiceId },
         data: {
           balanceAmount: newInvoiceBalance,
-          paidAmount: Number(invoice.paidAmount) + amountToApply,
+          paidAmount: Number((Number(invoice.paidAmount) + amountToApply).toFixed(2)),
           paymentStatus: newInvoiceBalance <= 0 ? 'PAID' : 'PARTIALLY_PAID',
         },
       });

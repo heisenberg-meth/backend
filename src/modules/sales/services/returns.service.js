@@ -125,7 +125,7 @@ class ReturnsService {
           totalInvoiceReturned += itemReturns._sum.quantity || 0;
         }
 
-        let newInvoiceStatus = 'COMPLETED';
+        let newInvoiceStatus = invoice.status;
         if (totalInvoiceReturned >= totalInvoiceQty) {
           newInvoiceStatus = 'REFUNDED';
         } else if (totalInvoiceReturned > 0) {

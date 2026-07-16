@@ -65,9 +65,9 @@ class SettlementService {
         const currentBalance = invoice.totalAmount - invoice.paidAmount;
         if (currentBalance <= 0) continue;
 
-        const allocatedAmount = Math.min(currentBalance, remainingAmount);
-        const newPaidAmount = invoice.paidAmount + allocatedAmount;
-        const newBalanceAmount = invoice.totalAmount - newPaidAmount;
+        const allocatedAmount = Number(Math.min(currentBalance, remainingAmount).toFixed(2));
+        const newPaidAmount = Number((Number(invoice.paidAmount) + allocatedAmount).toFixed(2));
+        const newBalanceAmount = Number((Number(invoice.totalAmount) - newPaidAmount).toFixed(2));
 
         // Update Invoice
         await tx.purchaseInvoice.update({

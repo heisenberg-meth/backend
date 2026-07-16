@@ -41,9 +41,9 @@ class RefundPaymentService {
 
     const totalRefunded = refundPayments.reduce((sum, p) => sum + Number(p.amount), 0);
     const totalPaid = Number(invoice.paidAmount);
-    const newPaid = Math.max(0, totalPaid - totalRefunded);
+    const newPaid = Number(Math.max(0, totalPaid - totalRefunded).toFixed(2));
 
-    const newPaymentStatus = newPaid <= 0 ? 'REFUNDED' : 'PARTIALLY_PAID';
+    const newPaymentStatus = newPaid <= 0 ? 'REFUNDED' : 'PARTIAL';
     const newStatus = newPaid <= 0 ? 'REFUNDED' : invoice.status;
 
     await client.invoice.update({

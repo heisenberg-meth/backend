@@ -88,8 +88,8 @@ class SettlementService {
       }
 
       // 5. Update Invoice Status
-      const newPaidAmount = invoice.paidAmount + totalPaying;
-      const newBalanceAmount = invoice.totalAmount - newPaidAmount;
+      const newPaidAmount = Number((invoice.paidAmount + totalPaying).toFixed(2));
+      const newBalanceAmount = Number((invoice.totalAmount - newPaidAmount).toFixed(2));
 
       let paymentStatus = 'PARTIAL';
       if (newBalanceAmount <= 0.01) {
@@ -100,7 +100,7 @@ class SettlementService {
         where: { id: invoice.id },
         data: {
           paidAmount: newPaidAmount,
-          balanceAmount: Math.max(0, newBalanceAmount),
+          balanceAmount: Number(Math.max(0, newBalanceAmount).toFixed(2)),
           paymentStatus: paymentStatus,
         },
       });

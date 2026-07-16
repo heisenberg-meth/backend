@@ -234,7 +234,7 @@ class UnifiedRefundOrchestrator {
       // 5. Update Invoice aggregates strictly via Unified rules
       const isFullRefund = proposedTotal >= invoiceTotal;
       const totalPaid = Number(targetInvoice.paidAmount);
-      const newPaid = Math.max(0, totalPaid - actualRefundAmount);
+      const newPaid = Number(Math.max(0, totalPaid - actualRefundAmount).toFixed(2));
 
       const updatedInvoiceItems = await tx.invoiceItem.findMany({
         where: { invoiceId },
@@ -245,7 +245,7 @@ class UnifiedRefundOrchestrator {
         Number(targetInvoice.discountAmount) || 0,
       );
 
-      const newBalance = Math.max(0, totals.totalAmount - newPaid);
+      const newBalance = Number(Math.max(0, totals.totalAmount - newPaid).toFixed(2));
 
       await tx.invoice.update({
         where: { id: invoiceId },
@@ -256,7 +256,7 @@ class UnifiedRefundOrchestrator {
           paidAmount: newPaid,
           balanceAmount: newBalance,
           status: isFullRefund ? 'REFUNDED' : 'PARTIALLY_REFUNDED',
-          paymentStatus: newPaid <= 0 ? 'REFUNDED' : newBalance > 0 ? 'PARTIALLY_PAID' : 'PAID',
+          paymentStatus: newPaid <= 0 ? 'REFUNDED' : newBalance > 0 ? 'PARTIAL' : 'PAID',
         },
       });
 
