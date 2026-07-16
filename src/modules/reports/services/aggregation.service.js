@@ -174,6 +174,7 @@ class AggregationService {
       where: {
         tenantId,
         expenseDate: { gte: start, lte: end },
+        deletedAt: null,
       },
       _sum: {
         amount: true,

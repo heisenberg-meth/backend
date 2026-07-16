@@ -216,6 +216,23 @@ class ReportQueryService {
     let totalExpenses = 0;
     let netProfit = 0;
 
+    const expenseGroups = await prisma.expense.groupBy({
+      by: ['categoryId'],
+      where: {
+        tenantId,
+        expenseDate: { gte: fromDate, lte: toDate },
+        deletedAt: null,
+      },
+      _sum: {
+        amount: true,
+      },
+    });
+
+    const actualTotalExpenses = expenseGroups.reduce(
+      (sum, g) => sum + Number(g._sum.amount || 0),
+      0,
+    );
+
     summaries.forEach((d) => {
       revenue += Number(d.totalRevenue || 0);
       cogs += Number(d.totalCogs || 0);
@@ -224,21 +241,14 @@ class ReportQueryService {
       netProfit += Number(d.netProfit || 0);
     });
 
+    totalExpenses = actualTotalExpenses;
+    netProfit = grossProfit - totalExpenses;
+
     const safeRevenue = revenue || 1;
     const cogsPct = Math.round((cogs / safeRevenue) * 100);
     const grossProfitPct = Math.round((grossProfit / safeRevenue) * 100);
     const expensePct = Math.round((totalExpenses / safeRevenue) * 100);
     const netMargin = Math.round((netProfit / safeRevenue) * 100);
-    const expenseGroups = await prisma.expense.groupBy({
-      by: ['categoryId'],
-      where: {
-        tenantId,
-        expenseDate: { gte: fromDate, lte: toDate },
-      },
-      _sum: {
-        amount: true,
-      },
-    });
 
     const categoryIds = expenseGroups.map((g) => g.categoryId).filter((id) => id !== null);
     const categories = await prisma.expenseCategory.findMany({
@@ -249,7 +259,7 @@ class ReportQueryService {
     const expensesDistribution = expenseGroups
       .map((group, idx) => {
         const amount = Number(group._sum.amount || 0);
-        const name = catNameMap[group.categoryId] || 'Operational';
+        const name = catNameMap[group.categoryId] || 'Unknown Category';
         const pct = Math.round((amount / (totalExpenses || 1)) * 100);
         return {
           name,
