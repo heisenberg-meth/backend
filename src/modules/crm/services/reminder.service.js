@@ -24,7 +24,7 @@ class ReminderService {
       const refillDate = new Date(purchaseDate);
       refillDate.setDate(refillDate.getDate() + durationDays - 3);
 
-      await prisma.medicineReminder.create({
+      await prisma.patientReminder.create({
         data: {
           tenantId,
           patientId,
@@ -48,7 +48,7 @@ class ReminderService {
     const endOfDay = new Date();
     endOfDay.setHours(23, 59, 59, 999);
 
-    const dueReminders = await prisma.medicineReminder.findMany({
+    const dueReminders = await prisma.patientReminder.findMany({
       where: {
         status: 'PENDING',
         nextReminderAt: { lte: endOfDay },
@@ -61,7 +61,7 @@ class ReminderService {
 
     for (const reminder of dueReminders) {
       if (!reminder.patient.phone) {
-        await prisma.medicineReminder.update({
+        await prisma.patientReminder.update({
           where: { id: reminder.id },
           data: { status: 'FAILED' },
         });
@@ -76,7 +76,7 @@ class ReminderService {
         notificationId: `crm-reminder-${reminder.id}`,
       });
 
-      await prisma.medicineReminder.update({
+      await prisma.patientReminder.update({
         where: { id: reminder.id },
         data: { status: 'SENT' },
       });
