@@ -30,6 +30,8 @@ class UnifiedInventorySummaryService {
       WITH batch_aggregates AS (
         SELECT 
           ib."medicineId",
+          SUM(CASE WHEN (ib."expiryDate"::date >= CURRENT_DATE AND ib."status" = 'ACTIVE') THEN ib."availableQuantity" ELSE 0 END) as usable_quantity,
+          SUM(CASE WHEN (ib."expiryDate"::date < CURRENT_DATE OR ib."status" = 'EXPIRED') THEN ib."availableQuantity" ELSE 0 END) as expired_quantity,
           SUM(ib."availableQuantity") as total_quantity,
           SUM(ib."availableQuantity" * COALESCE(ib."purchasePrice", 0)) as total_value,
           COUNT(*) FILTER (WHERE ib."availableQuantity" > 0 AND (ib."expiryDate"::date < CURRENT_DATE OR ib."status" = 'EXPIRED')) as expired_batches,
@@ -54,21 +56,21 @@ class UnifiedInventorySummaryService {
       medicine_stats AS (
         SELECT
           COUNT(*) as total_medicines,
-          COUNT(*) FILTER (WHERE m."isActive" = true AND COALESCE(ba.total_quantity, 0) > 0) as medicines_with_stock,
-          COUNT(*) FILTER (WHERE m."isActive" = true AND COALESCE(ba.total_quantity, 0) = 0) as out_of_stock_medicines,
+          COUNT(*) FILTER (WHERE m."isActive" = true AND COALESCE(ba.usable_quantity, 0) > 0) as medicines_with_stock,
+          COUNT(*) FILTER (WHERE m."isActive" = true AND COALESCE(ba.usable_quantity, 0) = 0 AND COALESCE(ba.expired_quantity, 0) = 0) as out_of_stock_medicines,
           COUNT(*) FILTER (
             WHERE m."isActive" = true
-              AND COALESCE(ba.total_quantity, 0) > 0
-              AND COALESCE(ba.total_quantity, 0) <= COALESCE(ba.max_reorder_point, m."reorderLevel", 10)
+              AND COALESCE(ba.usable_quantity, 0) > 0
+              AND COALESCE(ba.usable_quantity, 0) <= COALESCE(ba.max_reorder_point, m."reorderLevel", 10)
           ) as low_stock_medicines,
           COUNT(*) FILTER (
             WHERE m."isActive" = true
-              AND COALESCE(ba.total_quantity, 0) > COALESCE(ba.max_reorder_point, m."reorderLevel", 10)
+              AND COALESCE(ba.usable_quantity, 0) > COALESCE(ba.max_reorder_point, m."reorderLevel", 10)
           ) as in_stock_medicines,
-          COALESCE(SUM(ba.total_quantity), 0) as total_stock_units,
+          COALESCE(SUM(ba.usable_quantity), 0) as total_stock_units,
           COALESCE(SUM(ba.total_value), 0) as inventory_value,
           COALESCE(SUM(ba.expired_batches), 0) as expired_batches_count,
-          COUNT(*) FILTER (WHERE m."isActive" = true AND COALESCE(ba.total_quantity, 0) > 0 AND ba.expired_batches > 0) as medicines_with_expired
+          COUNT(*) FILTER (WHERE m."isActive" = true AND COALESCE(ba.usable_quantity, 0) > 0 AND ba.expired_batches > 0) as medicines_with_expired
         FROM "Medicine" m
         LEFT JOIN batch_aggregates ba ON m."id" = ba."medicineId"
         WHERE m."tenantId" = ${tenantId}
@@ -129,11 +131,6 @@ class UnifiedInventorySummaryService {
 
   async getExpiryMetrics(tenantId, branchId = null) {
     const bId = branchId === 'null' || branchId === 'undefined' || !branchId ? null : branchId;
-
-    // Single query to get all expiry metrics consistently.
-    // Uses CURRENT_DATE (date-only) to avoid UTC/IST timezone bugs.
-    // Counts both batches and distinct products for each category.
-    // Uses availableQuantity (remaining stock) not quantity (original stock).
     const [metrics] = await prisma.$queryRaw`
       SELECT
         -- Expired: expiryDate < TODAY AND availableQuantity > 0

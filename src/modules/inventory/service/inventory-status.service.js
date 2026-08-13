@@ -16,53 +16,90 @@ const CACHE_TTL = 120; // 2 minutes
 class InventoryStatusService {
   /**
    * Calculate status for a single medicine based on its batches
+   * Precedence: Expired > Out Of Stock > Expiring Soon > Low Stock > In Stock
    *
    * @param {Object} medicine - Medicine with inventoryBatches
-   * @returns {string} Status: "EXPIRED" | "OUT_OF_STOCK" | "LOW_STOCK" | "IN_STOCK"
+   * @returns {string} Status: "EXPIRED" | "OUT_OF_STOCK" | "EXPIRING_SOON" | "LOW_STOCK" | "IN_STOCK"
    */
   calculateStatus(medicine) {
     if (!medicine) return 'IN_STOCK';
 
-    const batches = medicine.inventoryBatches || [];
-    const activeBatches = batches.filter((b) => b.availableQuantity > 0 && !b.deletedAt);
-
-    const totalAvailable = activeBatches.reduce((sum, b) => sum + (b.availableQuantity || 0), 0);
-    const reorderLevel = medicine.reorderLevel || medicine.reorderPoint || 10;
+    const batches = medicine.inventoryBatches || medicine.batches || [];
+    const activeBatches = batches.filter(
+      (b) =>
+        (b.availableQuantity ?? b.quantity ?? 0) > 0 && !b.deletedAt && b.status !== 'ARCHIVED',
+    );
 
     const now = new Date();
     now.setHours(0, 0, 0, 0);
 
-    const hasExpiredBatches = activeBatches.some((b) => {
+    const thirtyDays = new Date(now);
+    thirtyDays.setDate(thirtyDays.getDate() + 30);
+
+    const expiredBatches = activeBatches.filter((b) => {
+      if (b.status === 'EXPIRED') return true;
       if (!b.expiryDate) return false;
       const expDate = new Date(b.expiryDate);
       expDate.setHours(0, 0, 0, 0);
-      return expDate <= now;
+      return expDate < now;
     });
 
-    // Priority: Expired > Out Of Stock > Low Stock > In Stock
-    if (hasExpiredBatches && totalAvailable > 0) {
-      // Has expired batches but also has non-expired stock
-      // Check if ALL stock is expired
-      const nonExpiredBatches = activeBatches.filter((b) => {
-        if (!b.expiryDate) return true;
-        const expDate = new Date(b.expiryDate);
-        expDate.setHours(0, 0, 0, 0);
-        return expDate > now;
-      });
+    const unexpiredBatches = activeBatches.filter((b) => {
+      if (b.status === 'EXPIRED') return false;
+      if (!b.expiryDate) return true;
+      const expDate = new Date(b.expiryDate);
+      expDate.setHours(0, 0, 0, 0);
+      return expDate >= now;
+    });
 
-      if (nonExpiredBatches.length === 0) {
-        return 'EXPIRED';
-      }
+    let usableStock = unexpiredBatches.reduce(
+      (sum, b) => sum + (b.availableQuantity ?? b.quantity ?? 0),
+      0,
+    );
+
+    // If no batches array but stock fields are directly on medicine
+    if (batches.length === 0) {
+      usableStock = Number(
+        medicine.availableStock ??
+          medicine.stock ??
+          medicine.currentStock ??
+          medicine.availableQuantity ??
+          0,
+      );
     }
 
-    if (totalAvailable === 0) {
+    const reorderLevel = Number(medicine.reorderLevel || medicine.reorderPoint || 10);
+
+    // 1. Expired: Has expired batches and 0 usable unexpired stock
+    if (expiredBatches.length > 0 && usableStock === 0) {
+      return 'EXPIRED';
+    }
+
+    // 2. Out Of Stock: 0 usable stock and no expired stock
+    if (usableStock === 0) {
       return 'OUT_OF_STOCK';
     }
 
-    if (totalAvailable <= reorderLevel) {
+    // 3. Expiring Soon: usableStock > 0 and next expiry <= 30 days
+    const nextUnexpired = [...unexpiredBatches]
+      .filter((b) => b.expiryDate)
+      .sort((a, b) => new Date(a.expiryDate) - new Date(b.expiryDate))[0];
+
+    const nextExpiry = nextUnexpired?.expiryDate || medicine.expiryDate;
+    if (nextExpiry) {
+      const expDate = new Date(nextExpiry);
+      expDate.setHours(0, 0, 0, 0);
+      if (expDate <= thirtyDays && expDate >= now) {
+        return 'EXPIRING_SOON';
+      }
+    }
+
+    // 4. Low Stock: usableStock <= reorder
+    if (usableStock <= reorderLevel) {
       return 'LOW_STOCK';
     }
 
+    // 5. In Stock
     return 'IN_STOCK';
   }
 

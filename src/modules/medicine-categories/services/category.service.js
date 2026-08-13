@@ -4,7 +4,7 @@ import auditService from '../../audit/service/audit.prisma.service.js';
 class CategoryService {
   async getCategories(tenantId) {
     let categories = await categoryRepository.findAll(tenantId);
-    
+
     const defaults = [
       { name: 'Tablets', description: 'Oral tablet medications' },
       { name: 'Capsules', description: 'Oral capsule medications' },

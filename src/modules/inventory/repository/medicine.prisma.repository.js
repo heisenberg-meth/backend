@@ -51,7 +51,7 @@ class MedicinePrismaRepository {
     let total = 0;
 
     if (lowStock || status) {
-      const upperStatus = status ? status.toUpperCase().replace(' ', '_') : null;
+      const upperStatus = status ? status.toUpperCase().replace(/\s+/g, '_') : null;
       const bCond = targetBranchId
         ? Prisma.sql`AND ib."branchId" = ${targetBranchId}`
         : Prisma.sql``;
@@ -60,11 +60,30 @@ class MedicinePrismaRepository {
         WITH batch_aggregates AS (
           SELECT 
             ib."medicineId",
-            SUM(ib."availableQuantity") as current_stock,
-            MIN(ib."expiryDate") as next_expiry
+            SUM(CASE 
+              WHEN (ib."expiryDate"::date >= CURRENT_DATE AND ib."status" = 'ACTIVE') 
+              THEN ib."availableQuantity" 
+              ELSE 0 
+            END) as usable_stock,
+            SUM(CASE 
+              WHEN (ib."expiryDate"::date < CURRENT_DATE OR ib."status" = 'EXPIRED') 
+              THEN ib."availableQuantity" 
+              ELSE 0 
+            END) as expired_stock,
+            MIN(CASE 
+              WHEN (ib."expiryDate"::date >= CURRENT_DATE AND ib."status" = 'ACTIVE' AND ib."availableQuantity" > 0) 
+              THEN ib."expiryDate" 
+              ELSE NULL 
+            END) as next_expiry,
+            MIN(CASE 
+              WHEN (ib."availableQuantity" > 0 AND (ib."expiryDate"::date < CURRENT_DATE OR ib."status" = 'EXPIRED')) 
+              THEN ib."expiryDate" 
+              ELSE NULL 
+            END) as expired_expiry
           FROM "InventoryBatch" ib
           WHERE ib."tenantId" = ${tenantId}
             AND ib."deletedAt" IS NULL
+            AND ib."isArchived" = false
           ${bCond}
           GROUP BY ib."medicineId"
         ),
@@ -87,11 +106,11 @@ class MedicinePrismaRepository {
           ${categoryId ? Prisma.sql`AND m."categoryId" = ${categoryId}` : Prisma.sql``}
           ${manufacturerId ? Prisma.sql`AND m."manufacturerId" = ${manufacturerId}` : Prisma.sql``}
           ${search ? Prisma.sql`AND (m."name" ILIKE ${'%' + search + '%'} OR m."genericName" ILIKE ${'%' + search + '%'} OR m."barcode" ILIKE ${'%' + search + '%'} OR m."sku" ILIKE ${'%' + search + '%'})` : Prisma.sql``}
-          ${upperStatus === 'IN_STOCK' ? Prisma.sql`AND COALESCE(ba.current_stock, 0) > COALESCE(ia.max_reorder_point, m."reorderLevel", 10)` : Prisma.sql``}
-          ${upperStatus === 'LOW_STOCK' || lowStock ? Prisma.sql`AND COALESCE(ba.current_stock, 0) > 0 AND COALESCE(ba.current_stock, 0) <= COALESCE(ia.max_reorder_point, m."reorderLevel", 10)` : Prisma.sql``}
-          ${upperStatus === 'OUT_OF_STOCK' ? Prisma.sql`AND COALESCE(ba.current_stock, 0) <= 0` : Prisma.sql``}
-          ${upperStatus === 'EXPIRING_SOON' ? Prisma.sql`AND ba.next_expiry > NOW() AND ba.next_expiry <= (NOW() + INTERVAL '30 days')` : Prisma.sql``}
-          ${upperStatus === 'EXPIRED' ? Prisma.sql`AND ba.next_expiry <= NOW()` : Prisma.sql``}
+          ${upperStatus === 'IN_STOCK' ? Prisma.sql`AND COALESCE(ba.usable_stock, 0) > COALESCE(ia.max_reorder_point, m."reorderLevel", 10) AND (ba.next_expiry IS NULL OR ba.next_expiry > (CURRENT_DATE + INTERVAL '30 days'))` : Prisma.sql``}
+          ${upperStatus === 'LOW_STOCK' || lowStock ? Prisma.sql`AND COALESCE(ba.usable_stock, 0) > 0 AND COALESCE(ba.usable_stock, 0) <= COALESCE(ia.max_reorder_point, m."reorderLevel", 10) AND (ba.next_expiry IS NULL OR ba.next_expiry > (CURRENT_DATE + INTERVAL '30 days'))` : Prisma.sql``}
+          ${upperStatus === 'OUT_OF_STOCK' ? Prisma.sql`AND COALESCE(ba.usable_stock, 0) <= 0 AND COALESCE(ba.expired_stock, 0) <= 0` : Prisma.sql``}
+          ${upperStatus === 'EXPIRING_SOON' ? Prisma.sql`AND COALESCE(ba.usable_stock, 0) > 0 AND ba.next_expiry >= CURRENT_DATE AND ba.next_expiry <= (CURRENT_DATE + INTERVAL '30 days')` : Prisma.sql``}
+          ${upperStatus === 'EXPIRED' ? Prisma.sql`AND (COALESCE(ba.expired_stock, 0) > 0 OR ba.expired_expiry IS NOT NULL)` : Prisma.sql``}
         ORDER BY m.${Prisma.raw(`"${ALLOWED_SORT_COLUMNS.has(sortBy) ? sortBy : 'name'}"`)} ${order === 'desc' ? Prisma.sql`DESC` : Prisma.sql`ASC`}
       `;
 
@@ -99,11 +118,30 @@ class MedicinePrismaRepository {
         WITH batch_aggregates AS (
           SELECT 
             ib."medicineId",
-            SUM(ib."availableQuantity") as current_stock,
-            MIN(ib."expiryDate") as next_expiry
+            SUM(CASE 
+              WHEN (ib."expiryDate"::date >= CURRENT_DATE AND ib."status" = 'ACTIVE') 
+              THEN ib."availableQuantity" 
+              ELSE 0 
+            END) as usable_stock,
+            SUM(CASE 
+              WHEN (ib."expiryDate"::date < CURRENT_DATE OR ib."status" = 'EXPIRED') 
+              THEN ib."availableQuantity" 
+              ELSE 0 
+            END) as expired_stock,
+            MIN(CASE 
+              WHEN (ib."expiryDate"::date >= CURRENT_DATE AND ib."status" = 'ACTIVE' AND ib."availableQuantity" > 0) 
+              THEN ib."expiryDate" 
+              ELSE NULL 
+            END) as next_expiry,
+            MIN(CASE 
+              WHEN (ib."availableQuantity" > 0 AND (ib."expiryDate"::date < CURRENT_DATE OR ib."status" = 'EXPIRED')) 
+              THEN ib."expiryDate" 
+              ELSE NULL 
+            END) as expired_expiry
           FROM "InventoryBatch" ib
           WHERE ib."tenantId" = ${tenantId}
             AND ib."deletedAt" IS NULL
+            AND ib."isArchived" = false
           ${bCond}
           GROUP BY ib."medicineId"
         ),
@@ -126,11 +164,11 @@ class MedicinePrismaRepository {
           ${categoryId ? Prisma.sql`AND m."categoryId" = ${categoryId}` : Prisma.sql``}
           ${manufacturerId ? Prisma.sql`AND m."manufacturerId" = ${manufacturerId}` : Prisma.sql``}
           ${search ? Prisma.sql`AND (m."name" ILIKE ${'%' + search + '%'} OR m."genericName" ILIKE ${'%' + search + '%'} OR m."barcode" ILIKE ${'%' + search + '%'} OR m."sku" ILIKE ${'%' + search + '%'})` : Prisma.sql``}
-          ${upperStatus === 'IN_STOCK' ? Prisma.sql`AND COALESCE(ba.current_stock, 0) > COALESCE(ia.max_reorder_point, m."reorderLevel", 10)` : Prisma.sql``}
-          ${upperStatus === 'LOW_STOCK' || lowStock ? Prisma.sql`AND COALESCE(ba.current_stock, 0) > 0 AND COALESCE(ba.current_stock, 0) <= COALESCE(ia.max_reorder_point, m."reorderLevel", 10)` : Prisma.sql``}
-          ${upperStatus === 'OUT_OF_STOCK' ? Prisma.sql`AND COALESCE(ba.current_stock, 0) <= 0` : Prisma.sql``}
-          ${upperStatus === 'EXPIRING_SOON' ? Prisma.sql`AND ba.next_expiry > NOW() AND ba.next_expiry <= (NOW() + INTERVAL '30 days')` : Prisma.sql``}
-          ${upperStatus === 'EXPIRED' ? Prisma.sql`AND ba.next_expiry <= NOW()` : Prisma.sql``}
+          ${upperStatus === 'IN_STOCK' ? Prisma.sql`AND COALESCE(ba.usable_stock, 0) > COALESCE(ia.max_reorder_point, m."reorderLevel", 10) AND (ba.next_expiry IS NULL OR ba.next_expiry > (CURRENT_DATE + INTERVAL '30 days'))` : Prisma.sql``}
+          ${upperStatus === 'LOW_STOCK' || lowStock ? Prisma.sql`AND COALESCE(ba.usable_stock, 0) > 0 AND COALESCE(ba.usable_stock, 0) <= COALESCE(ia.max_reorder_point, m."reorderLevel", 10) AND (ba.next_expiry IS NULL OR ba.next_expiry > (CURRENT_DATE + INTERVAL '30 days'))` : Prisma.sql``}
+          ${upperStatus === 'OUT_OF_STOCK' ? Prisma.sql`AND COALESCE(ba.usable_stock, 0) <= 0 AND COALESCE(ba.expired_stock, 0) <= 0` : Prisma.sql``}
+          ${upperStatus === 'EXPIRING_SOON' ? Prisma.sql`AND COALESCE(ba.usable_stock, 0) > 0 AND ba.next_expiry >= CURRENT_DATE AND ba.next_expiry <= (CURRENT_DATE + INTERVAL '30 days')` : Prisma.sql``}
+          ${upperStatus === 'EXPIRED' ? Prisma.sql`AND (COALESCE(ba.expired_stock, 0) > 0 OR ba.expired_expiry IS NOT NULL)` : Prisma.sql``}
       `;
 
       const countResult = await prisma.$queryRaw(countQuery);
@@ -209,12 +247,26 @@ class MedicinePrismaRepository {
     const formattedMedicines = medicines.map((m) => {
       // ── FEFO: first non-empty, non-expired, active batch (ground truth)
       const now = new Date();
+      now.setHours(0, 0, 0, 0);
       const activeBatches = (m.inventoryBatches || []).filter(
-        (b) => b.availableQuantity > 0 && b.status === 'ACTIVE' && new Date(b.expiryDate) > now,
+        (b) =>
+          (b.availableQuantity ?? b.quantity ?? 0) > 0 &&
+          b.status === 'ACTIVE' &&
+          b.expiryDate &&
+          new Date(b.expiryDate) >= now,
       );
       const fefo = activeBatches[0] || null;
 
-      // ── Compute available stock from InventoryBatch (authoritative source)
+      const expiredBatches = (m.inventoryBatches || []).filter(
+        (b) =>
+          (b.availableQuantity ?? b.quantity ?? 0) > 0 &&
+          (b.status === 'EXPIRED' || (b.expiryDate && new Date(b.expiryDate) < now)),
+      );
+      const earliestExpired = expiredBatches[0] || null;
+
+      const displayBatch = fefo || earliestExpired || m.inventoryBatches?.[0] || null;
+
+      // ── Compute available stock from InventoryBatch (authoritative source: unexpired active batches)
       const batchAvailableStock = activeBatches.reduce(
         (sum, b) => sum + (b.availableQuantity || 0),
         0,
@@ -262,12 +314,12 @@ class MedicinePrismaRepository {
         status,
         isOutOfStock: availableStock <= 0,
 
-        // FEFO batch fields — only from a batch with actual stock
-        batchId: fefo?.id ?? null,
-        batchNumber: fefo?.batchNumber ?? null,
-        expiryDate: fefo?.expiryDate ?? null,
-        mrp: toNum(fefo?.mrp),
-        purchasePrice: toNum(fefo?.purchasePrice),
+        // Batch fields: display active fefo batch, or expired/first batch fallback
+        batchId: displayBatch?.id ?? null,
+        batchNumber: displayBatch?.batchNumber ?? null,
+        expiryDate: displayBatch?.expiryDate ?? null,
+        mrp: toNum(displayBatch?.mrp),
+        purchasePrice: toNum(displayBatch?.purchasePrice),
 
         // Backward compatibility
         currentStock: stock,
