@@ -1,4 +1,19 @@
 import { jest, describe, beforeEach, it, expect } from '@jest/globals';
+import path from 'path';
+import { fileURLToPath } from 'url';
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+
+const prismaPath = path.resolve(__dirname, '../../../config/prisma.js');
+const alertRepositoryPath = path.resolve(__dirname, '../repositories/alert.repository.js');
+const forecastingServicePath = path.resolve(__dirname, '../forecasting/forecasting.service.js');
+const eventbusServicePath = path.resolve(__dirname, '../../../shared/services/eventbus.service.js');
+const alertSettingsPath = path.resolve(
+  __dirname,
+  '../../alert-settings/services/alert-settings.service.js',
+);
+const redisPath = path.resolve(__dirname, '../../../config/redis.js');
+const riskMonitoringServicePath = path.resolve(__dirname, '../services/risk-monitoring.service.js');
 
 const mockPrisma = {
   inventoryBatch: {
@@ -53,36 +68,36 @@ const mockRedis = {
 };
 
 // Use unstable_mockModule for ESM mocking
-jest.unstable_mockModule('../../../config/prisma.js', () => ({
+jest.unstable_mockModule(prismaPath, () => ({
   default: mockPrisma,
 }));
 
-jest.unstable_mockModule('../repositories/alert.repository.js', () => ({
+jest.unstable_mockModule(alertRepositoryPath, () => ({
   default: mockAlertRepository,
 }));
 
-jest.unstable_mockModule('../forecasting/forecasting.service.js', () => ({
+jest.unstable_mockModule(forecastingServicePath, () => ({
   default: mockForecastingService,
 }));
 
-jest.unstable_mockModule('../../../shared/services/eventbus.service.js', () => ({
+jest.unstable_mockModule(eventbusServicePath, () => ({
   default: mockEventBus,
 }));
 
-jest.unstable_mockModule('../../alert-settings/services/alert-settings.service.js', () => ({
+jest.unstable_mockModule(alertSettingsPath, () => ({
   default: mockAlertSettingsService,
 }));
 
-jest.unstable_mockModule('../../../config/redis.js', () => ({
+jest.unstable_mockModule(redisPath, () => ({
   default: mockRedis,
 }));
 
 // Import modules AFTER mocking
-const { default: riskMonitoringService } = await import('../services/risk-monitoring.service.js');
-const { default: alertRepository } = await import('../repositories/alert.repository.js');
-const { default: forecastingService } = await import('../forecasting/forecasting.service.js');
-const { default: prisma } = await import('../../../config/prisma.js');
-const { default: eventBus } = await import('../../../shared/services/eventbus.service.js');
+const { default: riskMonitoringService } = await import(riskMonitoringServicePath);
+const { default: alertRepository } = await import(alertRepositoryPath);
+const { default: forecastingService } = await import(forecastingServicePath);
+const { default: prisma } = await import(prismaPath);
+const { default: eventBus } = await import(eventbusServicePath);
 
 describe('RiskMonitoringService', () => {
   beforeEach(() => {

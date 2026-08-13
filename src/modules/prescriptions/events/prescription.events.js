@@ -11,27 +11,38 @@ export function emitPrescriptionCreated(prescriptionId, prescriptionNumber, pati
   });
 }
 
-export function emitPrescriptionVerified(prescriptionId, verifiedBy) {
+export function emitPrescriptionVerified(prescriptionId, verifiedBy, tenantId) {
   emitLocalEvent(EVENTS.PRESCRIPTION_VERIFIED, {
     prescriptionId,
     verifiedBy,
+    tenantId,
     timestamp: new Date().toISOString(),
   });
 }
 
-export function emitPrescriptionRejected(prescriptionId, verifiedBy, reason) {
-  emitLocalEvent(EVENTS.PRESCRIPTION_REJECTED, {
-    prescriptionId,
-    verifiedBy,
-    reason,
-    timestamp: new Date().toISOString(),
-  });
-}
-
-export function emitPrescriptionDispensed(prescriptionId, fullyDispensed) {
+export function emitPrescriptionDispensed(prescriptionId, invoiceId, items, tenantId) {
   emitLocalEvent(EVENTS.PRESCRIPTION_DISPENSED, {
     prescriptionId,
-    fullyDispensed,
+    invoiceId,
+    items,
+    tenantId,
     timestamp: new Date().toISOString(),
   });
 }
+
+export function emitPrescriptionRejected(prescriptionId, reason, rejectedBy, tenantId) {
+  emitLocalEvent(EVENTS.PRESCRIPTION_REJECTED, {
+    prescriptionId,
+    reason,
+    rejectedBy,
+    tenantId,
+    timestamp: new Date().toISOString(),
+  });
+}
+
+export default {
+  emitPrescriptionCreated,
+  emitPrescriptionVerified,
+  emitPrescriptionDispensed,
+  emitPrescriptionRejected,
+};

@@ -14,7 +14,10 @@ export default {
   },
   transformIgnorePatterns: ['/node_modules/'],
   moduleNameMapper: {
-    '^(\\.{2,4})/src/(.*)$': '<rootDir>/src/$2',
+    '^(?:\\.\\./)+src/(.*)$': '<rootDir>/src/$1',
+    '^(?:\\.\\./){2,}config/(.*)$': '<rootDir>/src/config/$1',
+    '^(?:\\.\\./){2,}shared/(.*)$': '<rootDir>/src/shared/$1',
+    '^(?:\\.\\./){2,}settings/(.*)$': '<rootDir>/src/modules/settings/$1',
   },
   verbose: true,
   testTimeout: 30000,

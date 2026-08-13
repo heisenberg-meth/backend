@@ -1,4 +1,24 @@
 import { jest, describe, beforeEach, it, expect } from '@jest/globals';
+import path from 'path';
+import { fileURLToPath } from 'url';
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+
+const redisPath = path.resolve(__dirname, '../../../config/redis.js');
+const prismaPath = path.resolve(__dirname, '../../../config/prisma.js');
+const notificationQueuePath = path.resolve(__dirname, '../queue/notification.queue.js');
+const queueServicePath = path.resolve(__dirname, '../queues/queue.service.js');
+const localEventBusPath = path.resolve(__dirname, '../../../shared/events/local-event-bus.js');
+const loggerPath = path.resolve(__dirname, '../../../shared/utils/logger.js');
+
+const notificationServicePath = path.resolve(__dirname, '../services/notification.service.js');
+const dedupServicePath = path.resolve(__dirname, '../services/deduplication.service.js');
+const rateLimitServicePath = path.resolve(__dirname, '../services/rate-limit.service.js');
+const deliveryTrackingServicePath = path.resolve(
+  __dirname,
+  '../services/delivery-tracking.service.js',
+);
+const analyticsServicePath = path.resolve(__dirname, '../services/analytics.service.js');
 
 const mockRedis = {
   get: jest.fn(),
@@ -42,40 +62,39 @@ const mockNotificationQueue = {
 
 const mockEmitLocalEvent = jest.fn();
 
-jest.unstable_mockModule('../../../config/redis.js', () => ({
+jest.unstable_mockModule(redisPath, () => ({
   getBullRedis: jest.fn().mockReturnValue({}),
   default: mockRedis,
 }));
 
-jest.unstable_mockModule('../../../config/prisma.js', () => ({
+jest.unstable_mockModule(prismaPath, () => ({
   default: mockPrisma,
 }));
 
-jest.unstable_mockModule('../queue/notification.queue.js', () => ({
+jest.unstable_mockModule(notificationQueuePath, () => ({
   notificationQueue: mockNotificationQueue,
 }));
 
-jest.unstable_mockModule('../queues/queue.service.js', () => ({
+jest.unstable_mockModule(queueServicePath, () => ({
   default: {
     enqueue: mockNotificationQueue.add,
   },
 }));
 
-jest.unstable_mockModule('../../../shared/events/local-event-bus.js', () => ({
+jest.unstable_mockModule(localEventBusPath, () => ({
   emitLocalEvent: mockEmitLocalEvent,
   localEventBus: { removeAllListeners: jest.fn() },
 }));
 
-jest.unstable_mockModule('../../../shared/utils/logger.js', () => ({
+jest.unstable_mockModule(loggerPath, () => ({
   default: { info: jest.fn(), warn: jest.fn(), error: jest.fn() },
 }));
 
-const notificationServiceModule = await import('../services/notification.service.js');
-const dedupModule = await import('../services/deduplication.service.js');
-const rateLimitModule = await import('../services/rate-limit.service.js');
-const deliveryTrackingModule = await import('../services/delivery-tracking.service.js');
-const analyticsModule = await import('../services/analytics.service.js');
-
+const notificationServiceModule = await import(notificationServicePath);
+const dedupModule = await import(dedupServicePath);
+const rateLimitModule = await import(rateLimitServicePath);
+const deliveryTrackingModule = await import(deliveryTrackingServicePath);
+const analyticsModule = await import(analyticsServicePath);
 const notificationService = notificationServiceModule.default;
 const notificationDeduplicationService = dedupModule.default;
 const notificationRateLimitService = rateLimitModule.default;

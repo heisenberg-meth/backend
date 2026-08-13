@@ -28,6 +28,8 @@ class ExpiryReportService {
         else if (diffDays <= 7) severity = 'Critical';
         else if (diffDays <= 30) severity = 'Warning';
 
+        const qty = batch.availableQuantity ?? batch.quantity ?? 0;
+
         return {
           id: batch.id,
           batchId: batch.id,
@@ -35,8 +37,8 @@ class ExpiryReportService {
           supplierId: batch.supplierId,
           medicineName: batch.medicine.name,
           batchNumber: batch.batchNumber,
-          quantity: batch.availableQuantity,
-          availableQuantity: batch.availableQuantity,
+          quantity: qty,
+          availableQuantity: qty,
           expiryDate: batch.expiryDate,
           manufacturingDate: batch.manufacturingDate,
           daysToExpiry: diffDays,
@@ -45,7 +47,7 @@ class ExpiryReportService {
             batch.purchasePrice || batch.medicine?.purchasePrice || batch.medicine?.unitPrice || 0,
           ),
           estimatedLoss:
-            batch.availableQuantity *
+            qty *
             Number(
               batch.purchasePrice ||
                 batch.medicine?.purchasePrice ||

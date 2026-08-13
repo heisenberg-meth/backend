@@ -9,8 +9,6 @@ export const seal = () => {
   sealed = true;
 };
 
-export const isSealed = () => sealed;
-
 export const registerQueue = (queue) => {
   if (sealed) {
     logger.warn('[QUEUE_REGISTRY] Attempted to register queue after bootstrap seal — ignored');
@@ -34,29 +32,22 @@ export const registerWorker = (worker) => {
 };
 
 export const closeAllQueuesAndWorkers = async () => {
-  sealed = true;
-
-  const workerPromises = activeWorkers.map(async (worker) => {
+  for (const worker of activeWorkers) {
     try {
-      if (worker && typeof worker.close === 'function' && !worker.closing) {
+      if (worker && typeof worker.close === 'function') {
         await worker.close();
       }
     } catch (err) {
-      logger.error('Error closing worker:', err);
+      logger.warn({ err: err.message }, '[QUEUE_REGISTRY] Error closing worker');
     }
-  });
-  await Promise.all(workerPromises);
-  activeWorkers.length = 0;
-
-  const queuePromises = activeQueues.map(async (queue) => {
+  }
+  for (const queue of activeQueues) {
     try {
-      if (queue && typeof queue.close === 'function' && !queue.closing) {
+      if (queue && typeof queue.close === 'function') {
         await queue.close();
       }
     } catch (err) {
-      logger.error('Error closing queue:', err);
+      logger.warn({ err: err.message }, '[QUEUE_REGISTRY] Error closing queue');
     }
-  });
-  await Promise.all(queuePromises);
-  activeQueues.length = 0;
+  }
 };

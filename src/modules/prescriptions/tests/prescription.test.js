@@ -1,6 +1,19 @@
 import { jest, describe, beforeEach, it, expect } from '@jest/globals';
+import path from 'path';
+import { fileURLToPath } from 'url';
 
-jest.unstable_mockModule('../../../config/prisma.js', () => ({
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+
+const prismaPath = path.resolve(__dirname, '../../../config/prisma.js');
+const loggerPath = path.resolve(__dirname, '../../../shared/utils/logger.js');
+const localEventBusPath = path.resolve(__dirname, '../../../shared/events/local-event-bus.js');
+
+const ocrServicePath = path.resolve(__dirname, '../services/ocr.service.js');
+const complianceServicePath = path.resolve(__dirname, '../services/compliance.service.js');
+const prescriptionServicePath = path.resolve(__dirname, '../services/prescription.service.js');
+const prescriptionEventsPath = path.resolve(__dirname, '../events/prescription.events.js');
+
+jest.unstable_mockModule(prismaPath, () => ({
   default: {
     prescription: {
       findUnique: jest.fn(),
@@ -31,21 +44,21 @@ jest.unstable_mockModule('../../../config/prisma.js', () => ({
   },
 }));
 
-jest.unstable_mockModule('../../../shared/utils/logger.js', () => ({
+jest.unstable_mockModule(loggerPath, () => ({
   default: { info: jest.fn(), error: jest.fn(), warn: jest.fn(), debug: jest.fn() },
 }));
 
-jest.unstable_mockModule('../../../shared/events/local-event-bus.js', () => ({
+jest.unstable_mockModule(localEventBusPath, () => ({
   emitLocalEvent: jest.fn(),
 }));
 
-const emitLocalEvent = (await import('../../../shared/events/local-event-bus.js')).emitLocalEvent;
+const emitLocalEvent = (await import(localEventBusPath)).emitLocalEvent;
 
-const mockPrisma = (await import('../../../config/prisma.js')).default;
-const ocrService = (await import('../services/ocr.service.js')).default;
-const complianceService = (await import('../services/compliance.service.js')).default;
-const prescriptionService = (await import('../services/prescription.service.js')).default;
-const prescriptionEvents = await import('../events/prescription.events.js');
+const mockPrisma = (await import(prismaPath)).default;
+const ocrService = (await import(ocrServicePath)).default;
+const complianceService = (await import(complianceServicePath)).default;
+const prescriptionService = (await import(prescriptionServicePath)).default;
+const prescriptionEvents = await import(prescriptionEventsPath);
 
 function mockPrescription(overrides = {}) {
   return {
@@ -262,7 +275,7 @@ describe('PrescriptionService', () => {
       mockPrescription({ verificationStatus: 'PENDING' }),
     );
 
-    await expect(prescriptionService.convertToInvoice('rx-1', 'user-1')).rejects.toThrow(
+    await expect(prescriptionService.convertToInvoice('rx-1', 'tenant-1')).rejects.toThrow(
       'must be verified',
     );
   });
@@ -272,7 +285,7 @@ describe('PrescriptionService', () => {
       mockPrescription({ verificationStatus: 'VERIFIED' }),
     );
 
-    const result = await prescriptionService.convertToInvoice('rx-1', 'user-1');
+    const result = await prescriptionService.convertToInvoice('rx-1', 'tenant-1');
     expect(result.readyForBilling).toBe(true);
     expect(result.items[0].remainingQuantity).toBe(10);
   });

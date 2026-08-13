@@ -1,7 +1,7 @@
 // ─── Standardized Authentication Error Codes ────────────────────────────────
 // Controllers return these codes exclusively. Never use raw strings.
 
-export const AUTH_ERRORS = {
+const AUTH_ERRORS = {
   // Credential errors
   INVALID_CREDENTIALS: 'INVALID_CREDENTIALS',
   VALIDATION_ERROR: 'VALIDATION_ERROR',

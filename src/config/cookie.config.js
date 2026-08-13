@@ -110,15 +110,3 @@ export const COOKIE_NAMES = {
 };
 
 export const resolvedCookieDomain = cookieDomain;
-
-export default {
-  REFRESH_COOKIE_OPTIONS,
-  ACCESS_COOKIE_OPTIONS,
-  ADMIN_REFRESH_COOKIE_OPTIONS,
-  ADMIN_ACCESS_COOKIE_OPTIONS,
-  CLEAR_COOKIE_OPTIONS,
-  COOKIE_PARSE_OPTIONS,
-  CSRF_COOKIE_OPTIONS,
-  COOKIE_NAMES,
-  resolvedCookieDomain,
-};

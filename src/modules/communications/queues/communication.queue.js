@@ -11,9 +11,3 @@ communicationQueue.on('error', (err) => {
 });
 
 export default communicationQueue;
-
-export const QUEUE_NAMES = {
-  SEND_REMINDER: 'send-reminder',
-  SEND_INVOICE: 'send-invoice',
-  ADHERENCE_ESCALATION: 'adherence-escalation',
-};

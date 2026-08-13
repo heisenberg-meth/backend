@@ -11,8 +11,13 @@ const erpEventBusPath = path.resolve(__dirname, '../../../shared/events/erp-even
 const loggerPath = path.resolve(__dirname, '../../../shared/utils/logger.js');
 
 const mockPrisma = {
+  $queryRaw: jest
+    .fn()
+    .mockResolvedValue([{ id: 'invoice-1', totalAmount: 100, paidAmount: 100, balanceAmount: 0 }]),
   invoice: {
-    findUnique: jest.fn(),
+    findUnique: jest
+      .fn()
+      .mockResolvedValue({ id: 'invoice-1', totalAmount: 100, paidAmount: 100, balanceAmount: 0 }),
     update: jest.fn(),
     aggregate: jest.fn(),
   },

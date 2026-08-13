@@ -115,5 +115,3 @@ const analyticsWorkerInstance = new AnalyticsWorker();
 export const initAnalyticsWorker = () => {
   analyticsWorkerInstance.setup();
 };
-
-export default analyticsWorkerInstance;

@@ -1,13 +1,5 @@
 import prisma from '../../../config/prisma.js';
 
-const ADMIN_ROLE_HIERARCHY = {
-  ROOT_ADMIN: 4,
-  ADMIN: 3,
-  FINANCE: 2,
-  SUPPORT: 1,
-  SALES: 1,
-};
-
 export const authenticateAdmin = async (request, reply) => {
   const cookieToken = request.cookies?.adminAccessToken;
 
@@ -64,52 +56,6 @@ export const requireAdminRole = (...roles) => {
         error: {
           message: `Access denied. Required role: ${roles.join(' or ')}`,
           code: 'ADMIN_ROLE_DENIED',
-        },
-      });
-    }
-  };
-};
-
-export const requireAdminPermission = (...permissions) => {
-  return async (request, reply) => {
-    if (!request.admin) {
-      return reply.code(401).send({
-        success: false,
-        error: { message: 'Admin authentication required', code: 'ADMIN_AUTH_REQUIRED' },
-      });
-    }
-
-    if (request.admin.role === 'ROOT_ADMIN') return;
-
-    const hasAll = permissions.every((p) => request.admin.permissions.includes(p));
-    if (!hasAll) {
-      return reply.code(403).send({
-        success: false,
-        error: {
-          message: `Access denied. Missing permissions: ${permissions.join(', ')}`,
-          code: 'ADMIN_PERMISSION_DENIED',
-        },
-      });
-    }
-  };
-};
-
-export const requireAdminLevel = (minimumLevel) => {
-  return async (request, reply) => {
-    if (!request.admin) {
-      return reply.code(401).send({
-        success: false,
-        error: { message: 'Admin authentication required', code: 'ADMIN_AUTH_REQUIRED' },
-      });
-    }
-
-    const level = ADMIN_ROLE_HIERARCHY[request.admin.role] || 0;
-    if (level < minimumLevel) {
-      return reply.code(403).send({
-        success: false,
-        error: {
-          message: 'Access denied. Insufficient admin level.',
-          code: 'ADMIN_LEVEL_DENIED',
         },
       });
     }

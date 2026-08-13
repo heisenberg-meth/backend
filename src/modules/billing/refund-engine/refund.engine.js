@@ -7,16 +7,68 @@ import prisma from '../../../config/prisma.js';
 import movementService from '../../stock/service/movement.service.js';
 
 class RefundEngine {
-  async processRefund(tenantId, userId, data) {
-    const result = await unifiedRefundOrchestrator.processRefund({
-      tenantId,
-      userId,
-      invoiceId: data.invoiceId,
-      items: data.items,
-      refundAmount: data.refundAmount,
-      reason: data.reason,
-      sessionId: data.sessionId,
-    });
+  async processRefund(arg1, arg2, arg3, arg4) {
+    let tenantId, userId, payload;
+
+    if (
+      arg4 !== undefined ||
+      (typeof arg1 === 'string' &&
+        typeof arg2 === 'string' &&
+        typeof arg3 === 'string' &&
+        typeof arg4 === 'object')
+    ) {
+      // Called as: processRefund(returnId, tenantId, userId, options)
+      const returnId = arg1;
+      tenantId = arg2;
+      userId = arg3;
+      const options = arg4 || {};
+
+      const returnRecord = await prisma.return.findUnique({
+        where: { id: returnId },
+        include: { items: true, invoice: true },
+      });
+
+      if (!returnRecord || returnRecord.tenantId !== tenantId) {
+        throw new Error('Return not found');
+      }
+
+      if (returnRecord.status !== 'APPROVED') {
+        throw new Error(`Cannot process refund for return in status: ${returnRecord.status}`);
+      }
+
+      if (returnRecord.refundStatus === 'COMPLETED') {
+        throw new Error('Refund already completed');
+      }
+
+      payload = {
+        tenantId,
+        userId,
+        returnId,
+        invoiceId: returnRecord.invoiceId,
+        refundAmount: returnRecord.totalReturnAmount,
+        reason: options.reason || returnRecord.returnReason,
+        refundMethod: options.refundMethod || returnRecord.refundMethod || 'CASH',
+        sessionId: options.sessionId,
+      };
+    } else {
+      // Called as: processRefund(tenantId, userId, data)
+      tenantId = arg1;
+      userId = arg2;
+      const data = arg3 || {};
+      payload = {
+        tenantId,
+        userId,
+        invoiceId: data.invoiceId,
+        items: data.items,
+        refundAmount: data.refundAmount,
+        reason: data.reason,
+        returnId: data.returnId,
+        refundMethod: data.refundMethod,
+        sessionId: data.sessionId,
+      };
+    }
+
+    const result = await unifiedRefundOrchestrator.processRefund(payload);
 
     try {
       emitLocalEvent(DOMAIN_EVENTS.REFUND_PROCESSED, {

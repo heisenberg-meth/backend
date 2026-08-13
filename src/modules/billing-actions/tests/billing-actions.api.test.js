@@ -1,6 +1,5 @@
-import { jest, describe, beforeEach, it, expect } from '@jest/globals';
-import express from 'express';
-import request from 'supertest';
+import { jest, describe, beforeEach, beforeAll, afterAll, it, expect } from '@jest/globals';
+import Fastify from 'fastify';
 import path from 'path';
 import { fileURLToPath } from 'url';
 
@@ -13,16 +12,15 @@ const invoiceTemplatePath = path.resolve(
   __dirname,
   '../../settings/invoice-template/invoice-template.service.js',
 );
-const authMiddlewarePath = path.resolve(__dirname, '../../../middleware/auth.middleware.js');
-const roleMiddlewarePath = path.resolve(__dirname, '../../../middleware/role.middleware.js');
-const validateMiddlewarePath = path.resolve(
-  __dirname,
-  '../../../middleware/validate.middleware.js',
-);
+const authFastifyPath = path.resolve(__dirname, '../../../middleware/auth.fastify.js');
+const permissionFastifyPath = path.resolve(__dirname, '../../../middleware/permission.fastify.js');
 const invoiceDeliveryQueuePath = path.resolve(__dirname, '../queue/invoice-delivery.queue.js');
 const pdfRendererPath = path.resolve(__dirname, '../services/pdf-renderer.service.js');
 const s3StoragePath = path.resolve(__dirname, '../services/s3-storage.service.js');
-const billingActionsRoutesPath = path.resolve(__dirname, '../routes/billing-actions.routes.js');
+const billingActionsRoutesPath = path.resolve(
+  __dirname,
+  '../routes/billing-actions.fastify.routes.js',
+);
 
 const mockPrisma = {
   invoice: {
@@ -66,20 +64,17 @@ jest.unstable_mockModule(invoiceTemplatePath, () => ({
   },
 }));
 
-jest.unstable_mockModule(authMiddlewarePath, () => ({
-  default: (req, res, next) => {
-    req.user = { id: 'user-1', role: 'ADMIN' };
-    req.tenantId = 'tenant-1';
-    next();
+jest.unstable_mockModule(authFastifyPath, () => ({
+  authenticate: async (request) => {
+    request.user = { id: 'user-1', role: 'ADMIN' };
+  },
+  requireTenant: async (request) => {
+    request.tenantId = 'tenant-1';
   },
 }));
 
-jest.unstable_mockModule(roleMiddlewarePath, () => ({
-  authorize: () => (req, res, next) => next(),
-}));
-
-jest.unstable_mockModule(validateMiddlewarePath, () => ({
-  default: () => (req, res, next) => next(),
+jest.unstable_mockModule(permissionFastifyPath, () => ({
+  requirePermission: () => async () => {},
 }));
 
 jest.unstable_mockModule(invoiceDeliveryQueuePath, () => ({
@@ -110,11 +105,19 @@ jest.unstable_mockModule(s3StoragePath, () => ({
 
 const { default: billingActionsRoutes } = await import(billingActionsRoutesPath);
 
-const app = express();
-app.use(express.json());
-app.use('/api/billing', billingActionsRoutes);
-
 describe('Billing Actions API', () => {
+  let app;
+
+  beforeAll(async () => {
+    app = Fastify();
+    await app.register(billingActionsRoutes, { prefix: '/api/billing' });
+    await app.ready();
+  });
+
+  afterAll(async () => {
+    await app.close();
+  });
+
   beforeEach(() => {
     jest.clearAllMocks();
   });
@@ -134,14 +137,17 @@ describe('Billing Actions API', () => {
         printStatus: 'PENDING',
       });
 
-      const response = await request(app)
-        .post('/api/billing/invoices/invoice-1/print')
-        .send({ printerType: 'A4', copies: 2 })
-        .expect(202);
+      const response = await app.inject({
+        method: 'POST',
+        url: '/api/billing/invoices/invoice-1/print',
+        payload: { printerType: 'A4', copies: 2 },
+      });
 
-      expect(response.body.success).toBe(true);
-      expect(response.body.data.printJobId).toBe('print-job-1');
-      expect(response.body.data.status).toBe('PENDING');
+      expect(response.statusCode).toBe(202);
+      const body = JSON.parse(response.payload);
+      expect(body.success).toBe(true);
+      expect(body.data.printJobId).toBe('print-job-1');
+      expect(body.data.status).toBe('PENDING');
     });
   });
 
@@ -172,10 +178,16 @@ describe('Billing Actions API', () => {
         expiresAt: new Date(Date.now() + 3600000),
       });
 
-      const response = await request(app).post('/api/billing/invoices/invoice-1/pdf').expect(200);
+      const response = await app.inject({
+        method: 'POST',
+        url: '/api/billing/invoices/invoice-1/pdf',
+        payload: {},
+      });
 
-      expect(response.body.success).toBe(true);
-      expect(response.body.data.pdfUrl).toBe('https://signed-url.example.com');
+      expect(response.statusCode).toBe(200);
+      const body = JSON.parse(response.payload);
+      expect(body.success).toBe(true);
+      expect(body.data.pdfUrl).toBe('https://signed-url.example.com');
     });
   });
 
@@ -193,14 +205,17 @@ describe('Billing Actions API', () => {
         deliveryStatus: 'QUEUED',
       });
 
-      const response = await request(app)
-        .post('/api/billing/invoices/invoice-1/whatsapp')
-        .send({ phoneNumber: '+919876543210' })
-        .expect(202);
+      const response = await app.inject({
+        method: 'POST',
+        url: '/api/billing/invoices/invoice-1/whatsapp',
+        payload: { phoneNumber: '+919876543210' },
+      });
 
-      expect(response.body.success).toBe(true);
-      expect(response.body.data.status).toBe('QUEUED');
-      expect(response.body.data.recipient).toBe('+919876543210');
+      expect(response.statusCode).toBe(202);
+      const body = JSON.parse(response.payload);
+      expect(body.success).toBe(true);
+      expect(body.data.status).toBe('QUEUED');
+      expect(body.data.recipient).toBe('+919876543210');
     });
   });
 
@@ -218,14 +233,17 @@ describe('Billing Actions API', () => {
         deliveryStatus: 'QUEUED',
       });
 
-      const response = await request(app)
-        .post('/api/billing/invoices/invoice-1/email')
-        .send({ email: 'patient@example.com' })
-        .expect(202);
+      const response = await app.inject({
+        method: 'POST',
+        url: '/api/billing/invoices/invoice-1/email',
+        payload: { email: 'patient@example.com' },
+      });
 
-      expect(response.body.success).toBe(true);
-      expect(response.body.data.status).toBe('QUEUED');
-      expect(response.body.data.recipient).toBe('patient@example.com');
+      expect(response.statusCode).toBe(202);
+      const body = JSON.parse(response.payload);
+      expect(body.success).toBe(true);
+      expect(body.data.status).toBe('QUEUED');
+      expect(body.data.recipient).toBe('patient@example.com');
     });
   });
 
@@ -239,12 +257,15 @@ describe('Billing Actions API', () => {
         expiresAt: new Date(Date.now() + 3600000),
       });
 
-      const response = await request(app)
-        .get('/api/billing/invoices/invoice-1/download')
-        .expect(200);
+      const response = await app.inject({
+        method: 'GET',
+        url: '/api/billing/invoices/invoice-1/download',
+      });
 
-      expect(response.body.success).toBe(true);
-      expect(response.body.data.pdfUrl).toBe('https://existing-signed-url.example.com');
+      expect(response.statusCode).toBe(200);
+      const body = JSON.parse(response.payload);
+      expect(body.success).toBe(true);
+      expect(body.data.pdfUrl).toBe('https://existing-signed-url.example.com');
     });
   });
 
@@ -269,12 +290,15 @@ describe('Billing Actions API', () => {
         },
       ]);
 
-      const response = await request(app)
-        .get('/api/billing/invoices/invoice-1/delivery-status')
-        .expect(200);
+      const response = await app.inject({
+        method: 'GET',
+        url: '/api/billing/invoices/invoice-1/delivery-status',
+      });
 
-      expect(response.body.success).toBe(true);
-      expect(response.body.data.logs).toHaveLength(2);
+      expect(response.statusCode).toBe(200);
+      const body = JSON.parse(response.payload);
+      expect(body.success).toBe(true);
+      expect(body.data.logs).toHaveLength(2);
     });
   });
 
@@ -291,17 +315,20 @@ describe('Billing Actions API', () => {
         deliveryStatus: 'QUEUED',
       });
 
-      const response = await request(app)
-        .post('/api/billing/invoices/invoice-1/resend')
-        .send({
+      const response = await app.inject({
+        method: 'POST',
+        url: '/api/billing/invoices/invoice-1/resend',
+        payload: {
           channels: ['email', 'whatsapp'],
           email: 'patient@example.com',
           phoneNumber: '+919876543210',
-        })
-        .expect(202);
+        },
+      });
 
-      expect(response.body.success).toBe(true);
-      expect(response.body.data.results).toHaveLength(2);
+      expect(response.statusCode).toBe(202);
+      const body = JSON.parse(response.payload);
+      expect(body.success).toBe(true);
+      expect(body.data.results).toHaveLength(2);
     });
   });
 
@@ -320,17 +347,20 @@ describe('Billing Actions API', () => {
         printStatus: 'PENDING',
       });
 
-      const response = await request(app)
-        .post('/api/billing/invoices/bulk-print')
-        .send({
+      const response = await app.inject({
+        method: 'POST',
+        url: '/api/billing/invoices/bulk-print',
+        payload: {
           invoiceIds: ['invoice-1', 'invoice-2', 'invoice-3'],
           printerType: 'A4',
           copies: 1,
-        })
-        .expect(202);
+        },
+      });
 
-      expect(response.body.success).toBe(true);
-      expect(response.body.data.totalQueued).toBe(3);
+      expect(response.statusCode).toBe(202);
+      const body = JSON.parse(response.payload);
+      expect(body.success).toBe(true);
+      expect(body.data.totalQueued).toBe(3);
     });
   });
 
@@ -342,24 +372,30 @@ describe('Billing Actions API', () => {
         status: 'ACTIVE',
       });
 
-      const response = await request(app)
-        .post('/api/billing/invoices/invoice-1/regenerate-pdf')
-        .send({ reason: 'customer request' })
-        .expect(200);
+      const response = await app.inject({
+        method: 'POST',
+        url: '/api/billing/invoices/invoice-1/regenerate-pdf',
+        payload: { reason: 'customer request' },
+      });
 
-      expect(response.body.success).toBe(true);
-      expect(response.body.data.pdfUrl).toBeDefined();
+      expect(response.statusCode).toBe(200);
+      const body = JSON.parse(response.payload);
+      expect(body.success).toBe(true);
+      expect(body.data.pdfUrl).toBeDefined();
     });
 
     it('should return 404 for non-existent invoice', async () => {
       mockPrisma.invoice.findUnique.mockResolvedValue(null);
 
-      const response = await request(app)
-        .post('/api/billing/invoices/nonexistent/regenerate-pdf')
-        .send({ reason: 'lost' })
-        .expect(404);
+      const response = await app.inject({
+        method: 'POST',
+        url: '/api/billing/invoices/nonexistent/regenerate-pdf',
+        payload: { reason: 'lost' },
+      });
 
-      expect(response.body.success).toBe(false);
+      expect(response.statusCode).toBe(404);
+      const body = JSON.parse(response.payload);
+      expect(body.success).toBe(false);
     });
   });
 
@@ -376,13 +412,16 @@ describe('Billing Actions API', () => {
         },
       ]);
 
-      const response = await request(app)
-        .get('/api/billing/invoices/invoice-1/print-history')
-        .expect(200);
+      const response = await app.inject({
+        method: 'GET',
+        url: '/api/billing/invoices/invoice-1/print-history',
+      });
 
-      expect(response.body.success).toBe(true);
-      expect(response.body.data.printJobs).toHaveLength(1);
-      expect(response.body.data.pagination.total).toBe(1);
+      expect(response.statusCode).toBe(200);
+      const body = JSON.parse(response.payload);
+      expect(body.success).toBe(true);
+      expect(body.data.printJobs).toHaveLength(1);
+      expect(body.data.pagination.total).toBe(1);
     });
   });
 });

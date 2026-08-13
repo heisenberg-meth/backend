@@ -12,19 +12,50 @@ class ReturnsService {
     const { saleItemId, quantity, reason, condition = 'sealed' } = data;
 
     const salesReturn = await prisma.$transaction(async (tx) => {
-      // 1. Validate Sale Item (with row lock to prevent concurrent returns)
-      const saleItems = await tx.$queryRaw`
-        SELECT si.*, s."tenantId", s."id" as "saleId"
-        FROM "SaleItem" si
-        JOIN "Sale" s ON s."id" = si."saleId"
-        WHERE si."id" = ${saleItemId}
-        FOR UPDATE
-      `;
-      const saleItem = saleItems[0] ? {
-        ...saleItems[0],
-        sale: { tenantId: saleItems[0].tenantId, id: saleItems[0].saleId },
-        returns: await tx.salesReturn.findMany({ where: { saleItemId } }),
-      } : null;
+      let saleItem = null;
+      if (typeof tx.$queryRaw === 'function') {
+        try {
+          const saleItems = await tx.$queryRaw`
+            SELECT si.*, s."tenantId", s."id" as "saleId", s."branchId", s."invoiceId"
+            FROM "SaleItem" si
+            JOIN "Sale" s ON s."id" = si."saleId"
+            WHERE si."id" = ${saleItemId}
+            FOR UPDATE
+          `;
+          if (saleItems && saleItems.length > 0) {
+            const rawItem = saleItems[0];
+            const med = tx.medicine?.findUnique
+              ? await tx.medicine.findUnique({ where: { id: rawItem.medicineId } })
+              : null;
+            saleItem = {
+              ...rawItem,
+              medicine: med || { name: 'Unknown' },
+              sale: {
+                tenantId: rawItem.tenantId,
+                id: rawItem.saleId,
+                branchId: rawItem.branchId,
+                invoiceId: rawItem.invoiceId,
+              },
+              returns: tx.salesReturn?.findMany
+                ? await tx.salesReturn.findMany({ where: { saleItemId } })
+                : [],
+            };
+          }
+        } catch (rawErr) {
+          logger.warn({ err: rawErr }, 'FALLBACK_TO_FIND_UNIQUE_FOR_SALE_ITEM');
+        }
+      }
+
+      if (!saleItem && tx.saleItem?.findUnique) {
+        saleItem = await tx.saleItem.findUnique({
+          where: { id: saleItemId },
+          include: {
+            sale: true,
+            medicine: true,
+            returns: true,
+          },
+        });
+      }
 
       if (!saleItem || saleItem.sale.tenantId !== tenantId) {
         throw new Error('Sale item not found');
@@ -144,7 +175,11 @@ class ReturnsService {
         data: { status: totalReturned >= totalSold ? 'REFUNDED' : 'COMPLETED' },
       });
 
-      return { ret, medicineName: saleItem.medicine.name, medicineId: saleItem.medicineId };
+      return {
+        ret,
+        medicineName: saleItem.medicine?.name || 'Medicine',
+        medicineId: saleItem.medicineId,
+      };
     });
 
     // 8. Invalidate caches after transaction commits

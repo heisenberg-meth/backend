@@ -1,4 +1,14 @@
 import { jest, describe, beforeEach, afterEach, it, expect } from '@jest/globals';
+import path from 'path';
+import { fileURLToPath } from 'url';
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+
+const redisPath = path.resolve(__dirname, '../../../config/redis.js');
+const alertRepositoryPath = path.resolve(__dirname, '../repositories/alert.repository.js');
+const forecastingServicePath = path.resolve(__dirname, '../forecasting/forecasting.service.js');
+const prismaPath = path.resolve(__dirname, '../../../config/prisma.js');
+const medicineAlertServicePath = path.resolve(__dirname, '../services/medicine-alert.service.js');
 
 const mockRedis = {
   get: jest.fn(),
@@ -53,24 +63,24 @@ const mockPrisma = {
   },
 };
 
-jest.unstable_mockModule('../../../config/redis.js', () => ({
+jest.unstable_mockModule(redisPath, () => ({
   default: mockRedis,
   quitRedis: jest.fn().mockResolvedValue(undefined),
 }));
 
-jest.unstable_mockModule('../repositories/alert.repository.js', () => ({
+jest.unstable_mockModule(alertRepositoryPath, () => ({
   default: mockAlertRepository,
 }));
 
-jest.unstable_mockModule('../forecasting/forecasting.service.js', () => ({
+jest.unstable_mockModule(forecastingServicePath, () => ({
   default: mockForecastingService,
 }));
 
-jest.unstable_mockModule('../../../config/prisma.js', () => ({
+jest.unstable_mockModule(prismaPath, () => ({
   default: mockPrisma,
 }));
 
-const { default: medicineAlertService } = await import('../services/medicine-alert.service.js');
+const { default: medicineAlertService } = await import(medicineAlertServicePath);
 
 describe('MedicineAlertService', () => {
   beforeEach(() => {

@@ -40,14 +40,8 @@ class PurchaseOrderService {
       'batchNumber',
       'expiryDate',
       'manufacturingDate',
-      'mrp',
-      'sellingPrice',
-      'unitPrice',
-      'purchasePrice',
-      'gstPercentage',
       'supplierInvoiceNumber',
       'invoiceDate',
-      'discountAmount',
     ];
     const invalidHeaderField = grnOnlyFields.find((field) => data[field] !== undefined);
     if (invalidHeaderField) {
@@ -60,7 +54,7 @@ class PurchaseOrderService {
     );
     if (invalidItem) {
       throw new BadRequestError(
-        'Purchase price, GST, batch, expiry, MRP, and invoice fields belong to Goods Receipt, not Purchase Order creation',
+        'Batch, expiry, manufacturing date, and invoice fields belong to Goods Receipt, not Purchase Order creation',
       );
     }
 
@@ -104,7 +98,7 @@ class PurchaseOrderService {
     });
     const medicineMap = new Map(medicines.map((m) => [m.id, m]));
 
-    // 6. Build PO items — only medicineId + quantity. No pricing.
+    // 6. Build PO items with pricing & GST
     const mappedItems = [];
     for (const item of data.items) {
       const med = medicineMap.get(item.medicineId);
@@ -114,19 +108,35 @@ class PurchaseOrderService {
       if (!qty || qty <= 0)
         throw new BadRequestError(`Quantity must be greater than zero for ${med.name}`);
 
+      const unitPrice = Number(item.unitPrice ?? item.purchasePrice ?? med.purchasePrice ?? 0);
+      const gstPercentage = Number(item.gstPercentage ?? med.gstPercentage ?? 0);
+      const itemSubtotal = Number((qty * unitPrice).toFixed(2));
+      const itemGst = Number(((itemSubtotal * gstPercentage) / 100).toFixed(2));
+      const itemTotal = Number((itemSubtotal + itemGst).toFixed(2));
+
       mappedItems.push({
         medicineId: item.medicineId,
         medicineName: med.name,
         currentStock: med.inventory?.[0]?.currentStock || 0,
         reorderQty: med.reorderLevel || 0,
         quantity: qty,
-        // Pricing fields kept nullable in DB — set to 0 as placeholder until GRN
-        unitPrice: 0,
-        gstPercentage: 0,
-        totalAmount: 0,
+        unitPrice,
+        gstPercentage,
+        totalAmount: itemTotal,
         remainingQuantity: qty,
       });
     }
+
+    const subtotal = Number(
+      mappedItems.reduce((sum, it) => sum + it.unitPrice * it.quantity, 0).toFixed(2),
+    );
+    const gstAmount = Number(
+      mappedItems
+        .reduce((sum, it) => sum + (it.unitPrice * it.quantity * it.gstPercentage) / 100, 0)
+        .toFixed(2),
+    );
+    const discountAmount = Number(data.discountAmount || 0);
+    const totalAmount = Number(Math.max(0, subtotal + gstAmount - discountAmount).toFixed(2));
 
     // 7. Generate order number
     const now = new Date();
@@ -137,7 +147,7 @@ class PurchaseOrderService {
     const random = Math.floor(1000 + Math.random() * 9000);
     const orderNumber = `PO-${dateStr}-${random}`;
 
-    // 8. Create Purchase Order — no financial totals yet (those come from GRN)
+    // 8. Create Purchase Order
     const order = await prisma.$transaction(async (tx) => {
       const po = await tx.purchaseOrder.create({
         data: {
@@ -150,13 +160,12 @@ class PurchaseOrderService {
           expectedDeliveryDate,
           paymentMode,
           paymentTermsDays,
-          // Totals are 0 at PO creation — real values set after GRN
-          subtotal: 0,
-          gstAmount: 0,
-          totalAmount: 0,
-          discountAmount: 0,
-          advancePaid: 0,
-          balanceAmount: 0,
+          subtotal,
+          gstAmount,
+          totalAmount,
+          discountAmount,
+          advancePaid: Number(data.advancePaid || 0),
+          balanceAmount: totalAmount - Number(data.advancePaid || 0),
           notes: data.notes,
           items: { create: mappedItems },
         },
@@ -1170,11 +1179,33 @@ class PurchaseOrderService {
     const invoice = await prisma.purchaseInvoice.findFirst({
       where: { id: invoiceId, tenantId },
     });
-    if (!invoice) throw new Error('Purchase invoice not found');
+    if (!invoice) throw new NotFoundError('Purchase invoice not found');
 
-    const validStatuses = ['PENDING', 'PAID', 'PARTIAL'];
+    const validStatuses = ['PENDING', 'PAID', 'PARTIAL', 'PARTIALLY_PAID'];
     if (!validStatuses.includes(paymentStatus)) {
-      throw new Error('Invalid payment status');
+      throw new BadRequestError(`Invalid payment status: ${paymentStatus}`);
+    }
+
+    const currentStatus = invoice.paymentStatus;
+    const allowedTransitions = {
+      PENDING: ['PENDING', 'PARTIAL', 'PARTIALLY_PAID', 'PAID'],
+      PARTIAL: ['PARTIAL', 'PARTIALLY_PAID', 'PAID'],
+      PARTIALLY_PAID: ['PARTIAL', 'PARTIALLY_PAID', 'PAID'],
+      PAID: ['PAID'],
+      OVERDUE: ['OVERDUE', 'PARTIAL', 'PARTIALLY_PAID', 'PAID'],
+      CANCELLED: ['CANCELLED'],
+    };
+
+    if (currentStatus === 'PAID' && paymentStatus !== 'PAID') {
+      throw new BadRequestError(
+        'Paid invoices are immutable and cannot be transitioned back to PENDING or PARTIAL',
+      );
+    }
+
+    if (!allowedTransitions[currentStatus]?.includes(paymentStatus)) {
+      throw new BadRequestError(
+        `Invalid payment status transition: ${currentStatus} → ${paymentStatus}`,
+      );
     }
 
     const totalAmount = Number(invoice.totalAmount);
@@ -1190,7 +1221,7 @@ class PurchaseOrderService {
       newPaidAmount = 0;
       newBalanceAmount = totalAmount;
       newPaidAt = null;
-    } else if (paymentStatus === 'PARTIAL') {
+    } else if (paymentStatus === 'PARTIAL' || paymentStatus === 'PARTIALLY_PAID') {
       if (paidAmount !== undefined && paidAmount !== null) {
         newPaidAmount = Math.min(Math.max(Number(paidAmount), 0), totalAmount);
       }

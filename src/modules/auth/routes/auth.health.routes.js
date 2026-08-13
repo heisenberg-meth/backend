@@ -5,7 +5,7 @@ import authMetricsService from '../service/auth.metrics.service.js';
 import { CURRENT_AUTH_VERSION } from '../auth.constants.js';
 import { resolvedCookieDomain } from '../../../config/cookie.config.js';
 
-export async function authHealthRoutes(fastify) {
+export default async function authHealthRoutes(fastify) {
   fastify.get('/health', async () => {
     let dbStatus = 'connected';
     let redisStatus = 'connected';
@@ -117,5 +117,3 @@ export async function authHealthRoutes(fastify) {
     });
   }
 }
-
-export default authHealthRoutes;

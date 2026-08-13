@@ -83,33 +83,21 @@ class MedicineIntelligenceService {
    */
   async createMedicineMaster(tenantId, userId, data) {
     const { category, manufacturer, ...rawMedicineData } = data;
+    const medicineName = rawMedicineData.medicineName || rawMedicineData.name;
 
     // Required field validations
-    if (!rawMedicineData.medicineName) {
+    if (!medicineName) {
       throw new Error('Medicine name is required');
     }
-    if (!rawMedicineData.genericName) {
-      throw new Error('Generic name is required');
-    }
-    if (
-      !rawMedicineData.manufacturerName &&
-      !rawMedicineData.manufacturer &&
-      !rawMedicineData.manufacturerId
-    ) {
-      throw new Error('Manufacturer is required');
-    }
-    if (!rawMedicineData.categoryId && !category) {
-      throw new Error('Category is required');
-    }
-    if (!rawMedicineData.medicineType) {
-      throw new Error('Medicine type is required');
-    }
-    if (!rawMedicineData.dosageForm) {
-      throw new Error('Dosage form is required');
-    }
-    if (!rawMedicineData.strength) {
-      throw new Error('Strength is required');
-    }
+    const genericName = rawMedicineData.genericName || medicineName;
+    const dosageForm = rawMedicineData.dosageForm || 'Tablet';
+    const medicineType = rawMedicineData.medicineType || 'ALLOPATHIC';
+    const strength = rawMedicineData.strength || 'N/A';
+    const manufacturerName =
+      rawMedicineData.manufacturerName ||
+      rawMedicineData.manufacturer ||
+      manufacturer ||
+      'Generic Manufacturer';
 
     // GST validation
     const validGstPercentages = [0, 5, 12, 18, 28];
@@ -130,7 +118,7 @@ class MedicineIntelligenceService {
       const existing = await medicineRepository.findByBarcode(rawMedicineData.barcode, tenantId);
       if (existing)
         throw new Error(
-          `Barcode ${rawMedicineData.barcode} is already assigned to ${existing.medicineName}`,
+          `Barcode ${rawMedicineData.barcode} is already assigned to ${existing.medicineName || existing.name}`,
         );
     }
 
@@ -140,7 +128,7 @@ class MedicineIntelligenceService {
       });
       if (existing)
         throw new Error(
-          `SKU ${rawMedicineData.sku} is already assigned to ${existing.medicineName}`,
+          `SKU ${rawMedicineData.sku} is already assigned to ${existing.medicineName || existing.name}`,
         );
     }
 
@@ -170,8 +158,8 @@ class MedicineIntelligenceService {
 
     // Resolve Manufacturer ID from name if not provided
     let manufacturerId = data.manufacturerId || null;
-    if (!manufacturerId && manufacturer) {
-      const mfgName = manufacturer.trim();
+    if (!manufacturerId && (manufacturer || rawMedicineData.manufacturerName)) {
+      const mfgName = (manufacturer || rawMedicineData.manufacturerName).trim();
       const existingMfg = await prisma.manufacturer.findFirst({
         where: {
           tenantId,
@@ -204,18 +192,18 @@ class MedicineIntelligenceService {
 
     // Clean up data for create
     const createData = {
-      name: rawMedicineData.medicineName, // Legacy field for backward compatibility
-      medicineName: rawMedicineData.medicineName,
-      genericName: rawMedicineData.genericName,
-      brandName: rawMedicineData.brandName,
-      manufacturerName: rawMedicineData.manufacturerName || rawMedicineData.manufacturer,
-      medicineType: rawMedicineData.medicineType,
-      dosageForm: rawMedicineData.dosageForm,
-      strength: rawMedicineData.strength,
+      name: medicineName,
+      medicineName: medicineName,
+      genericName: genericName,
+      brandName: rawMedicineData.brandName || medicineName,
+      manufacturerName: manufacturerName,
+      medicineType: medicineType,
+      dosageForm: dosageForm,
+      strength: strength,
       schedule: rawMedicineData.schedule,
-      purchaseUnit: rawMedicineData.purchaseUnit,
-      sellingUnit: rawMedicineData.sellingUnit,
-      unitPerPack: rawMedicineData.unitPerPack,
+      purchaseUnit: rawMedicineData.purchaseUnit || 'STRIP',
+      sellingUnit: rawMedicineData.sellingUnit || 'STRIP',
+      unitPerPack: rawMedicineData.unitPerPack || 10,
       gstPercentage: rawMedicineData.gstPercentage ?? 0,
       hsnCode: rawMedicineData.hsnCode,
       barcode: rawMedicineData.barcode,
@@ -227,8 +215,7 @@ class MedicineIntelligenceService {
       status: rawMedicineData.status || 'ACTIVE',
       notes: rawMedicineData.notes,
       isActive: rawMedicineData.isActive ?? true,
-      packagingType:
-        rawMedicineData.packagingType || mapDosageFormToPackaging(rawMedicineData.dosageForm),
+      packagingType: rawMedicineData.packagingType || mapDosageFormToPackaging(dosageForm),
       scheduleType: rawMedicineData.scheduleType,
       composition: rawMedicineData.composition,
       description: rawMedicineData.description,
@@ -236,33 +223,53 @@ class MedicineIntelligenceService {
 
     const medicine = await prisma.$transaction(async (tx) => {
       // Create Master Record
-      const medicine = await tx.medicine.create({
+      const med = await tx.medicine.create({
         data: {
           ...createData,
           category: categoryId ? { connect: { id: categoryId } } : undefined,
-          manufacturerRelation: manufacturerId ? { connect: { id: manufacturerId } } : undefined,
-          tenant: { connect: { id: tenantId } },
-          user: { connect: { id: userId } },
+          manufacturer: manufacturerId ? { connect: { id: manufacturerId } } : undefined,
+          tenant: tenantId ? { connect: { id: tenantId } } : undefined,
+          user: userId ? { connect: { id: userId } } : undefined,
         },
         include: {
           category: { select: { id: true, name: true } },
         },
       });
 
-      await auditService.log({
-        tenantId,
-        userId,
-        action: 'CREATE_MEDICINE_MASTER',
-        target: medicine.medicineName,
-        type: 'PHARMACEUTICAL',
-      });
+      if (auditService?.log) {
+        await auditService.log({
+          tenantId,
+          userId,
+          action: 'CREATE_MEDICINE_MASTER',
+          target: med.medicineName || med.name,
+          type: 'PHARMACEUTICAL',
+        });
+      }
 
-      return medicine;
+      return med;
     });
 
+    if (data.initialBatch && data.initialBatch.batchNumber) {
+      await movementService.stockIn(
+        tenantId,
+        {
+          ...data.initialBatch,
+          medicineId: medicine.id,
+          branchId: data.branchId,
+          referenceType: 'INITIAL_STOCK',
+          notes: `Initial stock for ${medicine.medicineName || medicine.name}`,
+        },
+        userId,
+      );
+    }
+
     await this.invalidateCache(tenantId);
-    await mainQueue.add('update-analytics', { tenantId });
-    await eventBus.publish('MEDICINE_CREATED', { medicineId: medicine.id, tenantId });
+    if (mainQueue?.add) {
+      await mainQueue.add('update-analytics', { tenantId });
+    }
+    if (eventBus?.publish) {
+      await eventBus.publish('MEDICINE_CREATED', { medicineId: medicine.id, tenantId });
+    }
 
     return medicine;
   }

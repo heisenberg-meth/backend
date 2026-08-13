@@ -1,7 +1,5 @@
 import logger from './logger.js';
 import { closeAllQueuesAndWorkers } from '../../config/queue-registry.js';
-import prisma from '../../config/prisma.js';
-import { quitRedis } from '../../config/redis.js';
 import process from 'process';
 
 const isTest = process.env.NODE_ENV === 'test';
@@ -14,21 +12,26 @@ export const cleanupResources = async () => {
     await closeAllQueuesAndWorkers();
     log.info('Queues and Workers closed');
 
-    if (typeof prisma.$disconnect === 'function') {
-      try {
-        await prisma.$disconnect();
-      } catch (err) {
-        log.warn({ err: err.message }, '[CLEANUP] Error disconnecting Prisma');
+    try {
+      const prismaModule = await import('../../config/prisma.js');
+      const prismaClient = prismaModule.default || prismaModule.prisma;
+      if (prismaClient && typeof prismaClient.$disconnect === 'function') {
+        await prismaClient.$disconnect();
       }
+    } catch (err) {
+      log.warn({ err: err.message }, '[CLEANUP] Error disconnecting Prisma');
     }
     log.info('Databases disconnected');
 
-    if (typeof quitRedis === 'function') {
-      try {
-        await quitRedis();
-      } catch (err) {
-        log.warn({ err: err.message }, '[CLEANUP] Error quitting Redis');
+    try {
+      const redisModule = await import('../../config/redis.js');
+      if (typeof redisModule.quitRedis === 'function') {
+        await redisModule.quitRedis();
+      } else if (redisModule.default && typeof redisModule.default.quit === 'function') {
+        await redisModule.default.quit();
       }
+    } catch (err) {
+      log.warn({ err: err.message }, '[CLEANUP] Error quitting Redis');
     }
     log.info('Redis disconnected');
 

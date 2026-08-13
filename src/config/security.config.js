@@ -45,10 +45,6 @@ export const HELMET_CONFIG = {
   },
 };
 
-export const CSRF_CONFIG = {
-  cookieOpts: { signed: true },
-};
-
 export const CSRF_EXEMPT_PATHS = [
   '/api/auth/login',
   '/api/auth/register',
@@ -80,10 +76,3 @@ export const getRateLimitConfig = (redisInstance) => ({
     retryAfter: context.after,
   }),
 });
-
-export default {
-  HELMET_CONFIG,
-  CSRF_CONFIG,
-  CSRF_EXEMPT_PATHS,
-  getRateLimitConfig,
-};

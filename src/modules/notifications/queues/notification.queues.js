@@ -21,7 +21,7 @@ const defaultJobOptions = {
   removeOnFail: false, // keep failed jobs until DLQ worker processes them
 };
 
-export const queues = {
+const queues = {
   IN_APP: new Queue('notifications_in_app', { connection, defaultJobOptions }),
   SMS: new Queue('notifications_sms', { connection, defaultJobOptions }),
   EMAIL: new Queue('notifications_email', { connection, defaultJobOptions }),

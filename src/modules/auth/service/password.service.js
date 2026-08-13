@@ -17,7 +17,7 @@ const COMMON_BREACHED_PASSWORDS = new Set([
   'Viyan@123',
 ]);
 
-export class PasswordService {
+export default class PasswordService {
   /**
    * Enforces enterprise password complexity and breach checks.
    * @param {string} password
@@ -135,5 +135,3 @@ export class PasswordService {
     }
   }
 }
-
-export default PasswordService;

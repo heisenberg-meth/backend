@@ -145,7 +145,11 @@ class PurchaseOrderFastifyController {
     const userId = request.user.id;
     try {
       const order = await purchaseOrderService.submitOrder(tenantId, id, userId);
-      return reply.send({ success: true, data: order, message: 'Purchase order submitted for approval' });
+      return reply.send({
+        success: true,
+        data: order,
+        message: 'Purchase order submitted for approval',
+      });
     } catch (error) {
       return reply.code(400).send({ success: false, error: error.message });
     }
@@ -157,7 +161,11 @@ class PurchaseOrderFastifyController {
     const userId = request.user.id;
     try {
       const order = await purchaseOrderService.requestApproval(tenantId, id, userId);
-      return reply.send({ success: true, data: order, message: 'Purchase order routed for approval' });
+      return reply.send({
+        success: true,
+        data: order,
+        message: 'Purchase order routed for approval',
+      });
     } catch (error) {
       return reply.code(400).send({ success: false, error: error.message });
     }
@@ -297,7 +305,10 @@ class PurchaseOrderFastifyController {
     const userId = request.user.id;
     const { medicineId, quantity } = request.body;
     try {
-      const result = await purchaseOrderService.createReorder(tenantId, userId, { medicineId, quantity });
+      const result = await purchaseOrderService.createReorder(tenantId, userId, {
+        medicineId,
+        quantity,
+      });
       return reply.code(201).send({ success: true, data: result });
     } catch (error) {
       logger.error({ error, tenantId }, 'Failed to create reorder');
@@ -310,11 +321,17 @@ class PurchaseOrderFastifyController {
     const tenantId = request.tenantId;
     const userId = request.user.id;
     try {
-      const result = await purchaseOrderService.updatePaymentStatus(tenantId, id, request.body, userId);
+      const result = await purchaseOrderService.updatePaymentStatus(
+        tenantId,
+        id,
+        request.body,
+        userId,
+      );
       return reply.send({ success: true, data: result, message: 'Payment status updated' });
     } catch (error) {
       logger.error({ error, id, tenantId }, 'Failed to update payment status');
-      return reply.code(400).send({ success: false, error: error.message });
+      const statusCode = error.statusCode || (error.message?.includes('not found') ? 404 : 400);
+      return reply.code(statusCode).send({ success: false, error: error.message });
     }
   }
 
@@ -438,7 +455,9 @@ ${order.notes ? `<p style="color:#6b7280;font-size:12px;margin-top:24px;"><stron
         .send(html);
     } catch (error) {
       logger.error({ error, id, tenantId }, 'Failed to generate PO PDF');
-      return reply.code(500).send({ success: false, error: 'Failed to generate purchase order PDF' });
+      return reply
+        .code(500)
+        .send({ success: false, error: 'Failed to generate purchase order PDF' });
     }
   }
 }

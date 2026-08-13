@@ -231,12 +231,3 @@ export async function startCommunicationWorker() {
   }
   return workerInstance;
 }
-
-export async function stopCommunicationWorker() {
-  if (workerInstance) {
-    await workerInstance.close();
-    workerInstance = null;
-  }
-}
-
-export default { startCommunicationWorker, stopCommunicationWorker };

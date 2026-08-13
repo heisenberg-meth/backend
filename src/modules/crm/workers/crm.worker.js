@@ -31,7 +31,7 @@ const handlers = {
   },
 };
 
-export const crmWorker = isTest
+const crmWorker = isTest
   ? null
   : registerWorker(
       new Worker(

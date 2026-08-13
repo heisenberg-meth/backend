@@ -1,4 +1,23 @@
 import { jest, describe, beforeEach, it, expect } from '@jest/globals';
+import path from 'path';
+import { fileURLToPath } from 'url';
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+
+const redisPath = path.resolve(__dirname, '../../../config/redis.js');
+const prismaPath = path.resolve(__dirname, '../../../config/prisma.js');
+const alertSettingsPath = path.resolve(
+  __dirname,
+  '../../alert-settings/services/alert-settings.service.js',
+);
+const localEventBusPath = path.resolve(__dirname, '../../../shared/events/local-event-bus.js');
+const eventsPath = path.resolve(__dirname, '../../../shared/constants/events.js');
+const loggerPath = path.resolve(__dirname, '../../../shared/utils/logger.js');
+
+const severityEnginePath = path.resolve(__dirname, '../services/severity-engine.service.js');
+const workflowPath = path.resolve(__dirname, '../services/workflow.service.js');
+const escalationPath = path.resolve(__dirname, '../services/escalation-engine.service.js');
+const dedupPath = path.resolve(__dirname, '../services/deduplication.service.js');
 
 const mockRedis = {
   get: jest.fn(),
@@ -71,24 +90,24 @@ const mockPrisma = {
 
 const mockEmitLocalEvent = jest.fn();
 
-jest.unstable_mockModule('../../../config/redis.js', () => ({
+jest.unstable_mockModule(redisPath, () => ({
   default: mockRedis,
 }));
 
-jest.unstable_mockModule('../../../config/prisma.js', () => ({
+jest.unstable_mockModule(prismaPath, () => ({
   default: mockPrisma,
 }));
 
-jest.unstable_mockModule('../../alert-settings/services/alert-settings.service.js', () => ({
+jest.unstable_mockModule(alertSettingsPath, () => ({
   default: mockAlertSettingsService,
 }));
 
-jest.unstable_mockModule('../../../shared/events/local-event-bus.js', () => ({
+jest.unstable_mockModule(localEventBusPath, () => ({
   emitLocalEvent: mockEmitLocalEvent,
   localEventBus: { removeAllListeners: jest.fn() },
 }));
 
-jest.unstable_mockModule('../../../shared/constants/events.js', () => ({
+jest.unstable_mockModule(eventsPath, () => ({
   DOMAIN_EVENTS: {
     ALERT_CREATED: 'alert.lifecycle.created',
     ALERT_ESCALATED: 'alert.lifecycle.escalated',
@@ -100,14 +119,14 @@ jest.unstable_mockModule('../../../shared/constants/events.js', () => ({
   },
 }));
 
-jest.unstable_mockModule('../../../shared/utils/logger.js', () => ({
+jest.unstable_mockModule(loggerPath, () => ({
   default: { info: jest.fn(), warn: jest.fn(), error: jest.fn() },
 }));
 
-const severityEngineModule = await import('../services/severity-engine.service.js');
-const workflowModule = await import('../services/workflow.service.js');
-const escalationModule = await import('../services/escalation-engine.service.js');
-const dedupModule = await import('../services/deduplication.service.js');
+const severityEngineModule = await import(severityEnginePath);
+const workflowModule = await import(workflowPath);
+const escalationModule = await import(escalationPath);
+const dedupModule = await import(dedupPath);
 
 const alertSeverityEngine = severityEngineModule.default;
 const alertWorkflowService = workflowModule.default;

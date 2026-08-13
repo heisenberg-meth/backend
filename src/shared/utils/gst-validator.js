@@ -100,9 +100,3 @@ function _calculateGstCheckDigit(gst) {
   const checkValue = (36 - remainder) % 36;
   return chars[checkValue];
 }
-
-export function formatGstState(gstNumber) {
-  if (!gstNumber || gstNumber.length < 2) return null;
-  const code = gstNumber.substring(0, 2);
-  return GST_STATE_CODES[code] || null;
-}

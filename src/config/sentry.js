@@ -13,9 +13,7 @@ export const initSentry = (app) => {
   Sentry.init({
     dsn: SENTRY_DSN,
     environment: env.nodeEnv || 'development',
-    integrations: [
-      nodeProfilingIntegration(),
-    ],
+    integrations: [nodeProfilingIntegration()],
     tracesSampleRate: env.nodeEnv === 'production' ? 0.1 : 1.0,
     profilesSampleRate: env.nodeEnv === 'production' ? 0.1 : 1.0,
     beforeSend(event) {
@@ -47,30 +45,13 @@ export const initSentry = (app) => {
         scope.setTag('endpoint', request.routerPath || request.url);
         scope.setExtra('statusCode', reply.statusCode);
         scope.setExtra('method', request.method);
-        Sentry.captureMessage(`${request.method} ${request.url} returned ${reply.statusCode}`, 'error');
+        Sentry.captureMessage(
+          `${request.method} ${request.url} returned ${reply.statusCode}`,
+          'error',
+        );
       });
     }
   });
 
   console.log('[Sentry] Error tracking initialized');
 };
-
-export const captureException = (error, context = {}) => {
-  Sentry.withScope((scope) => {
-    Object.entries(context).forEach(([key, value]) => {
-      scope.setTag(key, String(value));
-    });
-    Sentry.captureException(error);
-  });
-};
-
-export const captureMessage = (message, level = 'info', context = {}) => {
-  Sentry.withScope((scope) => {
-    Object.entries(context).forEach(([key, value]) => {
-      scope.setTag(key, String(value));
-    });
-    Sentry.captureMessage(message, level);
-  });
-};
-
-export { Sentry };

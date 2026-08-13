@@ -7,7 +7,13 @@ class InventoryCalculationService {
    */
   calculateAvailableStock(batches) {
     if (!Array.isArray(batches)) return 0;
-    return batches.reduce((sum, b) => sum + (b.availableQuantity || 0), 0);
+    return batches.reduce((sum, b) => {
+      const avail =
+        b.availableQuantity !== undefined
+          ? b.availableQuantity
+          : Math.max(0, (b.quantity || 0) - (b.reservedQuantity || 0));
+      return sum + avail;
+    }, 0);
   }
 
   /**
@@ -29,7 +35,13 @@ class InventoryCalculationService {
    */
   calculateStockValue(batches) {
     if (!Array.isArray(batches)) return 0;
-    return batches.reduce((sum, b) => sum + (b.availableQuantity || 0) * (b.purchasePrice || 0), 0);
+    return batches.reduce((sum, b) => {
+      const avail =
+        b.availableQuantity !== undefined
+          ? b.availableQuantity
+          : Math.max(0, (b.quantity || 0) - (b.reservedQuantity || 0));
+      return sum + avail * (b.purchasePrice || 0);
+    }, 0);
   }
 }
 

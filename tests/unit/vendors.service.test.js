@@ -1,4 +1,4 @@
-import { jest , describe, afterEach, it, expect } from '@jest/globals';
+import { jest, describe, it, expect, afterEach } from '@jest/globals';
 
 const mockLedgerRepository = {
   getLastEntry: jest.fn(),
@@ -20,19 +20,19 @@ const mockAuditService = {
   log: jest.fn(),
 };
 
-jest.unstable_mockModule('../../src/config/prisma.js', () => ({
+jest.unstable_mockModule('../src/config/prisma.js', () => ({
   default: mockPrisma,
 }));
 
-jest.unstable_mockModule('../../src/modules/vendors/repositories/ledger.repository.js', () => ({
+jest.unstable_mockModule('../src/modules/vendors/repositories/ledger.repository.js', () => ({
   default: mockLedgerRepository,
 }));
 
-jest.unstable_mockModule('../../src/modules/vendors/repositories/payment.repository.js', () => ({
+jest.unstable_mockModule('../src/modules/vendors/repositories/payment.repository.js', () => ({
   default: mockPaymentRepository,
 }));
 
-jest.unstable_mockModule('../../src/modules/audit/service/audit.prisma.service.js', () => ({
+jest.unstable_mockModule('../src/modules/audit/service/audit.prisma.service.js', () => ({
   default: mockAuditService,
 }));
 

@@ -16,7 +16,7 @@ const createQueue = (name) => {
   });
 };
 
-export const billingQueues = isTest
+const billingQueues = isTest
   ? {}
   : {
       pdf: registerQueue(createQueue('billing_pdf_generation')),

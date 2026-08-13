@@ -7,13 +7,12 @@ import { registerQueue, registerWorker } from '../../../config/queue-registry.js
 
 const QUEUE_NAME = 'dashboard-aggregation';
 
-let dashboardQueue;
 let dashboardWorker;
 
 export function initDashboardWorker() {
   if (process.env.NODE_ENV === 'test') return;
 
-  dashboardQueue = registerQueue(new Queue(QUEUE_NAME, { connection: getBullRedis() }));
+  registerQueue(new Queue(QUEUE_NAME, { connection: getBullRedis() }));
 
   dashboardWorker = registerWorker(
     new Worker(
@@ -73,52 +72,3 @@ export function initDashboardWorker() {
 
   logger.info('Dashboard aggregation worker initialized');
 }
-
-export async function queueDashboardRefresh(tenantId, branchId = null, snapshotType = null) {
-  if (!dashboardQueue) {
-    logger.warn('Dashboard queue not initialized, skipping refresh');
-    return;
-  }
-
-  const jobName = snapshotType ? `REFRESH_${snapshotType.toUpperCase()}` : 'REFRESH_ALL_SNAPSHOTS';
-
-  // Convert null branchId to empty string to avoid Redis/BullMQ issues
-  const jobData = {
-    tenantId,
-    branchId: branchId || '',
-    snapshotType,
-  };
-
-  await dashboardQueue.add(
-    jobName,
-    jobData,
-    {
-      removeOnComplete: true,
-      removeOnFail: 100,
-    },
-  );
-}
-
-export async function queueCacheInvalidation(tenantId, branchId = null) {
-  if (!dashboardQueue) {
-    logger.warn('Dashboard queue not initialized, skipping invalidation');
-    return;
-  }
-
-  // Convert null branchId to empty string to avoid Redis/BullMQ issues
-  const jobData = {
-    tenantId,
-    branchId: branchId || '',
-  };
-
-  await dashboardQueue.add(
-    'INVALIDATE_CACHE',
-    jobData,
-    {
-      removeOnComplete: true,
-      removeOnFail: 100,
-    },
-  );
-}
-
-export { dashboardQueue, dashboardWorker };

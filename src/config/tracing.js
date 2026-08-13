@@ -31,5 +31,3 @@ if (sdk) {
     }
   });
 }
-
-export default sdk;

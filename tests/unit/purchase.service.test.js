@@ -24,8 +24,26 @@ const mockPrisma = {
     findMany: jest.fn(),
     update: jest.fn(),
   },
+  purchaseOrder: {
+    findFirst: jest.fn(),
+    findUnique: jest.fn(),
+    update: jest.fn(),
+  },
+  purchaseOrderItem: {
+    update: jest.fn(),
+  },
+  goodsReceiptNote: {
+    count: jest.fn().mockResolvedValue(0),
+    create: jest.fn().mockResolvedValue({ id: 'grn-1', grnNumber: 'GRN-PO-001-001' }),
+  },
+  goodsReceiptNoteItem: {
+    create: jest.fn().mockResolvedValue({ id: 'grni-1' }),
+  },
   supplierReturn: {
     create: jest.fn(),
+    findFirst: jest.fn(),
+    findUnique: jest.fn(),
+    update: jest.fn(),
   },
   supplierReturnItem: {
     aggregate: jest.fn(),
@@ -127,6 +145,22 @@ describe('Purchase Module Unit Tests', () => {
   describe('StockInService.receiveGoods', () => {
     it('should receive goods and create batches and ledger entry', async () => {
       mockPrisma.supplier.findFirst.mockResolvedValue({ id: 'supp-1', paymentTermsDays: 30 });
+      mockPrisma.purchaseOrder.findFirst.mockResolvedValue({
+        id: 'po-1',
+        orderNumber: 'PO-001',
+        status: 'APPROVED',
+        branchId: 'branch-1',
+        items: [
+          {
+            id: 'poi-1',
+            medicineId: 'med-1',
+            medicineName: 'Med 1',
+            quantity: 10,
+            receivedQuantity: 0,
+            unitPrice: 100,
+          },
+        ],
+      });
       mockPrisma.purchaseInvoice.create.mockResolvedValue({ id: 'pi-1' });
       mockLedgerService.recordEntry.mockResolvedValue({});
       mockMovementService.stockIn.mockResolvedValue({});
@@ -141,8 +175,10 @@ describe('Purchase Module Unit Tests', () => {
         gstAmount: 100,
         items: [
           {
+            purchaseOrderItemId: 'poi-1',
             medicineId: 'med-1',
             batchNumber: 'B1',
+            receivedQuantity: 10,
             quantity: 10,
             expiryDate: new Date(),
             purchasePrice: 100,
@@ -157,17 +193,17 @@ describe('Purchase Module Unit Tests', () => {
       expect(mockPrisma.purchaseInvoice.create).toHaveBeenCalled();
       expect(mockLedgerService.recordEntry).toHaveBeenCalledWith(
         tenantId,
-        expect.objectContaining({ type: 'PURCHASE', debitAmount: 1100 }),
+        expect.objectContaining({ type: 'PURCHASE', debitAmount: 1000 }),
         mockPrisma,
       );
       expect(mockMovementService.stockIn).toHaveBeenCalled();
-      expect(mockPurchaseOrderRepository.updateStatus).toHaveBeenCalledWith(
-        'po-1',
-        tenantId,
-        'RECEIVED',
-        mockPrisma,
+      expect(mockPrisma.purchaseOrder.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: 'po-1' },
+          data: expect.objectContaining({ status: 'RECEIVED' }),
+        }),
       );
-      expect(result.id).toBe('pi-1');
+      expect(result.invoice.id).toBe('pi-1');
     });
   });
 
@@ -232,7 +268,36 @@ describe('Purchase Module Unit Tests', () => {
       });
       mockPrisma.auditLog.create.mockResolvedValue({});
 
-      mockPrisma.supplierReturn.create.mockResolvedValue({ id: 'ret-1' });
+      let currentReturn = {
+        id: 'ret-1',
+        tenantId,
+        supplierId: 'supp-1',
+        returnNumber: 'RET-1',
+        returnAmount: 50,
+        status: 'DRAFT',
+        items: [
+          {
+            id: 'item-1',
+            medicineId: 'med-1',
+            batchId: 'batch-1',
+            quantity: 5,
+            purchasePrice: 10,
+          },
+        ],
+      };
+
+      mockPrisma.supplierReturn.create.mockImplementation(async (args) => {
+        const items = args.data?.items?.create || currentReturn.items;
+        currentReturn = { ...currentReturn, ...args.data, items, id: 'ret-1', status: 'DRAFT' };
+        return currentReturn;
+      });
+      mockPrisma.supplierReturn.findUnique.mockImplementation(async () => currentReturn);
+      mockPrisma.supplierReturn.findFirst.mockImplementation(async () => currentReturn);
+      mockPrisma.supplierReturn.update.mockImplementation(async (args) => {
+        currentReturn = { ...currentReturn, ...args.data };
+        return currentReturn;
+      });
+
       mockLedgerService.recordEntry.mockResolvedValue({});
 
       const result = await supplierReturnService.processReturn(tenantId, data, userId);

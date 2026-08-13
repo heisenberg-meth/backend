@@ -36,5 +36,3 @@ export const JWT_CONFIG = {
     },
   },
 };
-
-export default JWT_CONFIG;

@@ -1,6 +1,6 @@
 import logger from '../../../shared/utils/logger.js';
 
-export const AuthEvents = {
+const AuthEvents = {
   LOGIN_SUCCESS: 'AUTH_LOGIN_SUCCESS',
   LOGIN_FAILURE: 'AUTH_LOGIN_FAILURE',
   REFRESH_SUCCESS: 'AUTH_REFRESH_SUCCESS',
@@ -13,7 +13,7 @@ export const AuthEvents = {
   PASSWORD_RESET: 'AUTH_PASSWORD_RESET',
 };
 
-class AuthAuditService {
+export default class AuthAuditService {
   /**
    * Logs a standardized authentication event
    * @param {Object} params
@@ -186,5 +186,3 @@ class AuthAuditService {
     });
   }
 }
-
-export default new AuthAuditService();

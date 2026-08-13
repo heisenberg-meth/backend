@@ -1,4 +1,14 @@
 import { jest, describe, beforeEach, it, expect } from '@jest/globals';
+import path from 'path';
+import { fileURLToPath } from 'url';
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+
+const prismaPath = path.resolve(__dirname, '../../../config/prisma.js');
+const alertRepositoryPath = path.resolve(__dirname, '../repositories/alert.repository.js');
+const forecastingServicePath = path.resolve(__dirname, '../forecasting/forecasting.service.js');
+const erpEventBusPath = path.resolve(__dirname, '../../../shared/events/erp-event-bus.js');
+const procurementServicePath = path.resolve(__dirname, '../procurement/procurement.service.js');
 
 const mockPrisma = {
   medicineSupplier: {
@@ -26,27 +36,30 @@ const mockErpEventBus = {
 };
 
 // Use unstable_mockModule for ESM mocking
-jest.unstable_mockModule('../../../config/prisma.js', () => ({
+jest.unstable_mockModule(prismaPath, () => ({
   default: mockPrisma,
 }));
 
-jest.unstable_mockModule('../repositories/alert.repository.js', () => ({
+jest.unstable_mockModule(alertRepositoryPath, () => ({
   default: mockAlertRepository,
 }));
 
-jest.unstable_mockModule('../forecasting/forecasting.service.js', () => ({
+jest.unstable_mockModule(forecastingServicePath, () => ({
   default: mockForecastingService,
 }));
 
-jest.unstable_mockModule('../../../shared/events/erp-event-bus.js', () => ({
+jest.unstable_mockModule(erpEventBusPath, () => ({
   emitEvent: mockErpEventBus.emitEvent,
+  DOMAIN_EVENTS: {
+    PURCHASE_ORDER_CREATED: 'PURCHASE_ORDER_CREATED',
+  },
 }));
 
 // Import modules AFTER mocking
-const { default: procurementService } = await import('../procurement/procurement.service.js');
-const { default: alertRepository } = await import('../repositories/alert.repository.js');
-const { default: forecastingService } = await import('../forecasting/forecasting.service.js');
-const { default: prisma } = await import('../../../config/prisma.js');
+const { default: procurementService } = await import(procurementServicePath);
+const { default: alertRepository } = await import(alertRepositoryPath);
+const { default: forecastingService } = await import(forecastingServicePath);
+const { default: prisma } = await import(prismaPath);
 
 describe('ProcurementIntegrationService', () => {
   beforeEach(() => {

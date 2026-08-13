@@ -228,36 +228,6 @@ export const authenticate = async (request, reply) => {
   request.branchId = user.branchId;
 };
 
-export const requireSession = async (request, reply) => {
-  const sessionId = request.headers['x-session-id'];
-  if (!sessionId) {
-    return reply.code(401).send({
-      success: false,
-      error: { message: 'Session ID required', code: 'SESSION_ID_REQUIRED' },
-    });
-  }
-
-  const session = await prisma.userSession.findUnique({
-    where: { id: sessionId },
-  });
-
-  if (!session || session.revoked) {
-    return reply.code(401).send({
-      success: false,
-      error: { message: 'Session revoked or not found', code: 'SESSION_INVALID' },
-    });
-  }
-
-  if (new Date() > session.expiresAt) {
-    return reply.code(401).send({
-      success: false,
-      error: { message: 'Session expired', code: 'SESSION_EXPIRED' },
-    });
-  }
-
-  request.session = session;
-};
-
 export const requireTenant = async (request) => {
   logger.info(
     {

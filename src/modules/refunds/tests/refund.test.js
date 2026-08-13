@@ -1,6 +1,18 @@
 import { jest, describe, beforeEach, it, expect } from '@jest/globals';
+import path from 'path';
+import { fileURLToPath } from 'url';
 
-jest.unstable_mockModule('../../../config/prisma.js', () => ({
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+
+const prismaPath = path.resolve(__dirname, '../../../config/prisma.js');
+const loggerPath = path.resolve(__dirname, '../../../shared/utils/logger.js');
+const localEventBusPath = path.resolve(__dirname, '../../../shared/events/local-event-bus.js');
+const refundCalculationPath = path.resolve(__dirname, '../services/refund-calculation.service.js');
+const refundEligibilityPath = path.resolve(__dirname, '../services/refund-eligibility.service.js');
+const refundFraudPath = path.resolve(__dirname, '../services/refund-fraud.service.js');
+const refundApprovalPath = path.resolve(__dirname, '../services/refund-approval.service.js');
+
+jest.unstable_mockModule(prismaPath, () => ({
   default: {
     return: {
       findUnique: jest.fn(),
@@ -41,24 +53,27 @@ jest.unstable_mockModule('../../../config/prisma.js', () => ({
     invoiceAuditLog: {
       create: jest.fn(),
     },
+    user: {
+      findFirst: jest.fn(),
+    },
   },
 }));
 
-jest.unstable_mockModule('../../../shared/utils/logger.js', () => ({
+jest.unstable_mockModule(loggerPath, () => ({
   default: { info: jest.fn(), error: jest.fn(), warn: jest.fn(), debug: jest.fn() },
 }));
 
-jest.unstable_mockModule('../../../shared/events/local-event-bus.js', () => ({
+jest.unstable_mockModule(localEventBusPath, () => ({
   emitLocalEvent: jest.fn(),
 }));
 
-const mockPrisma = (await import('../../../config/prisma.js')).default;
-const emitLocalEvent = (await import('../../../shared/events/local-event-bus.js')).emitLocalEvent;
+const mockPrisma = (await import(prismaPath)).default;
+const emitLocalEvent = (await import(localEventBusPath)).emitLocalEvent;
 
-const refundCalculation = (await import('../services/refund-calculation.service.js')).default;
-const refundEligibility = (await import('../services/refund-eligibility.service.js')).default;
-const refundFraud = (await import('../services/refund-fraud.service.js')).default;
-const refundApproval = (await import('../services/refund-approval.service.js')).default;
+const refundCalculation = (await import(refundCalculationPath)).default;
+const refundEligibility = (await import(refundEligibilityPath)).default;
+const refundFraud = (await import(refundFraudPath)).default;
+const refundApproval = (await import(refundApprovalPath)).default;
 
 function mockInvoiceItem(overrides = {}) {
   return {
@@ -293,40 +308,52 @@ describe('RefundFraudService', () => {
 describe('RefundApprovalService', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    mockPrisma.user.findFirst.mockResolvedValue({ id: 'user-1' });
   });
 
   it('approves a refund that is in UNDER_REVIEW status', async () => {
-    mockPrisma.return.findUnique.mockResolvedValue(mockReturn({ status: 'UNDER_REVIEW' }));
+    mockPrisma.return.findUnique.mockResolvedValue(
+      mockReturn({ status: 'UNDER_REVIEW', tenantId: 'tenant-1' }),
+    );
     mockPrisma.return.update.mockResolvedValue(
       mockReturn({ status: 'APPROVED', approvedBy: 'user-1', approvedAt: new Date() }),
     );
 
-    const result = await refundApproval.approveRefund('return-1', 'user-1');
+    const result = await refundApproval.approveRefund('return-1', 'user-1', 'tenant-1');
     expect(result.status).toBe('APPROVED');
     expect(emitLocalEvent).toHaveBeenCalled();
   });
 
   it('rejects a refund that is in REQUESTED status', async () => {
-    mockPrisma.return.findUnique.mockResolvedValue(mockReturn({ status: 'REQUESTED' }));
+    mockPrisma.return.findUnique.mockResolvedValue(
+      mockReturn({ status: 'REQUESTED', tenantId: 'tenant-1' }),
+    );
     mockPrisma.return.update.mockResolvedValue(
       mockReturn({ status: 'REJECTED', rejectionReason: 'Test reject' }),
     );
 
-    const result = await refundApproval.rejectRefund('return-1', 'user-1', 'Test reject');
+    const result = await refundApproval.rejectRefund(
+      'return-1',
+      'user-1',
+      'tenant-1',
+      'Test reject',
+    );
     expect(result.status).toBe('REJECTED');
     expect(emitLocalEvent).toHaveBeenCalled();
   });
 
   it('throws if refund not found for approval', async () => {
     mockPrisma.return.findUnique.mockResolvedValue(null);
-    await expect(refundApproval.approveRefund('nonexistent', 'user-1')).rejects.toThrow(
+    await expect(refundApproval.approveRefund('nonexistent', 'user-1', 'tenant-1')).rejects.toThrow(
       'not found',
     );
   });
 
   it('throws if refund in wrong status for approval', async () => {
-    mockPrisma.return.findUnique.mockResolvedValue(mockReturn({ status: 'REFUNDED' }));
-    await expect(refundApproval.approveRefund('return-1', 'user-1')).rejects.toThrow(
+    mockPrisma.return.findUnique.mockResolvedValue(
+      mockReturn({ status: 'REFUNDED', tenantId: 'tenant-1' }),
+    );
+    await expect(refundApproval.approveRefund('return-1', 'user-1', 'tenant-1')).rejects.toThrow(
       'cannot approve',
     );
   });

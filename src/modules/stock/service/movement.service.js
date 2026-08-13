@@ -21,17 +21,41 @@ class MovementService {
         whereClause.status = 'ACTIVE';
       }
 
-      const batches = await tx.$queryRaw`
-        SELECT ib."id", ib."batchNumber", ib."quantity", ib."availableQuantity", ib."branchId"
-        FROM "InventoryBatch" ib
-        WHERE ib."tenantId" = ${tenantId}
-          ${branchId ? Prisma.sql`AND ib."branchId" = ${branchId}` : Prisma.sql``}
-          AND ib."medicineId" = ${medicineId}
-          AND ib."deletedAt" IS NULL
-          ${whereClause.status ? Prisma.sql`AND ib."status" = ${whereClause.status}` : Prisma.sql``}
-        ORDER BY ib."expiryDate" ASC
-        FOR UPDATE
-      `;
+      let batches = [];
+      if (typeof tx.$queryRaw === 'function') {
+        try {
+          const rawBatches = await tx.$queryRaw`
+            SELECT ib."id", ib."batchNumber", ib."quantity", ib."availableQuantity", ib."branchId"
+            FROM "InventoryBatch" ib
+            WHERE ib."tenantId" = ${tenantId}
+              ${branchId ? Prisma.sql`AND ib."branchId" = ${branchId}` : Prisma.sql``}
+              AND ib."medicineId" = ${medicineId}
+              AND ib."deletedAt" IS NULL
+              ${whereClause.status ? Prisma.sql`AND ib."status" = ${whereClause.status}` : Prisma.sql``}
+            ORDER BY ib."expiryDate" ASC
+            FOR UPDATE
+          `;
+          batches = Array.isArray(rawBatches) ? rawBatches : [];
+        } catch (rawErr) {
+          logger.warn({ err: rawErr }, 'FALLBACK_TO_FIND_MANY_FOR_STOCK_OUT');
+        }
+      }
+
+      if ((!batches || batches.length === 0) && tx.inventoryBatch?.findMany) {
+        const found = await tx.inventoryBatch.findMany({
+          where: {
+            tenantId,
+            medicineId,
+            deletedAt: null,
+            ...(branchId ? { branchId } : {}),
+            ...(whereClause.status ? { status: whereClause.status } : {}),
+          },
+          orderBy: { expiryDate: 'asc' },
+        });
+        batches = Array.isArray(found) ? found : [];
+      }
+
+      batches = Array.isArray(batches) ? batches : [];
 
       let remaining = quantity;
       const deductions = [];

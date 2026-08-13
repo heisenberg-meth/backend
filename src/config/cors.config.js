@@ -42,5 +42,3 @@ export const CORS_CONFIG = {
   // withCredentials/credentials:true is set. Exposing it to JS weakens cookie security.
   exposedHeaders: ['x-request-id', 'x-ratelimit-limit', 'x-ratelimit-remaining'],
 };
-
-export default CORS_CONFIG;

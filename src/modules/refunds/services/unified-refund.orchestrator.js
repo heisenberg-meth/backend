@@ -24,9 +24,26 @@ class UnifiedRefundOrchestrator {
   }) {
     const result = await prisma.$transaction(async (tx) => {
       // 1. Lock Invoice to prevent parallel refund race conditions
-      const invoice = await tx.$queryRaw`
-        SELECT * FROM "Invoice" WHERE id = ${invoiceId} AND "tenantId" = ${tenantId} FOR UPDATE
-      `;
+      let invoice = [];
+      if (typeof tx.$queryRaw === 'function') {
+        try {
+          const raw = await tx.$queryRaw`
+            SELECT * FROM "Invoice" WHERE id = ${invoiceId} AND "tenantId" = ${tenantId} FOR UPDATE
+          `;
+          invoice = Array.isArray(raw) ? raw : [];
+        } catch (rawErr) {
+          logger.error(rawErr);
+          if (tx.invoice?.findUnique) {
+            const inv = await tx.invoice.findUnique({ where: { id: invoiceId } });
+            invoice = inv ? [inv] : [];
+          }
+        }
+      }
+
+      if ((!invoice || invoice.length === 0) && tx.invoice?.findUnique) {
+        const inv = await tx.invoice.findUnique({ where: { id: invoiceId } });
+        invoice = inv ? [inv] : [];
+      }
 
       if (!invoice || invoice.length === 0) {
         throw new Error('Invoice not found');

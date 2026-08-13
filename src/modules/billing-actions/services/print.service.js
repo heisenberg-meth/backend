@@ -186,5 +186,4 @@ class PrintService {
   }
 }
 
-export { PRINTER_TYPES, PRINT_STATUSES };
 export default new PrintService();
