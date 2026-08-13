@@ -19,6 +19,7 @@ import {
 import { seal as sealQueueRegistry } from './config/queue-registry.js';
 import logger from './shared/utils/logger.js';
 import { initDashboardWorker } from './modules/dashboard/index.js';
+import cronManager from './cron/index.js';
 
 async function validateDatabaseHealth() {
   try {
@@ -224,6 +225,7 @@ const start = async () => {
     initDashboardWorker();
     await initEventSubscriptions(fastify);
     await scheduleCrmJobs();
+    await cronManager.init();
     sealQueueRegistry();
     logger.info('[BOOT] Workers started — all systems operational');
   } catch (err) {

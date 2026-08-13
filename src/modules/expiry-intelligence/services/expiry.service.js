@@ -38,7 +38,7 @@ class ExpiryService {
 
           await this.triggerExpiryAlert(tenant.id, batch, 'Critical', daysRemaining);
         } else if (daysRemaining <= 30) {
-          await batchRepository.updateStatus(batch.id, 'NEAR_EXPIRY');
+          await batchRepository.updateStatus(batch.id, 'EXPIRING');
           await this.triggerExpiryAlert(tenant.id, batch, 'Warning', daysRemaining);
         } else if (daysRemaining <= 90) {
           await this.triggerExpiryAlert(tenant.id, batch, 'Monitor', daysRemaining);

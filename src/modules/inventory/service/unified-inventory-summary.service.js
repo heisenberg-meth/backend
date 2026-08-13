@@ -199,14 +199,31 @@ class UnifiedInventorySummaryService {
             AND ib."availableQuantity" > 0
         )::int as "expiring90Products",
 
+        -- Safe: TODAY+90 < expiryDate
+        COUNT(*) FILTER (
+          WHERE ib.status != 'EXPIRED'
+            AND ib."expiryDate"::date > CURRENT_DATE + INTERVAL '90 days'
+            AND ib."availableQuantity" > 0
+        )::int as "safeBatches",
+
+        COUNT(DISTINCT ib."medicineId") FILTER (
+          WHERE ib.status != 'EXPIRED'
+            AND ib."expiryDate"::date > CURRENT_DATE + INTERVAL '90 days'
+            AND ib."availableQuantity" > 0
+        )::int as "safeProducts",
+
         -- Total inventory
         COUNT(*)::int as "totalBatches",
         COUNT(DISTINCT ib."medicineId")::int as "totalProducts",
         COALESCE(SUM(ib."availableQuantity"), 0)::int as "totalUnits"
 
       FROM "InventoryBatch" ib
-      WHERE ib."tenantId" = ${tenantId}
+      INNER JOIN "Medicine" m ON ib."medicineId" = m."id"
+      WHERE m."tenantId" = ${tenantId}
+        AND ib."tenantId" = ${tenantId}
         AND ib."deletedAt" IS NULL
+        AND m."deletedAt" IS NULL
+        AND m."isActive" = true
         AND ib."availableQuantity" > 0
         AND ib.status != 'ARCHIVED'
         AND ib."isArchived" = false
@@ -218,23 +235,36 @@ class UnifiedInventorySummaryService {
     const expiring30CombinedProducts =
       Number(metrics?.expiring7Products || 0) + Number(metrics?.expiring30Products || 0);
 
+    const expiring90CombinedBatches =
+      expiring30CombinedBatches + Number(metrics?.expiring90Batches || 0);
+    const expiring90CombinedProducts =
+      expiring30CombinedProducts + Number(metrics?.expiring90Products || 0);
+
     return {
       // Legacy fields (batch counts)
       expired: Number(metrics?.expiredBatches || 0),
       expiring7: Number(metrics?.expiring7Batches || 0),
       expiring30: expiring30CombinedBatches,
-      expiring90: Number(metrics?.expiring90Batches || 0),
-      // New detailed fields
+      expiring90: expiring90CombinedBatches,
+      safe: Number(metrics?.safeBatches || 0),
+
+      // Detailed product counts
       expiredProducts: Number(metrics?.expiredProducts || 0),
       expiring7Products: Number(metrics?.expiring7Products || 0),
       expiring30Products: expiring30CombinedProducts,
-      expiring90Products: Number(metrics?.expiring90Products || 0),
+      expiring90Products: expiring90CombinedProducts,
+      safeProducts: Number(metrics?.safeProducts || 0),
 
+      // Mutually exclusive bucket counts
       expiredBatches: Number(metrics?.expiredBatches || 0),
       expiring7Batches: Number(metrics?.expiring7Batches || 0),
       expiring30Batches: Number(metrics?.expiring30Batches || 0),
-      expiring30CombinedBatches: expiring30CombinedBatches,
       expiring90Batches: Number(metrics?.expiring90Batches || 0),
+      safeBatches: Number(metrics?.safeBatches || 0),
+
+      // Cumulative bucket counts
+      expiring30CombinedBatches: expiring30CombinedBatches,
+      expiring90CombinedBatches: expiring90CombinedBatches,
 
       expiredUnits: Number(metrics?.expiredUnits || 0),
       expiredValue: Number(metrics?.expiredValue || 0),
@@ -373,9 +403,9 @@ class UnifiedInventorySummaryService {
     const data = await prisma.$queryRaw`
       SELECT 
         CASE 
-          WHEN ib."expiryDate"::date < CURRENT_DATE THEN 'expired'
-          WHEN ib."expiryDate"::date < CURRENT_DATE + INTERVAL '30 days' THEN 'risk30'
-          WHEN ib."expiryDate"::date < CURRENT_DATE + INTERVAL '90 days' THEN 'risk90'
+          WHEN (ib."expiryDate"::date < CURRENT_DATE OR ib.status = 'EXPIRED') THEN 'expired'
+          WHEN ib."expiryDate"::date <= CURRENT_DATE + INTERVAL '30 days' THEN 'risk30'
+          WHEN ib."expiryDate"::date <= CURRENT_DATE + INTERVAL '90 days' THEN 'risk90'
           ELSE 'safe'
         END as risk_category,
         SUM(ib."availableQuantity" * COALESCE(ib."purchasePrice", 0)) as value,
@@ -387,6 +417,7 @@ class UnifiedInventorySummaryService {
         AND m."deletedAt" IS NULL
         AND m."isActive" = true
         AND ib."availableQuantity" > 0
+        AND ib.status != 'ARCHIVED'
         AND ib."isArchived" = false
         ${bId ? Prisma.sql`AND ib."branchId" = ${bId}` : Prisma.empty}
       GROUP BY risk_category

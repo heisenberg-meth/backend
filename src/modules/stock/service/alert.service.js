@@ -15,7 +15,7 @@ class AlertService {
       const { count } = await prisma.inventoryBatch.updateMany({
         where: {
           expiryDate: { lt: today },
-          status: { not: 'EXPIRED' },
+          status: { notIn: ['EXPIRED', 'ARCHIVED'] },
         },
         data: { status: 'EXPIRED' },
       });
