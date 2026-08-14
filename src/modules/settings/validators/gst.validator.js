@@ -1,40 +1,5 @@
-import { z } from 'zod';
-
 // Valid GST slabs under Indian tax law
 const VALID_GST_SLABS = [0, 0.25, 1, 3, 5, 12, 18, 28];
-
-// Valid medicine tax categories
-export const GST_CATEGORIES = [
-  'OTC',
-  'ESSENTIAL_MEDICINES',
-  'LIFE_SAVING_DRUGS',
-  'SURGICAL_EQUIPMENT',
-  'COSMETICS',
-  'NUTRACEUTICALS',
-  'AYUSH',
-  'CONTRAST_MEDIA',
-  'VACCINES',
-  'BLOOD_PRODUCTS',
-  'CUSTOM',
-];
-
-export const gstCategorySchema = z.enum(GST_CATEGORIES);
-
-// Single GST category entry
-export const gstCategoryEntrySchema = z.object({
-  category: gstCategorySchema,
-  gstPercentage: z.number().min(0).max(28),
-});
-
-// GST settings update payload
-export const updateGstSettingsSchema = z.object({
-  defaultGST: z.number().min(0).max(28).optional(),
-  igstEnabled: z.boolean().optional(),
-  categories: z.array(gstCategoryEntrySchema).min(1).max(20).optional(),
-  branchId: z.string().uuid().optional().nullable(),
-  effectiveFrom: z.string().datetime().optional(),
-  notes: z.string().max(500).optional(),
-});
 
 // GST category validation (no duplicates)
 export function validateNoDuplicateCategories(categories) {
@@ -59,19 +24,6 @@ export function validateGstSlab(percentage) {
   return {
     valid: false,
     error: `Invalid GST slab: ${percentage}%. Legal slabs are: ${VALID_GST_SLABS.join(', ')}%`,
-  };
-}
-
-// Validate GSTIN format (15 characters: 2 state + 10 PAN + 1 entity + 1 Z + 1 checksum)
-export function validateGSTIN(gstin) {
-  const gstinRegex = /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$/;
-  if (!gstin || gstinRegex.test(gstin)) {
-    return { valid: true };
-  }
-  return {
-    valid: false,
-    error:
-      'Invalid GSTIN format. Must be 15 characters: 2 digit state code + 10 char PAN + 1 entity + Z + checksum.',
   };
 }
 

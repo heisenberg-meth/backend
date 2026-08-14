@@ -64,15 +64,3 @@ export const createInventoryWorker = () => {
   }
   return inventoryWorker;
 };
-
-export const initInventoryWorker = () => {
-  if (!inventoryQueue) return;
-  inventoryQueue.add(
-    'global-reconcile',
-    { type: 'GLOBAL_RECONCILE' },
-    {
-      repeat: { pattern: '0 0 * * *' },
-    },
-  );
-  logger.info('[INVENTORY_WORKER] Periodic jobs scheduled');
-};

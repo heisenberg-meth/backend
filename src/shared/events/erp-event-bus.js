@@ -15,8 +15,6 @@ if (!isTest) {
   );
 }
 
-export const erpEventBus = erpEventBusInstance;
-
 export const emitEvent = async (eventName, data) => {
   if (!erpEventBusInstance) {
     // In test mode, silently skip — no queue available
@@ -24,28 +22,31 @@ export const emitEvent = async (eventName, data) => {
   }
   const { sanitizeRedisPayload } = await import('../utils/sanitize-redis-payload.js');
   const safeData = sanitizeRedisPayload(data);
-  
+
   // Debug logging to catch serialization issues
   try {
     JSON.stringify(safeData);
   } catch (jsonErr) {
-    logger.error({ eventName, data, jsonErr: jsonErr.message }, 'JSON serialization failed before queue add');
+    logger.error(
+      { eventName, data, jsonErr: jsonErr.message },
+      'JSON serialization failed before queue add',
+    );
     throw jsonErr;
   }
-  
+
   try {
     await erpEventBusInstance.add(eventName, safeData, {
       removeOnComplete: true,
     });
   } catch (queueErr) {
     logger.error(
-      { 
-        eventName, 
+      {
+        eventName,
         safeData: JSON.stringify(safeData).substring(0, 500),
         queueErr: queueErr.message,
-        queueErrStack: queueErr.stack
-      }, 
-      'BullMQ queue.add failed - likely Redis argument type error'
+        queueErrStack: queueErr.stack,
+      },
+      'BullMQ queue.add failed - likely Redis argument type error',
     );
     throw queueErr;
   }

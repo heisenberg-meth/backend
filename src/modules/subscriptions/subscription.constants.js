@@ -1,5 +1,3 @@
-import { SubscriptionStatus } from '../../packages/enums.js';
-
 export const TRIAL_PLAN_ID = 'free-trial';
 
 export const SUBSCRIPTION_PLANS = {
@@ -57,17 +55,4 @@ export const SUBSCRIPTION_PLANS = {
   },
 };
 
-export const SUBSCRIPTION_STATUS = SubscriptionStatus;
-
 export const TRIAL_DAYS = 28;
-export const GRACE_PERIOD_DAYS = 3;
-
-export const ALLOWED_TRANSITIONS = {
-  TRIAL: ['ACTIVE', 'EXPIRED'],
-  PENDING: ['ACTIVE', 'FAILED'],
-  ACTIVE: ['GRACE_PERIOD', 'CANCELLED', 'EXPIRED', 'SUSPENDED'],
-  GRACE_PERIOD: ['ACTIVE', 'EXPIRED', 'SUSPENDED'],
-  EXPIRED: ['ACTIVE'],
-  SUSPENDED: ['ACTIVE', 'CANCELLED'],
-  CANCELLED: [],
-};

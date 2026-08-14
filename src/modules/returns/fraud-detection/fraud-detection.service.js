@@ -231,5 +231,4 @@ class FraudDetectionService {
   }
 }
 
-export { FRAUD_RULES };
 export default new FraudDetectionService();

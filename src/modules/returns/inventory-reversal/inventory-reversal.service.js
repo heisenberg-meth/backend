@@ -310,5 +310,4 @@ class InventoryReversalService {
   }
 }
 
-export { DISPOSITION_TYPES };
 export default new InventoryReversalService();

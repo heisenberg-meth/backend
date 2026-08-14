@@ -100,20 +100,6 @@ export const DOMAIN_EVENTS = {
   FRAUD_SIGNAL_DETECTED: 'fraud_signal.detected',
 };
 
-export const EVENT_PRIORITY = {
-  CRITICAL: 0,
-  HIGH: 1,
-  NORMAL: 2,
-  LOW: 3,
-};
-
-export const EVENT_RETENTION = {
-  CRITICAL: 7 * 24 * 60 * 60,
-  HIGH: 3 * 24 * 60 * 60,
-  NORMAL: 24 * 60 * 60,
-  LOW: 60 * 60,
-};
-
 export const PROCUREMENT_STATUS = {
   DRAFT: 'DRAFT',
   PENDING_APPROVAL: 'PENDING_APPROVAL',
@@ -146,23 +132,8 @@ export const PRESCRIPTION_STATUS = {
   CANCELLED: 'CANCELLED',
 };
 
-export const PRESCRIPTION_EVENTS = {
-  PRESCRIPTION_CREATED: 'prescription.created',
-  PRESCRIPTION_VERIFIED: 'prescription.verified',
-  PRESCRIPTION_REJECTED: 'prescription.rejected',
-  PRESCRIPTION_DISPENSED: 'prescription.dispensed',
-  PRESCRIPTION_PARTIALLY_DISPENSED: 'prescription.partially_dispensed',
-  PRESCRIPTION_EXPIRED: 'prescription.expired',
-  PRESCRIPTION_ARCHIVED: 'prescription.archived',
-  OCR_COMPLETED: 'prescription.ocr_completed',
-  OCR_FAILED: 'prescription.ocr_failed',
-  REFILL_DUE: 'prescription.refill_due',
-  REFILL_PROCESSED: 'prescription.refill_processed',
-};
-
 export const EVENTS = {
   ...DOMAIN_EVENTS,
-  ...PRESCRIPTION_EVENTS,
   INVOICE_PRINTED: 'billing.invoice.printed',
   INVOICE_PDF_GENERATED: 'billing.invoice.pdf_generated',
   INVOICE_PDF_REGENERATED: 'billing.invoice.pdf_regenerated',
@@ -194,24 +165,4 @@ export const EVENTS = {
   ALERT_ESCALATED: 'alert.lifecycle.escalated',
   ALERT_SNOOZED: 'alert.lifecycle.snoozed',
   PURCHASE_ORDER_RAISED: 'alert.procurement.raised',
-};
-
-export const NOTIFICATION_FAILURE_CATEGORIES = {
-  PROVIDER_TIMEOUT: 'PROVIDER_TIMEOUT',
-  INVALID_NUMBER: 'INVALID_NUMBER',
-  TEMPLATE_REJECTED: 'TEMPLATE_REJECTED',
-  RATE_LIMITED: 'RATE_LIMITED',
-  DELIVERY_FAILED: 'DELIVERY_FAILED',
-  PROVIDER_UNAVAILABLE: 'PROVIDER_UNAVAILABLE',
-  UNKNOWN: 'UNKNOWN',
-};
-
-export const RETRY_ELIGIBILITY = {
-  [NOTIFICATION_FAILURE_CATEGORIES.PROVIDER_TIMEOUT]: true,
-  [NOTIFICATION_FAILURE_CATEGORIES.PROVIDER_UNAVAILABLE]: true,
-  [NOTIFICATION_FAILURE_CATEGORIES.DELIVERY_FAILED]: true,
-  [NOTIFICATION_FAILURE_CATEGORIES.RATE_LIMITED]: true,
-  [NOTIFICATION_FAILURE_CATEGORIES.INVALID_NUMBER]: false,
-  [NOTIFICATION_FAILURE_CATEGORIES.TEMPLATE_REJECTED]: false,
-  [NOTIFICATION_FAILURE_CATEGORIES.UNKNOWN]: true,
 };

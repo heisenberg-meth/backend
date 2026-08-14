@@ -576,4 +576,3 @@ if (!isTest) {
 }
 
 export const mainQueue = mainQueueInstance;
-export const worker = workerInstance;

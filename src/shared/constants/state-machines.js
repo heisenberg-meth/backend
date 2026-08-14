@@ -1,5 +1,5 @@
 import StateMachine from '../utils/state-machine.js';
-import { PROCUREMENT_STATUS, PRESCRIPTION_STATUS, BILLING_STATUS } from './events.js';
+import { PROCUREMENT_STATUS, PRESCRIPTION_STATUS } from './events.js';
 
 export const procurementStateMachine = new StateMachine({
   name: 'Procurement Workflow',
@@ -103,40 +103,6 @@ export const prescriptionStateMachine = new StateMachine({
     [PRESCRIPTION_STATUS.CANCELLED]: {
       on: {}, // Terminal state
     },
-  },
-});
-
-export const billingStateMachine = new StateMachine({
-  name: 'Billing Workflow',
-  initial: BILLING_STATUS.DRAFT,
-  states: {
-    [BILLING_STATUS.DRAFT]: {
-      on: {
-        FINALIZE: BILLING_STATUS.PENDING,
-        VOID: BILLING_STATUS.VOIDED,
-      },
-    },
-    [BILLING_STATUS.PENDING]: {
-      on: {
-        RECORD_PARTIAL_PAYMENT: BILLING_STATUS.PARTIALLY_PAID,
-        RECORD_FULL_PAYMENT: BILLING_STATUS.PAID,
-        VOID: BILLING_STATUS.VOIDED,
-      },
-    },
-    [BILLING_STATUS.PARTIALLY_PAID]: {
-      on: {
-        RECORD_PAYMENT: BILLING_STATUS.PARTIALLY_PAID,
-        RECORD_FINAL_PAYMENT: BILLING_STATUS.PAID,
-        VOID: BILLING_STATUS.VOIDED,
-      },
-    },
-    [BILLING_STATUS.PAID]: {
-      on: {
-        REFUND: BILLING_STATUS.REFUNDED,
-      },
-    },
-    [BILLING_STATUS.VOIDED]: { on: {} },
-    [BILLING_STATUS.REFUNDED]: { on: {} },
   },
 });
 

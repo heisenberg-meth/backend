@@ -71,17 +71,6 @@ export function toSupplierDetailDto(supplier) {
   };
 }
 
-export function toSupplierSummaryDto(supplier) {
-  return {
-    id: supplier.id,
-    name: supplier.name,
-    rating: supplier.rating,
-    leadTimeDays: supplier.leadTimeDays,
-    status: supplier.status,
-    isPreferred: supplier.isPreferred,
-  };
-}
-
 function maskAccountNumber(accountNumber) {
   if (!accountNumber || accountNumber.length < 6) return accountNumber;
   const lastFour = accountNumber.slice(-4);
