@@ -29,7 +29,7 @@ export default class AuthAuditService {
    * @param {string} [params.status] - SUCCESS or FAILURE
    * @param {Object} [params.metadata] - Additional safe metadata (e.g., token hashes, rotation info)
    */
-  logEvent(params) {
+  static logEvent(params) {
     const {
       event,
       userId,
@@ -66,7 +66,7 @@ export default class AuthAuditService {
     }
   }
 
-  logLoginSuccess({ user, session, loginMethod = 'password', context = {} }) {
+  static logLoginSuccess({ user, session, loginMethod = 'password', context = {} }) {
     this.logEvent({
       event: AuthEvents.LOGIN_SUCCESS,
       userId: user.id,
@@ -81,7 +81,7 @@ export default class AuthAuditService {
     });
   }
 
-  logLoginFailure({ email, reason, context = {} }) {
+  static logLoginFailure({ email, reason, context = {} }) {
     this.logEvent({
       event: AuthEvents.LOGIN_FAILURE,
       requestId: context.requestId,
@@ -92,7 +92,7 @@ export default class AuthAuditService {
     });
   }
 
-  logRefreshSuccess({ session, previousTokenHash, newTokenHash, context = {} }) {
+  static logRefreshSuccess({ session, previousTokenHash, newTokenHash, context = {} }) {
     this.logEvent({
       event: AuthEvents.REFRESH_SUCCESS,
       userId: session.userId,
@@ -110,7 +110,7 @@ export default class AuthAuditService {
     });
   }
 
-  logRefreshFailure({ sessionId, reason, metadata = {}, context = {} }) {
+  static logRefreshFailure({ sessionId, reason, metadata = {}, context = {} }) {
     this.logEvent({
       event: AuthEvents.REFRESH_FAILURE,
       sessionId: sessionId || null,
@@ -122,7 +122,7 @@ export default class AuthAuditService {
     });
   }
 
-  logLogout({ session, reason = 'USER_INITIATED', context = {} }) {
+  static logLogout({ session, reason = 'USER_INITIATED', context = {} }) {
     this.logEvent({
       event: AuthEvents.LOGOUT,
       userId: session?.userId,
@@ -136,7 +136,7 @@ export default class AuthAuditService {
     });
   }
 
-  logSessionCreated({ session, context = {} }) {
+  static logSessionCreated({ session, context = {} }) {
     this.logEvent({
       event: AuthEvents.SESSION_CREATED,
       userId: session.userId,
@@ -149,7 +149,7 @@ export default class AuthAuditService {
     });
   }
 
-  logSessionExpired({ session, context = {} }) {
+  static logSessionExpired({ session, context = {} }) {
     this.logEvent({
       event: AuthEvents.SESSION_EXPIRED,
       userId: session.userId,
@@ -160,7 +160,7 @@ export default class AuthAuditService {
     });
   }
 
-  logSessionRevoked({ session, reason, context = {} }) {
+  static logSessionRevoked({ session, reason, context = {} }) {
     this.logEvent({
       event: AuthEvents.SESSION_REVOKED,
       userId: session?.userId,
@@ -172,7 +172,7 @@ export default class AuthAuditService {
     });
   }
 
-  logTokenReplay({ session, tokenHash, context = {} }) {
+  static logTokenReplay({ session, tokenHash, context = {} }) {
     this.logEvent({
       event: AuthEvents.TOKEN_REPLAY,
       userId: session?.userId,

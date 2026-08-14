@@ -1,11 +1,6 @@
 import nodemailer from 'nodemailer';
 import https from 'https';
 import { mainQueue } from '../../queue/index.js';
-import {
-  OTP_TEMPLATE,
-  EXPIRY_ALERT_TEMPLATE,
-  RESET_OTP_TEMPLATE,
-} from '../../modules/notifications/templates/email.templates.js';
 import process from 'process';
 import { Buffer } from 'buffer';
 import logger from '../utils/logger.js';
@@ -113,16 +108,6 @@ export const sendEmail = async (to, subject, html) => {
   throw new Error(`All email providers failed: ${errors.join('; ')}`);
 };
 
-export const sendOtpEmail = async (to, otp) => {
-  const html = OTP_TEMPLATE(otp);
-  return queueEmail(to, 'Viyan MedAssist — Verification Code', html);
-};
-
-export const sendPasswordResetOtp = async (to, otp) => {
-  const html = RESET_OTP_TEMPLATE(otp);
-  return queueEmail(to, 'Reset Your Viyan MedAssist Password', html);
-};
-
 export const sendWelcomeEmail = async (to, name) => {
   const html = `<div style="font-family:Arial;max-width:480px;margin:0 auto;padding:24px;background:#f9fafb;border-radius:12px;">
     <h2 style="color:#2563eb;">Welcome to Viyan MedAssist!</h2>
@@ -156,9 +141,4 @@ export const sendTrialEndingReminder = async (to, name, daysLeft) => {
     `Your Viyan MedAssist Trial Ends in ${daysLeft} Day${daysLeft > 1 ? 's' : ''}`,
     html,
   );
-};
-
-export const sendExpiryAlertEmail = async (to, shopName, items, daysAhead) => {
-  const html = EXPIRY_ALERT_TEMPLATE(shopName, items, daysAhead);
-  return queueEmail(to, `Expiry Alert: ${items.length} items at risk — ${shopName}`, html);
 };
