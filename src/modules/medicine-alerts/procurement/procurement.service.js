@@ -194,7 +194,7 @@ class ProcurementIntegrationService {
     }
 
     const results = [];
-    for (const [data] of supplierMap) {
+    for (const data of supplierMap.values()) {
       results.push({
         supplierId: data.supplierId,
         supplierName: data.supplierName,

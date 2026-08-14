@@ -760,6 +760,8 @@ class PurchaseOrderService {
           },
         });
 
+        const processedBatchIds = [];
+
         for (const item of receivedItems) {
           // Find PO item by medicineId (as sent from GRN form)
           const poItem = order.items.find(
@@ -892,6 +894,10 @@ class PurchaseOrderService {
             });
           }
 
+          if (batch && batch.id) {
+            processedBatchIds.push(batch.id);
+          }
+
           // 4. Stock Movement
           await tx.stockMovement.create({
             data: {
@@ -1003,6 +1009,13 @@ class PurchaseOrderService {
             paymentStatus: 'PENDING',
           },
         });
+
+        if (processedBatchIds.length > 0) {
+          await tx.inventoryBatch.updateMany({
+            where: { id: { in: processedBatchIds } },
+            data: { purchaseInvoiceId: purchaseInvoice.id },
+          });
+        }
 
         // 9. Supplier Ledger Entry
         const lastBalance = await tx.supplierLedger.findFirst({
@@ -1118,6 +1131,11 @@ class PurchaseOrderService {
       include: {
         supplier: { select: { name: true } },
         purchaseOrder: { select: { orderNumber: true } },
+        inventoryBatches: {
+          include: {
+            medicine: { select: { name: true } },
+          },
+        },
       },
       orderBy: { createdAt: 'desc' },
     });
@@ -1126,13 +1144,15 @@ class PurchaseOrderService {
       .map((inv) => inv.invoiceNumber?.replace('PINV-GRN-', 'GRN-'))
       .filter(Boolean);
 
+    const poIds = invoices.map((inv) => inv.purchaseOrderId).filter(Boolean);
+
     let grns = [];
-    if (grnNumbers.length > 0) {
+    if (grnNumbers.length > 0 || poIds.length > 0) {
       try {
-        grns = await prisma.goodsReceiptNote.findMany({
+        const fetchedGrns = await prisma.goodsReceiptNote.findMany({
           where: {
             tenantId,
-            grnNumber: { in: grnNumbers },
+            OR: [{ grnNumber: { in: grnNumbers } }, { purchaseOrderId: { in: poIds } }],
           },
           include: {
             items: {
@@ -1142,27 +1162,74 @@ class PurchaseOrderService {
             },
           },
         });
+        if (Array.isArray(fetchedGrns)) {
+          grns = fetchedGrns;
+        }
       } catch (grnError) {
         logger.warn({ err: grnError, tenantId }, 'PURCHASE_INVOICE_GRN_LOOKUP_FAILED');
       }
     }
 
-    const grnMap = new Map(grns.map((g) => [g.grnNumber, g]));
+    const grnByNumber = new Map(grns.map((g) => [g.grnNumber, g]));
+    const grnByPoId = new Map();
+    for (const g of grns) {
+      if (g.purchaseOrderId && !grnByPoId.has(g.purchaseOrderId)) {
+        grnByPoId.set(g.purchaseOrderId, g);
+      }
+    }
 
     return invoices.map((inv) => {
       const grnNumber = inv.invoiceNumber?.replace('PINV-GRN-', 'GRN-');
-      const grn = grnMap.get(grnNumber);
-      const items = grn
-        ? grn.items.map((item) => ({
+      const grn = grnByNumber.get(grnNumber) || grnByPoId.get(inv.purchaseOrderId);
+
+      let items = [];
+      if (grn && grn.items && grn.items.length > 0) {
+        items = grn.items.map((item) => {
+          const price =
+            item.purchasePrice != null
+              ? Number(item.purchasePrice)
+              : item.unitPrice != null
+                ? Number(item.unitPrice)
+                : 0;
+          return {
             id: item.id,
             medicineId: item.medicineId,
             medicine: item.medicine,
+            medicineName: item.medicine?.name,
             quantity: item.receivedQuantity,
-            purchasePrice: item.purchasePrice ? Number(item.purchasePrice) : 0,
+            receivedQuantity: item.receivedQuantity,
+            purchasePrice: price,
+            unitPrice: price,
             batchNumber: item.batchNumber,
             expiryDate: item.expiryDate,
-          }))
-        : [];
+            mrp: item.mrp ? Number(item.mrp) : 0,
+            sellingPrice: item.sellingPrice ? Number(item.sellingPrice) : 0,
+          };
+        });
+      } else if (inv.inventoryBatches && inv.inventoryBatches.length > 0) {
+        items = inv.inventoryBatches.map((b) => {
+          const price =
+            b.purchasePrice != null
+              ? Number(b.purchasePrice)
+              : b.unitPrice != null
+                ? Number(b.unitPrice)
+                : 0;
+          return {
+            id: b.id,
+            medicineId: b.medicineId,
+            medicine: b.medicine,
+            medicineName: b.medicine?.name,
+            quantity: b.receivedQuantity || b.quantity,
+            receivedQuantity: b.receivedQuantity || b.quantity,
+            purchasePrice: price,
+            unitPrice: price,
+            batchNumber: b.batchNumber,
+            expiryDate: b.expiryDate,
+            mrp: b.mrp ? Number(b.mrp) : 0,
+            sellingPrice: b.sellingPrice ? Number(b.sellingPrice) : 0,
+          };
+        });
+      }
 
       return {
         ...inv,
