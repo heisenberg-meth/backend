@@ -125,13 +125,25 @@ class AnalyticsFastifyController {
 
   async getHourlySales(request, reply) {
     try {
-      const startOfDay = new Date();
-      startOfDay.setHours(0, 0, 0, 0);
+      const { startDate, endDate } = request.query || {};
+
+      const start = startDate
+        ? new Date(`${startDate}T00:00:00`)
+        : new Date(new Date().setHours(0, 0, 0, 0));
+
+      const end = endDate ? new Date(`${endDate}T23:59:59.999`) : new Date();
 
       const sales = await prisma.sale.findMany({
         where: {
           tenantId: request.tenantId,
-          soldAt: { gte: startOfDay },
+          soldAt: {
+            gte: start,
+            lte: end,
+          },
+        },
+        select: {
+          soldAt: true,
+          totalAmount: true,
         },
       });
 
@@ -144,8 +156,10 @@ class AnalyticsFastifyController {
 
       sales.forEach((s) => {
         const h = new Date(s.soldAt).getHours();
-        hourly[h].revenue += Number(s.totalAmount || 0);
-        hourly[h].count += 1;
+        if (hourly[h]) {
+          hourly[h].revenue += Number(s.totalAmount || 0);
+          hourly[h].count += 1;
+        }
       });
 
       return reply.send({ success: true, data: hourly });

@@ -274,7 +274,24 @@ class ImportService {
   }
 
   async getImportHistory(tenantId, filters) {
-    return repo.getJobs(tenantId, filters);
+    const jobs = await repo.getJobs(tenantId, filters);
+    return jobs.map((job) => {
+      const summary = job.extractedData?.summary;
+      const records =
+        summary?.importedCount ??
+        summary?.imported ??
+        (Array.isArray(job.extractedItems) ? job.extractedItems.length : 0);
+
+      return {
+        ...job,
+        status: job.importStatus,
+        type: job.importType,
+        records,
+        supplier:
+          job.extractedData?.supplier || (job.purchaseOrder?.supplier?.name ?? 'General / CSV'),
+        strategy: job.extractedData?.strategy || 'Skip',
+      };
+    });
   }
 
   async getImportById(id, tenantId) {

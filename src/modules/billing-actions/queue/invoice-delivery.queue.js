@@ -20,20 +20,3 @@ export const invoiceDeliveryQueue = isTest
         },
       }),
     );
-
-export const invoicePrintQueue = isTest
-  ? null
-  : registerQueue(
-      new Queue('viyan-medassist-invoice-print', {
-        connection: getBullRedis(),
-        defaultJobOptions: {
-          attempts: 3,
-          backoff: {
-            type: 'exponential',
-            delay: 30000,
-          },
-          removeOnComplete: true,
-          removeOnFail: 50,
-        },
-      }),
-    );

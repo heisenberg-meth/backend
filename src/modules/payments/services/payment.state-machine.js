@@ -138,5 +138,5 @@ class PaymentStateMachine {
   }
 }
 
-export { VALID_STATES, TRANSITIONS, PaymentStateMachine };
+export { VALID_STATES };
 export default new PaymentStateMachine();

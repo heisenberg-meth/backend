@@ -25,31 +25,6 @@ function getQueue(name) {
   return queue;
 }
 
-async function enqueuePaymentRecovery(tenantId, orderId) {
-  const queue = getQueue('payment-recovery');
-  return queue.add(
-    'recover_orphans',
-    { type: 'recover_orphans', tenantId, orderId },
-    {
-      jobId: `recovery:${orderId || tenantId}:${Date.now()}`,
-      attempts: 5,
-      backoff: { type: 'exponential', delay: 5000 },
-    },
-  );
-}
-
-async function enqueueReconciliation(tenantId = null) {
-  const queue = getQueue('payment-reconciliation');
-  return queue.add(
-    'reconcile',
-    { tenantId },
-    {
-      jobId: `reconcile:${tenantId || 'all'}:${Date.now()}`,
-      attempts: 3,
-    },
-  );
-}
-
 async function enqueueWebhook(event, payload) {
   const queue = getQueue('payment-webhook');
   return queue.add(
@@ -59,17 +34,6 @@ async function enqueueWebhook(event, payload) {
       jobId: `webhook:${payload.event_id || payload.payload?.payment?.entity?.id}:${Date.now()}`,
       attempts: 5,
       backoff: { type: 'exponential', delay: 1000 },
-    },
-  );
-}
-
-async function enqueueDeadLetter(originalQueue, jobData, error) {
-  const queue = getQueue('payment-dlq');
-  return queue.add(
-    'dead_letter',
-    { originalQueue, jobData, error: error.message, failedAt: new Date().toISOString() },
-    {
-      attempts: 1,
     },
   );
 }
@@ -102,11 +66,4 @@ async function getQueueMetrics() {
   return metrics;
 }
 
-export {
-  getQueue,
-  enqueuePaymentRecovery,
-  enqueueReconciliation,
-  enqueueWebhook,
-  enqueueDeadLetter,
-  getQueueMetrics,
-};
+export { getQueue, enqueueWebhook, getQueueMetrics };

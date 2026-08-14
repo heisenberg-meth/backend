@@ -1,7 +1,7 @@
 import logger from '../shared/utils/logger.js';
 
-export const activeQueues = [];
-export const activeWorkers = [];
+const activeQueues = [];
+const activeWorkers = [];
 
 let sealed = false;
 

@@ -112,7 +112,7 @@ class ImportFastifyController {
       return reply.code(400).send({
         success: false,
         message: error.message,
-        stack: error.stack,
+        ...(process.env.NODE_ENV === 'development' ? { stack: error.stack } : {}),
       });
     }
   }
@@ -134,7 +134,7 @@ class ImportFastifyController {
       return reply.code(400).send({
         success: false,
         message: error.message,
-        stack: error.stack,
+        ...(process.env.NODE_ENV === 'development' ? { stack: error.stack } : {}),
       });
     }
   }
@@ -228,7 +228,7 @@ class ImportFastifyController {
       return reply.code(400).send({
         success: false,
         message: error.message,
-        stack: error.stack,
+        ...(process.env.NODE_ENV === 'development' ? { stack: error.stack } : {}),
       });
     }
   }

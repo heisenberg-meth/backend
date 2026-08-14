@@ -38,4 +38,3 @@ function createWebhookWorker() {
 }
 
 export { createWebhookWorker };
-export default createWebhookWorker;

@@ -155,7 +155,9 @@ class BulkImportService {
           field: 'quantity',
           value: qtyStr,
           errorCode: 'INVALID_QUANTITY',
-          message: qtyStr ? `Expected a positive number, received "${qtyStr}"` : 'Quantity is empty or zero',
+          message: qtyStr
+            ? `Expected a positive number, received "${qtyStr}"`
+            : 'Quantity is empty or zero',
         });
       }
 
@@ -184,7 +186,9 @@ class BulkImportService {
           field: 'price',
           value: priceStr,
           errorCode: 'INVALID_PRICE',
-          message: priceStr ? `Expected a valid number (≥ 0), received "${priceStr}"` : 'Price is empty or invalid',
+          message: priceStr
+            ? `Expected a valid number (≥ 0), received "${priceStr}"`
+            : 'Price is empty or invalid',
         });
       } else {
         const pricingError = validatePricing({
@@ -428,12 +432,41 @@ class BulkImportService {
       }
     }
 
+    const existingMedIds = Array.from(
+      new Set(
+        Array.from(medicineMapByName.values())
+          .concat(Array.from(medicineMapByBarcode.values()))
+          .map((m) => m.id),
+      ),
+    );
+
+    const existingBatches =
+      existingMedIds.length > 0
+        ? await prisma.inventoryBatch.findMany({
+            where: {
+              tenantId,
+              ...(branchId ? { branchId } : {}),
+              medicineId: { in: existingMedIds },
+              deletedAt: null,
+            },
+            select: { id: true, medicineId: true, batchNumber: true },
+          })
+        : [];
+
+    const batchMap = new Map();
+    for (const b of existingBatches) {
+      if (b.batchNumber) {
+        const key = `${b.medicineId}:${b.batchNumber}`.toLowerCase().trim();
+        batchMap.set(key, { id: b.id, isNew: false });
+      }
+    }
+
     const newMedicines = [];
     const newBatches = [];
     const newMovements = [];
     const inventoryUpdates = [];
     const medicineUpdates = [];
-    const batchQuantityUpdates = []; // We don't have batch quantity updates in BulkImportService right now since it doesn't do Overwrite on batches
+    const batchQuantityUpdates = [];
     const defaultExpiry = new Date(new Date().setFullYear(new Date().getFullYear() + 2));
 
     for (const row of validatedRows) {
@@ -528,27 +561,52 @@ class BulkImportService {
       const parsedQty = parseInt(row.qty, 10);
       if (!isNaN(parsedQty) && parsedQty > 0) {
         const parsedPrice = parseFloat(row.price) || 0;
-        const batchId = crypto.randomUUID();
-        newBatches.push({
-          id: batchId,
-          tenantId,
-          medicineId,
-          branchId,
-          batchNumber: row.batch,
-          quantity: parsedQty,
-          receivedQuantity: parsedQty,
-          availableQuantity: parsedQty,
-          expiryDate: row.expiryDate || defaultExpiry,
-          purchasePrice: parsedPrice,
-          sellingPrice: parsedPrice * 1.2,
-          mrp: parsedPrice * 1.2,
-          status: 'ACTIVE',
-          supplierId: resolvedSupplierId,
-        });
+        const finalBatchNo = row.batch
+          ? String(row.batch).trim()
+          : `IMP-${crypto.randomUUID().substring(0, 8).toUpperCase()}`;
+        const batchKey = `${medicineId}:${finalBatchNo}`.toLowerCase().trim();
+        const existingBatchEntry = batchMap.get(batchKey);
+
+        let targetBatchId = null;
+
+        if (existingBatchEntry) {
+          targetBatchId = existingBatchEntry.id;
+          if (existingBatchEntry.isNew) {
+            newBatches[existingBatchEntry.index].quantity += parsedQty;
+            newBatches[existingBatchEntry.index].receivedQuantity += parsedQty;
+            newBatches[existingBatchEntry.index].availableQuantity += parsedQty;
+          } else {
+            batchQuantityUpdates.push({ batchId: targetBatchId, qty: parsedQty, medicineId });
+          }
+        } else {
+          targetBatchId = crypto.randomUUID();
+          newBatches.push({
+            id: targetBatchId,
+            tenantId,
+            medicineId,
+            branchId,
+            batchNumber: finalBatchNo,
+            quantity: parsedQty,
+            receivedQuantity: parsedQty,
+            availableQuantity: parsedQty,
+            expiryDate: row.expiryDate || defaultExpiry,
+            purchasePrice: parsedPrice,
+            sellingPrice: parsedPrice * 1.2,
+            mrp: parsedPrice * 1.2,
+            status: 'ACTIVE',
+            supplierId: resolvedSupplierId,
+          });
+          batchMap.set(batchKey, {
+            id: targetBatchId,
+            isNew: true,
+            index: newBatches.length - 1,
+          });
+          commitSummary.newBatchesCount++;
+        }
 
         newMovements.push({
           id: crypto.randomUUID(),
-          batchId,
+          batchId: targetBatchId,
           tenantId,
           branchId,
           medicineId,
@@ -560,7 +618,6 @@ class BulkImportService {
         });
 
         inventoryUpdates.push({ medicineId, qty: parsedQty });
-        commitSummary.newBatchesCount++;
       }
 
       commitSummary.importedCount++;
@@ -591,10 +648,11 @@ class BulkImportService {
         importType: 'BULK_MEDICINES',
         importStatus: 'COMPLETED',
         uploadedBy: userId,
-        fileName: 'bulk_import.csv',
+        fileName: payload.fileName || 'bulk_import.csv',
         processedAt: new Date(),
         extractedData: {
           strategy: duplicateStrategy,
+          supplier: supplierName !== 'None' ? supplierName : 'General / CSV',
           summary: commitSummary,
         },
       },
@@ -624,6 +682,7 @@ class BulkImportService {
         totalRows: medicines.length,
         imported: commitSummary.importedCount,
         duplicates: commitSummary.overwrittenCount + commitSummary.mergedCount,
+        skipped: commitSummary.skippedCount,
         failed: analysis.errors.length,
         warnings: 0,
       },

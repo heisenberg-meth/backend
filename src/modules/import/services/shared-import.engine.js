@@ -164,7 +164,7 @@ class SharedImportEngine {
             await tx.medicine.createMany({ data: chunkMedicines, skipDuplicates: true });
           }
 
-          // 1b. Update Existing Medicines
+          // 2. Update Existing Medicines
           if (chunkMedicineUpdates.length > 0) {
             for (const upd of chunkMedicineUpdates) {
               await tx.medicine.update({
@@ -175,12 +175,27 @@ class SharedImportEngine {
             }
           }
 
-          // 2. Create Batches
+          // 3. Create Batches
           if (chunkBatches.length > 0) {
-            await tx.inventoryBatch.createMany({ data: chunkBatches, skipDuplicates: true });
+            const batchIds = chunkBatches.map((batch) => batch.id);
+            const duplicateBatchIds = batchIds.filter(
+              (id, index) => batchIds.indexOf(id) !== index,
+            );
+
+            if (duplicateBatchIds.length > 0) {
+              throw new Error(
+                `Duplicate InventoryBatch IDs detected: ${[...new Set(duplicateBatchIds)].join(
+                  ', ',
+                )}`,
+              );
+            }
+
+            await tx.inventoryBatch.createMany({
+              data: chunkBatches,
+            });
           }
 
-          // 3. Update Existing Batches
+          // 4. Update Existing Batches
           if (chunkBatchUpdates.length > 0) {
             for (const upd of chunkBatchUpdates) {
               await tx.inventoryBatch.update({
@@ -194,7 +209,53 @@ class SharedImportEngine {
             }
           }
 
-          // 4. Upsert Inventory
+          // 5. Create Movements only for valid batches
+          if (chunkMovements.length > 0) {
+            const movementBatchIds = [
+              ...new Set(chunkMovements.map((movement) => movement.batchId).filter(Boolean)),
+            ];
+
+            if (movementBatchIds.length > 0) {
+              const existingBatches = await tx.inventoryBatch.findMany({
+                where: {
+                  id: { in: movementBatchIds },
+                  tenantId,
+                  ...(branchId ? { branchId } : {}),
+                },
+                select: {
+                  id: true,
+                },
+              });
+
+              const existingBatchIds = new Set(existingBatches.map((batch) => batch.id));
+
+              const invalidMovements = chunkMovements.filter(
+                (movement) => !existingBatchIds.has(movement.batchId),
+              );
+
+              if (invalidMovements.length > 0) {
+                logger.error(
+                  {
+                    count: invalidMovements.length,
+                    batchIds: invalidMovements.map((movement) => movement.batchId),
+                    medicineIds: invalidMovements.map((movement) => movement.medicineId),
+                  },
+                  '[SharedImportEngine] Stock movements reference missing inventory batches',
+                );
+
+                throw new Error(
+                  `Import integrity failure: ${invalidMovements.length} stock movement(s) reference missing inventory batches`,
+                );
+              }
+            }
+
+            await tx.stockMovement.createMany({
+              data: chunkMovements,
+              skipDuplicates: true,
+            });
+          }
+
+          // 6. Upsert Inventory
           if (chunkInventoryUpdates.size > 0) {
             const medIds = Array.from(chunkInventoryUpdates.keys());
 
@@ -245,17 +306,22 @@ class SharedImportEngine {
               }
             }
           }
-
-          // 5. Create Movements
-          if (chunkMovements.length > 0) {
-            await tx.stockMovement.createMany({ data: chunkMovements, skipDuplicates: true });
-          }
         },
         { timeout: 30000 },
       );
     } catch (err) {
-      if (retries > 0) {
-        logger.warn({ err }, '[SharedImportEngine] Chunk commit failed, retrying...');
+      const nonRetryable =
+        err?.code === 'P2003' ||
+        err?.code === 'P2002' ||
+        err?.code === 'P2025' ||
+        err?.message?.startsWith('Import integrity failure:') ||
+        err?.message?.startsWith('Duplicate InventoryBatch IDs detected:');
+
+      if (retries > 0 && !nonRetryable) {
+        logger.warn(
+          { err, retriesRemaining: retries },
+          '[SharedImportEngine] Chunk commit failed, retrying...',
+        );
         await new Promise((r) => setTimeout(r, 1000));
         return this._commitChunkWithRetries(chunkData, retries - 1);
       }

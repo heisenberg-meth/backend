@@ -44,4 +44,3 @@ function createRecoveryWorker() {
 }
 
 export { createRecoveryWorker };
-export default createRecoveryWorker;

@@ -18,7 +18,7 @@
  * Each provider module must export an object matching this shape:
  *   { channelType: 'SMS', providerName: 'twilio', send: async (notification, config) => SendResult }
  */
-export const providerRegistry = new Map();
+const providerRegistry = new Map();
 
 export function registerProvider(provider) {
   const key = `${provider.channelType}:${provider.providerName}`;

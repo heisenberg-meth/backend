@@ -101,5 +101,3 @@ const riskWorkerInstance = new RiskWorker();
 export const initRiskWorker = () => {
   riskWorkerInstance.setup();
 };
-
-export default riskWorkerInstance;
