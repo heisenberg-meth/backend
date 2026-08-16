@@ -1,33 +1,71 @@
 import 'dotenv/config';
 import { z } from 'zod';
 
+const cleanString = (val) =>
+  typeof val === 'string' ? val.trim().replace(/^["']|["']$/g, '') : val;
+
+const cleanOptionalString = (val) => {
+  const cleaned = cleanString(val);
+  return cleaned ? cleaned : undefined;
+};
+
 const envSchema = z
   .object({
-    NODE_ENV: z.enum(['development', 'production', 'test']),
-    PORT: z.string().transform(Number).default('5000'),
-    FRONTEND_URL: z.string().url().default('https://medassist.viyaninfo.com/'),
-    MEDIA_BASE_URL: z.string().url().optional(),
-    CORS_ORIGIN: z.string().optional(),
-    LOG_LEVEL: z.string().default('info'),
-    LOG_OTP: z.string().optional(),
-    COOKIE_SECRET: z.string().min(10),
-    JWT_SECRET: z.string().min(64, 'JWT_SECRET must be at least 64 characters'),
-    REFRESH_SECRET: z.string().min(64, 'REFRESH_SECRET must be at least 64 characters').optional(),
-    COOKIE_DOMAIN: z.string().optional(),
-    AWS_BUCKET_NAME: z.string().optional(),
-    AWS_REGION: z.string().default('us-east-1'),
-    AWS_ACCESS_KEY_ID: z.string().optional(),
-    AWS_SECRET_ACCESS_KEY: z.string().optional(),
-    CLOUDINARY_CLOUD_NAME: z.string().optional(),
-    CLOUDINARY_API_KEY: z.string().optional(),
-    CLOUDINARY_API_SECRET: z.string().optional(),
-    REDIS_URL: z.string().url(),
-    RABBITMQ_URL: z.string().url().optional(),
-    ENABLE_EVENTBUS: z.string().optional(),
-    RAZORPAY_KEY_ID: z.string().optional(),
-    RAZORPAY_KEY_SECRET: z.string().optional(),
-    ENCRYPTION_KEY: z.string().length(64, 'ENCRYPTION_KEY must be 64 hex chars (32 bytes)'),
-    SENTRY_DSN: z.string().url().optional(),
+    NODE_ENV: z.preprocess(
+      (val) => {
+        if (typeof val !== 'string') return 'production';
+        const cleaned = val
+          .trim()
+          .replace(/^["']|["']$/g, '')
+          .toLowerCase();
+        if (cleaned === 'prod') return 'production';
+        if (cleaned === 'dev') return 'development';
+        return cleaned || 'production';
+      },
+      z.enum(['development', 'production', 'test']),
+    ),
+    PORT: z.preprocess(
+      (val) =>
+        val !== undefined && val !== null && String(val).trim() !== ''
+          ? Number(cleanString(String(val)))
+          : 5000,
+      z.number().default(5000),
+    ),
+    FRONTEND_URL: z.preprocess(
+      cleanString,
+      z.string().url().default('https://medassist.viyaninfo.com/'),
+    ),
+    MEDIA_BASE_URL: z.preprocess(cleanOptionalString, z.string().url().optional()),
+    CORS_ORIGIN: z.preprocess(cleanOptionalString, z.string().optional()),
+    LOG_LEVEL: z.preprocess(cleanString, z.string().default('info')),
+    LOG_OTP: z.preprocess(cleanOptionalString, z.string().optional()),
+    COOKIE_SECRET: z.preprocess(cleanString, z.string().min(10)),
+    JWT_SECRET: z.preprocess(
+      cleanString,
+      z.string().min(64, 'JWT_SECRET must be at least 64 characters'),
+    ),
+    REFRESH_SECRET: z.preprocess(
+      cleanOptionalString,
+      z.string().min(64, 'REFRESH_SECRET must be at least 64 characters').optional(),
+    ),
+    COOKIE_DOMAIN: z.preprocess(cleanOptionalString, z.string().optional()),
+    AWS_BUCKET_NAME: z.preprocess(cleanOptionalString, z.string().optional()),
+    AWS_REGION: z.preprocess(cleanString, z.string().default('us-east-1')),
+    AWS_ACCESS_KEY_ID: z.preprocess(cleanOptionalString, z.string().optional()),
+    AWS_SECRET_ACCESS_KEY: z.preprocess(cleanOptionalString, z.string().optional()),
+    CLOUDINARY_CLOUD_NAME: z.preprocess(cleanOptionalString, z.string().optional()),
+    CLOUDINARY_API_KEY: z.preprocess(cleanOptionalString, z.string().optional()),
+    CLOUDINARY_API_SECRET: z.preprocess(cleanOptionalString, z.string().optional()),
+    REDIS_URL: z.preprocess(cleanString, z.string().url()),
+    RABBITMQ_URL: z.preprocess(cleanOptionalString, z.string().url().optional()),
+    ENABLE_EVENTBUS: z.preprocess(cleanOptionalString, z.string().optional()),
+    RAZORPAY_KEY_ID: z.preprocess(cleanOptionalString, z.string().optional()),
+    RAZORPAY_KEY_SECRET: z.preprocess(cleanOptionalString, z.string().optional()),
+    ENCRYPTION_KEY: z.preprocess(
+      cleanString,
+      z.string().length(64, 'ENCRYPTION_KEY must be 64 hex chars (32 bytes)'),
+    ),
+    SENTRY_DSN: z.preprocess(cleanOptionalString, z.string().url().optional()),
   })
   .superRefine((data, ctx) => {
     // #17: REFRESH_SECRET is required in production — sharing it with JWT_SECRET
@@ -77,6 +115,7 @@ if (!parsedEnv.success) {
 }
 
 const validatedEnv = parsedEnv.data;
+process.env.NODE_ENV = validatedEnv.NODE_ENV;
 
 const corsOrigins =
   validatedEnv.CORS_ORIGIN?.split(',')
