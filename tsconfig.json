@@ -20,6 +20,8 @@
 
     "baseUrl": ".",
 
+    "types": ["node", "jest", "supertest"],
+
     "paths": {
       "@/*": ["src/*"]
     }
