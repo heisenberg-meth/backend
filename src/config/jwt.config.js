@@ -1,13 +1,20 @@
 import env from './env.js';
 
+const resolvedRefreshSecrets =
+  env.refreshSecrets.length > 0
+    ? env.refreshSecrets
+    : env.nodeEnv !== 'production'
+      ? env.jwtSecrets
+      : [];
+
 export const JWT_CONFIG = {
   secret: env.jwtSecrets[0],
 
   secrets: env.jwtSecrets,
 
-  refreshSecret: env.refreshSecrets[0],
+  refreshSecret: resolvedRefreshSecrets[0],
 
-  refreshSecrets: env.refreshSecrets,
+  refreshSecrets: resolvedRefreshSecrets,
 
   accessToken: {
     expiresIn: '15m',

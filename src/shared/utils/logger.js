@@ -1,19 +1,22 @@
 import pino from 'pino';
 import env from '../../config/env.js';
 
-const isDev = env.nodeEnv === 'development' || !env.nodeEnv;
+const isDev = env.nodeEnv === 'development';
 
 const logger = pino({
   level: env.logLevel || 'info',
-  transport: isDev
+
+  ...(isDev
     ? {
-        target: 'pino-pretty',
-        options: {
-          colorize: true,
-          translateTime: 'SYS:standard',
+        transport: {
+          target: 'pino-pretty',
+          options: {
+            colorize: true,
+            translateTime: 'SYS:standard',
+          },
         },
       }
-    : undefined,
+    : {}),
 });
 
 export default logger;

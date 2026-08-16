@@ -3,7 +3,7 @@ import { z } from 'zod';
 
 const envSchema = z
   .object({
-    NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
+    NODE_ENV: z.enum(['development', 'production', 'test']),
     PORT: z.string().transform(Number).default('5000'),
     FRONTEND_URL: z.string().url().default('https://medassist.viyaninfo.com/'),
     MEDIA_BASE_URL: z.string().url().optional(),
@@ -49,6 +49,14 @@ const envSchema = z
       });
     }
 
+    if (data.NODE_ENV === 'production' && (!data.CORS_ORIGIN || !data.CORS_ORIGIN.trim())) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'CORS_ORIGIN must be explicitly configured in production',
+        path: ['CORS_ORIGIN'],
+      });
+    }
+
     // #03/#15: LOG_OTP must never be enabled in production — OTPs in logs
     // allow any log-reader to take over user accounts.
     if (data.NODE_ENV === 'production' && data.LOG_OTP === 'true') {
@@ -70,19 +78,21 @@ if (!parsedEnv.success) {
 
 const validatedEnv = parsedEnv.data;
 
+const corsOrigins =
+  validatedEnv.CORS_ORIGIN?.split(',')
+    .map((origin) => origin.trim())
+    .filter(Boolean) || [];
+
 const env = {
   nodeEnv: validatedEnv.NODE_ENV,
   port: validatedEnv.PORT,
   frontendUrl: validatedEnv.FRONTEND_URL,
   mediaBaseUrl: validatedEnv.MEDIA_BASE_URL || 'https://api.medassist.viyaninfo.com',
   cors: {
-    origin: validatedEnv.CORS_ORIGIN?.split(',') || [
-      'http://localhost:5173',
-      'http://localhost:5174',
-      'http://localhost:3000',
-      'https://api.medassist.viyaninfo.com',
-      'https://medassist.viyaninfo.com',
-    ],
+    origin:
+      corsOrigins.length > 0
+        ? corsOrigins
+        : ['http://localhost:5173', 'http://localhost:5174', 'http://localhost:3000'],
     credentials: true,
   },
   logLevel: validatedEnv.LOG_LEVEL,
@@ -90,9 +100,7 @@ const env = {
   cookieSecret: validatedEnv.COOKIE_SECRET,
   cookieDomain: validatedEnv.COOKIE_DOMAIN,
   jwtSecrets: validatedEnv.JWT_SECRET.split(','),
-  refreshSecrets: validatedEnv.REFRESH_SECRET
-    ? validatedEnv.REFRESH_SECRET.split(',')
-    : validatedEnv.JWT_SECRET.split(','),
+  refreshSecrets: validatedEnv.REFRESH_SECRET ? validatedEnv.REFRESH_SECRET.split(',') : [],
 
   s3: {
     bucketName: validatedEnv.AWS_BUCKET_NAME,

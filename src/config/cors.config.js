@@ -10,10 +10,7 @@ const DEFAULT_DEV_ORIGINS = [
   'http://localhost:3000',
 ];
 
-const DEFAULT_PROD_ORIGINS = [
-  'https://medassist.viyaninfo.com',
-  'https://api.medassist.viyaninfo.com',
-];
+const DEFAULT_PROD_ORIGINS = ['https://medassist.viyaninfo.com'];
 
 const resolveOrigins = () => {
   if (env.cors.origin && Array.isArray(env.cors.origin) && env.cors.origin.length > 0) {
