@@ -8,8 +8,8 @@ import { registerQueue, registerWorker } from '../../../config/queue-registry.js
 
 const INVENTORY_QUEUE = 'inventory-tasks';
 
-export let inventoryQueue = null;
-export let inventoryWorker = null;
+let inventoryQueue = null;
+let inventoryWorker = null;
 
 export const createInventoryQueue = () => {
   if (!inventoryQueue) {

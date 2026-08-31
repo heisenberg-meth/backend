@@ -4,7 +4,7 @@ import logger from '../../../shared/utils/logger.js';
 import { getIO } from '../../../config/socket.js';
 import { inventoryQueue } from '../workers/inventory.worker.js';
 
-export class InventoryService {
+class InventoryService {
   constructor(deps = {}) {
     this.prisma = deps.prisma || prisma;
     this.redis = deps.redis || redisClient;
