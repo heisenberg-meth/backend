@@ -2,7 +2,7 @@ import prisma from '../../../config/prisma.js';
 import redisClient from '../../../config/redis.js';
 import logger from '../../../shared/utils/logger.js';
 import { getIO } from '../../../config/socket.js';
-import { inventoryQueue } from '../workers/inventory.worker.js';
+import { createInventoryQueue } from '../workers/inventory.worker.js';
 
 class InventoryService {
   constructor(deps = {}) {
@@ -10,7 +10,8 @@ class InventoryService {
     this.redis = deps.redis || redisClient;
     this.logger = deps.logger || logger;
     this.getIO = deps.getIO || getIO;
-    this.inventoryQueue = deps.inventoryQueue !== undefined ? deps.inventoryQueue : inventoryQueue;
+    this.inventoryQueue =
+      deps.inventoryQueue !== undefined ? deps.inventoryQueue : createInventoryQueue();
   }
 
   async recordTransaction(tx, tenantId, data, userId) {
