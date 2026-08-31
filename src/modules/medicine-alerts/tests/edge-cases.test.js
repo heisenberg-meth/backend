@@ -90,12 +90,14 @@ jest.unstable_mockModule(scanKeysPath, () => ({
   scanKeys: mockScanKeys,
 }));
 
-const { default: medicineAlertService } = await import(medicineAlertServicePath);
-const { default: alertRepository } = await import(alertRepositoryPath);
-const { default: forecastingService } = await import(forecastingServicePath);
-const { default: redisClient } = await import(redisPath);
-const { default: prisma } = await import(prismaPath);
-const { scanKeys } = await import(scanKeysPath);
+const [{ default: medicineAlertService }, { default: alertRepository }, { default: forecastingService }, { default: redisClient }, { default: prisma }, { scanKeys }] = await Promise.all([
+  import(medicineAlertServicePath),
+  import(alertRepositoryPath),
+  import(forecastingServicePath),
+  import(redisPath),
+  import(prismaPath),
+  import(scanKeysPath),
+]);
 
 describe('MedicineAlertService - Edge Cases', () => {
   beforeEach(() => {

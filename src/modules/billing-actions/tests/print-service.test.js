@@ -39,8 +39,10 @@ jest.unstable_mockModule('../../../shared/utils/logger.js', () => ({
   default: mockLogger,
 }));
 
-const { default: printService } = await import('../services/print.service.js');
-const { default: deliveryAuditService } = await import('../services/delivery-audit.service.js');
+const [{ default: printService }, { default: deliveryAuditService }] = await Promise.all([
+  import('../services/print.service.js'),
+  import('../services/delivery-audit.service.js'),
+]);
 
 describe('PrintService', () => {
   beforeEach(() => {

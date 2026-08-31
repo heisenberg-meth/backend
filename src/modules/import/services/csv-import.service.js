@@ -68,11 +68,13 @@ class CsvImportService {
       await updateProgress(jobId, { processed: 0, total: 0, status: 'preloading' });
 
       const preloadStart = Date.now();
-      const medicineMap = await this._preloadMedicines(tenantId);
-      const batchMap = await this._preloadBatches(tenantId, branchId);
-      const inventoryMap = await this._preloadInventory(tenantId, branchId);
-      const categoryMap = await this._preloadCategories(tenantId);
-      const manufacturerMap = await this._preloadManufacturers(tenantId);
+      const [medicineMap, batchMap, inventoryMap, categoryMap, manufacturerMap] = await Promise.all([
+        this._preloadMedicines(tenantId),
+        this._preloadBatches(tenantId, branchId),
+        this._preloadInventory(tenantId, branchId),
+        this._preloadCategories(tenantId),
+        this._preloadManufacturers(tenantId),
+      ]);
 
       // Get subscription limits
       const subscription = await prisma.subscription.findUnique({

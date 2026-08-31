@@ -123,10 +123,12 @@ jest.unstable_mockModule(loggerPath, () => ({
   default: { info: jest.fn(), warn: jest.fn(), error: jest.fn() },
 }));
 
-const severityEngineModule = await import(severityEnginePath);
-const workflowModule = await import(workflowPath);
-const escalationModule = await import(escalationPath);
-const dedupModule = await import(dedupPath);
+const [severityEngineModule, workflowModule, escalationModule, dedupModule] = await Promise.all([
+  import(severityEnginePath),
+  import(workflowPath),
+  import(escalationPath),
+  import(dedupPath),
+]);
 
 const alertSeverityEngine = severityEngineModule.default;
 const alertWorkflowService = workflowModule.default;

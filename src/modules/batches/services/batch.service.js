@@ -17,8 +17,10 @@ class BatchService {
     const batch = await batchRepository.findById(id);
     if (!batch) throw new Error('Batch not found');
 
-    const auditLogs = await batchAuditRepository.findByBatchId(id);
-    const traceability = await batchRepository.getTraceability(id);
+    const [auditLogs, traceability] = await Promise.all([
+      batchAuditRepository.findByBatchId(id),
+      batchRepository.getTraceability(id),
+    ]);
 
     return {
       ...batch,

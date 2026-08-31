@@ -500,8 +500,10 @@ const handlers = {
   'retry-refund-events': async (data) => {
     const { invoiceId, tenantId, attempt } = data;
     logger.info({ invoiceId, attempt }, 'Retrying refund events');
-    const { emitEvent } = await import('../shared/events/erp-event-bus.js');
-    const { DOMAIN_EVENTS } = await import('../shared/constants/events.js');
+    const [{ emitEvent }, { DOMAIN_EVENTS }] = await Promise.all([
+      import('../shared/events/erp-event-bus.js'),
+      import('../shared/constants/events.js'),
+    ]);
     await emitEvent(DOMAIN_EVENTS.REFUND_PROCESSED, { invoiceId, tenantId });
     logger.info({ invoiceId }, 'Refund events retry succeeded');
   },
@@ -509,8 +511,10 @@ const handlers = {
   'retry-supplier-payment-events': async (data) => {
     const { paymentId, tenantId, attempt } = data;
     logger.info({ paymentId, attempt }, 'Retrying supplier payment events');
-    const { emitEvent } = await import('../shared/events/erp-event-bus.js');
-    const { DOMAIN_EVENTS } = await import('../shared/constants/events.js');
+    const [{ emitEvent }, { DOMAIN_EVENTS }] = await Promise.all([
+      import('../shared/events/erp-event-bus.js'),
+      import('../shared/constants/events.js'),
+    ]);
     await emitEvent(DOMAIN_EVENTS.SUPPLIER_PAYMENT_MADE, { paymentId, tenantId });
     logger.info({ paymentId }, 'Supplier payment events retry succeeded');
   },
@@ -518,8 +522,10 @@ const handlers = {
   'retry-po-approved-events': async (data) => {
     const { orderId, tenantId, attempt } = data;
     logger.info({ orderId, attempt }, 'Retrying PO approved events');
-    const { emitEvent } = await import('../shared/events/erp-event-bus.js');
-    const { DOMAIN_EVENTS } = await import('../shared/constants/events.js');
+    const [{ emitEvent }, { DOMAIN_EVENTS }] = await Promise.all([
+      import('../shared/events/erp-event-bus.js'),
+      import('../shared/constants/events.js'),
+    ]);
     await emitEvent(DOMAIN_EVENTS.PURCHASE_ORDER_APPROVED, { orderId, tenantId });
     logger.info({ orderId }, 'PO approved events retry succeeded');
   },
@@ -527,8 +533,10 @@ const handlers = {
   'retry-po-received-events': async (data) => {
     const { orderId, tenantId, attempt } = data;
     logger.info({ orderId, attempt }, 'Retrying PO received events');
-    const { emitEvent } = await import('../shared/events/erp-event-bus.js');
-    const { DOMAIN_EVENTS } = await import('../shared/constants/events.js');
+    const [{ emitEvent }, { DOMAIN_EVENTS }] = await Promise.all([
+      import('../shared/events/erp-event-bus.js'),
+      import('../shared/constants/events.js'),
+    ]);
     await emitEvent(DOMAIN_EVENTS.PURCHASE_ORDER_RECEIVED, { orderId, tenantId });
     await emitEvent(DOMAIN_EVENTS.STOCK_UPDATED, { tenantId });
     logger.info({ orderId }, 'PO received events retry succeeded');

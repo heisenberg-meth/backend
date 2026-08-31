@@ -67,8 +67,10 @@ class PatientService {
   }
 
   async getLoyalty(id, tenantId) {
-    const patient = await this.getCustomerById(id, tenantId);
-    const history = await patientRepository.getLoyaltyHistory(id, tenantId);
+    const [patient, history] = await Promise.all([
+      this.getCustomerById(id, tenantId),
+      patientRepository.getLoyaltyHistory(id, tenantId),
+    ]);
     return {
       points: patient.loyaltyPoints,
       history,

@@ -135,8 +135,10 @@ class DashboardAggregationRepository {
   }
 
   async getStockHealthMetrics(tenantId, branchId = null) {
-    const summary = await unifiedInventorySummaryService.getUnifiedSummary(tenantId, branchId);
-    const expiry = await unifiedInventorySummaryService.getExpiryMetrics(tenantId, branchId);
+    const [summary, expiry] = await Promise.all([
+      unifiedInventorySummaryService.getUnifiedSummary(tenantId, branchId),
+      unifiedInventorySummaryService.getExpiryMetrics(tenantId, branchId),
+    ]);
 
     return {
       totalBatches: expiry.totalBatches,

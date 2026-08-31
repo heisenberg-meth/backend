@@ -79,8 +79,10 @@ jest.unstable_mockModule(invoiceRepositoryPath, () => ({
   __esModule: true,
 }));
 
-const { default: invoiceEngine } = await import(invoiceEnginePath);
-const { default: prisma } = await import(prismaPath);
+const [{ default: invoiceEngine }, { default: prisma }] = await Promise.all([
+  import(invoiceEnginePath),
+  import(prismaPath),
+]);
 
 describe('InvoiceEngine', () => {
   const tenantId = 'tenant-1';

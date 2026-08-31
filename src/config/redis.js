@@ -143,9 +143,11 @@ export const connectRedis = async () => {
     logger.info('REDIS_HEALTH_CHECK: Passed');
 
     try {
-      const policyConfig = await client.config('GET', 'maxmemory-policy');
-      const maxMemoryConfig = await client.config('GET', 'maxmemory');
-      const info = await client.info('server');
+      const [policyConfig, maxMemoryConfig, info] = await Promise.all([
+        client.config('GET', 'maxmemory-policy'),
+        client.config('GET', 'maxmemory'),
+        client.info('server'),
+      ]);
 
       let policy = 'unknown';
       if (Array.isArray(policyConfig)) {

@@ -172,8 +172,10 @@ class ExpenseService {
   }
 
   async deleteExpense(id, tenantId) {
-    const existing = await accountingRepository.findExpenseById(id, tenantId);
-    const deleted = await accountingRepository.deleteExpense(id, tenantId);
+    const [existing, deleted] = await Promise.all([
+      accountingRepository.findExpenseById(id, tenantId),
+      accountingRepository.deleteExpense(id, tenantId),
+    ]);
     if (existing && existing.expenseDate) {
       try {
         const startOfDay = new Date(existing.expenseDate);

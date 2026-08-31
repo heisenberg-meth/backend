@@ -135,9 +135,11 @@ class PatientFeaturesService {
       description: 'Refill predictions accessed',
     });
 
-    const medicineFreq = await repo.findMedicinePurchaseFrequency(id, tenantId, 12);
-    const subscriptions = await repo.findMedicineSubscriptions(id, tenantId);
-    const existingRefills = await repo.findRefillRecords(id, tenantId);
+    const [medicineFreq, subscriptions, existingRefills] = await Promise.all([
+      repo.findMedicinePurchaseFrequency(id, tenantId, 12),
+      repo.findMedicineSubscriptions(id, tenantId),
+      repo.findRefillRecords(id, tenantId),
+    ]);
 
     const refills = [];
 

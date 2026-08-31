@@ -42,3 +42,4 @@ scratch/
 .env
 # Security: never commit test-* utility files in root
 test-*.js
+medassist_render.dump

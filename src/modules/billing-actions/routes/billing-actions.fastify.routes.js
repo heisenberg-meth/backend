@@ -181,8 +181,10 @@ async function billingActionsFastifyRoutes(fastify) {
       });
       if (!invoice) return reply.code(404).send({ success: false, message: 'Invoice not found' });
 
-      const logs = await deliveryAuditService.getDeliveryStatus(request.params.id);
-      const stats = await deliveryAuditService.getDeliveryStats(request.params.id);
+      const [logs, stats] = await Promise.all([
+        deliveryAuditService.getDeliveryStatus(request.params.id),
+        deliveryAuditService.getDeliveryStats(request.params.id),
+      ]);
 
       return reply.send({ success: true, data: { logs, stats } });
     },

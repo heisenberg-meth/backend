@@ -135,8 +135,10 @@ jest.unstable_mockModule(movementPath, () => ({
 }));
 
 // Dynamic imports
-const { default: medicineService } = await import('../services/medicine.service.js');
-const { default: prisma } = await import('../../../config/prisma.js');
+const [{ default: medicineService }, { default: prisma }] = await Promise.all([
+  import('../services/medicine.service.js'),
+  import('../../../config/prisma.js'),
+]);
 
 describe('Medicine Status History', () => {
   let tenantId;

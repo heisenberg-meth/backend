@@ -40,8 +40,10 @@ async function startupPaymentSystem() {
 }
 
 async function startWorkers() {
-  const { createRecoveryWorker } = await import('../workers/recovery.worker.js');
-  const { createWebhookWorker } = await import('../workers/webhook.worker.js');
+  const [{ createRecoveryWorker }, { createWebhookWorker }] = await Promise.all([
+    import('../workers/recovery.worker.js'),
+    import('../workers/webhook.worker.js'),
+  ]);
   const { createReconciliationWorker, createDeadLetterWorker } =
     await import('../workers/reconciliation.worker.js');
   const { getQueue } = await import('../queue/payment.queue.js');

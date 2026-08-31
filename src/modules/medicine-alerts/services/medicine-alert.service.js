@@ -364,8 +364,10 @@ class MedicineAlertService {
   }
 
   async triggerFullScan(tenantId) {
-    const expiryCount = await this._runExpiryScan(tenantId);
-    const stockCount = await this._runStockScan(tenantId);
+    const [expiryCount, stockCount] = await Promise.all([
+      this._runExpiryScan(tenantId),
+      this._runStockScan(tenantId),
+    ]);
 
     emitLocalEvent(DOMAIN_EVENTS.ALERT_SCAN_COMPLETED, {
       tenantId,

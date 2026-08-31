@@ -56,10 +56,12 @@ jest.unstable_mockModule(erpEventBusPath, () => ({
 }));
 
 // Import modules AFTER mocking
-const { default: procurementService } = await import(procurementServicePath);
-const { default: alertRepository } = await import(alertRepositoryPath);
-const { default: forecastingService } = await import(forecastingServicePath);
-const { default: prisma } = await import(prismaPath);
+const [{ default: procurementService }, { default: alertRepository }, { default: forecastingService }, { default: prisma }] = await Promise.all([
+  import(procurementServicePath),
+  import(alertRepositoryPath),
+  import(forecastingServicePath),
+  import(prismaPath),
+]);
 
 describe('ProcurementIntegrationService', () => {
   beforeEach(() => {

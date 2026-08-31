@@ -118,8 +118,10 @@ class InventoryStatusService {
     if (cached) return cached;
 
     const bId = branchId === 'null' || !branchId ? null : branchId;
-    const summary = await unifiedInventorySummaryService.getUnifiedSummary(tenantId, bId);
-    const expiry = await unifiedInventorySummaryService.getExpiryMetrics(tenantId, bId);
+    const [summary, expiry] = await Promise.all([
+      unifiedInventorySummaryService.getUnifiedSummary(tenantId, bId),
+      unifiedInventorySummaryService.getExpiryMetrics(tenantId, bId),
+    ]);
 
     const calculatedTotal =
       summary.inStockCount +

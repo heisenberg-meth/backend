@@ -126,10 +126,12 @@ jest.unstable_mockModule(s3StoragePath, () => ({
   default: mockS3Storage,
 }));
 
-const { default: billingActionsRoutes } = await import(billingActionsRoutesPath);
-const { default: pdfGenerationService } = await import(pdfGenerationServicePath);
-const { default: printService } = await import(printServicePath);
-const { default: deliveryAuditService } = await import(deliveryAuditServicePath);
+const [{ default: billingActionsRoutes }, { default: pdfGenerationService }, { default: printService }, { default: deliveryAuditService }] = await Promise.all([
+  import(billingActionsRoutesPath),
+  import(pdfGenerationServicePath),
+  import(printServicePath),
+  import(deliveryAuditServicePath),
+]);
 
 describe('Edge Cases', () => {
   let app;

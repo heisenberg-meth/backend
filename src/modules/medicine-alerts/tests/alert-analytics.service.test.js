@@ -19,8 +19,10 @@ jest.unstable_mockModule('../../../config/prisma.js', () => ({
 }));
 
 // Import AFTER mocking
-const { default: alertAnalyticsService } = await import('../analytics/alert-analytics.service.js');
-const { default: prisma } = await import('../../../config/prisma.js');
+const [{ default: alertAnalyticsService }, { default: prisma }] = await Promise.all([
+  import('../analytics/alert-analytics.service.js'),
+  import('../../../config/prisma.js'),
+]);
 
 describe('AlertAnalyticsService', () => {
   beforeEach(() => {

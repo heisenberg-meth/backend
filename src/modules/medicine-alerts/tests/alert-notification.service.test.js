@@ -45,8 +45,10 @@ jest.unstable_mockModule('../../../shared/events/erp-event-bus.js', () => ({
 // Import AFTER mocking
 const { default: alertNotificationService } =
   await import('../notifications/alert-notification.service.js');
-const { default: prisma } = await import('../../../config/prisma.js');
-const { default: redisClient } = await import('../../../config/redis.js');
+const [{ default: prisma }, { default: redisClient }] = await Promise.all([
+  import('../../../config/prisma.js'),
+  import('../../../config/redis.js'),
+]);
 
 describe('AlertNotificationService', () => {
   beforeEach(() => {
