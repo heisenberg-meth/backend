@@ -133,6 +133,9 @@ class BulkImportService {
 
       const dosageForm = rawRow.dosageForm ? String(rawRow.dosageForm).trim() : '';
 
+      const scheduleRaw = rawRow.schedule ? String(rawRow.schedule).trim() : '';
+      const schedule = this._normalizeSchedule(scheduleRaw);
+
       const hsnCode = rawRow.hsnCode ? String(rawRow.hsnCode).trim() : '';
 
       const gstPercentage = this._parseGst(rawRow.gstPercentage);
@@ -261,6 +264,7 @@ class BulkImportService {
         genericName,
         strength,
         dosageForm,
+        schedule,
         hsnCode,
         gstPercentage,
         isExpired,
@@ -515,6 +519,10 @@ class BulkImportService {
                 currentMatch.manufacturerId = resolvedMfrId;
               }
             }
+            if (row.schedule && (duplicateStrategy === 'Overwrite' || !currentMatch.scheduleType)) {
+              updatePayload.scheduleType = row.schedule;
+              currentMatch.scheduleType = row.schedule;
+            }
             if (Object.keys(updatePayload).length > 0) {
               medicineUpdates.push({ id: medicineId, data: updatePayload });
             }
@@ -541,6 +549,7 @@ class BulkImportService {
           dosageForm: row.dosageForm || null,
           packagingType: mapDosageFormToPackaging(row.dosageForm),
           strength: row.strength || null,
+          scheduleType: row.schedule || 'OTC',
           sku: `SKU-${crypto.randomUUID()}`,
           gstPercentage: parseFloat(row.gstPercentage) || 0,
           reorderLevel: 10,
@@ -772,6 +781,22 @@ class BulkImportService {
     }
 
     return null;
+  }
+
+  /**
+   * Normalizes input schedule strings into standardized schedule codes.
+   */
+  _normalizeSchedule(val) {
+    if (!val) return 'OTC';
+    const clean = String(val).trim().toUpperCase();
+    if (clean === 'OTC' || clean.includes('NON') || clean === 'NON-SCHEDULED') return 'OTC';
+    if (clean === 'G' || clean === 'SCHEDULE G' || clean === 'SCHEDULE_G') return 'G';
+    if (clean === 'H' || clean === 'SCHEDULE H' || clean === 'SCHEDULE_H') return 'H';
+    if (clean === 'H1' || clean === 'SCHEDULE H1' || clean === 'SCHEDULE_H1') return 'H1';
+    if (clean === 'X' || clean === 'SCHEDULE X' || clean === 'SCHEDULE_X') return 'X';
+    if (clean === 'OTHER' || clean === 'OTHER_SPECIAL' || clean.includes('SPECIAL'))
+      return 'OTHER_SPECIAL';
+    return clean;
   }
 }
 
