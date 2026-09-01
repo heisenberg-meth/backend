@@ -219,8 +219,8 @@ const setupFastify = async () => {
       statusCode = 400;
       message = 'Validation failed';
       code = 'VALIDATION_ERROR';
-      errors = (error.issues || []).map(issue => ({
-        field: (issue.path || []).filter(p => p !== 'body').join('.'),
+      errors = (error.issues || []).map((issue) => ({
+        field: (issue.path || []).filter((p) => p !== 'body').join('.'),
         message: issue.message,
       }));
     } else if (error.validation) {
@@ -228,8 +228,9 @@ const setupFastify = async () => {
       message = error.message || 'Validation failed';
       code = 'VALIDATION_ERROR';
       errors = Array.isArray(error.validation)
-        ? error.validation.map(v => ({
-            field: (v.instancePath || '').replace(/^\//, '') || v.params?.missingProperty || 'general',
+        ? error.validation.map((v) => ({
+            field:
+              (v.instancePath || '').replace(/^\//, '') || v.params?.missingProperty || 'general',
             message: v.message || 'Invalid field',
           }))
         : [{ field: 'general', message: error.message }];
@@ -263,7 +264,13 @@ const setupFastify = async () => {
       statusCode = 400;
       message = 'Validation failed: Invalid database schema arguments provided.';
       code = 'VALIDATION_ERROR';
-      errors = [{ field: 'database_schema', message: 'The request payload contains invalid or missing fields for the database operation.' }];
+      errors = [
+        {
+          field: 'database_schema',
+          message:
+            'The request payload contains invalid or missing fields for the database operation.',
+        },
+      ];
     }
 
     reply.code(statusCode).send({
@@ -276,7 +283,9 @@ const setupFastify = async () => {
     });
   });
 
-  if (env.nodeEnv !== 'production') {
+  const enableApiDocs = env.nodeEnv !== 'production' || process.env.ENABLE_API_DOCS === 'true';
+
+  if (enableApiDocs) {
     await fastify.register(swagger, {
       openapi: {
         info: {
