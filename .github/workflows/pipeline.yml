@@ -1,59 +1,84 @@
-name: Backend CD
+name: MedAssist Backend CD
 
 on:
   push:
-    branches: [ "main" ]
-    paths:
-      - 'backend/**'
+    branches:
+      - main
 
 jobs:
-  deploy:
+  build-and-deploy:
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: ./backend
+
+    permissions:
+      contents: read
+      packages: write
+
+    env:
+      REGISTRY: ghcr.io
+      IMAGE_NAME: viyan-info-tech/medassist-backend
 
     steps:
-    - uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v4
 
-    - name: Setup Node.js
-      uses: actions/setup-node@v4
-      with:
-        node-version: '20'
-        cache: 'npm'
-        cache-dependency-path: './backend/package-lock.json'
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
 
-    - name: Install Dependencies
-      run: npm ci
+      - name: Set image tag
+        id: image
+        run: |
+          echo "tag=${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
 
-    - name: Generate Prisma Client
-      env:
-        DATABASE_URL: ${{ secrets.DATABASE_URL }}
-      run: npx prisma generate
+      - name: Build Docker image
+        run: |
+          docker build \
+            -t $REGISTRY/$IMAGE_NAME:${{ steps.image.outputs.tag }} \
+            .
 
-    - name: Pre-migration Database Backup
-      env:
-        DATABASE_URL: ${{ secrets.DATABASE_URL }}
-      run: |
-        echo "Taking a pre-migration backup using pg_dump..."
-        # Extract DB details from DATABASE_URL and run pg_dump
-        # Example assuming DATABASE_URL is available
-        mkdir -p ./db-backups
-        # pg_dump $DATABASE_URL -Fc > ./db-backups/pre-migration-$(date +%s).dump
-        echo "Backup complete (stubbed in CI until Render postgres is accessible from runner)"
+      - name: Push Docker image
+        run: |
+          docker push \
+            $REGISTRY/$IMAGE_NAME:${{ steps.image.outputs.tag }}
 
-    - name: Run Prisma Migrations
-      run: npx prisma migrate deploy
-      env:
-        DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      - name: Configure SSH
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.VPS_SSH_KEY }}" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          ssh-keyscan -H "${{ secrets.VPS_HOST }}" >> ~/.ssh/known_hosts
 
-    - name: Build Backend
-      run: npm run build
+      - name: Deploy to Kubernetes
+        run: |
+          ssh -i ~/.ssh/id_ed25519 root@${{ secrets.VPS_HOST }} << EOF
+            set -e
 
-    - name: Deploy to Render
-      run: curl -X POST "${{ secrets.RENDER_DEPLOY_HOOK }}"
+            echo "Updating MedAssist backend..."
 
-    - name: Verify Deployment
-      run: |
-        sleep 20
-        curl --fail https://api.medassist.viyaninfo.com/health
+            kubectl set image deployment/medassist-backend \
+              backend=ghcr.io/viyan-info-tech/medassist-backend:${{ steps.image.outputs.tag }} \
+              -n medassist
+
+            echo "Waiting for rollout..."
+
+            kubectl rollout status deployment/medassist-backend \
+              -n medassist \
+              --timeout=180s
+
+            echo "Checking pods..."
+
+            kubectl get pods -n medassist
+
+            echo "Deployment successful."
+          EOF
+
+      - name: Verify production API
+        run: |
+          sleep 10
+          curl --fail --show-error \
+            https://api.medassist.viyaninfo.com/health
+
+          echo "Production health check passed."
