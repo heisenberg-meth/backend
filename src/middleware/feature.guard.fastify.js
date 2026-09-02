@@ -1,5 +1,4 @@
 import prisma from '../config/prisma.js';
-import { SUBSCRIPTION_PLANS } from '../modules/subscriptions/subscription.constants.js';
 import logger from '../shared/utils/logger.js';
 
 /**
@@ -22,16 +21,21 @@ export const requireFeature = (featureName) => {
         include: { plan: true },
       });
 
-      const planId = subscription?.planId || 'free';
-      const planConfig = SUBSCRIPTION_PLANS[planId] || SUBSCRIPTION_PLANS['free'];
+      let planConfig = subscription?.plan;
+      if (!planConfig) {
+        planConfig = await prisma.subscriptionPlan.findFirst({
+          where: { id: 'free', isActive: true },
+        });
+      }
 
-      const hasFeature = planConfig.features && planConfig.features.includes(featureName);
+      const features = Array.isArray(planConfig?.features) ? planConfig.features : [];
+      const hasFeature = features.includes(featureName);
 
       if (!hasFeature) {
         return reply.code(403).send({
           success: false,
           error: {
-            message: `Your current plan (${planConfig.name}) does not support ${featureName}. Please upgrade.`,
+            message: `Your current plan (${planConfig?.name || 'Free'}) does not support ${featureName}. Please upgrade.`,
             code: 'FEATURE_NOT_ALLOWED',
           },
         });
@@ -70,11 +74,19 @@ export const requireLimit = (limitKey, currentCountFn) => {
         include: { plan: true },
       });
 
-      const planId = subscription?.planId || 'free';
-      const planConfig = SUBSCRIPTION_PLANS[planId] || SUBSCRIPTION_PLANS['free'];
-      const limit = planConfig.limits ? planConfig.limits[limitKey] : undefined;
+      let planConfig = subscription?.plan;
+      if (!planConfig) {
+        planConfig = await prisma.subscriptionPlan.findFirst({
+          where: { id: 'free', isActive: true },
+        });
+      }
 
-      if (limit === undefined) {
+      let limit;
+      if (limitKey === 'users') limit = planConfig?.maxUsers;
+      else if (limitKey === 'branches') limit = planConfig?.maxBranches;
+      else if (limitKey === 'batches' || limitKey === 'medicines') limit = planConfig?.maxBatches;
+
+      if (limit === undefined || limit === null) {
         return;
       }
       if (limit === -1) {

@@ -10,7 +10,6 @@ import {
   validatePricing,
 } from '../../../shared/utils/medicine-helpers.js';
 import sharedImportEngine from './shared-import.engine.js';
-import { SUBSCRIPTION_PLANS } from '../../subscriptions/subscription.constants.js';
 
 const CHUNK_SIZE = 1000;
 
@@ -68,22 +67,22 @@ class CsvImportService {
       await updateProgress(jobId, { processed: 0, total: 0, status: 'preloading' });
 
       const preloadStart = Date.now();
-      const [medicineMap, batchMap, inventoryMap, categoryMap, manufacturerMap] = await Promise.all([
-        this._preloadMedicines(tenantId),
-        this._preloadBatches(tenantId, branchId),
-        this._preloadInventory(tenantId, branchId),
-        this._preloadCategories(tenantId),
-        this._preloadManufacturers(tenantId),
-      ]);
+      const [medicineMap, batchMap, inventoryMap, categoryMap, manufacturerMap] = await Promise.all(
+        [
+          this._preloadMedicines(tenantId),
+          this._preloadBatches(tenantId, branchId),
+          this._preloadInventory(tenantId, branchId),
+          this._preloadCategories(tenantId),
+          this._preloadManufacturers(tenantId),
+        ],
+      );
 
       // Get subscription limits
       const subscription = await prisma.subscription.findUnique({
         where: { tenantId },
         include: { plan: true },
       });
-      const planId = subscription?.planId || 'free';
-      const planConfig = SUBSCRIPTION_PLANS[planId] || SUBSCRIPTION_PLANS['free'];
-      const maxMedicines = planConfig.limits ? planConfig.limits['medicines'] : undefined;
+      const maxMedicines = subscription?.plan?.maxBatches ?? undefined;
 
       const currentMedicinesCount = await prisma.medicine.count({
         where: { tenantId, deletedAt: null },

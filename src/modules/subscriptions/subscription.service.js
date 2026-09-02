@@ -1,5 +1,5 @@
 import prisma from '../../config/prisma.js';
-import { TRIAL_DAYS, SUBSCRIPTION_PLANS, TRIAL_PLAN_ID } from './subscription.constants.js';
+import { TRIAL_PLAN_ID } from './subscription.constants.js';
 
 class SubscriptionService {
   async createSubscription(tenantId, planId, billingCycle, performedBy = null, tx = null) {
@@ -11,28 +11,20 @@ class SubscriptionService {
     });
 
     const client = tx || prisma;
-    let plan = await client.subscriptionPlan.findUnique({ where: { id: planId } });
+    const plan = await client.subscriptionPlan.findUnique({
+      where: { id: planId },
+    });
+
+    if (!plan || !plan.isActive) {
+      throw new Error('The selected subscription plan is unavailable.');
+    }
 
     console.log('Plan found', plan);
-    
-    const inputCycle = (SUBSCRIPTION_PLANS[planId]?.billingCycle || billingCycle || 'monthly').toUpperCase();
+
+    const inputCycle = (plan.billingCycle || billingCycle || 'monthly').toString().toUpperCase();
     let finalBillingCycle = 'MONTHLY';
     if (inputCycle === 'YEARLY' || inputCycle === 'ANNUAL') finalBillingCycle = 'YEARLY';
     else if (inputCycle === 'QUARTERLY') finalBillingCycle = 'QUARTERLY';
-
-    if (!plan) {
-      console.log('Creating subscription plan...');
-      plan = await client.subscriptionPlan.create({
-        data: {
-          id: planId,
-          name: SUBSCRIPTION_PLANS[planId]?.name || `${planId} Plan`,
-          price: SUBSCRIPTION_PLANS[planId]?.price ?? 0,
-          billingCycle: finalBillingCycle,
-          features: SUBSCRIPTION_PLANS[planId]?.features || ['All Features Included'],
-        },
-      });
-      console.log('Subscription plan created');
-    }
 
     const startDate = new Date();
     const endDate = new Date(startDate);
@@ -216,21 +208,17 @@ class SubscriptionService {
       throw new Error('Trial already used');
     }
 
-    await prisma.subscriptionPlan.upsert({
+    const trialPlan = await prisma.subscriptionPlan.findUnique({
       where: { id: TRIAL_PLAN_ID },
-      update: {},
-      create: {
-        id: TRIAL_PLAN_ID,
-        name: SUBSCRIPTION_PLANS[TRIAL_PLAN_ID]?.name || 'Free Trial',
-        price: SUBSCRIPTION_PLANS[TRIAL_PLAN_ID]?.price ?? 0,
-        billingCycle: 'MONTHLY',
-        features: SUBSCRIPTION_PLANS[TRIAL_PLAN_ID]?.features || ['Free trial'],
-      },
     });
+    if (!trialPlan || !trialPlan.isActive) {
+      throw new Error('The free-trial plan is unavailable.');
+    }
+    const trialDays = trialPlan.trialDays ?? 0;
 
     const now = new Date();
     const trialExpiresAt = new Date(now);
-    trialExpiresAt.setDate(trialExpiresAt.getDate() + TRIAL_DAYS);
+    trialExpiresAt.setDate(trialExpiresAt.getDate() + trialDays);
 
     const subscription = await prisma.subscription.upsert({
       where: { tenantId },
@@ -242,7 +230,7 @@ class SubscriptionService {
         graceEndDate: null,
         autoRenew: false,
         isTrial: true,
-        trialDays: TRIAL_DAYS,
+        trialDays,
         trialStartedAt: now,
         trialExpiresAt,
       },
@@ -255,7 +243,7 @@ class SubscriptionService {
         graceEndDate: null,
         autoRenew: false,
         isTrial: true,
-        trialDays: TRIAL_DAYS,
+        trialDays,
         trialStartedAt: now,
         trialExpiresAt,
       },
@@ -270,7 +258,7 @@ class SubscriptionService {
       oldExpiry: null,
       newExpiry: trialExpiresAt,
       performedBy: null,
-      metadata: { trialDays: TRIAL_DAYS },
+      metadata: { trialDays },
     });
 
     return subscription;

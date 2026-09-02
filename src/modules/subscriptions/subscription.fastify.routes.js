@@ -4,7 +4,6 @@ import checkoutRoutes from './checkout.fastify.routes.js';
 import { authenticate, requireTenant } from '../../middleware/auth.fastify.js';
 import { requirePermission } from '../../middleware/permission.fastify.js';
 import prisma from '../../config/prisma.js';
-import { SUBSCRIPTION_PLANS } from './subscription.constants.js';
 
 export default async function (fastify) {
   fastify.addHook('preHandler', authenticate);
@@ -49,9 +48,18 @@ export default async function (fastify) {
           include: { plan: true },
         });
 
-        const planId = subscription?.planId || 'free';
-        const planConfig = SUBSCRIPTION_PLANS[planId] || SUBSCRIPTION_PLANS['free'];
-        const limits = planConfig.limits || {};
+        let planConfig = subscription?.plan;
+        if (!planConfig) {
+          planConfig = await prisma.subscriptionPlan.findFirst({
+            where: { id: 'free', isActive: true },
+          });
+        }
+        const planId = planConfig?.id || 'free';
+        const limits = {
+          medicines: planConfig?.maxBatches ?? -1,
+          users: planConfig?.maxUsers ?? -1,
+          branches: planConfig?.maxBranches ?? -1,
+        };
 
         const [medicineCount, userCount, branchCount] = await Promise.all([
           prisma.medicine.count({ where: { tenantId, deletedAt: null } }),
@@ -62,26 +70,33 @@ export default async function (fastify) {
         const usage = {
           plan: {
             id: planId,
-            name: planConfig.name,
+            name: planConfig?.name || 'Free',
           },
           limits: {
             medicines: {
               current: medicineCount,
               limit: limits.medicines ?? -1,
               unlimited: limits.medicines === -1,
-              exceeded: limits.medicines !== -1 && limits.medicines !== undefined && medicineCount > limits.medicines,
+              exceeded:
+                limits.medicines !== -1 &&
+                limits.medicines !== undefined &&
+                medicineCount > limits.medicines,
             },
             users: {
               current: userCount,
               limit: limits.users ?? -1,
               unlimited: limits.users === -1,
-              exceeded: limits.users !== -1 && limits.users !== undefined && userCount > limits.users,
+              exceeded:
+                limits.users !== -1 && limits.users !== undefined && userCount > limits.users,
             },
             branches: {
               current: branchCount,
               limit: limits.branches ?? -1,
               unlimited: limits.branches === -1,
-              exceeded: limits.branches !== -1 && limits.branches !== undefined && branchCount > limits.branches,
+              exceeded:
+                limits.branches !== -1 &&
+                limits.branches !== undefined &&
+                branchCount > limits.branches,
             },
           },
         };

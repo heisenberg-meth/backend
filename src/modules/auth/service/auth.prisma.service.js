@@ -5,7 +5,6 @@ import authRepository from '../repository/auth.prisma.repository.js';
 import sessionService from './session.service.js';
 import eventBus from '../../../shared/services/eventbus.service.js';
 import logger from '../../../shared/utils/logger.js';
-import { TRIAL_DAYS, SUBSCRIPTION_PLANS } from '../../subscriptions/subscription.constants.js';
 import { queueEmail } from '../../../shared/services/email.service.js';
 import otpAuditService from '../../../shared/services/otp-audit.service.js';
 import MediaService from '../../../shared/services/media.service.js';
@@ -25,7 +24,13 @@ class AuthPrismaService {
     const { password, fullName, shopName, branchName, fingerprint, selectedPlanId } = userData;
 
     // Validate selected plan exists
-    const planConfig = SUBSCRIPTION_PLANS[selectedPlanId];
+    const planConfig = await prisma.subscriptionPlan.findFirst({
+      where: {
+        id: selectedPlanId,
+        isActive: true,
+      },
+    });
+
     if (!planConfig) {
       throw new Error('The selected subscription plan is unavailable. Please choose another plan.');
     }
@@ -50,11 +55,12 @@ class AuthPrismaService {
     const hashedPassword = await bcrypt.hash(password, 12);
 
     const now = new Date();
-    const trialEnd = new Date(now);
-    trialEnd.setDate(trialEnd.getDate() + TRIAL_DAYS);
-
-    // Determine subscription status based on selected plan
     const isFreePlan = planConfig.price === 0;
+    const trialDays = planConfig.trialDays ?? 0;
+
+    const trialEnd = new Date(now);
+    trialEnd.setDate(trialEnd.getDate() + trialDays);
+
     const subscriptionStatus = isFreePlan ? 'TRIAL' : 'PENDING';
 
     const { user, registeredDeviceToken } = await prisma.$transaction(async (tx) => {
@@ -109,22 +115,6 @@ class AuthPrismaService {
         }
       }
 
-      // Upsert the selected plan
-      await tx.subscriptionPlan.upsert({
-        where: { id: selectedPlanId },
-        update: {},
-        create: {
-          id: selectedPlanId,
-          name: planConfig.name,
-          price: planConfig.price,
-          billingCycle:
-            planConfig.billingCycle === 'one-time'
-              ? 'MONTHLY'
-              : planConfig.billingCycle.toUpperCase(),
-          features: planConfig.features,
-        },
-      });
-
       // Create subscription with the selected plan
       await tx.subscription.create({
         data: {
@@ -132,10 +122,12 @@ class AuthPrismaService {
           planId: selectedPlanId,
           status: subscriptionStatus,
           startDate: now,
-          endDate: isFreePlan ? trialEnd : null,
+          endDate: isFreePlan && trialDays > 0 ? trialEnd : null,
           autoRenew: false,
-          isTrial: isFreePlan,
-          trialExpiresAt: isFreePlan ? trialEnd : null,
+          isTrial: isFreePlan && trialDays > 0,
+          trialDays: isFreePlan ? trialDays : null,
+          trialStartedAt: isFreePlan && trialDays > 0 ? now : null,
+          trialExpiresAt: isFreePlan && trialDays > 0 ? trialEnd : null,
         },
       });
 

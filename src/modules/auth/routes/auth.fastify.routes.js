@@ -1,5 +1,7 @@
 import authController from '../controller/auth.fastify.controller.js';
 import { authenticate } from '../../../middleware/auth.fastify.js';
+import prisma from '../../../config/prisma.js';
+
 async function authRoutes(fastify) {
   fastify.post(
     '/forgot-password',
@@ -85,6 +87,35 @@ async function authRoutes(fastify) {
       },
     },
     authController.updateProfile,
+  );
+
+  fastify.get(
+    '/plans',
+    {
+      schema: {
+        tags: ['Auth'],
+        summary: 'Get active subscription plans',
+      },
+    },
+    async (request, reply) => {
+      try {
+        const plans = await prisma.subscriptionPlan.findMany({
+          where: { isActive: true },
+          orderBy: { price: 'asc' },
+        });
+
+        return reply.send({
+          success: true,
+          data: plans,
+        });
+      } catch (error) {
+        request.log.error(error);
+        return reply.code(500).send({
+          success: false,
+          message: 'Failed to fetch subscription plans',
+        });
+      }
+    },
   );
 
   fastify.post(
