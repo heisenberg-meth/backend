@@ -53,7 +53,7 @@ export function normalizeInvoice(invoice) {
       invoice.invoice?.billNumber ||
       `INV-${invoice.id.slice(0, 8)}`,
     createdAt: timestamp.toISOString(),
-    date: timestamp.toISOString().split('T')[0],
+    date: timestamp.toISOString(),
     time: timestamp.toLocaleTimeString('en-US', {
       hour: '2-digit',
       minute: '2-digit',
