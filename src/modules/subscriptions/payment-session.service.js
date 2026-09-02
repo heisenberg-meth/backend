@@ -10,13 +10,22 @@ import { mainQueue } from '../../queue/index.js';
 const SESSION_EXPIRY_MINUTES = 30;
 
 class PaymentSessionService {
-  async createCheckoutSession(tenantId, userId, planId, billingCycle) {
-    const plan = await prisma.subscriptionPlan.findUnique({ where: { id: planId } });
+  async createCheckoutSession(tenantId, userId, planId) {
+    const plan = await prisma.subscriptionPlan.findUnique({
+      where: { id: planId },
+    });
+
     if (!plan) {
       throw new Error('Subscription plan not found');
     }
 
-    const amount = billingCycle === 'yearly' ? plan.price * 12 : plan.price;
+    if (!plan.isActive) {
+      throw new Error('The selected subscription plan is unavailable.');
+    }
+
+    const billingCycle = plan.billingCycle ? plan.billingCycle.toString().toLowerCase() : 'monthly';
+    const amount = Number(plan.price);
+    const currency = plan.currency || 'INR';
 
     const paymentSessionId = crypto.randomUUID();
     const state = crypto.randomBytes(32).toString('hex');
@@ -25,7 +34,7 @@ class PaymentSessionService {
 
     const razorpayOrder = await razorpay.orders.create({
       amount: Math.round(amount * 100),
-      currency: 'INR',
+      currency,
       receipt: `sub_${paymentSessionId.slice(0, 8)}`,
       payment_capture: 1,
       notes: {
@@ -45,7 +54,7 @@ class PaymentSessionService {
         userId,
         subscriptionPlanId: planId,
         amount,
-        currency: 'INR',
+        currency,
         state,
         status: 'PENDING',
         razorpayOrderId: razorpayOrder.id,
@@ -59,6 +68,7 @@ class PaymentSessionService {
         tenantId,
         planId,
         amount,
+        currency,
         razorpayOrderId: razorpayOrder.id,
       },
       '[PAYMENT_SESSION] Checkout session created',
@@ -70,7 +80,7 @@ class PaymentSessionService {
       paymentSessionId,
       planId,
       amount,
-      currency: 'INR',
+      currency,
     });
 
     return {
@@ -128,15 +138,39 @@ class PaymentSessionService {
   ) {
     const session = await this.validateSession(paymentSessionId, state);
 
+    if (session.razorpayOrderId !== razorpayOrderId) {
+      await this._updateSessionStatus(session.id, 'PAYMENT_FAILED', {
+        razorpayPaymentId,
+      });
+      await paymentSessionAuditService.logSignatureVerificationFailed({
+        tenantId: session.tenantId,
+        paymentSessionId,
+        razorpayOrderId,
+      });
+      throw new Error('Razorpay order ID mismatch');
+    }
+
+    if (!razorpaySignature || !/^[a-f0-9]{64}$/i.test(razorpaySignature)) {
+      await this._updateSessionStatus(session.id, 'PAYMENT_FAILED', {
+        razorpayPaymentId,
+      });
+      throw new Error('Invalid payment signature');
+    }
+
     const config = getConfig();
     const secret = config.keySecret;
 
     const expectedSignature = crypto
       .createHmac('sha256', secret)
-      .update(`${razorpayOrderId}|${razorpayPaymentId}`)
+      .update(`${session.razorpayOrderId}|${razorpayPaymentId}`)
       .digest('hex');
 
-    if (!crypto.timingSafeEqual(Buffer.from(expectedSignature), Buffer.from(razorpaySignature))) {
+    const signatureValid = crypto.timingSafeEqual(
+      Buffer.from(expectedSignature, 'utf8'),
+      Buffer.from(razorpaySignature, 'utf8'),
+    );
+
+    if (!signatureValid) {
       await this._updateSessionStatus(session.id, 'PAYMENT_FAILED', {
         razorpayPaymentId,
         razorpaySignature,
@@ -195,7 +229,6 @@ class PaymentSessionService {
 
     switch (event) {
       case 'payment.captured':
-      case 'payment.authorized':
       case 'order.paid':
         await this._updateSessionStatus(session.id, 'WEBHOOK_VERIFIED', {
           razorpayPaymentId,
@@ -261,16 +294,21 @@ class PaymentSessionService {
 
   async _activateSubscription(session) {
     try {
-      const transaction = await prisma.transaction.findFirst({
-        where: { razorpayOrderId: session.razorpayOrderId },
+      const plan = await prisma.subscriptionPlan.findUnique({
+        where: { id: session.subscriptionPlanId },
       });
 
-      const billingCycle = transaction?.gatewayResponse?.billingCycle || 'monthly';
-      const planId = session.subscriptionPlanId;
+      if (!plan || !plan.isActive) {
+        throw new Error('Subscription plan is unavailable.');
+      }
+
+      const billingCycle = plan.billingCycle
+        ? plan.billingCycle.toString().toLowerCase()
+        : 'monthly';
 
       await subscriptionService.createSubscription(
         session.tenantId,
-        planId,
+        plan.id,
         billingCycle,
         null,
         prisma,
@@ -282,14 +320,14 @@ class PaymentSessionService {
         tenantId: session.tenantId,
         userId: session.userId,
         paymentSessionId: session.paymentSessionId,
-        planId,
+        planId: plan.id,
       });
 
       logger.info(
         {
           paymentSessionId: session.paymentSessionId,
           tenantId: session.tenantId,
-          planId,
+          planId: plan.id,
         },
         '[PAYMENT_SESSION] Subscription activated',
       );

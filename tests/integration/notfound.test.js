@@ -86,7 +86,7 @@ describe('NotFound Handler Recursion Fix', () => {
     const body = JSON.parse(response.payload);
     expect(body).toEqual({
       success: false,
-      error: 'Route not found',
+      error: 'Route or asset not found',
       code: 'NOT_FOUND',
     });
   });

@@ -240,7 +240,7 @@ describe('Hardened Payment API Integration', () => {
       });
 
       expect(res.statusCode).toBe(200);
-      expect(res.body.status).toBe('SUCCESS');
+      expect(res.body.paymentStatus).toBe('SUCCESS');
     });
 
     it('should handle verification failure', async () => {

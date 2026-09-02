@@ -3,13 +3,6 @@ import { TRIAL_PLAN_ID } from './subscription.constants.js';
 
 class SubscriptionService {
   async createSubscription(tenantId, planId, billingCycle, performedBy = null, tx = null) {
-    console.log('ENTER createSubscription');
-    console.log({
-      tenantId,
-      planId,
-      billingCycle,
-    });
-
     const client = tx || prisma;
     const plan = await client.subscriptionPlan.findUnique({
       where: { id: planId },
@@ -18,8 +11,6 @@ class SubscriptionService {
     if (!plan || !plan.isActive) {
       throw new Error('The selected subscription plan is unavailable.');
     }
-
-    console.log('Plan found', plan);
 
     const inputCycle = (plan.billingCycle || billingCycle || 'monthly').toString().toUpperCase();
     let finalBillingCycle = 'MONTHLY';
@@ -41,7 +32,6 @@ class SubscriptionService {
     const oldStatus = existing?.status;
     const oldExpiry = existing?.endDate;
 
-    console.log('Updating subscription...');
     const subscription = await client.subscription.upsert({
       where: { tenantId },
       update: {
@@ -66,9 +56,7 @@ class SubscriptionService {
         isTrial: false,
       },
     });
-    console.log('Subscription updated');
 
-    console.log('Writing history...');
     await this._logHistory(
       {
         tenantId,

@@ -5,83 +5,88 @@ import { fileURLToPath } from 'url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const prismaPath = path.resolve(__dirname, '../../../src/config/prisma.js');
-const paymentServicePath = path.resolve(
+const webhookHandlerPath = path.resolve(
   __dirname,
-  '../../../src/modules/payments/services/payment.service.js',
+  '../../../src/modules/payments/webhooks/razorpay.webhook.js',
+);
+const paymentConfigPath = path.resolve(__dirname, '../../../src/config/payment.config.js');
+const paymentLockServicePath = path.resolve(
+  __dirname,
+  '../../../src/modules/payments/services/payment.lock.service.js',
 );
 
-const mockPaymentCreate = jest.fn();
-const mockPaymentFindUnique = jest.fn();
-const mockPaymentUpdate = jest.fn();
-const mockSubscriptionFindUnique = jest.fn();
-const mockSubscriptionUpdate = jest.fn();
-const mockIdempotencyFindUnique = jest.fn();
-const mockIdempotencyCreate = jest.fn();
+const secret = 'test_secret';
+
+const mockPaymentWebhookFindUnique = jest.fn();
+const mockPaymentWebhookCreate = jest.fn();
 
 jest.unstable_mockModule(prismaPath, () => ({
   default: {
+    paymentWebhook: {
+      findUnique: mockPaymentWebhookFindUnique,
+      create: mockPaymentWebhookCreate,
+    },
     payment: {
-      create: mockPaymentCreate,
-      findUnique: mockPaymentFindUnique,
-      update: mockPaymentUpdate,
+      findFirst: jest.fn(),
+      update: jest.fn(),
     },
-    subscription: {
-      findUnique: mockSubscriptionFindUnique,
-      update: mockSubscriptionUpdate,
+    transaction: {
+      updateMany: jest.fn(),
     },
-    idempotencyKey: {
-      findUnique: mockIdempotencyFindUnique,
-      create: mockIdempotencyCreate,
+    paymentAuditLog: {
+      create: jest.fn(),
     },
   },
 }));
 
-const { default: paymentService } = await import(paymentServicePath);
+jest.unstable_mockModule(paymentConfigPath, () => ({
+  getConfig: () => ({
+    webhookSecret: secret,
+  }),
+}));
+
+jest.unstable_mockModule(paymentLockServicePath, () => ({
+  default: {
+    executeWithLock: jest.fn(async (key, fn) => fn()),
+  },
+}));
+
+const { default: webhookHandler } = await import(webhookHandlerPath);
 
 describe('Webhook Security Tests', () => {
-  const secret = 'test_secret';
-
   beforeEach(() => {
     jest.clearAllMocks();
   });
 
-  it('should ignore duplicate webhook', async () => {
-    const payload = { transactionId: 'txn_dup', status: 'SUCCESS' };
-    const signature = crypto
-      .createHmac('sha256', secret)
-      .update(JSON.stringify(payload))
-      .digest('hex');
+  it('should verify valid signature', () => {
+    const rawBody = JSON.stringify({ event: 'payment.captured', id: 'pay_123' });
+    const signature = crypto.createHmac('sha256', secret).update(rawBody).digest('hex');
 
-    mockPaymentFindUnique.mockResolvedValue({
-      transactionId: 'txn_dup',
-      status: 'SUCCESS',
-      tenantId: 'tenant-1',
+    const isValid = webhookHandler.verifySignature(rawBody, signature);
+    expect(isValid).toBe(true);
+  });
+
+  it('should reject invalid signature', () => {
+    const rawBody = JSON.stringify({ event: 'payment.captured', id: 'pay_123' });
+    const signature =
+      'invalid_signature_hash_1234567890123456789012345678901234567890123456789012345678901234';
+
+    const isValid = webhookHandler.verifySignature(rawBody, signature);
+    expect(isValid).toBe(false);
+  });
+
+  it('should ignore duplicate webhook processing', async () => {
+    const payload = {
+      event_id: 'evt_123',
+      payload: { payment: { entity: { id: 'pay_dup', order_id: 'order_123' } } },
+    };
+
+    mockPaymentWebhookFindUnique.mockResolvedValue({
+      id: 'wh_1',
+      idempotencyKey: 'webhook:evt_123:pay_dup',
     });
-    mockIdempotencyFindUnique.mockResolvedValue({ idempotencyKey: 'pay_txn_dup_SUCCESS' });
 
-    const result = await paymentService.handleWebhook(payload, signature, secret);
-    expect(result.status).toBe('ignored');
-  });
-
-  it('should reject invalid signature', async () => {
-    const payload = { transactionId: 'txn_inv', status: 'SUCCESS' };
-    const signature = 'invalid_signature_hash';
-
-    await expect(paymentService.handleWebhook(payload, signature, secret)).rejects.toThrow(
-      'Invalid signature',
-    );
-  });
-
-  it('should reject replay attacks / modified payloads', async () => {
-    const payload = { transactionId: 'txn_1', status: 'SUCCESS', amount: 100 };
-    const tamperedPayload = { transactionId: 'txn_1', status: 'SUCCESS', amount: 10 };
-    const signature = crypto
-      .createHmac('sha256', secret)
-      .update(JSON.stringify(payload))
-      .digest('hex');
-
-    await expect(paymentService.handleWebhook(tamperedPayload, signature, secret)).rejects.toThrow(
-      'Invalid signature',
-    );
+    const result = await webhookHandler.processWebhook('payment.captured', payload);
+    expect(result).toEqual({ received: true, ignored: true });
   });
 });

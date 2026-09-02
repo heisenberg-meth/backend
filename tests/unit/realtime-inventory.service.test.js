@@ -48,7 +48,7 @@ const mockInventoryQueue = {
 jest.unstable_mockModule(
   '../../src/modules/realtime-inventory/workers/inventory.worker.js',
   () => ({
-    inventoryQueue: mockInventoryQueue,
+    createInventoryQueue: jest.fn(() => mockInventoryQueue),
   }),
 );
 

@@ -552,12 +552,22 @@ const setupFastify = async () => {
       root: frontendDist,
       prefix: '/',
       setHeaders: (res, path) => {
-        if (path.includes('/assets/')) {
-          res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
-        } else if (path.endsWith('index.html')) {
-          res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
-          res.setHeader('Pragma', 'no-cache');
-          res.setHeader('Expires', '0');
+        if (typeof res?.setHeader === 'function') {
+          if (path.includes('/assets/')) {
+            res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+          } else if (path.endsWith('index.html')) {
+            res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+            res.setHeader('Pragma', 'no-cache');
+            res.setHeader('Expires', '0');
+          }
+        } else if (typeof res?.header === 'function') {
+          if (path.includes('/assets/')) {
+            res.header('Cache-Control', 'public, max-age=31536000, immutable');
+          } else if (path.endsWith('index.html')) {
+            res.header('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+            res.header('Pragma', 'no-cache');
+            res.header('Expires', '0');
+          }
         }
       },
     });

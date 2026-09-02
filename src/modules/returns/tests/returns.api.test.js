@@ -34,6 +34,7 @@ const batchId = '1d8494b2-031e-450e-b7d6-848e3a24b13a';
 const mockPrisma = {
   invoice: {
     findUnique: jest.fn(),
+    findFirst: jest.fn(),
     update: jest.fn(),
     aggregate: jest.fn(),
   },
@@ -189,7 +190,7 @@ describe('Returns API Integration', () => {
 
   describe('POST /api/billing/returns', () => {
     it('should create a return and return 201', async () => {
-      mockPrisma.invoice.findUnique.mockResolvedValue({
+      const invoiceData = {
         id: invoiceId,
         invoiceNumber: 'INV-001',
         status: 'ACTIVE',
@@ -209,7 +210,9 @@ describe('Returns API Integration', () => {
         ],
         patient: { fullName: 'Test Patient', phone: '+919876543210' },
         branch: { code: 'CHN' },
-      });
+      };
+      mockPrisma.invoice.findUnique.mockResolvedValue(invoiceData);
+      mockPrisma.invoice.findFirst.mockResolvedValue(invoiceData);
 
       mockReturnRepository.createReturn.mockResolvedValue({
         id: returnId,
@@ -239,12 +242,14 @@ describe('Returns API Integration', () => {
     });
 
     it('should reject return for cancelled invoice', async () => {
-      mockPrisma.invoice.findUnique.mockResolvedValue({
+      const invoiceData = {
         id: invoiceId,
         status: 'CANCELLED',
         createdAt: new Date(),
         items: [],
-      });
+      };
+      mockPrisma.invoice.findUnique.mockResolvedValue(invoiceData);
+      mockPrisma.invoice.findFirst.mockResolvedValue(invoiceData);
 
       const response = await app.inject({
         method: 'POST',

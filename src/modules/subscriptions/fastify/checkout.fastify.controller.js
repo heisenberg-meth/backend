@@ -23,7 +23,7 @@ const formatStatusResponse = (statusObj) => {
   };
 
   const paymentStatus = statusMap[statusObj.status] || 'PENDING';
-  const plan = statusObj.planName || 'Professional';
+  const plan = statusObj.planName || null;
 
   if (paymentStatus === 'SUCCESS') {
     return {
@@ -55,16 +55,11 @@ const formatStatusResponse = (statusObj) => {
 class CheckoutController {
   async createCheckout(request, reply) {
     try {
-      const { planId, billingCycle } = request.body;
+      const { planId } = request.body;
       const tenantId = request.tenantId;
       const userId = request.user.id;
 
-      const session = await paymentSessionService.createCheckoutSession(
-        tenantId,
-        userId,
-        planId,
-        billingCycle,
-      );
+      const session = await paymentSessionService.createCheckoutSession(tenantId, userId, planId);
 
       return reply.code(201).send({
         success: true,
@@ -121,7 +116,6 @@ class CheckoutController {
         success: true,
         paymentStatus: 'SUCCESS',
         subscriptionActive: true,
-        plan: 'Professional',
         data: result,
       });
     } catch (error) {

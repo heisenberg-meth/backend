@@ -28,8 +28,13 @@ describe('Subscription Service', () => {
   });
 
   describe('createSubscription', () => {
-    it('should create subscription', async () => {
-      mockSubscriptionPlanFindUnique.mockResolvedValue({ id: 'plan-1' });
+    it('should create subscription when plan is active', async () => {
+      mockSubscriptionPlanFindUnique.mockResolvedValue({
+        id: 'plan-1',
+        name: 'Starter',
+        price: 599,
+        isActive: true,
+      });
       mockSubscriptionUpsert.mockResolvedValue({
         id: 'sub-1',
         status: 'ACTIVE',
@@ -38,6 +43,14 @@ describe('Subscription Service', () => {
       const res = await subscriptionService.createSubscription('tenant-1', 'plan-1', 'monthly');
       expect(res.status).toBe('ACTIVE');
       expect(mockSubscriptionUpsert).toHaveBeenCalled();
+    });
+
+    it('should throw error when plan is inactive or missing', async () => {
+      mockSubscriptionPlanFindUnique.mockResolvedValue(null);
+
+      await expect(
+        subscriptionService.createSubscription('tenant-1', 'invalid-plan', 'monthly'),
+      ).rejects.toThrow('The selected subscription plan is unavailable.');
     });
   });
 

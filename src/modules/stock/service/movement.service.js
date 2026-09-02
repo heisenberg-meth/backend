@@ -134,6 +134,15 @@ class MovementService {
     const run = async (client) => {
       const currentStock = await stockRepository.getCurrentStock(tenantId, data.medicineId, client);
 
+      if (!data.expiryDate) {
+        throw new Error('Expiry date is required');
+      }
+
+      const expiryDate = new Date(data.expiryDate);
+
+      if (Number.isNaN(expiryDate.getTime())) {
+        throw new Error('Invalid expiry date');
+      }
       const newBatch = await client.inventoryBatch.create({
         data: {
           tenantId,
@@ -143,7 +152,7 @@ class MovementService {
           quantity: data.quantity,
           receivedQuantity: data.quantity,
           availableQuantity: data.quantity,
-          expiryDate: new Date(data.expiryDate),
+          expiryDate,
           ...(data.manufacturingDate && { manufacturingDate: new Date(data.manufacturingDate) }),
           purchasePrice: data.purchasePrice || 0,
           sellingPrice: data.sellingPrice || 0,

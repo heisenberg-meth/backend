@@ -12,10 +12,9 @@ export default async function (fastify) {
       summary: 'Create payment session for subscription checkout',
       body: {
         type: 'object',
-        required: ['planId', 'billingCycle'],
+        required: ['planId'],
         properties: {
           planId: { type: 'string' },
-          billingCycle: { type: 'string', enum: ['monthly', 'yearly'] },
         },
       },
     },

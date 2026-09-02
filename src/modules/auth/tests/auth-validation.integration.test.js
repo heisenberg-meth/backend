@@ -1,19 +1,30 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-import authMetricsService from '../service/auth.metrics.service.js';
-import { validateAuthConfigOnStartup } from '../service/auth.bootstrap.js';
-import env from '../../../config/env.js';
+import { describe, it, expect, jest, beforeEach } from '@jest/globals';
+import path from 'path';
+import { fileURLToPath } from 'url';
 
-vi.mock('../../../config/prisma.js', () => ({
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+
+const prismaPath = path.resolve(__dirname, '../../../config/prisma.js');
+const redisPath = path.resolve(__dirname, '../../../config/redis.js');
+const authMetricsPath = path.resolve(__dirname, '../service/auth.metrics.service.js');
+const authBootstrapPath = path.resolve(__dirname, '../service/auth.bootstrap.js');
+const envPath = path.resolve(__dirname, '../../../config/env.js');
+
+jest.unstable_mockModule(prismaPath, () => ({
   default: {
-    $queryRaw: vi.fn().mockResolvedValue([{ 1: 1 }]),
+    $queryRaw: jest.fn().mockResolvedValue([{ 1: 1 }]),
   },
 }));
 
-vi.mock('../../../config/redis.js', () => ({
+jest.unstable_mockModule(redisPath, () => ({
   default: {
-    ping: vi.fn().mockResolvedValue('PONG'),
+    ping: jest.fn().mockResolvedValue('PONG'),
   },
 }));
+
+const { default: authMetricsService } = await import(authMetricsPath);
+const { validateAuthConfigOnStartup } = await import(authBootstrapPath);
+const { default: env } = await import(envPath);
 
 describe('Authentication Audit, Validation & Monitoring Framework', () => {
   beforeEach(() => {

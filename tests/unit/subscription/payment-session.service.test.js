@@ -1,4 +1,23 @@
 import { jest, describe, beforeEach, it, expect } from '@jest/globals';
+import path from 'path';
+import { fileURLToPath } from 'url';
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+
+const prismaPath = path.resolve(__dirname, '../../../src/config/prisma.js');
+const razorpayPath = path.resolve(__dirname, '../../../src/config/razorpay.js');
+const subServicePath = path.resolve(
+  __dirname,
+  '../../../src/modules/subscriptions/subscription.service.js',
+);
+const auditServicePath = path.resolve(
+  __dirname,
+  '../../../src/modules/subscriptions/payment-session-audit.service.js',
+);
+const paymentSessionServicePath = path.resolve(
+  __dirname,
+  '../../../src/modules/subscriptions/payment-session.service.js',
+);
 
 const mockPaymentSessionCreate = jest.fn();
 const mockPaymentSessionFindUnique = jest.fn();
@@ -9,7 +28,7 @@ const mockTransactionFindFirst = jest.fn();
 const mockRazorpayOrdersCreate = jest.fn();
 const mockAuditLogCreate = jest.fn();
 
-jest.unstable_mockModule('../../../src/config/prisma.js', () => ({
+jest.unstable_mockModule(prismaPath, () => ({
   default: {
     paymentSession: {
       create: mockPaymentSessionCreate,
@@ -29,7 +48,7 @@ jest.unstable_mockModule('../../../src/config/prisma.js', () => ({
   },
 }));
 
-jest.unstable_mockModule('../../../src/config/razorpay.js', () => ({
+jest.unstable_mockModule(razorpayPath, () => ({
   default: {
     orders: {
       create: mockRazorpayOrdersCreate,
@@ -37,13 +56,13 @@ jest.unstable_mockModule('../../../src/config/razorpay.js', () => ({
   },
 }));
 
-jest.unstable_mockModule('../../../src/modules/subscriptions/subscription.service.js', () => ({
+jest.unstable_mockModule(subServicePath, () => ({
   default: {
     createSubscription: jest.fn(),
   },
 }));
 
-jest.unstable_mockModule('../../../src/modules/subscriptions/payment-session-audit.service.js', () => ({
+jest.unstable_mockModule(auditServicePath, () => ({
   default: {
     logCheckoutCreated: jest.fn(),
     logPaymentSuccess: jest.fn(),
@@ -56,9 +75,7 @@ jest.unstable_mockModule('../../../src/modules/subscriptions/payment-session-aud
   },
 }));
 
-const { default: paymentSessionService } = await import(
-  '../../../src/modules/subscriptions/payment-session.service.js'
-);
+const { default: paymentSessionService } = await import(paymentSessionServicePath);
 
 describe('PaymentSession Service', () => {
   beforeEach(() => {
@@ -71,6 +88,9 @@ describe('PaymentSession Service', () => {
         id: 'plan-1',
         price: 999,
         name: 'Pro Plan',
+        isActive: true,
+        billingCycle: 'MONTHLY',
+        currency: 'INR',
       });
       mockRazorpayOrdersCreate.mockResolvedValue({
         id: 'order_test123',
@@ -87,7 +107,6 @@ describe('PaymentSession Service', () => {
         'tenant-1',
         'user-1',
         'plan-1',
-        'monthly',
       );
 
       expect(result).toHaveProperty('paymentSessionId');
@@ -101,35 +120,21 @@ describe('PaymentSession Service', () => {
       mockSubscriptionPlanFindUnique.mockResolvedValue(null);
 
       await expect(
-        paymentSessionService.createCheckoutSession('tenant-1', 'user-1', 'invalid-plan', 'monthly'),
+        paymentSessionService.createCheckoutSession('tenant-1', 'user-1', 'invalid-plan'),
       ).rejects.toThrow('Subscription plan not found');
     });
 
-    it('should calculate yearly amount correctly', async () => {
+    it('should throw error if plan is inactive', async () => {
       mockSubscriptionPlanFindUnique.mockResolvedValue({
         id: 'plan-1',
         price: 999,
         name: 'Pro Plan',
-      });
-      mockRazorpayOrdersCreate.mockResolvedValue({
-        id: 'order_test123',
-        amount: 1198800,
-        currency: 'INR',
-      });
-      mockPaymentSessionCreate.mockResolvedValue({
-        id: 'session-1',
-        paymentSessionId: 'test-uuid',
-        status: 'PENDING',
+        isActive: false,
       });
 
-      const result = await paymentSessionService.createCheckoutSession(
-        'tenant-1',
-        'user-1',
-        'plan-1',
-        'yearly',
-      );
-
-      expect(result.amount).toBe(1198800);
+      await expect(
+        paymentSessionService.createCheckoutSession('tenant-1', 'user-1', 'plan-1'),
+      ).rejects.toThrow('The selected subscription plan is unavailable.');
     });
   });
 
@@ -227,9 +232,9 @@ describe('PaymentSession Service', () => {
     it('should throw error if session not found', async () => {
       mockPaymentSessionFindUnique.mockResolvedValue(null);
 
-      await expect(
-        paymentSessionService.getPaymentStatus('invalid-uuid'),
-      ).rejects.toThrow('Payment session not found');
+      await expect(paymentSessionService.getPaymentStatus('invalid-uuid')).rejects.toThrow(
+        'Payment session not found',
+      );
     });
   });
 });
