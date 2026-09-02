@@ -4,7 +4,6 @@ import prisma from '../../../config/prisma.js';
 import authService from '../service/auth.prisma.service.js';
 import authRepository from '../repository/auth.prisma.repository.js';
 import emailVerificationService from '../service/email-verification.service.js';
-
 import accountRecoveryService from '../service/account-recovery.service.js';
 import deviceManagementService from '../service/device-management.service.js';
 import loginHistoryService from '../service/login-history.service.js';
@@ -288,7 +287,15 @@ class AuthFastifyController {
     } catch (error) {
       request.log.error(error);
 
+      const isConcurrentRefresh = error?.code === 'CONCURRENT_REFRESH';
       const isReused = error?.message === 'Invalid or reused refresh token';
+
+      if (isConcurrentRefresh) {
+        authMetricsService.recordRefreshFailure('concurrent');
+        return reply
+          .code(401)
+          .send(errorResponse('Concurrent refresh in progress', AUTH_ERRORS.REFRESH_FAILED));
+      }
       authMetricsService.recordRefreshFailure(isReused ? 'replay' : 'expired');
 
       const isInvalidToken =

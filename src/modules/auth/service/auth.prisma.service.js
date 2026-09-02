@@ -117,7 +117,10 @@ class AuthPrismaService {
           id: selectedPlanId,
           name: planConfig.name,
           price: planConfig.price,
-          billingCycle: planConfig.billingCycle === 'one-time' ? 'MONTHLY' : planConfig.billingCycle.toUpperCase(),
+          billingCycle:
+            planConfig.billingCycle === 'one-time'
+              ? 'MONTHLY'
+              : planConfig.billingCycle.toUpperCase(),
           features: planConfig.features,
         },
       });
