@@ -43,5 +43,16 @@ export async function validateAuthConfigOnStartup() {
     throw new Error(`Authentication Configuration Invalid: ${errors.join(', ')}`);
   }
 
+  try {
+    const { seedSubscriptionPlans } = await import('../../../../prisma/seed.js');
+    await seedSubscriptionPlans();
+    logger.info('Authoritative Subscription Plans verified/seeded on startup.');
+  } catch (err) {
+    logger.warn(
+      { err: err.message },
+      'Subscription plan seeding skipped or deferred during startup.',
+    );
+  }
+
   logger.info('Authentication Startup Validation passed successfully.');
 }

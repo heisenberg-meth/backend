@@ -99,14 +99,28 @@ async function authRoutes(fastify) {
     },
     async (request, reply) => {
       try {
-        const plans = await prisma.subscriptionPlan.findMany({
+        let plans = await prisma.subscriptionPlan.findMany({
           where: { isActive: true },
           orderBy: { price: 'asc' },
         });
 
+        if (!plans || plans.length === 0) {
+          const { seedSubscriptionPlans } = await import('../../../../prisma/seed.js');
+          await seedSubscriptionPlans();
+          plans = await prisma.subscriptionPlan.findMany({
+            where: { isActive: true },
+            orderBy: { price: 'asc' },
+          });
+        }
+
+        const formattedPlans = plans.map((plan) => ({
+          ...plan,
+          price: Number(plan.price),
+        }));
+
         return reply.send({
           success: true,
-          data: plans,
+          data: formattedPlans,
         });
       } catch (error) {
         request.log.error(error);
