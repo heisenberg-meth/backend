@@ -5,6 +5,9 @@ import aggregationService from '../services/aggregation.service.js';
 import { success, error } from '../../../shared/helpers/response.js';
 import logger from '../../../shared/utils/logger.js';
 
+import salesReportExportService from '../services/sales-report-export.service.js';
+import { validateSalesReportRequest } from '../validators/sales-report.validator.js';
+
 class ReportFastifyController {
   async getSalesReport(request, reply) {
     const startTime = Date.now();
@@ -143,6 +146,82 @@ class ReportFastifyController {
     }
   }
 
+  async exportSalesReportCsv(request, reply) {
+    const startTime = Date.now();
+    try {
+      const validation = validateSalesReportRequest(request.body);
+      if (!validation.isValid) {
+        return reply.code(400).send({
+          success: false,
+          message: validation.message,
+          errors: validation.errors,
+        });
+      }
+
+      const csvData = await salesReportExportService.exportCsv(request.tenantId, request.body);
+      const filename = `sales-report-${request.body.fromDate}-to-${request.body.toDate}.csv`;
+
+      return reply
+        .header('Content-Type', 'text/csv; charset=utf-8')
+        .header('Content-Disposition', `attachment; filename="${filename}"`)
+        .send(csvData);
+    } catch (err) {
+      logger.error(
+        {
+          err,
+          requestId: request.id,
+          route: request.url,
+          tenantId: request.tenantId,
+          body: request.body,
+          duration: Date.now() - startTime,
+        },
+        'Export sales report CSV failed',
+      );
+      return reply.code(500).send({
+        success: false,
+        message: 'Failed to generate sales report',
+      });
+    }
+  }
+
+  async exportSalesReportPdf(request, reply) {
+    const startTime = Date.now();
+    try {
+      const validation = validateSalesReportRequest(request.body);
+      if (!validation.isValid) {
+        return reply.code(400).send({
+          success: false,
+          message: validation.message,
+          errors: validation.errors,
+        });
+      }
+
+      const pdfBuffer = await salesReportExportService.exportPdf(request.tenantId, request.body);
+      const filename = `sales-report-${request.body.fromDate}-to-${request.body.toDate}.pdf`;
+
+      return reply
+        .header('Content-Type', 'application/pdf')
+        .header('Content-Disposition', `attachment; filename="${filename}"`)
+        .send(pdfBuffer);
+    } catch (err) {
+      logger.error(
+        {
+          err,
+          requestId: request.id,
+          route: request.url,
+          tenantId: request.tenantId,
+          body: request.body,
+          duration: Date.now() - startTime,
+        },
+        'Export sales report PDF failed',
+      );
+      return reply.code(500).send({
+        success: false,
+        message: 'Failed to generate sales report',
+      });
+    }
+  }
+
   async triggerManualAggregation(request, reply) {
     const startTime = Date.now();
     try {
@@ -186,18 +265,23 @@ class ReportFastifyController {
           await aggregationService.runDailyAggregation(request.tenantId, current);
           results.push(current.toISOString().split('T')[0]);
         } catch (err) {
-          logger.error({ err, date: current, tenantId: request.tenantId }, 'Reaggregate date failed');
+          logger.error(
+            { err, date: current, tenantId: request.tenantId },
+            'Reaggregate date failed',
+          );
           failed.push({ date: current.toISOString().split('T')[0], error: err.message });
         }
         current.setDate(current.getDate() + 1);
       }
 
       await reportService.invalidateCache(request.tenantId);
-      return reply.send(success({
-        message: `Reaggregation complete for ${results.length} days`,
-        dates: results,
-        failedDays: failed.length > 0 ? failed : undefined,
-      }));
+      return reply.send(
+        success({
+          message: `Reaggregation complete for ${results.length} days`,
+          dates: results,
+          failedDays: failed.length > 0 ? failed : undefined,
+        }),
+      );
     } catch (err) {
       logger.error(
         {

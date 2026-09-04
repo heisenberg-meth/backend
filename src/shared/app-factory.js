@@ -70,7 +70,13 @@ const createServiceApp = async (options = {}) => {
           'https://*.razorpay.com',
         ],
         scriptSrcAttr: ["'none'"],
-        styleSrc: ["'self'", 'https:', 'https://fonts.googleapis.com', "'unsafe-inline'", 'https://*.razorpay.com'],
+        styleSrc: [
+          "'self'",
+          'https:',
+          'https://fonts.googleapis.com',
+          "'unsafe-inline'",
+          'https://*.razorpay.com',
+        ],
         frameSrc: [
           "'self'",
           'https://api.razorpay.com',

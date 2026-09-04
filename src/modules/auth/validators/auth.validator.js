@@ -46,7 +46,9 @@ export const registerSchema = z
         message: 'Subscription plan selection is required',
         path: ['selectedPlanId'],
       });
-    } else if (!['free-trial', 'free', 'starter', 'professional', 'enterprise'].includes(plan)) {
+    } else if (
+      !['free', 'paid', 'free-trial', 'starter', 'professional', 'enterprise'].includes(plan)
+    ) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
         message: 'The selected subscription plan is unavailable or invalid',

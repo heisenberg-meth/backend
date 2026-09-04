@@ -53,6 +53,24 @@ async function reportFastifyRoutes(fastify) {
   );
 
   fastify.post(
+    '/sales/export/csv',
+    {
+      schema: { tags: ['Reports'], summary: 'Export sales report in CSV format' },
+      preHandler: [requirePermission('reports.read')],
+    },
+    reportController.exportSalesReportCsv,
+  );
+
+  fastify.post(
+    '/sales/export/pdf',
+    {
+      schema: { tags: ['Reports'], summary: 'Export sales report in PDF format' },
+      preHandler: [requirePermission('reports.read')],
+    },
+    reportController.exportSalesReportPdf,
+  );
+
+  fastify.post(
     '/aggregate/manual',
     {
       schema: { tags: ['Reports'], summary: 'Trigger manual aggregation for a single date' },

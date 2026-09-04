@@ -6,6 +6,21 @@ const standalonePrisma = new PrismaClient();
 export async function seedSubscriptionPlans(dbClient = defaultPrisma || standalonePrisma) {
   console.log('[SEED] Upserting subscription plans...');
 
+  if (dbClient.subscriptionPlan?.updateMany) {
+    try {
+      await dbClient.subscriptionPlan.updateMany({
+        where: {
+          id: { in: ['starter', 'free-trial'] },
+        },
+        data: {
+          isActive: false,
+        },
+      });
+    } catch (err) {
+      console.warn('[SEED] Could not deactivate legacy plans:', err.message);
+    }
+  }
+
   const freePlan = await dbClient.subscriptionPlan.upsert({
     where: { id: 'free' },
     update: {

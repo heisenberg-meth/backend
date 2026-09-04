@@ -1,1 +1,1 @@
-export const TRIAL_PLAN_ID = 'free-trial';
+export const TRIAL_PLAN_ID = 'free';
