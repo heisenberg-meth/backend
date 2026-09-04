@@ -1,6 +1,5 @@
 import authController from '../controller/auth.fastify.controller.js';
 import { authenticate } from '../../../middleware/auth.fastify.js';
-import prisma from '../../../config/prisma.js';
 
 async function authRoutes(fastify) {
   fastify.post(
@@ -97,39 +96,7 @@ async function authRoutes(fastify) {
         summary: 'Get active subscription plans',
       },
     },
-    async (request, reply) => {
-      try {
-        let plans = await prisma.subscriptionPlan.findMany({
-          where: { isActive: true },
-          orderBy: { price: 'asc' },
-        });
-
-        if (!plans || plans.length === 0) {
-          const { seedSubscriptionPlans } = await import('../../../../prisma/seed.js');
-          await seedSubscriptionPlans();
-          plans = await prisma.subscriptionPlan.findMany({
-            where: { isActive: true },
-            orderBy: { price: 'asc' },
-          });
-        }
-
-        const formattedPlans = plans.map((plan) => ({
-          ...plan,
-          price: Number(plan.price),
-        }));
-
-        return reply.send({
-          success: true,
-          data: formattedPlans,
-        });
-      } catch (error) {
-        request.log.error(error);
-        return reply.code(500).send({
-          success: false,
-          message: 'Failed to fetch subscription plans',
-        });
-      }
-    },
+    authController.getPlans,
   );
 
   fastify.post(

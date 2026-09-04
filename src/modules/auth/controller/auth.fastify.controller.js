@@ -606,6 +606,51 @@ class AuthFastifyController {
     }
   }
 
+  async getPlans(request, reply) {
+    try {
+      let plans = await prisma.subscriptionPlan.findMany({
+        where: { isActive: true },
+        orderBy: { price: 'asc' },
+      });
+
+      if (!plans || plans.length === 0) {
+        const { seedSubscriptionPlans } = await import('../../../../prisma/seed.js');
+        await seedSubscriptionPlans();
+        plans = await prisma.subscriptionPlan.findMany({
+          where: { isActive: true },
+          orderBy: { price: 'asc' },
+        });
+      }
+
+      const formattedPlans = plans.map((plan) => ({
+        id: plan.id,
+        name: plan.name,
+        price: Number(plan.price),
+        currency: plan.currency,
+        billingCycle: plan.billingCycle,
+        durationDays: plan.durationDays,
+        trialDays: plan.trialDays,
+        maxUsers: plan.maxUsers,
+        maxBranches: plan.maxBranches,
+        maxBatches: plan.maxBatches,
+        features: plan.features,
+        isActive: plan.isActive,
+      }));
+
+      return reply.send(success(formattedPlans));
+    } catch (error) {
+      request.log?.error ? request.log.error(error) : console.error(error);
+      return reply
+        .code(500)
+        .send(
+          errorResponse(
+            error?.message || 'Failed to fetch subscription plans',
+            AUTH_ERRORS.INTERNAL_ERROR,
+          ),
+        );
+    }
+  }
+
   async changePassword(request, reply) {
     try {
       const { currentPassword, newPassword } = request.body;

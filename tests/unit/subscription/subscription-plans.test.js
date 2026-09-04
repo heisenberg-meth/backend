@@ -63,4 +63,116 @@ describe('Subscription Plans Seeding & API Standardization', () => {
       expect(plans).toHaveProperty('paidPlan');
     });
   });
+
+  describe('authController.getPlans', () => {
+    it('should return subscription plans from database without requiring authentication', async () => {
+      const controllerModule =
+        await import('../../../src/modules/auth/controller/auth.fastify.controller.js');
+      const authController = controllerModule.default;
+
+      const mockPlans = [
+        {
+          id: 'free',
+          name: 'Free Tier',
+          price: 0,
+          currency: 'INR',
+          billingCycle: 'MONTHLY',
+          durationDays: 28,
+          isActive: true,
+        },
+        {
+          id: 'paid',
+          name: 'Paid Plan',
+          price: 599,
+          currency: 'INR',
+          billingCycle: 'MONTHLY',
+          durationDays: 30,
+          isActive: true,
+        },
+      ];
+
+      mockSubscriptionPlanFindMany.mockResolvedValue(mockPlans);
+
+      const mockReply = {
+        send: jest.fn(),
+        code: jest.fn().mockReturnThis(),
+      };
+      const mockRequest = {
+        log: { error: jest.fn() },
+      };
+
+      await authController.getPlans(mockRequest, mockReply);
+
+      expect(mockSubscriptionPlanFindMany).toHaveBeenCalledWith({
+        where: { isActive: true },
+        orderBy: { price: 'asc' },
+      });
+      expect(mockReply.send).toHaveBeenCalledWith(
+        expect.objectContaining({
+          success: true,
+          data: expect.arrayContaining([
+            expect.objectContaining({
+              id: 'free',
+              name: 'Free Tier',
+              price: 0,
+              currency: 'INR',
+              billingCycle: 'MONTHLY',
+              durationDays: 28,
+            }),
+            expect.objectContaining({
+              id: 'paid',
+              name: 'Paid Plan',
+              price: 599,
+              currency: 'INR',
+              billingCycle: 'MONTHLY',
+              durationDays: 30,
+            }),
+          ]),
+        }),
+      );
+    });
+
+    it('should auto-seed plans if database returns empty array and then return seeded plans', async () => {
+      const controllerModule =
+        await import('../../../src/modules/auth/controller/auth.fastify.controller.js');
+      const authController = controllerModule.default;
+
+      mockSubscriptionPlanFindMany.mockResolvedValueOnce([]).mockResolvedValueOnce([
+        {
+          id: 'free',
+          name: 'Free Tier',
+          price: 0,
+          currency: 'INR',
+          billingCycle: 'MONTHLY',
+          durationDays: 28,
+          isActive: true,
+        },
+      ]);
+      mockSubscriptionPlanUpsert.mockResolvedValue({ id: 'free' });
+
+      const mockReply = {
+        send: jest.fn(),
+        code: jest.fn().mockReturnThis(),
+      };
+      const mockRequest = {
+        log: { error: jest.fn() },
+      };
+
+      await authController.getPlans(mockRequest, mockReply);
+
+      expect(mockSubscriptionPlanFindMany).toHaveBeenCalledTimes(2);
+      expect(mockSubscriptionPlanUpsert).toHaveBeenCalled();
+      expect(mockReply.send).toHaveBeenCalledWith(
+        expect.objectContaining({
+          success: true,
+          data: [
+            expect.objectContaining({
+              id: 'free',
+              price: 0,
+            }),
+          ],
+        }),
+      );
+    });
+  });
 });
