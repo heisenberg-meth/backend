@@ -121,9 +121,18 @@ class PurchaseOrderFastifyController {
     const userId = request.user.id;
     try {
       const order = await purchaseOrderService.updateDraftOrder(tenantId, id, userId, request.body);
-      return reply.send({ success: true, data: order, message: 'Purchase order updated' });
+      return reply.send({
+        success: true,
+        data: order,
+        message: 'Purchase order updated successfully',
+      });
     } catch (error) {
-      return reply.code(400).send({ success: false, error: error.message });
+      logger.error({ error, id, tenantId }, 'Failed to update purchase order');
+      const statusCode =
+        error.statusCode || (error.message?.toLowerCase().includes('not found') ? 404 : 400);
+      return reply
+        .code(statusCode)
+        .send({ success: false, message: error.message, error: error.message });
     }
   }
 

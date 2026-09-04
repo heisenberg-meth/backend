@@ -192,8 +192,25 @@ class SubscriptionService {
 
   async activateTrial(tenantId) {
     const existing = await prisma.subscription.findUnique({ where: { tenantId } });
-    if (existing && existing.status !== 'EXPIRED' && existing.status !== 'CANCELLED') {
-      throw new Error('Trial already used');
+
+    // If trial is already active, return it (idempotent)
+    if (existing && existing.status === 'TRIAL') {
+      return existing;
+    }
+
+    // If subscription is already active (paid), return it instead of erroring
+    if (existing && existing.status === 'ACTIVE') {
+      return existing;
+    }
+
+    // If existing is expired or cancelled, proceed with trial activation
+    if (
+      existing &&
+      existing.status !== 'EXPIRED' &&
+      existing.status !== 'CANCELLED'
+    ) {
+      // e.g. status is PENDING or some other state - return as-is
+      return existing;
     }
 
     const trialPlan = await prisma.subscriptionPlan.findUnique({

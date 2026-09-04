@@ -406,6 +406,10 @@ const setupFastify = async () => {
     return reply.code(statusCode).send(health);
   });
 
+  fastify.get('/api', async () => {
+    return { status: 'healthy', service: 'Viyan MedAssist API', version: '1.0.0' };
+  });
+
   fastify.get('/api/health', async (request, reply) => {
     let dbStatus = 'healthy';
     let redisStatus = 'healthy';

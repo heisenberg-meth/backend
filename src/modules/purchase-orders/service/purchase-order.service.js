@@ -5,7 +5,7 @@ import { procurementStateMachine } from '../../../shared/constants/state-machine
 import { emitLocalEvent } from '../../../shared/events/local-event-bus.js';
 import { emitEvent } from '../../../shared/events/erp-event-bus.js';
 import logger from '../../../shared/utils/logger.js';
-import { BadRequestError, NotFoundError } from '../../../shared/utils/errors.js';
+import { BadRequestError, NotFoundError, ConflictError } from '../../../shared/utils/errors.js';
 
 class PurchaseOrderService {
   async logAudit(txOrPrisma, tenantId, userId, action, target) {
@@ -341,16 +341,71 @@ class PurchaseOrderService {
 
   async updateDraftOrder(tenantId, id, userId, data) {
     const order = await this.getOrderById(tenantId, id);
-    if (order.status !== PROCUREMENT_STATUS.DRAFT) {
-      throw new BadRequestError('Only DRAFT purchase orders can be updated');
+
+    const editableStatuses = [
+      PROCUREMENT_STATUS.DRAFT,
+      PROCUREMENT_STATUS.PENDING_APPROVAL,
+      'DRAFT',
+      'PENDING_APPROVAL',
+      'PENDING',
+    ];
+    if (!editableStatuses.includes(order.status)) {
+      throw new ConflictError('This purchase order cannot be edited in its current status.');
+    }
+
+    // Guard: reject any invoice/GRN fields at the PO update stage
+    const grnOnlyFields = [
+      'batchNumber',
+      'expiryDate',
+      'manufacturingDate',
+      'supplierInvoiceNumber',
+      'invoiceDate',
+    ];
+    const invalidHeaderField = grnOnlyFields.find((field) => data[field] !== undefined);
+    if (invalidHeaderField) {
+      throw new BadRequestError(
+        `'${invalidHeaderField}' belongs to Goods Receipt (GRN), not Purchase Order update`,
+      );
+    }
+    if (Array.isArray(data.items)) {
+      const invalidItem = data.items.find((item) =>
+        grnOnlyFields.some((field) => item[field] !== undefined),
+      );
+      if (invalidItem) {
+        throw new BadRequestError(
+          'Batch, expiry, manufacturing date, and invoice fields belong to Goods Receipt, not Purchase Order update',
+        );
+      }
+    }
+
+    // Validate supplier if supplied
+    if (data.supplierId && data.supplierId !== order.supplierId) {
+      const supplier = await prisma.supplier.findFirst({
+        where: { id: data.supplierId, tenantId, deletedAt: null },
+      });
+      if (!supplier) throw new NotFoundError('Supplier not found');
+    }
+
+    // Validate branch if supplied
+    if (data.branchId && data.branchId !== order.branchId) {
+      const branch = await prisma.branch.findFirst({
+        where: { id: data.branchId, tenantId },
+      });
+      if (!branch) throw new NotFoundError('Branch not found');
     }
 
     return prisma.$transaction(async (tx) => {
       const updateData = {
+        supplierId: data.supplierId ?? order.supplierId,
+        branchId: data.branchId ?? order.branchId,
         expectedDeliveryDate: data.expectedDeliveryDate
           ? new Date(data.expectedDeliveryDate)
           : order.expectedDeliveryDate,
-        paymentTermsDays: data.paymentTermsDays ?? order.paymentTermsDays,
+        paymentMode: data.paymentMode ?? order.paymentMode,
+        paymentTermsDays:
+          data.paymentTermsDays !== undefined
+            ? Number(data.paymentTermsDays)
+            : order.paymentTermsDays,
         notes: data.notes ?? order.notes,
       };
 
@@ -364,25 +419,52 @@ class PurchaseOrderService {
         });
         const medicineMap = new Map(medicines.map((medicine) => [medicine.id, medicine]));
 
-        // PO update only stores medicineId + quantity. No pricing.
         const mappedItems = data.items.map((item) => {
           const medicine = medicineMap.get(item.medicineId);
           if (!medicine) throw new BadRequestError(`Medicine with ID ${item.medicineId} not found`);
           const quantity = Number(item.quantity);
           if (!quantity || quantity <= 0)
             throw new BadRequestError(`Quantity must be > 0 for ${medicine.name}`);
+          const unitPrice = Number(
+            item.unitPrice ?? item.purchasePrice ?? medicine.purchasePrice ?? 0,
+          );
+          const gstPercentage = Number(item.gstPercentage ?? medicine.gstPercentage ?? 0);
+          const itemSubtotal = Number((quantity * unitPrice).toFixed(2));
+          const itemGst = Number(((itemSubtotal * gstPercentage) / 100).toFixed(2));
+          const itemTotal = Number((itemSubtotal + itemGst).toFixed(2));
+
           return {
             medicineId: item.medicineId,
             medicineName: medicine.name,
             currentStock: medicine.inventory?.[0]?.currentStock || 0,
             reorderQty: medicine.reorderLevel || 0,
             quantity,
-            unitPrice: 0,
-            gstPercentage: 0,
-            totalAmount: 0,
+            unitPrice,
+            gstPercentage,
+            totalAmount: itemTotal,
             remainingQuantity: quantity,
           };
         });
+
+        const subtotal = Number(
+          mappedItems.reduce((sum, it) => sum + it.unitPrice * it.quantity, 0).toFixed(2),
+        );
+        const gstAmount = Number(
+          mappedItems
+            .reduce((sum, it) => sum + (it.unitPrice * it.quantity * it.gstPercentage) / 100, 0)
+            .toFixed(2),
+        );
+        const discountAmount = Number(data.discountAmount ?? order.discountAmount ?? 0);
+        const totalAmount = Number(Math.max(0, subtotal + gstAmount - discountAmount).toFixed(2));
+        const advancePaid = Number(data.advancePaid ?? order.advancePaid ?? 0);
+        const balanceAmount = Number((totalAmount - advancePaid).toFixed(2));
+
+        updateData.subtotal = subtotal;
+        updateData.gstAmount = gstAmount;
+        updateData.discountAmount = discountAmount;
+        updateData.totalAmount = totalAmount;
+        updateData.advancePaid = advancePaid;
+        updateData.balanceAmount = balanceAmount;
 
         await tx.purchaseOrderItem.createMany({
           data: mappedItems.map((item) => ({ ...item, purchaseOrderId: id })),
@@ -392,7 +474,11 @@ class PurchaseOrderService {
       const updated = await tx.purchaseOrder.update({
         where: { id, tenantId },
         data: updateData,
-        include: { items: true },
+        include: {
+          items: true,
+          supplier: { select: { id: true, name: true } },
+          branch: { select: { id: true, name: true } },
+        },
       });
       await this.logAudit(tx, tenantId, userId, 'PURCHASE_ORDER_UPDATED', `PurchaseOrder:${id}`);
       return updated;

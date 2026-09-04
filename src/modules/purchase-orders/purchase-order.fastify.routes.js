@@ -73,14 +73,52 @@ async function purchaseOrderRoutes(fastify) {
     purchaseOrderController.getOrder,
   );
 
+  const updateSchema = {
+    tags: ['Purchase Orders'],
+    summary: 'Update a draft purchase order',
+    params: { type: 'object', properties: { id: { type: 'string' } } },
+    body: {
+      type: 'object',
+      properties: {
+        supplierId: { type: 'string' },
+        branchId: { type: 'string' },
+        expectedDeliveryDate: { type: 'string' },
+        paymentMode: { type: 'string' },
+        paymentTermsDays: { type: 'integer', minimum: 0, maximum: 365 },
+        notes: { type: 'string', maxLength: 500 },
+        discountAmount: { type: 'number' },
+        advancePaid: { type: 'number' },
+        items: {
+          type: 'array',
+          items: {
+            type: 'object',
+            required: ['medicineId', 'quantity'],
+            properties: {
+              medicineId: { type: 'string' },
+              quantity: { type: 'integer', minimum: 1 },
+              unitPrice: { type: 'number' },
+              purchasePrice: { type: 'number' },
+              gstPercentage: { type: 'number' },
+            },
+          },
+        },
+      },
+    },
+  };
+
   fastify.put(
     '/:id',
     {
-      schema: {
-        tags: ['Purchase Orders'],
-        summary: 'Update a draft purchase order',
-        params: { type: 'object', properties: { id: { type: 'string', format: 'uuid' } } },
-      },
+      schema: updateSchema,
+      preHandler: [requirePermission('purchase-orders.update')],
+    },
+    purchaseOrderController.updateDraftOrder,
+  );
+
+  fastify.patch(
+    '/:id',
+    {
+      schema: updateSchema,
       preHandler: [requirePermission('purchase-orders.update')],
     },
     purchaseOrderController.updateDraftOrder,
@@ -114,7 +152,10 @@ async function purchaseOrderRoutes(fastify) {
             supplierId: { type: 'string', format: 'uuid' },
             branchId: { type: 'string', format: 'uuid' },
             expectedDeliveryDate: { type: 'string', format: 'date' },
-            paymentMode: { type: 'string', enum: ['CASH', 'CREDIT', 'UPI', 'BANK_TRANSFER', 'CHEQUE'] },
+            paymentMode: {
+              type: 'string',
+              enum: ['CASH', 'CREDIT', 'UPI', 'BANK_TRANSFER', 'CHEQUE'],
+            },
             paymentTermsDays: { type: 'integer', minimum: 0, maximum: 365 },
             notes: { type: 'string', maxLength: 500 },
             items: {
@@ -388,7 +429,8 @@ async function purchaseOrderRoutes(fastify) {
     {
       schema: {
         tags: ['Purchase Orders'],
-        summary: 'Create a one-click reorder PO from inventory — auto-fills medicine, supplier, and pricing',
+        summary:
+          'Create a one-click reorder PO from inventory — auto-fills medicine, supplier, and pricing',
         body: {
           type: 'object',
           required: ['medicineId', 'quantity'],
