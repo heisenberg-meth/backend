@@ -1,3 +1,5 @@
+import prisma from '../../../config/prisma.js';
+import cacheInvalidatorService from '../../inventory/service/cache-invalidator.service.js';
 import logger from '../../../shared/utils/logger.js';
 import crypto from 'crypto';
 
@@ -167,6 +169,109 @@ class MovementService {
       movementType: 'ADJUSTMENT',
       referenceType: 'ADJUSTMENT_LOG',
     });
+  }
+
+  /**
+   * Record stock damage/write-off.
+   * MUST be run within a Prisma transaction 'tx'.
+   *
+   * @param {Object} tx - Prisma transaction client
+   * @param {Object} data - Damage data (batchId, quantity, reason, medicineId)
+   */
+  async recordDamage(tx, data) {
+    const { batchId, quantity, reason, medicineId } = data;
+
+    if (!batchId || !quantity || quantity <= 0) {
+      throw new Error('[MOVEMENT_SERVICE] Invalid damage data: batchId and positive quantity required');
+    }
+
+    if (!medicineId) {
+      throw new Error('[MOVEMENT_SERVICE] medicineId is required for damage recording');
+    }
+
+    const run = async (client) => {
+      const batchWhere = {
+        id: batchId,
+        tenantId: client.tenantId,
+        deletedAt: null,
+      };
+
+      const batch = await client.inventoryBatch.findUnique({
+        where: batchWhere,
+      });
+
+      if (!batch) {
+        throw new Error('[MOVEMENT_SERVICE] Batch not found');
+      }
+
+      if (batch.availableQuantity < quantity) {
+        throw new Error(
+          `[MOVEMENT_SERVICE] Insufficient stock. Available: ${batch.availableQuantity}, Requested: ${quantity}`,
+        );
+      }
+
+      const updateData = {
+        availableQuantity: { decrement: quantity },
+      };
+
+      if (batch.quantity - quantity <= 0) {
+        updateData.quantity = { set: 0 };
+      } else {
+        updateData.quantity = { decrement: quantity };
+      }
+
+      const updatedBatch = await client.inventoryBatch.update({
+        where: batchWhere,
+        data: updateData,
+      });
+
+      const movement = await client.stockMovement.create({
+        data: {
+          tenantId: client.tenantId,
+          medicineId,
+          batchId,
+          movementType: 'DAMAGE',
+          quantity: -quantity,
+          referenceType: 'DAMAGE_LOG',
+          notes: reason || 'Disposal via expiry',
+          performedBy: data.userId,
+        },
+      });
+
+      const existingInventory = await client.inventory.findFirst({
+        where: {
+          tenantId: client.tenantId,
+          branchId: batch.branchId,
+          medicineId,
+        },
+      });
+
+      if (existingInventory) {
+        await client.inventory.update({
+          where: { id: existingInventory.id },
+          data: {
+            currentStock: { decrement: quantity },
+          },
+        });
+      }
+
+      if (updatedBatch.availableQuantity <= 0) {
+        await client.inventory.update({
+          where: {
+            tenantId: client.tenantId,
+            branchId: batch.branchId,
+            medicineId,
+          },
+          data: { status: 'OUT_OF_STOCK' },
+        });
+      }
+
+      return movement;
+    };
+
+    const result = tx ? await run(tx) : await prisma.$transaction(run);
+    await cacheInvalidatorService.invalidateInventoryCaches(data.tenantId, data.medicineId);
+    return result;
   }
 
   /**

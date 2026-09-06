@@ -188,7 +188,13 @@ class ReportQueryService {
       percentage: Math.round((Number(g._sum.totalAmount || 0) / maxAmt) * 100),
     }));
 
-    const comparisonData = summaries.slice(-4).map((d) => Number(d.totalPurchase || 0));
+    const comparisonData = summaries
+      .filter((d) => Number(d.totalPurchase || 0) > 0)
+      .slice(-4)
+      .map((d) => ({
+        period: d.reportDate || d.date || d.period,
+        amount: Number(d.totalPurchase || 0),
+      }));
 
     return {
       summary: {
