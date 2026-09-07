@@ -41,7 +41,7 @@ class InventoryStatusService {
       if (!b.expiryDate) return false;
       const expDate = new Date(b.expiryDate);
       expDate.setHours(0, 0, 0, 0);
-      return expDate < now;
+      return expDate <= now;
     });
 
     const unexpiredBatches = activeBatches.filter((b) => {
@@ -49,7 +49,7 @@ class InventoryStatusService {
       if (!b.expiryDate) return true;
       const expDate = new Date(b.expiryDate);
       expDate.setHours(0, 0, 0, 0);
-      return expDate >= now;
+      return expDate > now;
     });
 
     let usableStock = unexpiredBatches.reduce(
@@ -89,7 +89,7 @@ class InventoryStatusService {
     if (nextExpiry) {
       const expDate = new Date(nextExpiry);
       expDate.setHours(0, 0, 0, 0);
-      if (expDate <= thirtyDays && expDate >= now) {
+      if (expDate <= thirtyDays && expDate > now) {
         return 'EXPIRING_SOON';
       }
     }

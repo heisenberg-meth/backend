@@ -31,9 +31,9 @@ class ExpiryService {
 
     switch (bucket) {
       case 'EXPIRED':
-        return { expiryDate: { lt: today } };
+        return { expiryDate: { lte: today } };
       case 'SEVEN_DAYS':
-        return { expiryDate: { gte: today, lte: plus7 } };
+        return { expiryDate: { gt: today, lte: plus7 } };
       case 'THIRTY_DAYS':
         return { expiryDate: { gte: plus8, lte: plus30 } };
       case 'NINETY_DAYS':
@@ -74,9 +74,9 @@ class ExpiryService {
     const { today, plus7, plus8, plus30, plus31, plus90 } = this.getDateBoundaries();
 
     const [expired, days7, days30, days90, safe] = await Promise.all([
-      prisma.inventoryBatch.count({ where: { ...baseWhere, expiryDate: { lt: today } } }),
+      prisma.inventoryBatch.count({ where: { ...baseWhere, expiryDate: { lte: today } } }),
       prisma.inventoryBatch.count({
-        where: { ...baseWhere, expiryDate: { gte: today, lte: plus7 } },
+        where: { ...baseWhere, expiryDate: { gt: today, lte: plus7 } },
       }),
       prisma.inventoryBatch.count({
         where: { ...baseWhere, expiryDate: { gte: plus8, lte: plus30 } },

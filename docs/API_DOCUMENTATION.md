@@ -1,4 +1,5 @@
-# MedAssist API Documentation — Purchase Orders & Support Tickets
+
+# MedAssist API Documentation — Purchase Orders, Stock & Support Tickets
 
 ## Authentication
 
@@ -42,6 +43,7 @@ POST /api/purchase-orders
 > **Note:** Both `unitPrice` and `purchasePrice` are accepted. If both provided, `unitPrice` takes precedence.
 
 **Backend Calculations (never trust frontend):**
+
 - `itemTotal = quantity × unitPrice`
 - `itemGst = itemTotal × gstPercentage / 100`
 - `subtotal = Σ(itemTotals)`
@@ -87,12 +89,12 @@ POST /api/purchase-orders
 
 **Validation Errors:**
 
-| Error | Code |
-|---|---|
-| Supplier not found | `400` |
-| Medicine not found | `400` |
+| Error                          | Code    |
+| ------------------------------ | ------- |
+| Supplier not found             | `400` |
+| Medicine not found             | `400` |
 | At least one medicine required | `400` |
-| Quantity must be > 0 | `400` |
+| Quantity must be > 0           | `400` |
 
 ---
 
@@ -104,13 +106,13 @@ GET /api/purchase-orders
 
 **Query Parameters:**
 
-| Param | Type | Description |
-|---|---|---|
-| `branchId` | uuid | Filter by branch |
-| `supplierId` | uuid | Filter by supplier |
-| `status` | string | Filter by status |
-| `from` | date | Filter from date |
-| `to` | date | Filter to date |
+| Param          | Type   | Description        |
+| -------------- | ------ | ------------------ |
+| `branchId`   | uuid   | Filter by branch   |
+| `supplierId` | uuid   | Filter by supplier |
+| `status`     | string | Filter by status   |
+| `from`       | date   | Filter from date   |
+| `to`         | date   | Filter to date     |
 
 ---
 
@@ -167,6 +169,7 @@ POST /api/purchase-orders/:id/receive
 ```
 
 **System Actions During GRN:**
+
 1. Creates GoodsReceiptNote + GoodsReceiptNoteItem
 2. Creates/updates InventoryBatch
 3. Records StockMovement (PURCHASE)
@@ -234,6 +237,272 @@ Returns HTML document for printing.
 DRAFT → PENDING_APPROVAL → APPROVED → SENT → PARTIALLY_RECEIVED → RECEIVED → CLOSED
                                 ↓                                      ↑
                            CANCELLED                              CANCELLED
+```
+
+---
+
+## Stock Operations
+
+### Inbound Stock (Stock In)
+
+```
+POST /api/stock/in
+```
+
+**Permission:** `inventory.update`
+
+**Request Body:**
+
+```json
+{
+  "medicineId": "uuid",
+  "batchNumber": "string",
+  "quantity": 100,
+  "expiryDate": "2028-06-30T00:00:00.000Z",
+  "branchId": "uuid (optional)",
+  "manufacturingDate": "2025-06-01T00:00:00.000Z (optional)",
+  "purchasePrice": 18.50,
+  "sellingPrice": 28.00,
+  "mrp": 32.50,
+  "supplierId": "uuid (optional)",
+  "referenceType": "PURCHASE (optional)",
+  "referenceId": "uuid (optional)",
+  "notes": "string (optional)"
+}
+```
+
+**Response (201):**
+
+```json
+{
+  "id": "uuid",
+  "tenantId": "uuid",
+  "branchId": "uuid",
+  "medicineId": "uuid",
+  "batchNumber": "PARA-2026-08A",
+  "quantity": 100,
+  "receivedQuantity": 100,
+  "availableQuantity": 100,
+  "purchasePrice": 18.50,
+  "sellingPrice": 28.00,
+  "mrp": 32.50,
+  "expiryDate": "2028-06-30T00:00:00.000Z",
+  "manufacturingDate": "2025-06-01T00:00:00.000Z",
+  "status": "ACTIVE",
+  "supplierId": "uuid",
+  "purchaseInvoiceId": null,
+  "createdAt": "2026-09-07T12:30:00.000Z",
+  "updatedAt": "2026-09-07T12:30:00.000Z"
+}
+```
+
+---
+
+### Outbound Stock (Stock Out)
+
+```
+POST /api/stock/out
+```
+
+**Permission:** `inventory.update`
+
+**Request Body:**
+
+```json
+{
+  "medicineId": "uuid",
+  "quantity": 30,
+  "type": "SALE | ADJUSTMENT | RETURN | DAMAGE | EXPIRED | TRANSFER_OUT | SUPPLIER_RETURN | DISPOSAL (default: SALE)",
+  "branchId": "uuid (optional)",
+  "batchId": "uuid (optional, defaults to FEFO order)"
+}
+```
+
+**Response (200):**
+
+```json
+{
+  "totalDeducted": 30,
+  "batches": [
+    { "batchId": "uuid", "quantity": 20 },
+    { "batchId": "uuid", "quantity": 10 }
+  ]
+}
+```
+
+---
+
+### Record Damaged Stock
+
+```
+POST /api/stock/damage
+```
+
+**Permission:** `inventory.update`
+
+**Request Body:**
+
+```json
+{
+  "batchId": "uuid",
+  "quantity": 5,
+  "reason": "Broken vials during transit (optional)",
+  "branchId": "uuid (optional)",
+  "medicineId": "uuid (optional)",
+  "notes": "string (optional)"
+}
+```
+
+**Response (201):**
+
+```json
+{
+  "id": "uuid",
+  "tenantId": "uuid",
+  "medicineId": "uuid",
+  "batchId": "uuid",
+  "branchId": "uuid",
+  "movementType": "DAMAGE",
+  "quantity": 5,
+  "quantityBefore": 50,
+  "quantityAfter": 45,
+  "performedBy": "uuid",
+  "referenceType": "DAMAGE_LOG",
+  "notes": "Broken vials during transit",
+  "createdAt": "2026-09-07T12:45:00.000Z"
+}
+```
+
+---
+
+### Stock Movement History
+
+```
+GET /api/stock/history?medicineId=uuid&page=1&limit=20
+```
+
+**Permission:** `inventory.read`
+
+**Response (200):**
+
+```json
+{
+  "transactions": [
+    {
+      "id": "uuid",
+      "tenantId": "uuid",
+      "medicineId": "uuid",
+      "batchId": "uuid",
+      "branchId": "uuid",
+      "movementType": "DAMAGE",
+      "quantity": 5,
+      "quantityBefore": 50,
+      "quantityAfter": 45,
+      "performedBy": "uuid",
+      "referenceType": "DAMAGE_LOG",
+      "notes": "Broken vials",
+      "createdAt": "2026-09-07T12:45:00.000Z",
+      "medicine": { "id": "uuid", "name": "Paracetamol" },
+      "batch": { "id": "uuid", "batchNumber": "PARA-2026-08A" }
+    }
+  ],
+  "total": 1,
+  "page": 1,
+  "limit": 20
+}
+```
+
+---
+
+### Active Stock Alerts
+
+```
+GET /api/stock/alerts
+```
+
+**Permission:** `inventory.read`
+
+**Response (200):**
+
+```json
+{
+  "success": true,
+  "data": {
+    "lowStockCount": 1,
+    "expiringSoonCount": 1,
+    "lowStock": [
+      {
+        "medicineId": "uuid",
+        "name": "Amoxicillin 500mg",
+        "currentStock": 4,
+        "reorderPoint": 15
+      }
+    ],
+    "expiringSoon": [
+      {
+        "medicineId": "uuid",
+        "batchNumber": "AMX-001",
+        "expiryDate": "2026-09-25T00:00:00.000Z",
+        "daysRemaining": 18,
+        "name": "Amoxicillin 500mg"
+      }
+    ],
+    "outOfStock": [
+      {
+        "medicineId": "uuid",
+        "name": "Ibuprofen 400mg"
+      }
+    ]
+  }
+}
+```
+
+---
+
+### Resolve Stock Alert
+
+```
+PUT /api/stock/alerts/:id/resolve
+```
+
+**Permission:** `inventory.update`
+
+**Response (200):**
+
+```json
+{
+  "message": "Alert resolved"
+}
+```
+
+---
+
+### Current Stock for Medicine
+
+```
+GET /api/stock/current/:medicineId
+```
+
+**Permission:** `inventory.read`
+
+**Response (200):**
+
+```json
+{
+  "totalQuantity": 100,
+  "batches": [
+    {
+      "id": "uuid",
+      "batchNumber": "BATCH-001",
+      "quantity": 100,
+      "availableQuantity": 100,
+      "expiryDate": "2027-01-01T00:00:00.000Z",
+      "purchasePrice": 20.0,
+      "sellingPrice": 30.0,
+      "mrp": 35.0
+    }
+  ]
+}
 ```
 
 ---
@@ -307,6 +576,7 @@ POST /api/support/:ticketId/replies
 **Body:** `{ "message": "string" }`
 
 **Auto-status transitions:**
+
 - Staff reply on `WAITING_FOR_STAFF` → `IN_PROGRESS`
 - Admin reply on `IN_PROGRESS` → `WAITING_FOR_STAFF`
 
@@ -434,13 +704,13 @@ Staff Reopens → OPEN
 
 ## Notifications
 
-| Event | Who Notifies | Message |
-|---|---|---|
-| Ticket created | All admins | `New support ticket {number}: {title}` |
-| Admin replies | Ticket creator | `Admin replied to your ticket {number}` |
-| Staff replies | All admins | `New reply on ticket {number}` |
+| Event           | Who Notifies   | Message                                    |
+| --------------- | -------------- | ------------------------------------------ |
+| Ticket created  | All admins     | `New support ticket {number}: {title}`   |
+| Admin replies   | Ticket creator | `Admin replied to your ticket {number}`  |
+| Staff replies   | All admins     | `New reply on ticket {number}`           |
 | Ticket resolved | Ticket creator | `Your ticket {number} has been resolved` |
-| Ticket closed | Ticket creator | `Your ticket {number} has been closed` |
+| Ticket closed   | Ticket creator | `Your ticket {number} has been closed`   |
 
 ---
 

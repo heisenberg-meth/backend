@@ -27,8 +27,10 @@ class StockService {
 
     // Get medicineId from batch for alert checking and cache invalidation
     const batch = await stockRepository.findBatchById(data.batchId, tenantId);
-    await this.invalidateStockCache(tenantId, batch.medicineId);
-    await this.checkAndTriggerAlerts(tenantId, batch.medicineId);
+    if (batch) {
+      await this.invalidateStockCache(tenantId, batch.medicineId);
+      await this.checkAndTriggerAlerts(tenantId, batch.medicineId);
+    }
 
     return record;
   }

@@ -336,6 +336,81 @@ class MovementService {
     await cacheInvalidatorService.invalidateInventoryCaches(tenantId, medicineId);
     return result;
   }
+
+  async recordDamage(tenantId, data, userId, tx) {
+    const { batchId, quantity, reason, notes } = data;
+    if (!batchId || !quantity || quantity <= 0) {
+      throw new Error('Valid batchId and positive quantity required');
+    }
+
+    const run = async (client) => {
+      const batch = await client.inventoryBatch.findFirst({
+        where: { id: batchId, tenantId, deletedAt: null },
+      });
+
+      if (!batch) {
+        throw new Error('Batch not found');
+      }
+
+      if (batch.availableQuantity < quantity) {
+        throw new Error(
+          `Insufficient stock. Available: ${batch.availableQuantity}, Requested: ${quantity}`,
+        );
+      }
+
+      const updatedBatch = await client.inventoryBatch.update({
+        where: { id: batchId },
+        data: {
+          quantity: { decrement: quantity },
+          availableQuantity: { decrement: quantity },
+        },
+      });
+
+      const targetBranchId = data.branchId || batch.branchId;
+      const medicineId = data.medicineId || batch.medicineId;
+
+      const movement = await ledgerRepository.createTransaction(
+        {
+          tenantId,
+          medicineId,
+          batchId,
+          branchId: targetBranchId,
+          type: 'DAMAGE',
+          quantity,
+          previousStock: batch.availableQuantity,
+          newStock: updatedBatch.availableQuantity,
+          createdBy: userId,
+          referenceType: 'DAMAGE_LOG',
+          notes: reason || notes || 'Stock damaged',
+        },
+        client,
+      );
+
+      if (targetBranchId) {
+        const existingInventory = await client.inventory.findFirst({
+          where: { tenantId, branchId: targetBranchId, medicineId },
+        });
+        if (existingInventory) {
+          await client.inventory.update({
+            where: { id: existingInventory.id },
+            data: { currentStock: { decrement: quantity } },
+          });
+        }
+      }
+
+      logger.info({ tenantId, medicineId, batchId, quantity }, 'Stock damage recorded');
+      return movement;
+    };
+
+    const result = tx ? await run(tx) : await prisma.$transaction(run);
+    if (!tx) {
+      const targetMedicineId = data.medicineId || result.medicineId;
+      if (targetMedicineId) {
+        await cacheInvalidatorService.invalidateInventoryCaches(tenantId, targetMedicineId);
+      }
+    }
+    return result;
+  }
 }
 
 export default new MovementService();

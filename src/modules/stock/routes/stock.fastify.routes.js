@@ -1,6 +1,15 @@
 import stockController from '../fastify/stock.fastify.controller.js';
 import { authenticate, requireTenant } from '../../../middleware/auth.fastify.js';
 import { requirePermission } from '../../../middleware/permission.fastify.js';
+import {
+  stockInSchema,
+  stockOutSchema,
+  recordDamageSchema,
+  getHistorySchema,
+  getAlertsSchema,
+  resolveAlertSchema,
+  getCurrentStockSchema,
+} from '../validators/stock.validator.js';
 
 async function stockFastifyRoutes(fastify) {
   fastify.addHook('preHandler', authenticate);
@@ -9,7 +18,7 @@ async function stockFastifyRoutes(fastify) {
   fastify.post(
     '/in',
     {
-      schema: { tags: ['Stock'], summary: 'Record stock inbound (purchase/receiving)' },
+      schema: stockInSchema,
       preHandler: [requirePermission('inventory.update')],
     },
     stockController.stockIn,
@@ -18,7 +27,7 @@ async function stockFastifyRoutes(fastify) {
   fastify.post(
     '/out',
     {
-      schema: { tags: ['Stock'], summary: 'Record stock outbound (sale/adjustment)' },
+      schema: stockOutSchema,
       preHandler: [requirePermission('inventory.update')],
     },
     stockController.stockOut,
@@ -27,7 +36,7 @@ async function stockFastifyRoutes(fastify) {
   fastify.post(
     '/damage',
     {
-      schema: { tags: ['Stock'], summary: 'Record damaged stock' },
+      schema: recordDamageSchema,
       preHandler: [requirePermission('inventory.update')],
     },
     stockController.recordDamage,
@@ -36,7 +45,7 @@ async function stockFastifyRoutes(fastify) {
   fastify.get(
     '/history',
     {
-      schema: { tags: ['Stock'], summary: 'Get stock movement history' },
+      schema: getHistorySchema,
       preHandler: [requirePermission('inventory.read')],
     },
     stockController.getHistory,
@@ -45,7 +54,7 @@ async function stockFastifyRoutes(fastify) {
   fastify.get(
     '/alerts',
     {
-      schema: { tags: ['Stock'], summary: 'Get active stock alerts' },
+      schema: getAlertsSchema,
       preHandler: [requirePermission('inventory.read')],
     },
     stockController.getAlerts,
@@ -54,7 +63,7 @@ async function stockFastifyRoutes(fastify) {
   fastify.put(
     '/alerts/:id/resolve',
     {
-      schema: { tags: ['Stock'], summary: 'Resolve a stock alert' },
+      schema: resolveAlertSchema,
       preHandler: [requirePermission('inventory.update')],
     },
     stockController.resolveAlert,
@@ -63,7 +72,7 @@ async function stockFastifyRoutes(fastify) {
   fastify.get(
     '/current/:medicineId',
     {
-      schema: { tags: ['Stock'], summary: 'Get current stock for a medicine' },
+      schema: getCurrentStockSchema,
       preHandler: [requirePermission('inventory.read')],
     },
     stockController.getCurrentStock,

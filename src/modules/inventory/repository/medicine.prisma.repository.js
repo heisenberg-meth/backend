@@ -61,22 +61,22 @@ class MedicinePrismaRepository {
           SELECT 
             ib."medicineId",
             SUM(CASE 
-              WHEN (ib."expiryDate"::date >= CURRENT_DATE AND ib."status" = 'ACTIVE') 
+              WHEN (ib."expiryDate"::date > CURRENT_DATE AND ib."status" = 'ACTIVE') 
               THEN ib."availableQuantity" 
               ELSE 0 
             END) as usable_stock,
             SUM(CASE 
-              WHEN (ib."expiryDate"::date < CURRENT_DATE OR ib."status" = 'EXPIRED') 
+              WHEN (ib."expiryDate"::date <= CURRENT_DATE OR ib."status" = 'EXPIRED') 
               THEN ib."availableQuantity" 
               ELSE 0 
             END) as expired_stock,
             MIN(CASE 
-              WHEN (ib."expiryDate"::date >= CURRENT_DATE AND ib."status" = 'ACTIVE' AND ib."availableQuantity" > 0) 
+              WHEN (ib."expiryDate"::date > CURRENT_DATE AND ib."status" = 'ACTIVE' AND ib."availableQuantity" > 0) 
               THEN ib."expiryDate" 
               ELSE NULL 
             END) as next_expiry,
             MIN(CASE 
-              WHEN (ib."availableQuantity" > 0 AND (ib."expiryDate"::date < CURRENT_DATE OR ib."status" = 'EXPIRED')) 
+              WHEN (ib."availableQuantity" > 0 AND (ib."expiryDate"::date <= CURRENT_DATE OR ib."status" = 'EXPIRED')) 
               THEN ib."expiryDate" 
               ELSE NULL 
             END) as expired_expiry
@@ -119,22 +119,22 @@ class MedicinePrismaRepository {
           SELECT 
             ib."medicineId",
             SUM(CASE 
-              WHEN (ib."expiryDate"::date >= CURRENT_DATE AND ib."status" = 'ACTIVE') 
+              WHEN (ib."expiryDate"::date > CURRENT_DATE AND ib."status" = 'ACTIVE') 
               THEN ib."availableQuantity" 
               ELSE 0 
             END) as usable_stock,
             SUM(CASE 
-              WHEN (ib."expiryDate"::date < CURRENT_DATE OR ib."status" = 'EXPIRED') 
+              WHEN (ib."expiryDate"::date <= CURRENT_DATE OR ib."status" = 'EXPIRED') 
               THEN ib."availableQuantity" 
               ELSE 0 
             END) as expired_stock,
             MIN(CASE 
-              WHEN (ib."expiryDate"::date >= CURRENT_DATE AND ib."status" = 'ACTIVE' AND ib."availableQuantity" > 0) 
+              WHEN (ib."expiryDate"::date > CURRENT_DATE AND ib."status" = 'ACTIVE' AND ib."availableQuantity" > 0) 
               THEN ib."expiryDate" 
               ELSE NULL 
             END) as next_expiry,
             MIN(CASE 
-              WHEN (ib."availableQuantity" > 0 AND (ib."expiryDate"::date < CURRENT_DATE OR ib."status" = 'EXPIRED')) 
+              WHEN (ib."availableQuantity" > 0 AND (ib."expiryDate"::date <= CURRENT_DATE OR ib."status" = 'EXPIRED')) 
               THEN ib."expiryDate" 
               ELSE NULL 
             END) as expired_expiry
@@ -253,14 +253,14 @@ class MedicinePrismaRepository {
           (b.availableQuantity ?? b.quantity ?? 0) > 0 &&
           b.status === 'ACTIVE' &&
           b.expiryDate &&
-          new Date(b.expiryDate) >= now,
+          new Date(b.expiryDate) > now,
       );
       const fefo = activeBatches[0] || null;
 
       const expiredBatches = (m.inventoryBatches || []).filter(
         (b) =>
           (b.availableQuantity ?? b.quantity ?? 0) > 0 &&
-          (b.status === 'EXPIRED' || (b.expiryDate && new Date(b.expiryDate) < now)),
+          (b.status === 'EXPIRED' || (b.expiryDate && new Date(b.expiryDate) <= now)),
       );
       const earliestExpired = expiredBatches[0] || null;
 

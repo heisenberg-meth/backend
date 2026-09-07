@@ -22,19 +22,18 @@ class UnifiedInventorySummaryService {
     const bId = branchId === 'null' || branchId === 'undefined' || !branchId ? null : branchId;
 
     // Use CURRENT_DATE (date-only) everywhere to avoid UTC/IST timezone mismatch.
-    // A medicine is expired when expiryDate::date < CURRENT_DATE.
-    // expiryDate = today means "expires today" = NOT yet expired.
+    // A medicine is expired when expiryDate::date <= CURRENT_DATE.
     const [expiryMetrics, [summary]] = await Promise.all([
       this.getExpiryMetrics(tenantId, bId),
       prisma.$queryRaw`
       WITH batch_aggregates AS (
         SELECT 
           ib."medicineId",
-          SUM(CASE WHEN (ib."expiryDate"::date >= CURRENT_DATE AND ib."status" = 'ACTIVE') THEN ib."availableQuantity" ELSE 0 END) as usable_quantity,
-          SUM(CASE WHEN (ib."expiryDate"::date < CURRENT_DATE OR ib."status" = 'EXPIRED') THEN ib."availableQuantity" ELSE 0 END) as expired_quantity,
+          SUM(CASE WHEN (ib."expiryDate"::date > CURRENT_DATE AND ib."status" = 'ACTIVE') THEN ib."availableQuantity" ELSE 0 END) as usable_quantity,
+          SUM(CASE WHEN (ib."expiryDate"::date <= CURRENT_DATE OR ib."status" = 'EXPIRED') THEN ib."availableQuantity" ELSE 0 END) as expired_quantity,
           SUM(ib."availableQuantity") as total_quantity,
           SUM(ib."availableQuantity" * COALESCE(ib."purchasePrice", 0)) as total_value,
-          COUNT(*) FILTER (WHERE ib."availableQuantity" > 0 AND (ib."expiryDate"::date < CURRENT_DATE OR ib."status" = 'EXPIRED')) as expired_batches,
+          COUNT(*) FILTER (WHERE ib."availableQuantity" > 0 AND (ib."expiryDate"::date <= CURRENT_DATE OR ib."status" = 'EXPIRED')) as expired_batches,
           MAX(i."reorderPoint") as max_reorder_point
         FROM "InventoryBatch" ib
         INNER JOIN "Medicine" m
@@ -133,38 +132,38 @@ class UnifiedInventorySummaryService {
     const bId = branchId === 'null' || branchId === 'undefined' || !branchId ? null : branchId;
     const [metrics] = await prisma.$queryRaw`
       SELECT
-        -- Expired: expiryDate < TODAY AND availableQuantity > 0
+        -- Expired: expiryDate <= TODAY AND availableQuantity > 0
         COUNT(*) FILTER (
-          WHERE (ib."expiryDate"::date < CURRENT_DATE OR ib.status = 'EXPIRED')
+          WHERE (ib."expiryDate"::date <= CURRENT_DATE OR ib.status = 'EXPIRED')
             AND ib."availableQuantity" > 0
         )::int as "expiredBatches",
         
         COUNT(DISTINCT ib."medicineId") FILTER (
-          WHERE (ib."expiryDate"::date < CURRENT_DATE OR ib.status = 'EXPIRED')
+          WHERE (ib."expiryDate"::date <= CURRENT_DATE OR ib.status = 'EXPIRED')
             AND ib."availableQuantity" > 0
         )::int as "expiredProducts",
         
         COALESCE(SUM(ib."availableQuantity") FILTER (
-          WHERE (ib."expiryDate"::date < CURRENT_DATE OR ib.status = 'EXPIRED')
+          WHERE (ib."expiryDate"::date <= CURRENT_DATE OR ib.status = 'EXPIRED')
             AND ib."availableQuantity" > 0
         ), 0)::int as "expiredUnits",
         
         COALESCE(SUM(ib."availableQuantity" * COALESCE(ib."purchasePrice", 0)) FILTER (
-          WHERE (ib."expiryDate"::date < CURRENT_DATE OR ib.status = 'EXPIRED')
+          WHERE (ib."expiryDate"::date <= CURRENT_DATE OR ib.status = 'EXPIRED')
             AND ib."availableQuantity" > 0
         ), 0)::numeric as "expiredValue",
 
-        -- Expiring 7 Days: TODAY <= expiryDate <= TODAY+7
+        -- Expiring 7 Days: TODAY < expiryDate <= TODAY+7
         COUNT(*) FILTER (
           WHERE ib.status != 'EXPIRED'
-            AND ib."expiryDate"::date >= CURRENT_DATE
+            AND ib."expiryDate"::date > CURRENT_DATE
             AND ib."expiryDate"::date <= CURRENT_DATE + INTERVAL '7 days'
             AND ib."availableQuantity" > 0
         )::int as "expiring7Batches",
         
         COUNT(DISTINCT ib."medicineId") FILTER (
           WHERE ib.status != 'EXPIRED'
-            AND ib."expiryDate"::date >= CURRENT_DATE
+            AND ib."expiryDate"::date > CURRENT_DATE
             AND ib."expiryDate"::date <= CURRENT_DATE + INTERVAL '7 days'
             AND ib."availableQuantity" > 0
         )::int as "expiring7Products",
@@ -403,7 +402,7 @@ class UnifiedInventorySummaryService {
     const data = await prisma.$queryRaw`
       SELECT 
         CASE 
-          WHEN (ib."expiryDate"::date < CURRENT_DATE OR ib.status = 'EXPIRED') THEN 'expired'
+          WHEN (ib."expiryDate"::date <= CURRENT_DATE OR ib.status = 'EXPIRED') THEN 'expired'
           WHEN ib."expiryDate"::date <= CURRENT_DATE + INTERVAL '30 days' THEN 'risk30'
           WHEN ib."expiryDate"::date <= CURRENT_DATE + INTERVAL '90 days' THEN 'risk90'
           ELSE 'safe'
