@@ -179,7 +179,15 @@ class MedicinePrismaService {
   async createMedicine(data, tenantId, userId) {
     try {
       logger.info({ tenantId, userId, payload: data }, '[INVENTORY] Attempting to create medicine');
-      const { initialBatch, branchId, reorderPoint, rackLocation, ...rawMedicineData } = data;
+      let { initialBatch, branchId, reorderPoint, rackLocation, ...rawMedicineData } = data;
+
+      if (!branchId) {
+        const defaultBranch = await prisma.branch.findFirst({
+          where: { tenantId, deletedAt: null },
+          select: { id: true },
+        });
+        branchId = defaultBranch?.id;
+      }
 
       if (!branchId) {
         throw new Error('Branch ID is required to create medicine inventory');
@@ -266,8 +274,10 @@ class MedicinePrismaService {
         }
 
         const medicineData = {
-          name: rawMedicineData.name,
+          name: rawMedicineData.name || rawMedicineData.medicineName,
+          medicineName: rawMedicineData.medicineName || rawMedicineData.name,
           genericName: rawMedicineData.genericName || null,
+          brandName: rawMedicineData.brandName || rawMedicineData.name || null,
           composition: rawMedicineData.composition || null,
           categoryId,
           manufacturerId,
@@ -277,6 +287,12 @@ class MedicinePrismaService {
             rawMedicineData.packagingType || mapDosageFormToPackaging(rawMedicineData.dosageForm),
           strength: rawMedicineData.strength || null,
           unit: rawMedicineData.unit || null,
+          unitPerPack:
+            rawMedicineData.unitPerPack !== undefined && rawMedicineData.unitPerPack !== null
+              ? Number(rawMedicineData.unitPerPack)
+              : rawMedicineData.packSize
+                ? Number(String(rawMedicineData.packSize).replace(/\D/g, '')) || null
+                : null,
           scheduleType: rawMedicineData.scheduleType || rawMedicineData.schedule || null,
           storageCondition: rawMedicineData.storageCondition || null,
           prescriptionRequired:

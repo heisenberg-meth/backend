@@ -219,6 +219,29 @@ class MedicinePrismaRepository {
                 branchId: true,
               },
             },
+            purchaseOrderItems: {
+              where: {
+                purchaseOrder: {
+                  tenantId,
+                  deletedAt: null,
+                  status: {
+                    in: [
+                      'DRAFT',
+                      'SENT',
+                      'SENT_TO_SUPPLIER',
+                      'ACKNOWLEDGED',
+                      'PARTIALLY_RECEIVED',
+                      'APPROVED',
+                    ],
+                  },
+                },
+              },
+              select: {
+                quantity: true,
+                receivedQuantity: true,
+                remainingQuantity: true,
+              },
+            },
           },
         });
 
@@ -240,6 +263,29 @@ class MedicinePrismaRepository {
             inventoryBatches: {
               where: { ...(targetBranchId ? { branchId: targetBranchId } : {}), deletedAt: null },
               orderBy: { expiryDate: 'asc' },
+            },
+            purchaseOrderItems: {
+              where: {
+                purchaseOrder: {
+                  tenantId,
+                  deletedAt: null,
+                  status: {
+                    in: [
+                      'DRAFT',
+                      'SENT',
+                      'SENT_TO_SUPPLIER',
+                      'ACKNOWLEDGED',
+                      'PARTIALLY_RECEIVED',
+                      'APPROVED',
+                    ],
+                  },
+                },
+              },
+              select: {
+                quantity: true,
+                receivedQuantity: true,
+                remainingQuantity: true,
+              },
             },
           },
           orderBy: { [sortBy || 'name']: order || 'asc' },
@@ -311,6 +357,13 @@ class MedicinePrismaRepository {
       }
 
       const availableStock = batchAvailableStock;
+      const onOrder = (m.purchaseOrderItems || []).reduce((sum, item) => {
+        const rem =
+          item.remainingQuantity !== undefined && item.remainingQuantity !== null
+            ? item.remainingQuantity
+            : Math.max(0, (item.quantity || 0) - (item.receivedQuantity || 0));
+        return sum + Math.max(0, Number(rem) || 0);
+      }, 0);
       const toNum = (val) => (val ? Number(val) : 0);
 
       return {
@@ -319,6 +372,7 @@ class MedicinePrismaRepository {
         supplier: m.supplier,
         stock,
         availableStock,
+        onOrder,
         reservedStock,
         reorderLevel,
         rackLocation,
