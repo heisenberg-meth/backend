@@ -450,6 +450,34 @@ async function medicineRoutes(fastify) {
     medicineController.clearAllMedicines,
   );
 
+  fastify.get(
+    '/medicines/:id/batches',
+    {
+      schema: {
+        tags: ['Inventory'],
+        summary: 'Get all batches for a specific medicine',
+        params: { type: 'object', properties: { id: { type: 'string' } } },
+        querystring: {
+          type: 'object',
+          properties: {
+            page: { type: 'integer', default: 1 },
+            limit: { type: 'integer', default: 20 },
+            status: { type: 'string' },
+            branchId: { type: 'string' },
+          },
+        },
+      },
+      preHandler: [requirePermission('VIEW_INVENTORY')],
+    },
+    async (request, reply) => {
+      request.query = {
+        ...request.query,
+        medicineId: request.params.id,
+      };
+      return batchController.getBatches(request, reply);
+    },
+  );
+
   fastify.post(
     '/medicines/:id/batches',
     {

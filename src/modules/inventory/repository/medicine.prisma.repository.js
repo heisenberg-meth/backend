@@ -46,12 +46,12 @@ class MedicinePrismaRepository {
     };
 
     const targetBranchId = branchId === 'null' || !branchId ? undefined : branchId;
+    const upperStatus = status ? status.toUpperCase().replace(/\s+/g, '_') : null;
 
     let medicines = [];
     let total = 0;
 
     if (lowStock || status) {
-      const upperStatus = status ? status.toUpperCase().replace(/\s+/g, '_') : null;
       const bCond = targetBranchId
         ? Prisma.sql`AND ib."branchId" = ${targetBranchId}`
         : Prisma.sql``;
@@ -195,7 +195,15 @@ class MedicinePrismaRepository {
               where: targetBranchId ? { branchId: targetBranchId } : {},
             },
             inventoryBatches: {
-              where: { ...(targetBranchId ? { branchId: targetBranchId } : {}), deletedAt: null },
+              where: {
+                ...(targetBranchId ? { branchId: targetBranchId } : {}),
+                deletedAt: null,
+                ...(upperStatus === 'EXPIRED'
+                  ? {
+                      OR: [{ status: 'EXPIRED' }, { expiryDate: { lte: new Date() } }],
+                    }
+                  : {}),
+              },
               orderBy: { expiryDate: 'asc' },
               select: {
                 id: true,
@@ -264,7 +272,10 @@ class MedicinePrismaRepository {
       );
       const earliestExpired = expiredBatches[0] || null;
 
-      const displayBatch = fefo || earliestExpired || m.inventoryBatches?.[0] || null;
+      const displayBatch =
+        upperStatus === 'EXPIRED'
+          ? earliestExpired || m.inventoryBatches?.[0] || null
+          : fefo || earliestExpired || m.inventoryBatches?.[0] || null;
 
       // ── Compute available stock from InventoryBatch (authoritative source: unexpired active batches)
       const batchAvailableStock = activeBatches.reduce(
