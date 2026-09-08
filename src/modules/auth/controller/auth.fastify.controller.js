@@ -41,7 +41,6 @@ class AuthFastifyController {
       }
 
       const responsePayload = { ...result };
-      delete responsePayload.refreshToken;
 
       return reply.code(201).send(success(responsePayload));
     } catch (error) {
@@ -97,8 +96,6 @@ class AuthFastifyController {
       cookieManager.setCsrfCookie(reply, csrfMiddleware.generateToken());
 
       const responsePayload = { ...result };
-      delete responsePayload.refreshToken;
-      delete responsePayload.token;
 
       request.log.info(
         {
@@ -233,13 +230,18 @@ class AuthFastifyController {
         'Refresh request received',
       );
 
-      const refreshToken = request.cookies?.refresh_token;
+      const refreshToken =
+        request.cookies?.refresh_token ||
+        request.cookies?.refreshToken ||
+        request.body?.refreshToken ||
+        request.body?.refresh_token;
 
       if (!refreshToken) {
         request.log.info(
           {
             route: '/auth/refresh',
-            cookieReceived: false,
+            cookieReceived: !!request.cookies?.refresh_token,
+            bodyReceived: !!(request.body?.refreshToken || request.body?.refresh_token),
             sessionFound: false,
             userFound: false,
             duration: Date.now() - startTime,
@@ -247,7 +249,7 @@ class AuthFastifyController {
             sameSite: REFRESH_COOKIE_OPTIONS.sameSite,
             secure: REFRESH_COOKIE_OPTIONS.secure,
           },
-          'Token refresh failed: Missing cookie - check cookie domain and SameSite settings',
+          'Token refresh failed: Missing token in cookie and request body',
         );
         return reply
           .code(401)
@@ -268,7 +270,6 @@ class AuthFastifyController {
       });
 
       const responsePayload = { ...result };
-      delete responsePayload.refreshToken;
 
       request.log.info(
         {
