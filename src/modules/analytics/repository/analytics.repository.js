@@ -1,5 +1,6 @@
 import { Prisma } from '@prisma/client';
 import prisma from '../../../config/prisma.js';
+import { getCalendarBoundaries } from '../../../shared/utils/expiry.js';
 
 class AnalyticsRepository {
   async getSkuCount(tenantId) {
@@ -32,7 +33,7 @@ class AnalyticsRepository {
 
   async getExpiringCount(tenantId, days = 30, branchId = null) {
     const branchCondition = branchId ? Prisma.sql`AND "branchId" = ${branchId}` : Prisma.sql``;
-    // Use CURRENT_DATE (date-only) to avoid UTC/IST timezone bugs
+    // Use CURRENT_DATE (date-only) to avoid UTC/IST timezone bugs. Exclude today (today is expired).
     const result = await prisma.$queryRaw`
       SELECT COUNT(*)::int as count
       FROM "InventoryBatch"
@@ -41,8 +42,8 @@ class AnalyticsRepository {
         AND "availableQuantity" > 0
         AND status != 'EXPIRED'
         AND status != 'ARCHIVED'
-        AND "expiryDate"::date >= CURRENT_DATE
-        AND "expiryDate"::date < CURRENT_DATE + INTERVAL '1 day' * ${days}
+        AND "expiryDate"::date > CURRENT_DATE
+        AND "expiryDate"::date <= CURRENT_DATE + INTERVAL '1 day' * ${days}
         ${branchCondition}
     `;
     return Number(Array.isArray(result) ? result[0]?.count || 0 : result?.count || 0);
@@ -53,12 +54,11 @@ class AnalyticsRepository {
   }
 
   async getExpiredProductCount(tenantId, branchId = null) {
-    // Use startOfDay to ensure date-only comparison, avoiding UTC/IST timezone bugs
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
+    // Batches expiring today (expiryDate <= todayEnd) or status=EXPIRED
+    const { todayEnd } = getCalendarBoundaries();
     const where = {
       tenantId,
-      OR: [{ expiryDate: { lt: today } }, { status: 'EXPIRED' }],
+      OR: [{ expiryDate: { lte: todayEnd } }, { status: 'EXPIRED' }],
       availableQuantity: { gt: 0 },
       status: { not: 'ARCHIVED' },
       deletedAt: null,

@@ -109,7 +109,7 @@ class MedicinePrismaRepository {
           ${upperStatus === 'IN_STOCK' ? Prisma.sql`AND COALESCE(ba.usable_stock, 0) > COALESCE(ia.max_reorder_point, m."reorderLevel", 10) AND (ba.next_expiry IS NULL OR ba.next_expiry > (CURRENT_DATE + INTERVAL '30 days'))` : Prisma.sql``}
           ${upperStatus === 'LOW_STOCK' || lowStock ? Prisma.sql`AND COALESCE(ba.usable_stock, 0) > 0 AND COALESCE(ba.usable_stock, 0) <= COALESCE(ia.max_reorder_point, m."reorderLevel", 10) AND (ba.next_expiry IS NULL OR ba.next_expiry > (CURRENT_DATE + INTERVAL '30 days'))` : Prisma.sql``}
           ${upperStatus === 'OUT_OF_STOCK' ? Prisma.sql`AND COALESCE(ba.usable_stock, 0) <= 0 AND COALESCE(ba.expired_stock, 0) <= 0` : Prisma.sql``}
-          ${upperStatus === 'EXPIRING_SOON' ? Prisma.sql`AND COALESCE(ba.usable_stock, 0) > 0 AND ba.next_expiry >= CURRENT_DATE AND ba.next_expiry <= (CURRENT_DATE + INTERVAL '30 days')` : Prisma.sql``}
+          ${upperStatus === 'EXPIRING_SOON' ? Prisma.sql`AND COALESCE(ba.usable_stock, 0) > 0 AND ba.next_expiry > CURRENT_DATE AND ba.next_expiry <= (CURRENT_DATE + INTERVAL '30 days')` : Prisma.sql``}
           ${upperStatus === 'EXPIRED' ? Prisma.sql`AND (COALESCE(ba.expired_stock, 0) > 0 OR ba.expired_expiry IS NOT NULL)` : Prisma.sql``}
         ORDER BY m.${Prisma.raw(`"${ALLOWED_SORT_COLUMNS.has(sortBy) ? sortBy : 'name'}"`)} ${order === 'desc' ? Prisma.sql`DESC` : Prisma.sql`ASC`}
       `;
@@ -167,7 +167,7 @@ class MedicinePrismaRepository {
           ${upperStatus === 'IN_STOCK' ? Prisma.sql`AND COALESCE(ba.usable_stock, 0) > COALESCE(ia.max_reorder_point, m."reorderLevel", 10) AND (ba.next_expiry IS NULL OR ba.next_expiry > (CURRENT_DATE + INTERVAL '30 days'))` : Prisma.sql``}
           ${upperStatus === 'LOW_STOCK' || lowStock ? Prisma.sql`AND COALESCE(ba.usable_stock, 0) > 0 AND COALESCE(ba.usable_stock, 0) <= COALESCE(ia.max_reorder_point, m."reorderLevel", 10) AND (ba.next_expiry IS NULL OR ba.next_expiry > (CURRENT_DATE + INTERVAL '30 days'))` : Prisma.sql``}
           ${upperStatus === 'OUT_OF_STOCK' ? Prisma.sql`AND COALESCE(ba.usable_stock, 0) <= 0 AND COALESCE(ba.expired_stock, 0) <= 0` : Prisma.sql``}
-          ${upperStatus === 'EXPIRING_SOON' ? Prisma.sql`AND COALESCE(ba.usable_stock, 0) > 0 AND ba.next_expiry >= CURRENT_DATE AND ba.next_expiry <= (CURRENT_DATE + INTERVAL '30 days')` : Prisma.sql``}
+          ${upperStatus === 'EXPIRING_SOON' ? Prisma.sql`AND COALESCE(ba.usable_stock, 0) > 0 AND ba.next_expiry > CURRENT_DATE AND ba.next_expiry <= (CURRENT_DATE + INTERVAL '30 days')` : Prisma.sql``}
           ${upperStatus === 'EXPIRED' ? Prisma.sql`AND (COALESCE(ba.expired_stock, 0) > 0 OR ba.expired_expiry IS NOT NULL)` : Prisma.sql``}
       `;
 

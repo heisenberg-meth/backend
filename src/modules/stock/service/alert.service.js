@@ -4,17 +4,17 @@ import expiryService from '../../inventory/service/expiry.service.js';
 import prisma from '../../../config/prisma.js';
 import eventBus from '../../../shared/services/eventbus.service.js';
 import logger from '../../../shared/utils/logger.js';
+import { getCalendarBoundaries } from '../../../shared/utils/expiry.js';
 
 class AlertService {
   async processDailyExpiryChecks() {
     logger.info('Running bulk expiry status update...');
+    // Use end of today (23:59:59.999) to ensure batches expiring today are included
+    const { todayEnd } = getCalendarBoundaries();
     try {
-      // Use startOfDay to ensure date-only comparison, consistent with all expiry logic
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
       const { count } = await prisma.inventoryBatch.updateMany({
         where: {
-          expiryDate: { lt: today },
+          expiryDate: { lte: todayEnd },
           status: { notIn: ['EXPIRED', 'ARCHIVED'] },
         },
         data: { status: 'EXPIRED' },
@@ -41,7 +41,7 @@ class AlertService {
       // 2. Check for near-expiry (90 days)
       const nearExpiryBatches = await expiryService.getNearExpiryBatches(tenant.id, 90);
       for (const batch of nearExpiryBatches) {
-        if (batch.expiryDate > new Date()) {
+        if (batch.expiryDate > todayEnd) {
           await this.triggerAlert(
             tenant.id,
             batch.medicineId,

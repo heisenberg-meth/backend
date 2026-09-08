@@ -1,4 +1,5 @@
 import prisma from '../../../config/prisma.js';
+import { getDaysToExpiry } from '../../../shared/utils/expiry.js';
 
 class ExpiryReportService {
   async getExpiryReport(tenantId, days = 30) {
@@ -17,11 +18,9 @@ class ExpiryReportService {
         orderBy: { expiryDate: 'asc' },
       });
 
+      const now = new Date();
       const report = batches.map((batch) => {
-        const now = new Date();
-        const expiryDate = new Date(batch.expiryDate);
-        const diffTime = expiryDate.getTime() - now.getTime();
-        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+        const diffDays = getDaysToExpiry(batch.expiryDate, now);
 
         let severity = 'Monitor';
         if (diffDays <= 0) severity = 'Expired';

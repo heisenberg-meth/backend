@@ -2,6 +2,7 @@ import prisma from '../../../config/prisma.js';
 import redisClient from '../../../config/redis.js';
 import { scanKeys } from '../../../shared/utils/scan-keys.js';
 import unifiedInventorySummaryService from './unified-inventory-summary.service.js';
+import { isExpired } from '../../../shared/utils/expiry.js';
 
 class DisposeService {
   async disposeBatches(tenantId, userId, batchIds, reason, notes) {
@@ -28,7 +29,10 @@ class DisposeService {
       if (batch.availableQuantity <= 0) {
         throw new Error(`Batch ${batch.batchNumber} has no available quantity to dispose`);
       }
-      if (batch.status !== 'EXPIRED') {
+      const hasFutureExpiry = batch.expiryDate && !isExpired(batch.expiryDate);
+      const isBatchExpired =
+        isExpired(batch.expiryDate) || (batch.status === 'EXPIRED' && !hasFutureExpiry);
+      if (!isBatchExpired) {
         throw new Error(
           `Batch ${batch.batchNumber} has status "${batch.status}" — only EXPIRED batches can be disposed`,
         );

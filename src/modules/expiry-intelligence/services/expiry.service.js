@@ -3,6 +3,7 @@ import expiryAlertRepository from '../repositories/expiry_alert.repository.js';
 import prisma from '../../../config/prisma.js';
 import eventBus from '../../../shared/services/eventbus.service.js';
 import inventoryService from '../../realtime-inventory/services/inventory.service.js';
+import { getDaysToExpiry } from '../../../shared/utils/expiry.js';
 
 class ExpiryService {
   async processExpiryScan() {
@@ -14,8 +15,7 @@ class ExpiryService {
       const now = new Date();
 
       for (const batch of batches) {
-        const diffTime = batch.expiryDate - now;
-        const daysRemaining = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+        const daysRemaining = getDaysToExpiry(batch.expiryDate, now);
 
         if (daysRemaining <= 0) {
           await batchRepository.updateStatus(batch.id, 'EXPIRED');

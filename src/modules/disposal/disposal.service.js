@@ -3,17 +3,17 @@ import logger from '../../shared/utils/logger.js';
 import auditService from '../audit/service/audit.prisma.service.js';
 import { mainQueue } from '../../queue/index.js';
 import unifiedInventorySummaryService from '../inventory/service/unified-inventory-summary.service.js';
+import { getCalendarBoundaries, isExpired } from '../../shared/utils/expiry.js';
 
 class DisposalService {
   async getExpiredBatches(tenantId, branchId = null) {
-    // Use startOfDay to ensure date-only comparison, avoiding UTC/IST timezone bugs
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
+    // Use calendar boundaries (todayEnd: 23:59:59.999) to ensure batches expiring today are included
+    const { todayEnd } = getCalendarBoundaries();
     const targetBranchId =
       branchId === 'null' || branchId === 'undefined' || !branchId ? null : branchId;
     const where = {
       tenantId,
-      OR: [{ expiryDate: { lt: today } }, { status: 'EXPIRED' }],
+      OR: [{ expiryDate: { lte: todayEnd } }, { status: 'EXPIRED' }],
       status: { not: 'ARCHIVED' },
       isArchived: false, // exclude cleared batches
       availableQuantity: { gt: 0 },
@@ -56,14 +56,13 @@ class DisposalService {
   }
 
   async getExpiredOverview(tenantId, branchId = null) {
-    // Use startOfDay to ensure date-only comparison, avoiding UTC/IST timezone bugs
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
+    // Use calendar boundaries (todayEnd: 23:59:59.999) to ensure batches expiring today are included
+    const { todayEnd } = getCalendarBoundaries();
     const targetBranchId =
       branchId === 'null' || branchId === 'undefined' || !branchId ? null : branchId;
     const where = {
       tenantId,
-      OR: [{ expiryDate: { lt: today } }, { status: 'EXPIRED' }],
+      OR: [{ expiryDate: { lte: todayEnd } }, { status: 'EXPIRED' }],
       status: { not: 'ARCHIVED' },
       isArchived: false, // exclude cleared batches
       availableQuantity: { gt: 0 },
@@ -124,8 +123,10 @@ class DisposalService {
         continue;
       }
 
-      const isExpired = batch.status === 'EXPIRED' || new Date(batch.expiryDate) < new Date();
-      if (!isExpired) {
+      const hasFutureExpiry = batch.expiryDate && !isExpired(batch.expiryDate);
+      const isBatchExpired =
+        isExpired(batch.expiryDate) || (batch.status === 'EXPIRED' && !hasFutureExpiry);
+      if (!isBatchExpired) {
         results.push({
           medicineId,
           batchId,

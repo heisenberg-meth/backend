@@ -1,4 +1,5 @@
 import prisma from '../../../config/prisma.js';
+import { getCalendarBoundaries } from '../../../shared/utils/expiry.js';
 
 class BatchRepository {
   async findAll(tenantId, filters = {}) {
@@ -42,15 +43,19 @@ class BatchRepository {
   }
 
   async getNearExpiry(tenantId, days) {
-    const thresholdDate = new Date();
-    thresholdDate.setDate(thresholdDate.getDate() + days);
+    const { todayEnd } = getCalendarBoundaries();
+    const thresholdDate = new Date(todayEnd);
+    thresholdDate.setDate(thresholdDate.getDate() + Number(days));
 
     const isExpiredCheck =
-      days <= 0
+      Number(days) <= 0
         ? {
-            OR: [{ expiryDate: { lte: thresholdDate } }, { status: 'EXPIRED' }],
+            OR: [{ expiryDate: { lte: todayEnd } }, { status: 'EXPIRED' }],
           }
-        : { expiryDate: { gte: new Date(), lte: thresholdDate } };
+        : {
+            status: { not: 'EXPIRED' },
+            expiryDate: { gt: todayEnd, lte: thresholdDate },
+          };
 
     return prisma.inventoryBatch.findMany({
       where: {

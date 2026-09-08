@@ -1,11 +1,13 @@
 import prisma from '../../../config/prisma.js';
+import { getCalendarBoundaries } from '../../../shared/utils/expiry.js';
 
 class SupplierReturnRepository {
   async findExpiredBatchesGroupedBySupplier(tenantId) {
+    const { todayEnd } = getCalendarBoundaries();
     const batches = await prisma.inventoryBatch.findMany({
       where: {
         tenantId,
-        OR: [{ expiryDate: { lt: new Date() } }, { status: 'EXPIRED' }, { status: 'DAMAGED' }],
+        OR: [{ expiryDate: { lte: todayEnd } }, { status: 'EXPIRED' }, { status: 'DAMAGED' }],
         deletedAt: null,
         supplierId: { not: null },
         quantity: { gt: 0 },
