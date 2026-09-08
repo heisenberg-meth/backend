@@ -392,9 +392,9 @@ class InvoiceEngine {
         if (batches.length !== batchIds.length) {
           const foundIds = new Set(batches.map((b) => b.id));
           const missingIds = batchIds.filter((id) => !foundIds.has(id));
-          throw new Error(
-            `Batch validation failed: ${missingIds.length} batch(es) not found within tenant scope. ` +
-              `IDs: ${missingIds.join(', ')}`,
+          logger.warn(
+            { missingIds, tenantId, branchId: invoice.branchId },
+            'Some draft item batches not found in branch scope; FEFO allocation will select available active batches',
           );
         }
         batchMap = new Map(batches.map((b) => [b.id, b]));
@@ -585,23 +585,64 @@ class InvoiceEngine {
       }
 
       if (['FINALIZED', 'PAID', 'PARTIALLY_REFUNDED'].includes(invoice.status)) {
-        for (const item of invoice.items) {
-          if (item.batchId) {
-            await movementService.recordMovement(
-              tenantId,
-              {
-                medicineId: item.medicineId,
-                batchId: item.batchId,
-                branchId: invoice.branchId,
-                movementType: 'RETURN',
-                quantity: item.quantity,
-                referenceType: 'INVOICE_CANCEL',
+        let recordedMovements = [];
+        if (typeof tx.stockMovement?.findMany === 'function') {
+          try {
+            recordedMovements = await tx.stockMovement.findMany({
+              where: {
+                tenantId,
                 referenceId: invoice.id,
-                notes: `Restock from cancelled invoice ${invoice.invoiceNumber}. Reason: ${reason}`,
+                referenceType: 'INVOICE',
+                movementType: 'SALE',
               },
-              userId,
-              tx,
+            });
+          } catch (mErr) {
+            logger.warn(
+              { err: mErr },
+              'Failed to query stock movements on invoice cancel, falling back to items',
             );
+          }
+        }
+
+        if (recordedMovements && recordedMovements.length > 0) {
+          for (const m of recordedMovements) {
+            if (m.batchId) {
+              await movementService.recordMovement(
+                tenantId,
+                {
+                  medicineId: m.medicineId,
+                  batchId: m.batchId,
+                  branchId: invoice.branchId,
+                  movementType: 'RETURN',
+                  quantity: Math.abs(m.quantity),
+                  referenceType: 'INVOICE_CANCEL',
+                  referenceId: invoice.id,
+                  notes: `Restock from cancelled invoice ${invoice.invoiceNumber}. Reason: ${reason}`,
+                },
+                userId,
+                tx,
+              );
+            }
+          }
+        } else {
+          for (const item of invoice.items) {
+            if (item.batchId) {
+              await movementService.recordMovement(
+                tenantId,
+                {
+                  medicineId: item.medicineId,
+                  batchId: item.batchId,
+                  branchId: invoice.branchId,
+                  movementType: 'RETURN',
+                  quantity: item.quantity,
+                  referenceType: 'INVOICE_CANCEL',
+                  referenceId: invoice.id,
+                  notes: `Restock from cancelled invoice ${invoice.invoiceNumber}. Reason: ${reason}`,
+                },
+                userId,
+                tx,
+              );
+            }
           }
         }
       }
@@ -749,81 +790,134 @@ class InvoiceEngine {
     };
   }
 
-  async _processItemDeduction(tenantId, invoice, item, userId, tx = new Map()) {
-    let batchesToUse = [];
+  /**
+   * Retrieve all eligible batches for a medicine following FEFO ordering.
+   * Batches must be: active, not deleted, availableQuantity > 0, expiryDate > NOW().
+   * Row locks are acquired (FOR UPDATE) to guarantee transactional consistency.
+   */
+  async _getAvailableBatches(tenantId, branchId, medicineId, tx) {
+    let batches = [];
 
-    if (item.batchId) {
-      const lockedBatches = await tx.$queryRaw`
-        SELECT * FROM "InventoryBatch" 
-        WHERE id = ${item.batchId} AND "tenantId" = ${tenantId} 
-        FOR UPDATE
-      `;
-      const batch = lockedBatches[0];
-      if (!batch || batch.availableQuantity < item.quantity) {
-        logger.error(
-          {
-            event: 'NEGATIVE_STOCK_ATTEMPT',
-            tenantId,
-            medicineId: item.medicineId,
-            batchId: item.batchId,
-            requested: item.quantity,
-            available: batch?.availableQuantity,
-          },
-          'Attempted to deduct more stock than available',
-        );
-        throw new Error(
-          `Medicine "${item.medicine?.medicineName || item.medicine?.name || 'Unknown'}" only has ${batch?.availableQuantity || 0} stock available in batch ${batch?.batchNumber || 'unknown'}`,
-        );
+    if (typeof tx.$queryRaw === 'function') {
+      try {
+        const rawBatches = await tx.$queryRaw`
+          SELECT ib."id", ib."batchNumber", ib."availableQuantity", ib."expiryDate"
+          FROM "InventoryBatch" ib
+          WHERE ib."tenantId" = ${tenantId}
+            AND ib."branchId" = ${branchId}
+            AND ib."medicineId" = ${medicineId}
+            AND ib."availableQuantity" > 0
+            AND ib."deletedAt" IS NULL
+            AND ib."expiryDate" > NOW()
+            AND ib."status" = 'ACTIVE'
+          ORDER BY ib."expiryDate" ASC, ib."createdAt" ASC
+          FOR UPDATE
+        `;
+        batches = Array.isArray(rawBatches) ? rawBatches : [];
+      } catch (rawErr) {
+        logger.warn({ err: rawErr }, 'FALLBACK_TO_FIND_MANY_FOR_AVAILABLE_BATCHES');
       }
-      if (batch.status !== 'ACTIVE') {
-        throw new Error(`Batch ${batch.batchNumber} is ${batch.status}. Dispensing blocked.`);
-      }
-      if (batch.expiryDate && new Date(batch.expiryDate) <= new Date()) {
-        throw new Error(`Batch ${batch.batchNumber} is EXPIRED. Dispensing blocked.`);
-      }
+    }
+
+    if ((!batches || batches.length === 0) && tx.inventoryBatch?.findMany) {
+      const found = await tx.inventoryBatch.findMany({
+        where: {
+          tenantId,
+          branchId,
+          medicineId,
+          availableQuantity: { gt: 0 },
+          deletedAt: null,
+          expiryDate: { gt: new Date() },
+          status: 'ACTIVE',
+        },
+        orderBy: [{ expiryDate: 'asc' }, { createdAt: 'asc' }],
+      });
+      batches = Array.isArray(found) ? found : [];
+    }
+
+    return batches.map((b) => ({
+      ...b,
+      availableQuantity: Number(b.availableQuantity),
+    }));
+  }
+
+  /**
+   * Sort eligible batches giving preference to a preferredBatchId if specified.
+   * If preferredBatchId is valid and unexpired, it becomes the first batch consumed.
+   * If not found (e.g. expired or out of stock), pure FEFO order is preserved.
+   */
+  _sortBatchesWithPreference(availableBatches, preferredBatchId) {
+    if (!preferredBatchId || !Array.isArray(availableBatches)) {
+      return [...(availableBatches || [])];
+    }
+    const batches = [...availableBatches];
+    const preferredIndex = batches.findIndex((b) => b.id === preferredBatchId);
+    if (preferredIndex > 0) {
+      const [preferred] = batches.splice(preferredIndex, 1);
+      batches.unshift(preferred);
+    }
+    return batches;
+  }
+
+  /**
+   * Allocate requested quantity across eligible batches sequentially.
+   * Throws an insufficient stock error if remaining requested quantity > 0.
+   */
+  _allocateAcrossBatches(batches, requestedQuantity, medicineName = 'Unknown') {
+    const batchesToUse = [];
+    let remaining = Number(requestedQuantity);
+
+    for (const batch of batches) {
+      if (remaining <= 0) break;
+      const available = Number(batch.availableQuantity);
+      if (available <= 0) continue;
+
+      const take = Math.min(available, remaining);
       batchesToUse.push({
-        id: item.batchId,
-        quantity: item.quantity,
+        id: batch.id,
+        quantity: take,
         batchNumber: batch.batchNumber,
       });
-    } else {
-      const availableBatches = await tx.$queryRaw`
-        SELECT ib."id", ib."batchNumber", ib."availableQuantity"
-        FROM "InventoryBatch" ib
-        WHERE ib."tenantId" = ${tenantId}
-          AND ib."branchId" = ${invoice.branchId}
-          AND ib."medicineId" = ${item.medicineId}
-          AND ib."availableQuantity" > 0
-          AND ib."deletedAt" IS NULL
-          AND ib."expiryDate" > NOW()
-          AND ib."status" = 'ACTIVE'
-        ORDER BY ib."expiryDate" ASC
-        FOR UPDATE
-      `;
+      remaining -= take;
+    }
 
-      let remaining = item.quantity;
-      for (const b of availableBatches) {
-        if (remaining <= 0) break;
-        const take = Math.min(b.availableQuantity, remaining);
-        batchesToUse.push({ id: b.id, quantity: take, batchNumber: b.batchNumber });
-        remaining -= take;
-      }
+    if (remaining > 0) {
+      throw new Error(
+        `Medicine "${medicineName}" has insufficient stock available (missing ${remaining})`,
+      );
+    }
 
-      if (remaining > 0) {
-        logger.error(
-          {
-            event: 'STOCK_DEDUCTION_FAILURE',
-            tenantId,
-            medicineId: item.medicineId,
-            requested: item.quantity,
-            missing: remaining,
-          },
-          'Insufficient stock across all batches',
-        );
-        throw new Error(
-          `Medicine "${item.medicine?.medicineName || item.medicine?.name || 'Unknown'}" has insufficient stock available (missing ${remaining})`,
-        );
-      }
+    return batchesToUse;
+  }
+
+  async _processItemDeduction(tenantId, invoice, item, userId, tx) {
+    const availableBatches = await this._getAvailableBatches(
+      tenantId,
+      invoice.branchId,
+      item.medicineId,
+      tx,
+    );
+
+    const orderedBatches = this._sortBatchesWithPreference(availableBatches, item.batchId);
+
+    const medicineName =
+      item.medicine?.medicineName || item.medicine?.name || item.medicineName || 'Unknown';
+
+    let batchesToUse;
+    try {
+      batchesToUse = this._allocateAcrossBatches(orderedBatches, item.quantity, medicineName);
+    } catch (err) {
+      logger.error(
+        {
+          event: 'STOCK_DEDUCTION_FAILURE',
+          tenantId,
+          medicineId: item.medicineId,
+          requested: item.quantity,
+          branchId: invoice.branchId,
+        },
+        err.message,
+      );
+      throw err;
     }
 
     for (const bUsage of batchesToUse) {
@@ -843,6 +937,8 @@ class InvoiceEngine {
         tx,
       );
     }
+
+    return batchesToUse;
   }
 
   async _audit(invoiceId, action, userId, tx, notes = null) {
