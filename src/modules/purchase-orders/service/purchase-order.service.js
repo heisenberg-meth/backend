@@ -31,6 +31,89 @@ class PurchaseOrderService {
   async getOrderById(tenantId, id) {
     const order = await purchaseOrderRepository.findById(id, tenantId);
     if (!order) throw new Error('Order not found');
+
+    if (order.items && Array.isArray(order.items)) {
+      const allGrnItems = [];
+      if (order.goodsReceiptNotes && Array.isArray(order.goodsReceiptNotes)) {
+        for (const grn of order.goodsReceiptNotes) {
+          if (grn.items && Array.isArray(grn.items)) {
+            allGrnItems.push(...grn.items);
+          }
+        }
+      }
+
+      order.items = await Promise.all(
+        order.items.map(async (item) => {
+          let batch = item.inventoryBatches?.[0] || null;
+
+          const matchingGrnItem = allGrnItems.find(
+            (gi) => gi.purchaseOrderItemId === item.id || gi.medicineId === item.medicineId,
+          );
+
+          // If no batch is directly linked via purchaseOrderItemId, find and auto-backfill it
+          if (!batch) {
+            if (matchingGrnItem?.batchNumber) {
+              batch = await prisma.inventoryBatch.findFirst({
+                where: {
+                  tenantId,
+                  medicineId: item.medicineId,
+                  batchNumber: matchingGrnItem.batchNumber,
+                  deletedAt: null,
+                },
+                orderBy: { createdAt: 'desc' },
+              });
+            }
+
+            // Fallback: check any active/recent batch for this medicine in this tenant
+            if (!batch) {
+              batch = await prisma.inventoryBatch.findFirst({
+                where: {
+                  tenantId,
+                  medicineId: item.medicineId,
+                  deletedAt: null,
+                },
+                orderBy: { createdAt: 'desc' },
+              });
+            }
+
+            // Auto-backfill: link the batch to this PO item so future queries are instant
+            if (batch && !batch.purchaseOrderItemId) {
+              try {
+                await prisma.inventoryBatch.update({
+                  where: { id: batch.id },
+                  data: { purchaseOrderItemId: item.id },
+                });
+                batch.purchaseOrderItemId = item.id;
+                logger.info(
+                  { batchId: batch.id, purchaseOrderItemId: item.id, medicineId: item.medicineId },
+                  'AUTO_BACKFILLED_INVENTORY_BATCH_PURCHASE_ORDER_ITEM_ID',
+                );
+              } catch (err) {
+                logger.warn({ err }, 'Failed to backfill purchaseOrderItemId on InventoryBatch');
+              }
+            }
+          }
+
+          const expiryDateVal = batch?.expiryDate || matchingGrnItem?.expiryDate || null;
+          let formattedExpiryDate = null;
+          if (expiryDateVal) {
+            try {
+              formattedExpiryDate = new Date(expiryDateVal).toISOString().split('T')[0];
+            } catch {
+              formattedExpiryDate = String(expiryDateVal);
+            }
+          }
+
+          return {
+            ...item,
+            batchId: batch?.id || null,
+            batchNumber: batch?.batchNumber || matchingGrnItem?.batchNumber || null,
+            expiryDate: formattedExpiryDate,
+          };
+        }),
+      );
+    }
+
     return order;
   }
 
@@ -952,6 +1035,9 @@ class PurchaseOrderService {
             }
             if (!existingBatch.supplierId && order.supplierId) {
               updateData.supplierId = order.supplierId;
+            }
+            if (!existingBatch.purchaseOrderItemId) {
+              updateData.purchaseOrderItemId = poItem.id;
             }
 
             batch = await tx.inventoryBatch.update({

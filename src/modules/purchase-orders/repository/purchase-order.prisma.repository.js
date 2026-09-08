@@ -60,11 +60,20 @@ class PurchaseOrderPrismaRepository {
                 name: true,
               },
             },
+            inventoryBatches: {
+              where: { deletedAt: null },
+              select: {
+                id: true,
+                batchNumber: true,
+                expiryDate: true,
+                quantity: true,
+                availableQuantity: true,
+              },
+            },
           },
         },
         goodsReceiptNotes: {
           orderBy: { createdAt: 'desc' },
-          take: 1,
           include: {
             items: true,
           },

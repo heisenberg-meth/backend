@@ -95,6 +95,7 @@ class StockInService {
         tenantId,
         {
           medicineId: poItem.medicineId,
+          purchaseOrderItemId: item.purchaseOrderItemId || poItem.id,
           batchNumber: item.batchNumber,
           quantity: item.receivedQuantity,
           expiryDate: item.expiryDate,
