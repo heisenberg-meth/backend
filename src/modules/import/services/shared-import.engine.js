@@ -198,13 +198,30 @@ class SharedImportEngine {
           // 4. Update Existing Batches
           if (chunkBatchUpdates.length > 0) {
             for (const upd of chunkBatchUpdates) {
+              const batchData = {};
+
+              if (upd.mode === 'SET') {
+                if (upd.qty !== undefined) {
+                  batchData.quantity = upd.qty;
+                  batchData.availableQuantity = upd.qty;
+                }
+              } else if (upd.qty !== undefined) {
+                batchData.quantity = { increment: upd.qty };
+                batchData.receivedQuantity = { increment: upd.qty };
+                batchData.availableQuantity = { increment: upd.qty };
+              }
+
+              if (upd.purchasePrice !== undefined) batchData.purchasePrice = upd.purchasePrice;
+              if (upd.sellingPrice !== undefined) batchData.sellingPrice = upd.sellingPrice;
+              if (upd.mrp !== undefined) batchData.mrp = upd.mrp;
+              if (upd.expiryDate !== undefined) batchData.expiryDate = upd.expiryDate;
+
               await tx.inventoryBatch.update({
                 where: { id: upd.batchId },
-                data: {
-                  quantity: { increment: upd.qty },
-                  receivedQuantity: { increment: upd.qty },
-                  availableQuantity: { increment: upd.qty },
-                },
+                data:
+                  Object.keys(batchData).length > 0
+                    ? batchData
+                    : { quantity: { increment: upd.qty || 0 } },
               });
             }
           }

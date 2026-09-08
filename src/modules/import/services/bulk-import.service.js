@@ -25,6 +25,8 @@ class BulkImportService {
       medicines = [],
       supplier: supplierName = 'None',
       duplicateStrategy = 'Skip',
+      duplicateDecisions = {},
+      importType = 'New Medicines',
       barcodeOptions = { autoGen: true, overwrite: false, validate: true },
     } = payload;
 
@@ -63,7 +65,7 @@ class BulkImportService {
     for (let index = 0; index < medicines.length; index++) {
       const rawRow = medicines[index];
       const name = rawRow.name ? String(rawRow.name).trim() : '';
-      const barcode = rawRow.barcode ? String(rawRow.barcode).trim() : '';
+      const barcode = rawRow.barcode ? String(rawRow.barcode).trim().replace(/-/g, '') : '';
       if (name) namesToLookup.add(name.toLowerCase());
       if (barcode) barcodesToLookup.add(barcode);
     }
@@ -84,7 +86,19 @@ class BulkImportService {
             mode: 'insensitive',
           },
         },
-        select: { id: true, name: true, barcode: true, categoryId: true, manufacturerId: true },
+        select: {
+          id: true,
+          name: true,
+          barcode: true,
+          categoryId: true,
+          manufacturerId: true,
+          genericName: true,
+          strength: true,
+          dosageForm: true,
+          hsnCode: true,
+          gstPercentage: true,
+          scheduleType: true,
+        },
       });
       existingMedicines.push(...batchResult);
     }
@@ -99,16 +113,37 @@ class BulkImportService {
             in: batchBarcodes,
           },
         },
-        select: { id: true, name: true, barcode: true, categoryId: true, manufacturerId: true },
+        select: {
+          id: true,
+          name: true,
+          barcode: true,
+          categoryId: true,
+          manufacturerId: true,
+          genericName: true,
+          strength: true,
+          dosageForm: true,
+          hsnCode: true,
+          gstPercentage: true,
+          scheduleType: true,
+        },
       });
       existingMedicines.push(...batchResult);
     }
 
     const medicineMapByName = new Map();
     const medicineMapByBarcode = new Map();
+    const medicineMapByComposite = new Map();
+
     for (const med of existingMedicines) {
-      if (med.name) medicineMapByName.set(med.name.toLowerCase().trim(), med);
-      if (med.barcode) medicineMapByBarcode.set(med.barcode.trim(), med);
+      if (med.name) {
+        const normName = med.name.toLowerCase().trim();
+        medicineMapByName.set(normName, med);
+        const compositeKey = `${normName}::${(med.strength || '').toLowerCase().trim()}::${(med.dosageForm || '').toLowerCase().trim()}`;
+        medicineMapByComposite.set(compositeKey, med);
+      }
+      if (med.barcode) {
+        medicineMapByBarcode.set(med.barcode.trim().replace(/-/g, ''), med);
+      }
     }
 
     for (let index = 0; index < medicines.length; index++) {
@@ -122,36 +157,33 @@ class BulkImportService {
       const priceStr =
         rawRow.price !== undefined && rawRow.price !== null ? String(rawRow.price).trim() : '';
       const batch = rawRow.batch ? String(rawRow.batch).trim() : '';
-      const barcode = rawRow.barcode ? String(rawRow.barcode).trim() : '';
+      const rawBarcode = rawRow.barcode ? String(rawRow.barcode).trim() : '';
+      const barcode = rawBarcode.replace(/-/g, '');
       const category = rawRow.category ? String(rawRow.category).trim() : '';
-
       const manufacturer = rawRow.manufacturer ? String(rawRow.manufacturer).trim() : '';
-
       const genericName = rawRow.genericName ? String(rawRow.genericName).trim() : '';
-
       const strength = rawRow.strength ? String(rawRow.strength).trim() : '';
-
       const dosageForm = rawRow.dosageForm ? String(rawRow.dosageForm).trim() : '';
-
       const scheduleRaw = rawRow.schedule ? String(rawRow.schedule).trim() : '';
       const schedule = this._normalizeSchedule(scheduleRaw);
-
       const hsnCode = rawRow.hsnCode ? String(rawRow.hsnCode).trim() : '';
-
       const gstPercentage = this._parseGst(rawRow.gstPercentage);
 
       const validationErrors = [];
       const validationWarnings = [];
 
-      if (!name) {
+      // PRD §8.1: Medicine Name - min 2 non-whitespace characters
+      if (!name || name.replace(/\s+/g, '').length < 2) {
         validationErrors.push({
           field: 'name',
-          value: '',
-          errorCode: 'MISSING_REQUIRED_FIELD',
-          message: 'Medicine name is required',
+          value: name,
+          errorCode: 'INVALID_NAME',
+          message:
+            'Medicine name is required and must contain at least 2 non-whitespace characters',
         });
       }
 
+      // PRD §8.1: Quantity - positive integer
       const qty = this._parseQuantity(qtyStr);
       if (isNaN(qty) || qty <= 0) {
         validationErrors.push({
@@ -159,11 +191,12 @@ class BulkImportService {
           value: qtyStr,
           errorCode: 'INVALID_QUANTITY',
           message: qtyStr
-            ? `Expected a positive number, received "${qtyStr}"`
+            ? `Expected a positive number (> 0), received "${qtyStr}"`
             : 'Quantity is empty or zero',
         });
       }
 
+      // PRD §8.3: Expiry date normalization and past-expiry detection
       let expiryDate = null;
       let isExpired = false;
       if (expiryStr) {
@@ -178,43 +211,59 @@ class BulkImportService {
         } else if (expiryDate < new Date()) {
           isExpired = true;
           validationWarnings.push(
-            `Medicine already expired (${expiryStr}) — importing as expired stock`,
+            `Medicine already expired (${expiryStr}) — flagged with EXPIRED_PRODUCT`,
           );
         }
       }
 
+      // PRD §8.2: Purchase price (> 0) and optional MRP sanity (MRP >= purchase price)
       const price = this._parsePrice(priceStr);
-      if (isNaN(price) || price < 0) {
+      if (isNaN(price) || price <= 0) {
         validationErrors.push({
           field: 'price',
           value: priceStr,
           errorCode: 'INVALID_PRICE',
           message: priceStr
-            ? `Expected a valid number (≥ 0), received "${priceStr}"`
+            ? `Expected a positive number (> 0), received "${priceStr}"`
             : 'Price is empty or invalid',
         });
       } else {
-        const pricingError = validatePricing({
-          purchasePrice: price,
-          sellingPrice: price * 1.2,
-          mrp: price * 1.2,
-        });
-        if (pricingError) {
-          validationErrors.push({
-            field: 'price',
-            value: priceStr,
-            errorCode: 'INVALID_PRICE',
-            message: pricingError,
+        const rawMrp =
+          rawRow.mrp !== undefined && rawRow.mrp !== null ? this._parsePrice(rawRow.mrp) : null;
+        if (rawMrp !== null && !isNaN(rawMrp)) {
+          if (rawMrp < price) {
+            validationErrors.push({
+              field: 'mrp',
+              value: String(rawRow.mrp),
+              errorCode: 'INVALID_MRP',
+              message: `MRP (${rawMrp}) cannot be less than purchase price (${price})`,
+            });
+          }
+        } else {
+          const pricingError = validatePricing({
+            purchasePrice: price,
+            sellingPrice: price * 1.2,
+            mrp: price * 1.2,
           });
+          if (pricingError) {
+            validationErrors.push({
+              field: 'price',
+              value: priceStr,
+              errorCode: 'INVALID_PRICE',
+              message: pricingError,
+            });
+          }
         }
       }
 
-      if (barcode) {
+      if (rawBarcode) {
         analysis.validBarcodes++;
         if (barcodeOptions.validate) {
-          const isValidFormat = /^[a-zA-Z0-9._-]{4,30}$/.test(barcode);
+          const isValidFormat = /^[a-zA-Z0-9._-]{4,30}$/.test(rawBarcode);
           if (!isValidFormat) {
-            validationWarnings.push(`Barcode "${barcode}" has unusual format — importing anyway`);
+            validationWarnings.push(
+              `Barcode "${rawBarcode}" has unusual format — importing anyway`,
+            );
           }
         }
       } else if (barcodeOptions.autoGen) {
@@ -236,14 +285,24 @@ class BulkImportService {
         continue;
       }
 
+      // PRD §3.1: Identity Precedence: Priority 1 (Barcode), Priority 2 (Formulation Composite / Name)
       let matchedMedicine = null;
+      let isBarcodeCollision = false;
       const normName = name.toLowerCase().trim();
       const normBarcode = barcode ? barcode.trim() : '';
 
-      if (medicineMapByName.has(normName)) {
-        matchedMedicine = medicineMapByName.get(normName);
-      } else if (normBarcode && medicineMapByBarcode.has(normBarcode)) {
+      if (normBarcode && medicineMapByBarcode.has(normBarcode)) {
         matchedMedicine = medicineMapByBarcode.get(normBarcode);
+        if (matchedMedicine.name.toLowerCase().trim() !== normName) {
+          isBarcodeCollision = true;
+        }
+      } else {
+        const compositeKey = `${normName}::${strength.toLowerCase().trim()}::${dosageForm.toLowerCase().trim()}`;
+        if (medicineMapByComposite.has(compositeKey)) {
+          matchedMedicine = medicineMapByComposite.get(compositeKey);
+        } else if (medicineMapByName.has(normName)) {
+          matchedMedicine = medicineMapByName.get(normName);
+        }
       }
 
       preValidatedRows.push({
@@ -252,13 +311,15 @@ class BulkImportService {
         qty,
         expiryDate,
         price,
-        batch: batch || `IMP-${crypto.randomUUID().substring(0, 8).toUpperCase()}`,
+        batch: batch || '',
+        rawBatch: batch,
         barcode:
           barcode ||
           (barcodeOptions.autoGen
             ? `BC-${crypto.randomUUID().substring(0, 8).toUpperCase()}`
             : null),
         matchedMedicine,
+        isBarcodeCollision,
         category,
         manufacturer,
         genericName,
@@ -278,21 +339,41 @@ class BulkImportService {
       ),
     );
 
-    const latestBatchMap = new Map();
-    if (matchedMedicineIds.length > 0) {
-      const latestBatches = await prisma.inventoryBatch.findMany({
-        where: {
-          tenantId,
-          medicineId: { in: matchedMedicineIds },
-          deletedAt: null,
-        },
-        orderBy: { createdAt: 'desc' },
-      });
+    // Fetch existing batches for all matched medicines to perform Priority 3 Batch-Level Resolution
+    const existingBatchesList =
+      matchedMedicineIds.length > 0
+        ? await prisma.inventoryBatch.findMany({
+            where: {
+              tenantId,
+              medicineId: { in: matchedMedicineIds },
+              deletedAt: null,
+            },
+            select: {
+              id: true,
+              medicineId: true,
+              batchNumber: true,
+              quantity: true,
+              availableQuantity: true,
+              purchasePrice: true,
+              sellingPrice: true,
+              mrp: true,
+              expiryDate: true,
+            },
+            orderBy: { createdAt: 'desc' },
+          })
+        : [];
 
-      for (const batch of latestBatches) {
-        if (!latestBatchMap.has(batch.medicineId)) {
-          latestBatchMap.set(batch.medicineId, batch);
+    const batchLookupMap = new Map();
+    const latestBatchByMedId = new Map();
+    for (const b of existingBatchesList) {
+      if (b.batchNumber) {
+        const key = `${b.medicineId}:${b.batchNumber.toLowerCase().trim()}`;
+        if (!batchLookupMap.has(key)) {
+          batchLookupMap.set(key, b);
         }
+      }
+      if (!latestBatchByMedId.has(b.medicineId)) {
+        latestBatchByMedId.set(b.medicineId, b);
       }
     }
 
@@ -300,53 +381,111 @@ class BulkImportService {
     for (const row of preValidatedRows) {
       let isDuplicate = false;
       let isConflict = false;
+      let conflictType = null;
       let matchType = 'NONE';
       let diffDesc = '';
       const matchedMedicine = row.matchedMedicine;
 
       if (matchedMedicine) {
-        isDuplicate = true;
-        analysis.duplicates++;
+        const normBatchNo = (row.batch || '').toLowerCase().trim();
+        const batchKey = `${matchedMedicine.id}:${normBatchNo}`;
+        const existingBatch = normBatchNo ? batchLookupMap.get(batchKey) : null;
 
-        if (matchedMedicine.name.toLowerCase() === row.name.toLowerCase()) {
-          matchType = 'EXACT';
-        } else if (row.barcode && matchedMedicine.barcode === row.barcode) {
-          matchType = 'BARCODE';
-        } else {
-          matchType = 'FUZZY';
-        }
+        // PRD §3.1: Priority 3 - Batch-Level Duplicate Determination
+        // If row matches an existing active batch, it is a DUPLICATE BATCH.
+        // If not found, it is a NEW BATCH for an EXISTING MEDICINE (isDuplicate = false).
+        if (existingBatch) {
+          isDuplicate = true;
+          analysis.duplicates++;
 
-        const existingBatch = latestBatchMap.get(matchedMedicine.id);
+          const existingQty = Number(
+            existingBatch.quantity || existingBatch.availableQuantity || 0,
+          );
+          const existingPrice = Number(existingBatch.purchasePrice || 0);
+          const existingMrp = Number(existingBatch.mrp || 0);
+          const existingExpiryStr = existingBatch.expiryDate
+            ? typeof existingBatch.expiryDate.toISOString === 'function'
+              ? existingBatch.expiryDate.toISOString().split('T')[0]
+              : String(existingBatch.expiryDate).split('T')[0]
+            : null;
+          const importedExpiryStr = row.expiryDate
+            ? typeof row.expiryDate.toISOString === 'function'
+              ? row.expiryDate.toISOString().split('T')[0]
+              : String(row.expiryDate).split('T')[0]
+            : null;
 
-        if (
-          row.barcode &&
-          matchedMedicine.name.toLowerCase() !== row.name.toLowerCase() &&
-          matchedMedicine.barcode === row.barcode
-        ) {
-          isConflict = true;
-          analysis.conflicts++;
-          diffDesc = `Barcode ${row.barcode} matches existing medicine "${matchedMedicine.name}" in system`;
-        } else if (matchedMedicine.name.toLowerCase() === row.name.toLowerCase()) {
-          if (
-            row.price > 0 &&
-            existingBatch &&
-            Math.abs(row.price - Number(existingBatch.purchasePrice)) > 0.01
-          ) {
-            diffDesc = `Unit price mismatch (Imported: INR ${row.price} vs System: INR ${Number(existingBatch.purchasePrice)})`;
+          const diffDetails = {
+            quantity: { existing: existingQty, imported: row.qty },
+            expiry: { existing: existingExpiryStr, imported: importedExpiryStr },
+            purchasePrice: { existing: existingPrice, imported: row.price },
+            mrp: { existing: existingMrp, imported: row.price * 1.2 },
+          };
+
+          if (row.isBarcodeCollision) {
+            isConflict = true;
+            conflictType = 'BARCODE_COLLISION';
+            matchType = 'BARCODE_COLLISION';
+            analysis.conflicts++;
+            diffDesc = `Barcode ${row.barcode} matches existing medicine "${matchedMedicine.name}" in system`;
+          } else {
+            const priceDiff = Math.abs(row.price - existingPrice) > 0.01;
+            const expiryDiff =
+              importedExpiryStr && existingExpiryStr && importedExpiryStr !== existingExpiryStr;
+
+            if (priceDiff || expiryDiff) {
+              isConflict = true;
+              conflictType = priceDiff ? 'PRICE_MISMATCH' : 'EXPIRY_MISMATCH';
+              matchType = 'DIFFERENCE';
+              analysis.conflicts++;
+              diffDesc = priceDiff
+                ? `Unit price mismatch (Imported: INR ${row.price} vs System: INR ${existingPrice})`
+                : `Expiry date mismatch (Imported: ${importedExpiryStr} vs System: ${existingExpiryStr})`;
+            } else {
+              matchType = 'EXACT';
+              diffDesc = 'None (Details match)';
+            }
           }
-        }
 
-        analysis.rows.push({
-          row: row.rowNum,
-          name: row.name,
-          match: matchedMedicine.name,
-          type: matchType,
-          severity: isConflict ? 'danger' : 'warning',
-          diff: diffDesc || 'None (Details match)',
-          conflict: isConflict,
-        });
+          analysis.rows.push({
+            row: row.rowNum,
+            name: row.name,
+            match: matchedMedicine.name,
+            matchType,
+            type: matchType,
+            severity: row.isBarcodeCollision ? 'danger' : isConflict ? 'warning' : 'info',
+            diff: diffDesc,
+            diffDetails,
+            conflict: isConflict,
+            conflictType,
+            existing: {
+              id: matchedMedicine.id,
+              name: matchedMedicine.name,
+              barcode: matchedMedicine.barcode || null,
+              batch: existingBatch.batchNumber,
+              quantity: existingQty,
+              expiry: existingExpiryStr,
+              purchasePrice: existingPrice,
+              mrp: existingMrp,
+            },
+            imported: {
+              name: row.name,
+              batch: row.batch || null,
+              quantity: row.qty,
+              expiry: importedExpiryStr,
+              purchasePrice: row.price,
+              mrp: row.price * 1.2,
+              barcode: row.barcode || null,
+            },
+          });
+        } else {
+          // PRD §3.1 & TC-IMP-07: New Batch for Existing Medicine
+          // isDuplicate remains false; counted under new
+          analysis.new++;
+        }
       } else {
-        analysis.new++;
+        if (importType === 'New Medicines') {
+          analysis.new++;
+        }
       }
 
       analysis.readyCount++;
@@ -359,17 +498,45 @@ class BulkImportService {
     }
 
     if (isDryRun) {
-      return { success: true, dryRun: true, summary: analysis };
+      return {
+        success: true,
+        dryRun: true,
+        summary: {
+          total: medicines.length,
+          new: analysis.new,
+          duplicates: analysis.duplicates,
+          conflicts: analysis.conflicts,
+          errors: analysis.errors.length,
+          readyCount: medicines.length - analysis.errors.length,
+          validBarcodes: analysis.validBarcodes,
+          autoGenBarcodes: analysis.autoGenBarcodes,
+          rows: analysis.rows,
+        },
+        rows: analysis.rows,
+        errors: analysis.errors,
+      };
     }
 
-    const commitSummary = {
-      importedCount: 0,
-      newMedicinesCount: 0,
-      newBatchesCount: 0,
-      skippedCount: 0,
-      overwrittenCount: 0,
-      mergedCount: 0,
-    };
+    // --- COMMIT PHASE ---
+
+    // PRD §4.4 & TC-IMP-04: Validate Ask Me resolution completeness
+    if (duplicateStrategy && duplicateStrategy.toLowerCase() === 'ask me') {
+      const unresolvedRows = validatedRows
+        .filter((r) => r.isDuplicate && !this._getDecisionAction(duplicateDecisions, r.rowNum))
+        .map((r) => r.rowNum);
+      if (unresolvedRows.length > 0) {
+        const err = new Error(
+          `Unresolved duplicate conflicts remaining on row(s): ${unresolvedRows.join(', ')}. Please resolve each duplicate conflict before importing.`,
+        );
+        err.errorCode = 'UNRESOLVED_DUPLICATES_REMAINING';
+        throw err;
+      }
+    }
+
+    let createdCount = 0;
+    let overwrittenCount = 0;
+    let mergedCount = 0;
+    let skippedCount = 0;
 
     const uniqueCategories = new Set();
     const uniqueManufacturers = new Set();
@@ -436,33 +603,9 @@ class BulkImportService {
       }
     }
 
-    const existingMedIds = Array.from(
-      new Set(
-        Array.from(medicineMapByName.values())
-          .concat(Array.from(medicineMapByBarcode.values()))
-          .map((m) => m.id),
-      ),
-    );
-
-    const existingBatches =
-      existingMedIds.length > 0
-        ? await prisma.inventoryBatch.findMany({
-            where: {
-              tenantId,
-              ...(branchId ? { branchId } : {}),
-              medicineId: { in: existingMedIds },
-              deletedAt: null,
-            },
-            select: { id: true, medicineId: true, batchNumber: true },
-          })
-        : [];
-
-    const batchMap = new Map();
-    for (const b of existingBatches) {
-      if (b.batchNumber) {
-        const key = `${b.medicineId}:${b.batchNumber}`.toLowerCase().trim();
-        batchMap.set(key, { id: b.id, isNew: false });
-      }
+    const commitBatchMap = new Map();
+    for (const [key, batch] of batchLookupMap.entries()) {
+      commitBatchMap.set(key, { id: batch.id, isNew: false, batch });
     }
 
     const newMedicines = [];
@@ -480,55 +623,162 @@ class BulkImportService {
       const normBarcode = row.barcode ? row.barcode.trim() : '';
 
       let currentMatch =
+        (normBarcode && medicineMapByBarcode.get(normBarcode)) ||
         medicineMapByName.get(normName) ||
-        (normBarcode ? medicineMapByBarcode.get(normBarcode) : null);
+        null;
 
       if (currentMatch) {
         medicineId = currentMatch.id;
 
         if (row.isDuplicate) {
-          if (duplicateStrategy === 'Skip') {
-            commitSummary.skippedCount++;
+          const action = (
+            this._getDecisionAction(duplicateDecisions, row.rowNum) || duplicateStrategy
+          ).toLowerCase();
+
+          // PRD §4.1: Strategy Skip - 0 master updates, 0 batch updates, 0 stock aggregate changes
+          if (action === 'skip') {
+            skippedCount++;
             continue;
           }
 
-          if (duplicateStrategy === 'Overwrite' || duplicateStrategy === 'Merge') {
-            if (duplicateStrategy === 'Overwrite') commitSummary.overwrittenCount++;
-            if (duplicateStrategy === 'Merge') commitSummary.mergedCount++;
+          // PRD §4.2: Strategy Overwrite / §4.3 Strategy Merge
+          if (action === 'overwrite' || action === 'merge') {
+            if (action === 'overwrite') overwrittenCount++;
+            if (action === 'merge') mergedCount++;
 
-            const updatePayload = {};
-            if (row.barcode && (barcodeOptions.overwrite || !currentMatch.barcode)) {
-              updatePayload.barcode = row.barcode;
-              currentMatch.barcode = row.barcode;
-              medicineMapByBarcode.set(row.barcode.trim(), currentMatch);
-            }
-            if (row.category && (duplicateStrategy === 'Overwrite' || !currentMatch.categoryId)) {
-              const resolvedCatId = categoryMap.get(row.category.trim().toLowerCase());
-              if (resolvedCatId) {
-                updatePayload.categoryId = resolvedCatId;
-                currentMatch.categoryId = resolvedCatId;
+            // Master Catalog Updates (Immutable under Stock Entry Only)
+            if (importType !== 'Stock Entry Only') {
+              const updatePayload = {};
+              if (row.barcode && (barcodeOptions.overwrite || !currentMatch.barcode)) {
+                updatePayload.barcode = row.barcode;
+                currentMatch.barcode = row.barcode;
+                medicineMapByBarcode.set(row.barcode.trim(), currentMatch);
+              }
+              if (row.category && (action === 'overwrite' || !currentMatch.categoryId)) {
+                const resolvedCatId = categoryMap.get(row.category.trim().toLowerCase());
+                if (resolvedCatId) {
+                  updatePayload.categoryId = resolvedCatId;
+                  currentMatch.categoryId = resolvedCatId;
+                }
+              }
+              if (row.manufacturer && (action === 'overwrite' || !currentMatch.manufacturerId)) {
+                const resolvedMfrId = manufacturerMap.get(row.manufacturer.trim().toLowerCase());
+                if (resolvedMfrId) {
+                  updatePayload.manufacturerId = resolvedMfrId;
+                  currentMatch.manufacturerId = resolvedMfrId;
+                }
+              }
+              if (row.schedule && (action === 'overwrite' || !currentMatch.scheduleType)) {
+                updatePayload.scheduleType = row.schedule;
+                currentMatch.scheduleType = row.schedule;
+              }
+              if (row.genericName && (action === 'overwrite' || !currentMatch.genericName)) {
+                updatePayload.genericName = row.genericName;
+                currentMatch.genericName = row.genericName;
+              }
+              if (row.strength && (action === 'overwrite' || !currentMatch.strength)) {
+                updatePayload.strength = row.strength;
+                currentMatch.strength = row.strength;
+              }
+              if (row.dosageForm && (action === 'overwrite' || !currentMatch.dosageForm)) {
+                updatePayload.dosageForm = row.dosageForm;
+                currentMatch.dosageForm = row.dosageForm;
+              }
+              if (row.hsnCode && (action === 'overwrite' || !currentMatch.hsnCode)) {
+                updatePayload.hsnCode = row.hsnCode;
+                currentMatch.hsnCode = row.hsnCode;
+              }
+              if (
+                row.gstPercentage !== undefined &&
+                (action === 'overwrite' ||
+                  currentMatch.gstPercentage === null ||
+                  currentMatch.gstPercentage === undefined)
+              ) {
+                updatePayload.gstPercentage = row.gstPercentage;
+                currentMatch.gstPercentage = row.gstPercentage;
+              }
+              if (Object.keys(updatePayload).length > 0) {
+                medicineUpdates.push({ id: medicineId, data: updatePayload });
               }
             }
-            if (
-              row.manufacturer &&
-              (duplicateStrategy === 'Overwrite' || !currentMatch.manufacturerId)
-            ) {
-              const resolvedMfrId = manufacturerMap.get(row.manufacturer.trim().toLowerCase());
-              if (resolvedMfrId) {
-                updatePayload.manufacturerId = resolvedMfrId;
-                currentMatch.manufacturerId = resolvedMfrId;
+
+            // Batch Updates for Overwrite / Merge
+            const parsedQty = parseInt(row.qty, 10);
+            const finalBatchNo = row.batch
+              ? String(row.batch).trim()
+              : `IMP-${crypto.randomUUID().substring(0, 8).toUpperCase()}`;
+            const batchKey = `${medicineId}:${finalBatchNo.toLowerCase().trim()}`;
+            const existingBatchEntry = commitBatchMap.get(batchKey);
+
+            if (existingBatchEntry) {
+              const targetBatchId = existingBatchEntry.id;
+              const isStockEntryOnly = importType === 'Stock Entry Only';
+              const mode = isStockEntryOnly
+                ? 'INCREMENT'
+                : action === 'overwrite'
+                  ? 'SET'
+                  : 'INCREMENT';
+
+              const batchUpdate = {
+                batchId: targetBatchId,
+                medicineId,
+                mode,
+                qty: parsedQty,
+              };
+
+              if (action === 'overwrite') {
+                batchUpdate.purchasePrice = row.price;
+                batchUpdate.sellingPrice = row.price * 1.2;
+                batchUpdate.mrp = row.price * 1.2;
+                if (row.expiryDate) batchUpdate.expiryDate = row.expiryDate;
               }
+
+              batchQuantityUpdates.push(batchUpdate);
+
+              newMovements.push({
+                id: crypto.randomUUID(),
+                batchId: targetBatchId,
+                tenantId,
+                branchId,
+                medicineId,
+                movementType: 'STOCK_IN',
+                quantity: parsedQty,
+                referenceType: 'BULK_IMPORT',
+                performedBy: userId,
+                notes: `Duplicate resolved via ${action.toUpperCase()}`,
+              });
+
+              inventoryUpdates.push({ medicineId, qty: parsedQty });
             }
-            if (row.schedule && (duplicateStrategy === 'Overwrite' || !currentMatch.scheduleType)) {
-              updatePayload.scheduleType = row.schedule;
-              currentMatch.scheduleType = row.schedule;
-            }
-            if (Object.keys(updatePayload).length > 0) {
-              medicineUpdates.push({ id: medicineId, data: updatePayload });
-            }
+            continue;
           }
         }
       } else {
+        // Unmatched medicine handling
+        if (importType === 'Update Existing') {
+          analysis.errors.push({
+            row: row.rowNum,
+            name: row.name || 'Unknown',
+            field: 'name',
+            value: row.name,
+            errorCode: 'RECORD_NOT_FOUND',
+            message: `Cannot update medicine "${row.name}" because it does not exist in system.`,
+          });
+          continue;
+        }
+        if (importType === 'Stock Entry Only') {
+          analysis.errors.push({
+            row: row.rowNum,
+            name: row.name || 'Unknown',
+            field: 'name',
+            value: row.name,
+            errorCode: 'MEDICINE_NOT_FOUND',
+            message: `Cannot add stock for medicine "${row.name}" because it does not exist in catalog.`,
+          });
+          continue;
+        }
+
+        // New Medicine creation
         let categoryId = row.category
           ? categoryMap.get(row.category.trim().toLowerCase()) || null
           : null;
@@ -538,6 +788,8 @@ class BulkImportService {
           : null;
 
         medicineId = crypto.randomUUID();
+        const prescriptionRequired = row.schedule === 'H' || row.schedule === 'H1';
+
         newMedicines.push({
           id: medicineId,
           tenantId,
@@ -555,26 +807,38 @@ class BulkImportService {
           reorderLevel: 10,
           status: 'ACTIVE',
           isActive: true,
+          requiresPrescription: prescriptionRequired,
+          prescriptionRequired,
           categoryId: categoryId || null,
           manufacturerId: manufacturerId || null,
         });
-        commitSummary.newMedicinesCount++;
 
-        const cachedMed = { id: medicineId, name: row.name, barcode: row.barcode };
+        const cachedMed = {
+          id: medicineId,
+          name: row.name,
+          barcode: row.barcode,
+          categoryId,
+          manufacturerId,
+          genericName: row.genericName,
+          strength: row.strength,
+          dosageForm: row.dosageForm,
+          scheduleType: row.schedule,
+        };
         medicineMapByName.set(normName, cachedMed);
         if (row.barcode) {
           medicineMapByBarcode.set(row.barcode.trim(), cachedMed);
         }
       }
 
+      // Handle stock creation for New Medicines or New Batches on Existing Medicines
       const parsedQty = parseInt(row.qty, 10);
       if (!isNaN(parsedQty) && parsedQty > 0) {
         const parsedPrice = parseFloat(row.price) || 0;
         const finalBatchNo = row.batch
           ? String(row.batch).trim()
           : `IMP-${crypto.randomUUID().substring(0, 8).toUpperCase()}`;
-        const batchKey = `${medicineId}:${finalBatchNo}`.toLowerCase().trim();
-        const existingBatchEntry = batchMap.get(batchKey);
+        const batchKey = `${medicineId}:${finalBatchNo.toLowerCase().trim()}`;
+        const existingBatchEntry = commitBatchMap.get(batchKey);
 
         let targetBatchId = null;
 
@@ -605,12 +869,11 @@ class BulkImportService {
             status: 'ACTIVE',
             supplierId: resolvedSupplierId,
           });
-          batchMap.set(batchKey, {
+          commitBatchMap.set(batchKey, {
             id: targetBatchId,
             isNew: true,
             index: newBatches.length - 1,
           });
-          commitSummary.newBatchesCount++;
         }
 
         newMovements.push({
@@ -627,9 +890,8 @@ class BulkImportService {
         });
 
         inventoryUpdates.push({ medicineId, qty: parsedQty });
+        createdCount++;
       }
-
-      commitSummary.importedCount++;
     }
 
     try {
@@ -650,6 +912,34 @@ class BulkImportService {
       logger.error({ err: err.message, stack: err.stack }, 'Bulk import transaction failed');
       throw new Error(`Import failed: ${err.message}`);
     }
+
+    // Mathematical Summary Invariants (PRD §7.3):
+    // total = imported + skipped + failed
+    // imported = created + updated
+    // updated = overwritten + merged
+    const totalProcessed = medicines.length;
+    const totalUpdated = overwrittenCount + mergedCount;
+    const totalImported = createdCount + totalUpdated;
+    const totalSkipped = skippedCount;
+    const totalFailed = analysis.errors.length;
+
+    const commitSummary = {
+      total: totalProcessed,
+      imported: totalImported,
+      created: createdCount,
+      updated: totalUpdated,
+      skipped: totalSkipped,
+      overwritten: overwrittenCount,
+      merged: mergedCount,
+      failed: totalFailed,
+      duplicates: totalUpdated,
+      totalRows: totalProcessed,
+      importedCount: totalImported,
+      skippedCount: totalSkipped,
+      newMedicinesCount: newMedicines.length,
+      newBatchesCount: newBatches.length,
+      warnings: 0,
+    };
 
     const importJob = await prisma.importJob.create({
       data: {
@@ -687,16 +977,23 @@ class BulkImportService {
         analysis.errors.length > 0
           ? 'Bulk import completed with validation errors.'
           : 'Bulk import completed successfully.',
-      summary: {
-        totalRows: medicines.length,
-        imported: commitSummary.importedCount,
-        duplicates: commitSummary.overwrittenCount + commitSummary.mergedCount,
-        skipped: commitSummary.skippedCount,
-        failed: analysis.errors.length,
-        warnings: 0,
+      summary: commitSummary,
+      audit: {
+        importId: importJob.id,
+        committedAt: importJob.createdAt || new Date(),
+        committedBy: userId,
       },
       errors: analysis.errors,
     };
+  }
+
+  _getDecisionAction(decisions, rowNum) {
+    if (!decisions || typeof decisions !== 'object') return null;
+    const val = decisions[rowNum] || decisions[String(rowNum)];
+    if (!val) return null;
+    if (typeof val === 'string') return val.toUpperCase().trim();
+    if (typeof val === 'object' && val.action) return String(val.action).toUpperCase().trim();
+    return null;
   }
 
   _parseQuantity(val) {
@@ -783,9 +1080,6 @@ class BulkImportService {
     return null;
   }
 
-  /**
-   * Normalizes input schedule strings into standardized schedule codes.
-   */
   _normalizeSchedule(val) {
     if (!val) return 'OTC';
     const clean = String(val).trim().toUpperCase();

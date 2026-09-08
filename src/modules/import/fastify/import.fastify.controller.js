@@ -134,6 +134,7 @@ class ImportFastifyController {
       return reply.code(400).send({
         success: false,
         message: error.message,
+        errorCode: error.errorCode || 'IMPORT_COMMIT_FAILED',
         ...(process.env.NODE_ENV === 'development' ? { stack: error.stack } : {}),
       });
     }
