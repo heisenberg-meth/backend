@@ -39,7 +39,15 @@ class SupplierReturnController {
         { err: error, endpoint: 'supplier-return-create' },
         'Supplier return error',
       );
-      return reply.code(500).send({ success: false, message: error.message });
+      const isClientError =
+        error.statusCode === 400 ||
+        error.message?.includes('greater than 0') ||
+        error.message?.includes('exceeds available stock') ||
+        error.message?.includes('not found') ||
+        error.message?.includes('required');
+      return reply
+        .code(error.statusCode || (isClientError ? 400 : 500))
+        .send({ success: false, message: error.message });
     }
   }
 

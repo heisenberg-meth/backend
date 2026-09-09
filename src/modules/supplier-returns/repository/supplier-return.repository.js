@@ -56,11 +56,13 @@ class SupplierReturnRepository {
         notes: data.notes,
         returnAmount: totalAmount,
         reason: data.reason,
+        batchId: items.length === 1 ? items[0].batchId : undefined,
+        medicineId: items.length === 1 ? items[0].medicineId : undefined,
+        quantity: items.reduce((sum, item) => sum + Number(item.quantity || 0), 0),
         items: {
           create: items.map((item) => ({
             medicineId: item.medicineId,
             batchId: item.batchId,
-            purchaseInvoiceItemId: item.purchaseInvoiceItemId,
             quantity: item.quantity,
             expiryDate: item.expiryDate,
             purchasePrice: item.purchasePrice,

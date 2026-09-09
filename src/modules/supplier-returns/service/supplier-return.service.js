@@ -40,13 +40,36 @@ class SupplierReturnService {
       if (!item.batchId) {
         throw new Error('Batch ID is required for each return item');
       }
-      const batch = await prisma.inventoryBatch.findUnique({
-        where: { id: item.batchId },
-        select: { purchasePrice: true, expiryDate: true, availableQuantity: true, medicine: true },
+      const batch = await prisma.inventoryBatch.findFirst({
+        where: {
+          id: item.batchId,
+          ...(tenantId ? { tenantId } : {}),
+        },
+        include: {
+          medicine: true,
+        },
       });
       if (!batch) throw new Error(`Batch ${item.batchId} not found`);
 
-      const qty = Math.min(item.quantity, batch.availableQuantity);
+      if (item.quantity <= 0) {
+        throw new Error('Return quantity must be greater than 0');
+      }
+
+      if (item.quantity > batch.availableQuantity) {
+        throw new Error(
+          `Requested return quantity (${item.quantity}) exceeds available stock (${batch.batchNumber})`,
+        );
+      }
+
+      if (!data.purchaseInvoiceId && batch.purchaseInvoiceId) {
+        data.purchaseInvoiceId = batch.purchaseInvoiceId;
+      }
+
+      if (!data.supplierId && batch.supplierId) {
+        data.supplierId = batch.supplierId;
+      }
+
+      const qty = item.quantity;
 
       const purchasePrice = Number(batch.purchasePrice || 0);
       const subtotal = purchasePrice * qty;
@@ -55,9 +78,8 @@ class SupplierReturnService {
       const totalAmount = subtotal + gstAmount;
 
       items.push({
-        medicineId: item.medicineId,
+        medicineId: item.medicineId || batch.medicineId || batch.medicine?.id,
         batchId: item.batchId,
-        purchaseInvoiceItemId: item.purchaseInvoiceItemId || null,
         quantity: qty,
         expiryDate: batch.expiryDate,
         purchasePrice: purchasePrice,
