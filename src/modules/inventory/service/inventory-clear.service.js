@@ -89,6 +89,23 @@ class InventoryClearService {
     }
 
     try {
+      // Check if an import is currently in progress for this tenant (PRD Section 34)
+      const activeImport = await prisma.importJob.findFirst({
+        where: {
+          tenantId,
+          importStatus: 'PROCESSING',
+        },
+      });
+
+      if (activeImport) {
+        const err = new Error(
+          'An inventory import is currently in progress. Please wait until it finishes.',
+        );
+        err.statusCode = 409;
+        err.errorCode = 'IMPORT_IN_PROGRESS';
+        throw err;
+      }
+
       const where = this._buildActiveInventoryWhere(tenantId, branchId);
 
       const activeBatches = await prisma.inventoryBatch.findMany({

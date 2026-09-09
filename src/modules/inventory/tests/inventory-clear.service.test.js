@@ -21,6 +21,9 @@ const mockPrisma = {
   branch: {
     findFirst: jest.fn(),
   },
+  importJob: {
+    findFirst: jest.fn(),
+  },
   batchAuditLog: {
     createMany: jest.fn(),
   },
@@ -81,6 +84,7 @@ describe('InventoryClearService', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockLock.acquireLock.mockResolvedValue(true);
+    mockPrisma.importJob.findFirst.mockResolvedValue(null);
   });
 
   afterEach(() => {
@@ -132,6 +136,23 @@ describe('InventoryClearService', () => {
       });
 
       expect(mockPrisma.$transaction).not.toHaveBeenCalled();
+    });
+
+    it('throws 409 conflict when an import is currently in progress', async () => {
+      mockPrisma.importJob.findFirst.mockResolvedValue({
+        id: 'job-123',
+        importStatus: 'PROCESSING',
+      });
+
+      await expect(
+        inventoryClearService.clearBranchInventory('tenant-1', 'branch-1', 'user-1'),
+      ).rejects.toMatchObject({
+        statusCode: 409,
+        errorCode: 'IMPORT_IN_PROGRESS',
+      });
+
+      expect(mockPrisma.inventoryBatch.findMany).not.toHaveBeenCalled();
+      expect(mockLock.releaseLock).toHaveBeenCalled();
     });
 
     it('returns safe response when no active inventory exists', async () => {
