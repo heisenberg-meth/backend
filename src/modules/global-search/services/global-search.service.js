@@ -372,5 +372,3 @@ export class GlobalSearchService {
     }
   }
 }
-
-export default new GlobalSearchService();
