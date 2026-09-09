@@ -5,6 +5,7 @@ import batchController from '../batches/fastify/batch.fastify.controller.js';
 import expiryMetricsController from './controller/expiry-metrics.controller.js';
 import inventoryReconciliationController from './controller/inventory-reconciliation.controller.js';
 import disposeController from './controller/dispose.controller.js';
+import inventoryClearController from './controller/inventory-clear.controller.js';
 import { authenticate, requireTenant } from '../../middleware/auth.fastify.js';
 import { requireBranch } from '../../middleware/requireBranch.js';
 import { requirePermission } from '../../middleware/permission.fastify.js';
@@ -549,6 +550,47 @@ async function medicineRoutes(fastify) {
       preHandler: [requirePermission('VIEW_INVENTORY')],
     },
     disposeController.getDisposalHistory,
+  );
+
+  // ═══════════════════════════════════════════════════════════════
+  // CLEAR ENTIRE INVENTORY (Destructive reset scoped to branch)
+  // ═══════════════════════════════════════════════════════════════
+  fastify.get(
+    '/clear-summary',
+    {
+      schema: {
+        tags: ['Inventory'],
+        summary: 'Get active inventory count that would be cleared',
+        querystring: {
+          type: 'object',
+          properties: {
+            branchId: { type: 'string' },
+          },
+        },
+      },
+      preHandler: [requirePermission('VIEW_INVENTORY')],
+    },
+    inventoryClearController.getClearSummary,
+  );
+
+  fastify.post(
+    '/clear',
+    {
+      schema: {
+        tags: ['Inventory'],
+        summary: 'Clear all active inventory for current tenant and branch',
+        description:
+          'Destructive operation that archives active batches and sets quantities to 0 while preserving medicine master data',
+        querystring: {
+          type: 'object',
+          properties: {
+            branchId: { type: 'string' },
+          },
+        },
+      },
+      preHandler: [requirePermission('MANAGE_INVENTORY')],
+    },
+    inventoryClearController.clearInventory,
   );
 }
 
