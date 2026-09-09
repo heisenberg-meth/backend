@@ -20,11 +20,19 @@ const mockPrisma = {
     findMany: jest.fn().mockResolvedValue([]),
     create: jest.fn().mockResolvedValue({ id: 'sup-1', name: 'Global Pharma' }),
   },
-  importJob: { create: jest.fn().mockResolvedValue({ id: 'job-1' }) },
+  importJob: {
+    create: jest.fn().mockResolvedValue({ id: 'job-1' }),
+    update: jest.fn().mockResolvedValue({ id: 'job-1' }),
+    findFirst: jest.fn(),
+  },
 };
 
 const mockSharedEngine = {
   commitChunks: jest.fn().mockResolvedValue(),
+};
+
+const mockMainQueue = {
+  add: jest.fn().mockResolvedValue({ id: 'mock-bull-id' }),
 };
 
 jest.unstable_mockModule('../../src/config/prisma.js', () => ({
@@ -33,6 +41,10 @@ jest.unstable_mockModule('../../src/config/prisma.js', () => ({
 
 jest.unstable_mockModule('../../src/modules/import/services/shared-import.engine.js', () => ({
   default: mockSharedEngine,
+}));
+
+jest.unstable_mockModule('../../src/queue/index.js', () => ({
+  mainQueue: mockMainQueue,
 }));
 
 const { default: bulkImportService } =
@@ -604,5 +616,76 @@ describe('BulkImportService - PRD Implementation & Test Cases', () => {
     expect(callArgs.newBatches[0].medicineId).toBe('med-amox-1');
     expect(callArgs.newBatches[0].batchNumber).toBe('BATCH-NEW-002');
     expect(callArgs.newBatches[0].quantity).toBe(100);
+  });
+
+  it('should queue import job when queued option is true', async () => {
+    const importPayload = {
+      medicines: [
+        {
+          name: 'Paracetamol 500mg',
+          qty: '10',
+          price: '5.00',
+        },
+      ],
+      fileName: 'test.csv',
+    };
+
+    mockPrisma.importJob.create.mockResolvedValue({ id: 'job-123' });
+
+    const result = await bulkImportService.commit(importPayload, tenantId, branchId, userId, {
+      queued: true,
+    });
+
+    expect(result).toEqual({
+      success: true,
+      queued: true,
+      jobId: 'job-123',
+      status: 'queued',
+      total: 1,
+      message: 'Bulk import queued for processing.',
+    });
+
+    expect(mockMainQueue.add).toHaveBeenCalledWith('bulk-medicines-bulk-commit', {
+      jobId: 'job-123',
+      tenantId,
+      branchId,
+      userId,
+    });
+  });
+
+  it('should execute queued commit via processQueuedCommit', async () => {
+    const importPayload = {
+      medicines: [
+        {
+          name: 'Paracetamol 500mg',
+          qty: '10',
+          price: '5.00',
+        },
+      ],
+    };
+
+    mockPrisma.importJob.findFirst.mockResolvedValue({
+      id: 'job-123',
+      tenantId,
+      extractedData: importPayload,
+    });
+
+    const result = await bulkImportService.processQueuedCommit(
+      'job-123',
+      tenantId,
+      branchId,
+      userId,
+    );
+
+    expect(result.success).toBe(true);
+    expect(mockSharedEngine.commitChunks).toHaveBeenCalled();
+    expect(mockPrisma.importJob.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: 'job-123' },
+        data: expect.objectContaining({
+          importStatus: 'COMPLETED',
+        }),
+      }),
+    );
   });
 });

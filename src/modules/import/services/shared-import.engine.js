@@ -23,6 +23,8 @@ class SharedImportEngine {
     medicineUpdates,
     categoriesToCreate,
     manufacturersToCreate,
+    progressTotal = null,
+    onProgress = null,
   }) {
     // 1. Create categories and manufacturers (Safe to do outside the main row chunk loop)
     const categoryNameToId = new Map();
@@ -141,6 +143,21 @@ class SharedImportEngine {
         { jobId, chunk: i / this.CHUNK_SIZE + 1, total: totalChunks },
         '[SharedImportEngine] Committed chunk',
       );
+
+      if (onProgress) {
+        const processed = Math.min(
+          progressTotal || allMedicineIds.length,
+          Math.round(
+            ((i + chunkMedIds.size) / allMedicineIds.length) *
+              (progressTotal || allMedicineIds.length),
+          ),
+        );
+
+        await onProgress({
+          processed,
+          total: progressTotal || allMedicineIds.length,
+        });
+      }
     }
   }
 

@@ -223,6 +223,15 @@ const handlers = {
     await importService.processImportJob(jobId, tenantId);
   },
 
+  'bulk-medicines-bulk-commit': async (data) => {
+    const { jobId, tenantId, branchId, userId } = data;
+
+    const { default: bulkImportService } =
+      await import('../modules/import/services/bulk-import.service.js');
+
+    await bulkImportService.processQueuedCommit(jobId, tenantId, branchId, userId);
+  },
+
   'bulk-medicines-import': async (data) => {
     const {
       filePath,

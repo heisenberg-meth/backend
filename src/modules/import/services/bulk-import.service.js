@@ -2,21 +2,171 @@ import crypto from 'crypto';
 import prisma from '../../../config/prisma.js';
 import auditService from '../../audit/service/audit.prisma.service.js';
 import logger from '../../../shared/utils/logger.js';
+import { getBullRedis } from '../../../config/redis.js';
 import {
   mapDosageFormToPackaging,
   validatePricing,
 } from '../../../shared/utils/medicine-helpers.js';
+
+const progressKey = (jobId) => `import:${jobId}:progress`;
+
+async function updateBulkProgress(jobId, data) {
+  try {
+    if (process.env.NODE_ENV === 'test') return;
+    const redis = getBullRedis();
+    await redis.set(progressKey(jobId), JSON.stringify(data));
+  } catch (err) {
+    logger.warn({ err }, '[Bulk Import] Redis progress update failed');
+  }
+}
 
 class BulkImportService {
   async analyze(payload, tenantId, branchId, userId) {
     return this._processBulkImport(payload, tenantId, branchId, userId, true);
   }
 
-  async commit(payload, tenantId, branchId, userId) {
-    return this._processBulkImport(payload, tenantId, branchId, userId, false);
+  async commit(payload, tenantId, branchId, userId, options = {}) {
+    if (!payload || typeof payload !== 'object') {
+      throw new Error('Invalid payload');
+    }
+
+    // In test environment, unless queue is explicitly requested, run synchronously
+    // to support unit test suites where BullMQ workers are disabled
+    if (process.env.NODE_ENV === 'test' && !options.queued) {
+      return this._processBulkImport(payload, tenantId, branchId, userId, false);
+    }
+
+    const medicines = Array.isArray(payload.medicines) ? payload.medicines : [];
+
+    const job = await prisma.importJob.create({
+      data: {
+        tenantId,
+        importType: 'BULK_MEDICINES',
+        importStatus: 'PROCESSING',
+        uploadedBy: userId,
+        fileName: payload.fileName || 'bulk_import.csv',
+        extractedData: payload,
+      },
+    });
+
+    await updateBulkProgress(job.id, {
+      processed: 0,
+      total: medicines.length,
+      percentage: 0,
+      status: 'queued',
+    });
+
+    try {
+      const { mainQueue } = await import('../../../queue/index.js');
+
+      await mainQueue.add('bulk-medicines-bulk-commit', {
+        jobId: job.id,
+        tenantId,
+        branchId,
+        userId,
+      });
+
+      return {
+        success: true,
+        queued: true,
+        jobId: job.id,
+        status: 'queued',
+        total: medicines.length,
+        message: 'Bulk import queued for processing.',
+      };
+    } catch (error) {
+      await prisma.importJob.update({
+        where: { id: job.id },
+        data: {
+          importStatus: 'FAILED',
+        },
+      });
+
+      throw error;
+    }
   }
 
-  async _processBulkImport(payload, tenantId, branchId, userId, isDryRun) {
+  async processQueuedCommit(jobId, tenantId, branchId, userId) {
+    const job = await prisma.importJob.findFirst({
+      where: {
+        id: jobId,
+        tenantId,
+      },
+    });
+
+    if (!job) {
+      throw new Error(`Import job ${jobId} not found.`);
+    }
+
+    const payload =
+      job.extractedData && typeof job.extractedData === 'object' ? job.extractedData : {};
+
+    const total = Array.isArray(payload.medicines) ? payload.medicines.length : 0;
+
+    try {
+      await updateBulkProgress(jobId, {
+        processed: 0,
+        total,
+        percentage: 0,
+        status: 'processing',
+      });
+
+      const result = await this._processBulkImport(
+        payload,
+        tenantId,
+        branchId,
+        userId,
+        false,
+        jobId,
+      );
+
+      await updateBulkProgress(jobId, {
+        processed: total,
+        total,
+        percentage: 100,
+        status: 'complete',
+        summary: result.summary,
+      });
+
+      await prisma.importJob.update({
+        where: { id: jobId },
+        data: {
+          importStatus: 'COMPLETED',
+          processedAt: new Date(),
+          extractedData: {
+            ...payload,
+            summary: result.summary,
+          },
+        },
+      });
+
+      return result;
+    } catch (error) {
+      await updateBulkProgress(jobId, {
+        processed: 0,
+        total,
+        percentage: 0,
+        status: 'failed',
+        error: error.message,
+      });
+
+      await prisma.importJob.update({
+        where: { id: jobId },
+        data: {
+          importStatus: 'FAILED',
+          errorMessage: error.message,
+          extractedData: {
+            ...payload,
+            error: error.message,
+          },
+        },
+      });
+
+      throw error;
+    }
+  }
+
+  async _processBulkImport(payload, tenantId, branchId, userId, isDryRun, jobId = null) {
     if (!payload || typeof payload !== 'object') {
       throw new Error('Invalid payload');
     }
@@ -900,13 +1050,27 @@ class BulkImportService {
         tenantId,
         branchId,
         userId,
-        jobId: `bulk-api-${Date.now()}`,
+        jobId: jobId || `bulk-api-${Date.now()}`,
         newMedicines,
         newBatches,
         newMovements,
         inventoryUpdates,
         batchQuantityUpdates,
         medicineUpdates,
+        progressTotal: medicines.length,
+        onProgress: jobId
+          ? async ({ processed, total }) => {
+              const percentage =
+                total > 0 ? Math.min(100, Math.round((processed / total) * 100)) : 100;
+
+              await updateBulkProgress(jobId, {
+                processed,
+                total,
+                percentage,
+                status: 'processing',
+              });
+            }
+          : undefined,
       });
     } catch (err) {
       logger.error({ err: err.message, stack: err.stack }, 'Bulk import transaction failed');
