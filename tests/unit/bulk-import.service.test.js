@@ -688,4 +688,116 @@ describe('BulkImportService - PRD Implementation & Test Cases', () => {
       }),
     );
   });
+
+  it('PRD §24: Merge duplicate strategy with new batch creates a new batch under existing medicine', async () => {
+    const existingMed = {
+      id: 'med-para-1',
+      name: 'Paracetamol 500mg',
+      barcode: '9999999999991',
+    };
+
+    const existingBatch = {
+      id: 'batch-para-old',
+      medicineId: existingMed.id,
+      batchNumber: 'BATCH001',
+      quantity: 100,
+    };
+
+    mockPrisma.medicine.findMany.mockResolvedValue([existingMed]);
+    mockPrisma.inventoryBatch.findMany.mockResolvedValue([existingBatch]);
+
+    const importPayload = {
+      medicines: [
+        {
+          name: 'Paracetamol 500mg',
+          barcode: '9999999999991',
+          qty: '50',
+          price: '20.00',
+          batch: 'BATCH002', // Genuinely different batch number (PRD §24)
+          isDuplicate: true,
+          rowNum: 1,
+        },
+      ],
+      duplicateStrategy: 'Merge',
+      supplier: 'Global Pharma',
+      barcodeOptions: { autoGen: false, overwrite: false },
+    };
+
+    const result = await bulkImportService.commit(importPayload, tenantId, branchId, userId);
+
+    expect(result.success).toBe(true);
+    expect(result.summary.merged).toBe(1);
+    expect(result.summary.created).toBe(0); // No new medicine created
+    expect(result.summary.imported).toBe(1);
+    expect(result.summary.total).toBe(1);
+
+    const callArgs = mockSharedEngine.commitChunks.mock.calls[0][0];
+    // No new medicines in catalog
+    expect(callArgs.newMedicines).toHaveLength(0);
+    // Genuinely new batch created for the existing medicine
+    expect(callArgs.newBatches).toHaveLength(1);
+    expect(callArgs.newBatches[0].medicineId).toBe('med-para-1');
+    expect(callArgs.newBatches[0].batchNumber).toBe('BATCH002');
+    expect(callArgs.newBatches[0].quantity).toBe(50);
+    expect(callArgs.newMovements).toHaveLength(1);
+    expect(callArgs.newMovements[0].notes).toContain('Duplicate resolved via MERGE');
+  });
+
+  it('PRD §27: Overwrite duplicate strategy with new batch creates a new batch and updates medicine fields', async () => {
+    const existingMed = {
+      id: 'med-para-2',
+      name: 'Paracetamol 500mg',
+      barcode: '9999999999992',
+      genericName: 'Old Generic',
+    };
+
+    const existingBatch = {
+      id: 'batch-para-old-2',
+      medicineId: existingMed.id,
+      batchNumber: 'BATCH001',
+      quantity: 100,
+    };
+
+    mockPrisma.medicine.findMany.mockResolvedValue([existingMed]);
+    mockPrisma.inventoryBatch.findMany.mockResolvedValue([existingBatch]);
+
+    const importPayload = {
+      medicines: [
+        {
+          name: 'Paracetamol 500mg',
+          barcode: '9999999999992',
+          genericName: 'New Paracetamol Generic',
+          qty: '50',
+          price: '22.00',
+          batch: 'BATCH002', // Different batch number (PRD §27)
+          isDuplicate: true,
+          rowNum: 1,
+        },
+      ],
+      duplicateStrategy: 'Overwrite',
+      supplier: 'Global Pharma',
+      barcodeOptions: { autoGen: false, overwrite: false },
+    };
+
+    const result = await bulkImportService.commit(importPayload, tenantId, branchId, userId);
+
+    expect(result.success).toBe(true);
+    expect(result.summary.overwritten).toBe(1);
+    expect(result.summary.created).toBe(0);
+    expect(result.summary.imported).toBe(1);
+    expect(result.summary.total).toBe(1);
+
+    const callArgs = mockSharedEngine.commitChunks.mock.calls[0][0];
+    expect(callArgs.newMedicines).toHaveLength(0);
+    // Master field updated
+    expect(callArgs.medicineUpdates).toHaveLength(1);
+    expect(callArgs.medicineUpdates[0].id).toBe('med-para-2');
+    expect(callArgs.medicineUpdates[0].data.genericName).toBe('New Paracetamol Generic');
+    // New batch created
+    expect(callArgs.newBatches).toHaveLength(1);
+    expect(callArgs.newBatches[0].medicineId).toBe('med-para-2');
+    expect(callArgs.newBatches[0].batchNumber).toBe('BATCH002');
+    expect(callArgs.newBatches[0].quantity).toBe(50);
+    expect(callArgs.newMovements[0].notes).toContain('Duplicate resolved via OVERWRITE');
+  });
 });

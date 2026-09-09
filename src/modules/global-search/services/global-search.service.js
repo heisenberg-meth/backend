@@ -86,7 +86,7 @@ export const STATIC_SETTINGS = [
   },
 ];
 
-export class GlobalSearchService {
+class GlobalSearchService {
   async searchMedicines(tenantId, query, limit = 20) {
     try {
       const medicines = await prisma.medicine.findMany({
@@ -372,3 +372,5 @@ export class GlobalSearchService {
     }
   }
 }
+
+export default new GlobalSearchService();

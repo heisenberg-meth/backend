@@ -529,7 +529,10 @@ class BulkImportService {
 
     const validatedRows = [];
     for (const row of preValidatedRows) {
-      let isDuplicate = false;
+      const explicitDecision = this._getDecisionAction(duplicateDecisions, row.rowNum);
+      const isMergeOrOverwrite =
+        duplicateStrategy && ['merge', 'overwrite'].includes(duplicateStrategy.toLowerCase());
+      let isDuplicate = Boolean(row.isDuplicate) || Boolean(explicitDecision);
       let isConflict = false;
       let conflictType = null;
       let matchType = 'NONE';
@@ -541,23 +544,22 @@ class BulkImportService {
         const batchKey = `${matchedMedicine.id}:${normBatchNo}`;
         const existingBatch = normBatchNo ? batchLookupMap.get(batchKey) : null;
 
-        // PRD §3.1: Priority 3 - Batch-Level Duplicate Determination
-        // If row matches an existing active batch, it is a DUPLICATE BATCH.
-        // If not found, it is a NEW BATCH for an EXISTING MEDICINE (isDuplicate = false).
-        if (existingBatch) {
+        // PRD §24 & §27: If batch exists, or if duplicate decision is set, or if strategy is Merge/Overwrite
+        if (existingBatch || isDuplicate || isMergeOrOverwrite) {
           isDuplicate = true;
           analysis.duplicates++;
 
-          const existingQty = Number(
-            existingBatch.quantity || existingBatch.availableQuantity || 0,
-          );
-          const existingPrice = Number(existingBatch.purchasePrice || 0);
-          const existingMrp = Number(existingBatch.mrp || 0);
-          const existingExpiryStr = existingBatch.expiryDate
-            ? typeof existingBatch.expiryDate.toISOString === 'function'
-              ? existingBatch.expiryDate.toISOString().split('T')[0]
-              : String(existingBatch.expiryDate).split('T')[0]
-            : null;
+          const existingQty = existingBatch
+            ? Number(existingBatch.quantity || existingBatch.availableQuantity || 0)
+            : 0;
+          const existingPrice = existingBatch ? Number(existingBatch.purchasePrice || 0) : 0;
+          const existingMrp = existingBatch ? Number(existingBatch.mrp || 0) : 0;
+          const existingExpiryStr =
+            existingBatch && existingBatch.expiryDate
+              ? typeof existingBatch.expiryDate.toISOString === 'function'
+                ? existingBatch.expiryDate.toISOString().split('T')[0]
+                : String(existingBatch.expiryDate).split('T')[0]
+              : null;
           const importedExpiryStr = row.expiryDate
             ? typeof row.expiryDate.toISOString === 'function'
               ? row.expiryDate.toISOString().split('T')[0]
@@ -571,7 +573,10 @@ class BulkImportService {
             mrp: { existing: existingMrp, imported: row.price * 1.2 },
           };
 
-          if (row.isBarcodeCollision) {
+          if (!existingBatch) {
+            matchType = 'NEW_BATCH';
+            diffDesc = `New batch "${row.batch || 'Auto-generated'}" for existing medicine "${matchedMedicine.name}"`;
+          } else if (row.isBarcodeCollision) {
             isConflict = true;
             conflictType = 'BARCODE_COLLISION';
             matchType = 'BARCODE_COLLISION';
@@ -611,7 +616,7 @@ class BulkImportService {
               id: matchedMedicine.id,
               name: matchedMedicine.name,
               barcode: matchedMedicine.barcode || null,
-              batch: existingBatch.batchNumber,
+              batch: existingBatch ? existingBatch.batchNumber : null,
               quantity: existingQty,
               expiry: existingExpiryStr,
               purchasePrice: existingPrice,
@@ -768,6 +773,8 @@ class BulkImportService {
 
     for (const row of validatedRows) {
       let medicineId = null;
+      let isDuplicateResolution = false;
+      let duplicateAction = null;
 
       const normName = row.name.toLowerCase().trim();
       const normBarcode = row.barcode ? row.barcode.trim() : '';
@@ -793,6 +800,9 @@ class BulkImportService {
 
           // PRD §4.2: Strategy Overwrite / §4.3 Strategy Merge
           if (action === 'overwrite' || action === 'merge') {
+            isDuplicateResolution = true;
+            duplicateAction = action;
+
             if (action === 'overwrite') overwrittenCount++;
             if (action === 'merge') mergedCount++;
 
@@ -899,8 +909,10 @@ class BulkImportService {
               });
 
               inventoryUpdates.push({ medicineId, qty: parsedQty });
+              continue;
             }
-            continue;
+            // PRD §24 & §27: If existing batch was NOT found for this medicine,
+            // do not continue; fall through to create the new batch in newBatches below.
           }
         }
       } else {
@@ -1036,11 +1048,15 @@ class BulkImportService {
           quantity: parsedQty,
           referenceType: 'BULK_IMPORT',
           performedBy: userId,
-          notes: `Bulk imported from ${supplierName !== 'None' ? supplierName : 'spreadsheet'}`,
+          notes: isDuplicateResolution
+            ? `Duplicate resolved via ${duplicateAction.toUpperCase()} (new batch created)`
+            : `Bulk imported from ${supplierName !== 'None' ? supplierName : 'spreadsheet'}`,
         });
 
         inventoryUpdates.push({ medicineId, qty: parsedQty });
-        createdCount++;
+        if (!isDuplicateResolution) {
+          createdCount++;
+        }
       }
     }
 
