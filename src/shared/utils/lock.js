@@ -63,27 +63,16 @@ export const extendLock = async (resource, ttlMs = 5000, customToken = null) => 
     return false;
   }
 
-  if (typeof redisClient.eval === 'function') {
-    const result = await redisClient.eval(EXTEND_LOCK_SCRIPT, 1, lockKey, token, ttlMs);
-    const success = result === 1;
-    if (!success) {
-      activeLockTokens.delete(resource);
-    }
-    return success;
+  if (typeof redisClient.eval !== 'function') {
+    return false;
   }
 
-  // Fallback for mocks/clients without eval
-  if (typeof redisClient.get === 'function') {
-    const current = await redisClient.get(lockKey);
-    if (current !== token) {
-      activeLockTokens.delete(resource);
-      return false;
-    }
-    const result = await redisClient.pexpire(lockKey, ttlMs);
-    return result === 1;
+  const result = await redisClient.eval(EXTEND_LOCK_SCRIPT, 1, lockKey, token, ttlMs);
+  const success = result === 1;
+  if (!success) {
+    activeLockTokens.delete(resource);
   }
-
-  return false;
+  return success;
 };
 
 /**
@@ -143,22 +132,12 @@ export const releaseLock = async (resource, customToken = null) => {
     return false;
   }
 
-  if (typeof redisClient.eval === 'function') {
-    const result = await redisClient.eval(RELEASE_LOCK_SCRIPT, 1, lockKey, token);
-    return result === 1;
-  }
-
-  // Fallback for mocks without eval
-  if (typeof redisClient.get === 'function') {
-    const current = await redisClient.get(lockKey);
-    if (current === token) {
-      await redisClient.del(lockKey);
-      return true;
-    }
+  if (typeof redisClient.eval !== 'function') {
     return false;
   }
 
-  return false;
+  const result = await redisClient.eval(RELEASE_LOCK_SCRIPT, 1, lockKey, token);
+  return result === 1;
 };
 
 /**

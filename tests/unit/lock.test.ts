@@ -120,6 +120,25 @@ describe('Lock Utility (Unit)', () => {
     jest.useRealTimers();
   });
 
+  it('should stop heartbeat when lock ownership is lost', async () => {
+    jest.useFakeTimers();
+
+    mockRedis.eval.mockResolvedValue(0);
+
+    const stopHeartbeat = startLockHeartbeat('lost-resource', 2000, 1000, 'token-123');
+
+    await jest.advanceTimersByTimeAsync(1000);
+
+    expect(mockRedis.eval).toHaveBeenCalledTimes(1);
+
+    await jest.advanceTimersByTimeAsync(3000);
+
+    expect(mockRedis.eval).toHaveBeenCalledTimes(1);
+
+    stopHeartbeat();
+    jest.useRealTimers();
+  });
+
   it('should release a lock using atomic Lua script when ownership token is known', async () => {
     mockRedis.eval.mockResolvedValue(1);
 
