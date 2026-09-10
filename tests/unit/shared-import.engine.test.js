@@ -20,10 +20,19 @@ const mockPrisma = {
   inventory: {
     findMany: jest.fn(),
     createMany: jest.fn(),
+    create: jest.fn(),
     update: jest.fn(),
   },
   $transaction: jest.fn(async (callback) => await callback(mockPrisma)),
 };
+
+const mockLock = {
+  acquireLock: jest.fn().mockResolvedValue(true),
+  releaseLock: jest.fn().mockResolvedValue(undefined),
+  startLockHeartbeat: jest.fn().mockReturnValue(() => {}),
+};
+
+jest.unstable_mockModule('../../src/shared/utils/lock.js', () => mockLock);
 
 jest.unstable_mockModule('../../src/modules/audit/service/audit.prisma.service.js', () => ({
   default: mockAuditService,
@@ -44,6 +53,10 @@ describe('SharedImportEngine - Integrity & Ordering Enforcement', () => {
   beforeEach(() => {
     jest.clearAllMocks();
 
+    mockLock.acquireLock.mockResolvedValue(true);
+    mockLock.releaseLock.mockResolvedValue(undefined);
+    mockLock.startLockHeartbeat.mockReturnValue(() => {});
+
     mockPrisma.medicine.createMany.mockResolvedValue({ count: 1 });
     mockPrisma.medicine.update.mockResolvedValue({});
     mockPrisma.inventoryBatch.createMany.mockResolvedValue({ count: 1 });
@@ -52,6 +65,7 @@ describe('SharedImportEngine - Integrity & Ordering Enforcement', () => {
     mockPrisma.stockMovement.createMany.mockResolvedValue({ count: 1 });
     mockPrisma.inventory.findMany.mockResolvedValue([]);
     mockPrisma.inventory.createMany.mockResolvedValue({ count: 1 });
+    mockPrisma.inventory.create.mockResolvedValue({});
     mockPrisma.inventory.update.mockResolvedValue({});
     mockPrisma.$transaction.mockImplementation(async (callback) => await callback(mockPrisma));
   });
@@ -114,9 +128,67 @@ describe('SharedImportEngine - Integrity & Ordering Enforcement', () => {
       'inventoryBatch.update',
       'inventoryBatch.findMany',
       'stockMovement.createMany',
+      'inventoryBatch.findMany',
       'inventory.findMany',
       'inventory.update',
     ]);
+  });
+
+  it('should reactivate previously cleared/archived batch during import when reactivate: true', async () => {
+    const medicineId = 'med-reactivate-1';
+    const batchId = 'batch-reactivate-1';
+
+    mockPrisma.inventoryBatch.findMany.mockResolvedValue([
+      { id: batchId, medicineId, availableQuantity: 10 },
+    ]);
+    mockPrisma.inventory.findMany.mockResolvedValue([{ id: 'inv-1', medicineId }]);
+
+    await sharedImportEngine.commitChunks({
+      tenantId,
+      branchId,
+      userId,
+      jobId: 'job-reactivate-test',
+      batchQuantityUpdates: [{ batchId, qty: 10, medicineId, reactivate: true }],
+    });
+
+    expect(mockPrisma.inventoryBatch.update).toHaveBeenCalledWith({
+      where: { id: batchId },
+      data: expect.objectContaining({
+        quantity: { increment: 10 },
+        receivedQuantity: { increment: 10 },
+        availableQuantity: { increment: 10 },
+        status: 'ACTIVE',
+        isArchived: false,
+        archivedAt: null,
+        archivedBy: null,
+        archiveReason: null,
+      }),
+    });
+  });
+
+  it('should NOT reactivate archived batch if reactivate is false/omitted (e.g. Expired Cleanup)', async () => {
+    const medicineId = 'med-no-reactivate';
+    const batchId = 'batch-expired-1';
+
+    mockPrisma.inventoryBatch.findMany.mockResolvedValue([]);
+    mockPrisma.inventory.findMany.mockResolvedValue([{ id: 'inv-2', medicineId }]);
+
+    await sharedImportEngine.commitChunks({
+      tenantId,
+      branchId,
+      userId,
+      jobId: 'job-no-reactivate-test',
+      batchQuantityUpdates: [{ batchId, qty: 10, medicineId, reactivate: false }],
+    });
+
+    expect(mockPrisma.inventoryBatch.update).toHaveBeenCalledWith({
+      where: { id: batchId },
+      data: {
+        quantity: { increment: 10 },
+        receivedQuantity: { increment: 10 },
+        availableQuantity: { increment: 10 },
+      },
+    });
   });
 
   it('should reject duplicate InventoryBatch IDs in the chunk', async () => {
@@ -227,5 +299,66 @@ describe('SharedImportEngine - Integrity & Ordering Enforcement', () => {
 
     // Succeeded on 2nd attempt
     expect(mockPrisma.$transaction).toHaveBeenCalledTimes(2);
+  });
+
+  it('should acquire distributed lock on commit and release it', async () => {
+    await sharedImportEngine.commitChunks({
+      tenantId,
+      branchId,
+      userId,
+      jobId: 'job-lock-test',
+      newMedicines: [{ id: 'med-lock-1', name: 'Lock Med' }],
+    });
+
+    expect(mockLock.acquireLock).toHaveBeenCalledWith(
+      `inventory-op:${tenantId}:${branchId}`,
+      60000,
+    );
+    expect(mockLock.releaseLock).toHaveBeenCalledWith(`inventory-op:${tenantId}:${branchId}`);
+  });
+
+  it('should throw 409 if distributed lock cannot be acquired', async () => {
+    mockLock.acquireLock.mockResolvedValue(false);
+
+    await expect(
+      sharedImportEngine.commitChunks({
+        tenantId,
+        branchId,
+        userId,
+        jobId: 'job-lock-fail',
+        newMedicines: [{ id: 'med-lock-1', name: 'Lock Med' }],
+      }),
+    ).rejects.toMatchObject({
+      statusCode: 409,
+      errorCode: 'OPERATION_IN_PROGRESS',
+    });
+
+    expect(mockLock.releaseLock).not.toHaveBeenCalled();
+  });
+
+  it('should throw 400 if branchId is missing or "all"', async () => {
+    await expect(
+      sharedImportEngine.commitChunks({
+        tenantId,
+        branchId: 'all',
+        userId,
+        jobId: 'job-branch-all',
+      }),
+    ).rejects.toMatchObject({
+      statusCode: 400,
+      errorCode: 'BRANCH_REQUIRED',
+    });
+
+    await expect(
+      sharedImportEngine.commitChunks({
+        tenantId,
+        branchId: null,
+        userId,
+        jobId: 'job-branch-null',
+      }),
+    ).rejects.toMatchObject({
+      statusCode: 400,
+      errorCode: 'BRANCH_REQUIRED',
+    });
   });
 });

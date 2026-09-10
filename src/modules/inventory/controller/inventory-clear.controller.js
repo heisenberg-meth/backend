@@ -61,6 +61,17 @@ class InventoryClearController {
         });
       }
 
+      if (err.statusCode === 400) {
+        return reply.code(400).send({
+          success: false,
+          message: err.message,
+          error: {
+            code: err.errorCode || 'BRANCH_REQUIRED',
+            message: err.message,
+          },
+        });
+      }
+
       return reply.code(500).send({
         success: false,
         message: 'Unable to clear inventory',

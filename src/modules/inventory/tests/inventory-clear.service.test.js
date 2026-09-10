@@ -30,6 +30,9 @@ const mockPrisma = {
   stockMovement: {
     createMany: jest.fn(),
   },
+  inventory: {
+    updateMany: jest.fn(),
+  },
   $transaction: jest.fn(),
 };
 
@@ -44,6 +47,7 @@ const mockCacheInvalidator = {
 const mockLock = {
   acquireLock: jest.fn().mockResolvedValue(true),
   releaseLock: jest.fn().mockResolvedValue(undefined),
+  startLockHeartbeat: jest.fn().mockReturnValue(() => {}),
 };
 
 const mockQueue = {
@@ -84,6 +88,8 @@ describe('InventoryClearService', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockLock.acquireLock.mockResolvedValue(true);
+    mockLock.releaseLock.mockResolvedValue(undefined);
+    mockLock.startLockHeartbeat.mockReturnValue(() => {});
     mockPrisma.importJob.findFirst.mockResolvedValue(null);
   });
 
@@ -92,28 +98,25 @@ describe('InventoryClearService', () => {
   });
 
   describe('getClearSummary', () => {
-    it('returns aggregated batch count, total units, and branch name', async () => {
-      mockPrisma.inventoryBatch.aggregate.mockResolvedValue({
-        _count: { id: 12 },
-        _sum: { availableQuantity: 3450, quantity: 3450 },
-      });
+    it('returns aggregated batch count, total units, and branch name using exact formula', async () => {
+      mockPrisma.inventoryBatch.findMany.mockResolvedValue([
+        { availableQuantity: 100, quantity: 100 },
+        { availableQuantity: 0, quantity: 50 },
+      ]);
       mockPrisma.branch.findFirst.mockResolvedValue({
         name: 'Main Pharmacy Branch',
       });
 
       const summary = await inventoryClearService.getClearSummary('tenant-1', 'branch-1');
 
-      expect(summary.batchCount).toBe(12);
-      expect(summary.totalUnits).toBe(3450);
+      expect(summary.batchCount).toBe(2);
+      expect(summary.totalUnits).toBe(150);
       expect(summary.branchName).toBe('Main Pharmacy Branch');
-      expect(mockPrisma.inventoryBatch.aggregate).toHaveBeenCalled();
+      expect(mockPrisma.inventoryBatch.findMany).toHaveBeenCalled();
     });
 
     it('handles empty inventory gracefully', async () => {
-      mockPrisma.inventoryBatch.aggregate.mockResolvedValue({
-        _count: { id: 0 },
-        _sum: { availableQuantity: null, quantity: null },
-      });
+      mockPrisma.inventoryBatch.findMany.mockResolvedValue([]);
       mockPrisma.branch.findFirst.mockResolvedValue(null);
 
       const summary = await inventoryClearService.getClearSummary('tenant-1', 'branch-1');
@@ -121,6 +124,13 @@ describe('InventoryClearService', () => {
       expect(summary.batchCount).toBe(0);
       expect(summary.totalUnits).toBe(0);
       expect(summary.branchName).toBeNull();
+    });
+
+    it('throws 400 when branchId is invalid in getClearSummary', async () => {
+      await expect(inventoryClearService.getClearSummary('tenant-1', 'all')).rejects.toMatchObject({
+        statusCode: 400,
+        errorCode: 'BRANCH_REQUIRED',
+      });
     });
   });
 
@@ -157,6 +167,7 @@ describe('InventoryClearService', () => {
 
     it('returns safe response when no active inventory exists', async () => {
       mockPrisma.inventoryBatch.findMany.mockResolvedValue([]);
+      mockPrisma.inventory.updateMany.mockResolvedValue({ count: 0 });
 
       const result = await inventoryClearService.clearBranchInventory(
         'tenant-1',
@@ -167,6 +178,18 @@ describe('InventoryClearService', () => {
       expect(result.success).toBe(true);
       expect(result.summary.batchesCleared).toBe(0);
       expect(result.summary.unitsCleared).toBe(0);
+      expect(mockPrisma.inventory.updateMany).toHaveBeenCalledWith({
+        where: {
+          tenantId: 'tenant-1',
+          branchId: 'branch-1',
+        },
+        data: {
+          currentStock: 0,
+          reservedStock: 0,
+          status: 'OUT_OF_STOCK',
+        },
+      });
+      expect(mockCacheInvalidator.invalidateInventoryCaches).toHaveBeenCalledWith('tenant-1');
       expect(mockPrisma.$transaction).not.toHaveBeenCalled();
       expect(mockLock.releaseLock).toHaveBeenCalled();
     });
@@ -195,11 +218,13 @@ describe('InventoryClearService', () => {
 
       mockPrisma.inventoryBatch.findMany.mockResolvedValue(mockBatches);
 
+      const mockInventoryUpdateMany = jest.fn().mockResolvedValue({ count: 2 });
       mockPrisma.$transaction.mockImplementation(async (callback) => {
         const tx = {
           inventoryBatch: { updateMany: jest.fn().mockResolvedValue({ count: 2 }) },
           batchAuditLog: { createMany: jest.fn().mockResolvedValue({ count: 2 }) },
           stockMovement: { createMany: jest.fn().mockResolvedValue({ count: 2 }) },
+          inventory: { updateMany: mockInventoryUpdateMany },
         };
         return callback(tx);
       });
@@ -213,6 +238,18 @@ describe('InventoryClearService', () => {
       expect(result.success).toBe(true);
       expect(result.summary.batchesCleared).toBe(2);
       expect(result.summary.unitsCleared).toBe(150);
+
+      expect(mockInventoryUpdateMany).toHaveBeenCalledWith({
+        where: {
+          tenantId: 'tenant-1',
+          branchId: 'branch-1',
+        },
+        data: {
+          currentStock: 0,
+          reservedStock: 0,
+          status: 'OUT_OF_STOCK',
+        },
+      });
 
       expect(mockPrisma.$transaction).toHaveBeenCalledTimes(1);
       expect(mockAuditService.log).toHaveBeenCalledWith(
@@ -250,6 +287,22 @@ describe('InventoryClearService', () => {
 
       expect(mockLock.releaseLock).toHaveBeenCalled();
       expect(mockAuditService.log).not.toHaveBeenCalled();
+    });
+
+    it('rejects with 400 when branchId is missing or "all"', async () => {
+      await expect(
+        inventoryClearService.clearBranchInventory('tenant-1', 'all', 'user-1'),
+      ).rejects.toMatchObject({
+        statusCode: 400,
+        errorCode: 'BRANCH_REQUIRED',
+      });
+
+      await expect(
+        inventoryClearService.clearBranchInventory('tenant-1', null, 'user-1'),
+      ).rejects.toMatchObject({
+        statusCode: 400,
+        errorCode: 'BRANCH_REQUIRED',
+      });
     });
   });
 });

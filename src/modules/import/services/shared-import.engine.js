@@ -1,6 +1,7 @@
 import prisma from '../../../config/prisma.js';
 import logger from '../../../shared/utils/logger.js';
 import auditService from '../../audit/service/audit.service.js';
+import { acquireLock, releaseLock, startLockHeartbeat } from '../../../shared/utils/lock.js';
 
 class SharedImportEngine {
   constructor() {
@@ -15,149 +16,174 @@ class SharedImportEngine {
     branchId,
     userId,
     jobId,
-    newMedicines,
-    newBatches,
-    newMovements,
-    inventoryUpdates,
-    batchQuantityUpdates,
-    medicineUpdates,
-    categoriesToCreate,
-    manufacturersToCreate,
+    newMedicines = [],
+    newBatches = [],
+    newMovements = [],
+    inventoryUpdates = [],
+    batchQuantityUpdates = [],
+    medicineUpdates = [],
+    categoriesToCreate = [],
+    manufacturersToCreate = [],
     progressTotal = null,
     onProgress = null,
   }) {
-    // 1. Create categories and manufacturers (Safe to do outside the main row chunk loop)
-    const categoryNameToId = new Map();
-    const manufacturerNameToId = new Map();
-
-    if (categoriesToCreate?.length > 0 || manufacturersToCreate?.length > 0) {
-      await prisma.$transaction(
-        async (tx) => {
-          for (const cat of categoriesToCreate || []) {
-            const key = cat.name.toLowerCase().trim();
-            if (!categoryNameToId.has(key)) {
-              const created = await tx.medicineCategory.create({
-                data: { tenantId, name: cat.name },
-              });
-              categoryNameToId.set(key, created.id);
-            }
-          }
-
-          for (const mfr of manufacturersToCreate || []) {
-            const key = mfr.name.toLowerCase().trim();
-            if (!manufacturerNameToId.has(key)) {
-              const created = await tx.manufacturer.create({
-                data: { tenantId, name: mfr.name },
-              });
-              manufacturerNameToId.set(key, created.id);
-            }
-          }
-        },
-        { timeout: 30000 },
-      );
+    if (!branchId || ['all', 'null', 'undefined'].includes(branchId)) {
+      const err = new Error('A valid branch is required for inventory import.');
+      err.statusCode = 400;
+      err.errorCode = 'BRANCH_REQUIRED';
+      throw err;
     }
 
-    // Resolve category and manufacturer IDs for new medicines
-    for (const m of newMedicines) {
-      if (!m.categoryId && m._categoryName) {
-        m.categoryId = categoryNameToId.get(m._categoryName.toLowerCase().trim());
-      }
-      if (!m.manufacturerId && m._manufacturerName) {
-        m.manufacturerId = manufacturerNameToId.get(m._manufacturerName.toLowerCase().trim());
-      }
-      delete m._categoryName;
-      delete m._manufacturerName;
+    const lockResource = `inventory-op:${tenantId}:${branchId}`;
+    const locked = await acquireLock(lockResource, 60000);
+
+    if (!locked) {
+      const err = new Error('An inventory operation or clear is already in progress. Please wait.');
+      err.statusCode = 409;
+      err.errorCode = 'OPERATION_IN_PROGRESS';
+      throw err;
     }
 
-    // Combine all operations into cohesive units per medicine to chunk them
-    // For simplicity, we can chunk based on the number of new medicines or new batches.
-    // However, since some rows might only be batch updates, we should chunk by a fixed size across all arrays.
+    const stopHeartbeat =
+      typeof startLockHeartbeat === 'function' ? startLockHeartbeat(lockResource, 60000) : () => {};
 
-    // We will chunk the array of all unique medicine IDs being updated.
-    const uniqueMedicineIds = new Set([
-      ...(newMedicines || []).map((m) => m.id),
-      ...(newBatches || []).map((b) => b.medicineId),
-      ...(inventoryUpdates || []).map((i) => i.medicineId),
-      ...(newMovements || []).map((m) => m.medicineId),
-      ...(batchQuantityUpdates || []).map((u) => u.medicineId),
-      ...(medicineUpdates || []).map((u) => u.id),
-    ]);
+    try {
+      // 1. Create categories and manufacturers (Safe to do outside the main row chunk loop)
+      const categoryNameToId = new Map();
+      const manufacturerNameToId = new Map();
 
-    const allMedicineIds = Array.from(uniqueMedicineIds);
-    let totalChunks = Math.ceil(allMedicineIds.length / this.CHUNK_SIZE);
+      if (categoriesToCreate?.length > 0 || manufacturersToCreate?.length > 0) {
+        await prisma.$transaction(
+          async (tx) => {
+            for (const cat of categoriesToCreate || []) {
+              const key = cat.name.toLowerCase().trim();
+              if (!categoryNameToId.has(key)) {
+                const created = await tx.medicineCategory.create({
+                  data: { tenantId, name: cat.name },
+                });
+                categoryNameToId.set(key, created.id);
+              }
+            }
 
-    logger.info(
-      { jobId, totalMedicines: allMedicineIds.length, chunks: totalChunks },
-      '[SharedImportEngine] Starting chunked commit',
-    );
-
-    for (let i = 0; i < allMedicineIds.length; i += this.CHUNK_SIZE) {
-      const chunkMedIds = new Set(allMedicineIds.slice(i, i + this.CHUNK_SIZE));
-
-      const chunkMedicines = (newMedicines || []).filter((m) => chunkMedIds.has(m.id));
-      const chunkBatches = (newBatches || []).filter((b) => chunkMedIds.has(b.medicineId));
-      const chunkMovements = (newMovements || []).filter((m) => chunkMedIds.has(m.medicineId));
-      const chunkBatchUpdates = (batchQuantityUpdates || []).filter((u) =>
-        chunkMedIds.has(u.medicineId),
-      );
-      const chunkMedicineUpdates = (medicineUpdates || []).filter((u) => chunkMedIds.has(u.id));
-
-      const chunkInventoryUpdates = new Map();
-      for (const inv of inventoryUpdates || []) {
-        if (chunkMedIds.has(inv.medicineId)) {
-          chunkInventoryUpdates.set(
-            inv.medicineId,
-            (chunkInventoryUpdates.get(inv.medicineId) || 0) + inv.qty,
-          );
-        }
-      }
-
-      await this._commitChunkWithRetries({
-        tenantId,
-        branchId,
-        chunkMedicines,
-        chunkBatches,
-        chunkMovements,
-        chunkBatchUpdates,
-        chunkMedicineUpdates,
-        chunkInventoryUpdates,
-      });
-
-      if (userId) {
-        await auditService.logAction({
-          tenantId,
-          userId,
-          entityType: 'IMPORT_JOB_CHUNK',
-          entityId: jobId,
-          action: 'CHUNK_COMMITTED',
-          newData: {
-            chunkIndex: i / this.CHUNK_SIZE + 1,
-            totalChunks,
-            medicinesCount: chunkMedicines.length,
-            batchesCount: chunkBatches.length,
+            for (const mfr of manufacturersToCreate || []) {
+              const key = mfr.name.toLowerCase().trim();
+              if (!manufacturerNameToId.has(key)) {
+                const created = await tx.manufacturer.create({
+                  data: { tenantId, name: mfr.name },
+                });
+                manufacturerNameToId.set(key, created.id);
+              }
+            }
           },
-        });
+          { timeout: 30000 },
+        );
       }
+
+      // Resolve category and manufacturer IDs for new medicines
+      for (const m of newMedicines) {
+        if (!m.categoryId && m._categoryName) {
+          m.categoryId = categoryNameToId.get(m._categoryName.toLowerCase().trim());
+        }
+        if (!m.manufacturerId && m._manufacturerName) {
+          m.manufacturerId = manufacturerNameToId.get(m._manufacturerName.toLowerCase().trim());
+        }
+        delete m._categoryName;
+        delete m._manufacturerName;
+      }
+
+      // Combine all operations into cohesive units per medicine to chunk them
+      // For simplicity, we can chunk based on the number of new medicines or new batches.
+      // However, since some rows might only be batch updates, we should chunk by a fixed size across all arrays.
+
+      // We will chunk the array of all unique medicine IDs being updated.
+      const uniqueMedicineIds = new Set([
+        ...(newMedicines || []).map((m) => m.id),
+        ...(newBatches || []).map((b) => b.medicineId),
+        ...(inventoryUpdates || []).map((i) => i.medicineId),
+        ...(newMovements || []).map((m) => m.medicineId),
+        ...(batchQuantityUpdates || []).map((u) => u.medicineId),
+        ...(medicineUpdates || []).map((u) => u.id),
+      ]);
+
+      const allMedicineIds = Array.from(uniqueMedicineIds);
+      let totalChunks = Math.ceil(allMedicineIds.length / this.CHUNK_SIZE);
 
       logger.info(
-        { jobId, chunk: i / this.CHUNK_SIZE + 1, total: totalChunks },
-        '[SharedImportEngine] Committed chunk',
+        { jobId, totalMedicines: allMedicineIds.length, chunks: totalChunks },
+        '[SharedImportEngine] Starting chunked commit',
       );
 
-      if (onProgress) {
-        const processed = Math.min(
-          progressTotal || allMedicineIds.length,
-          Math.round(
-            ((i + chunkMedIds.size) / allMedicineIds.length) *
-              (progressTotal || allMedicineIds.length),
-          ),
+      for (let i = 0; i < allMedicineIds.length; i += this.CHUNK_SIZE) {
+        const chunkMedIds = new Set(allMedicineIds.slice(i, i + this.CHUNK_SIZE));
+
+        const chunkMedicines = (newMedicines || []).filter((m) => chunkMedIds.has(m.id));
+        const chunkBatches = (newBatches || []).filter((b) => chunkMedIds.has(b.medicineId));
+        const chunkMovements = (newMovements || []).filter((m) => chunkMedIds.has(m.medicineId));
+        const chunkBatchUpdates = (batchQuantityUpdates || []).filter((u) =>
+          chunkMedIds.has(u.medicineId),
+        );
+        const chunkMedicineUpdates = (medicineUpdates || []).filter((u) => chunkMedIds.has(u.id));
+
+        const chunkInventoryUpdates = new Map();
+        for (const inv of inventoryUpdates || []) {
+          if (chunkMedIds.has(inv.medicineId)) {
+            chunkInventoryUpdates.set(
+              inv.medicineId,
+              (chunkInventoryUpdates.get(inv.medicineId) || 0) + inv.qty,
+            );
+          }
+        }
+
+        await this._commitChunkWithRetries({
+          tenantId,
+          branchId,
+          chunkMedicines,
+          chunkBatches,
+          chunkMovements,
+          chunkBatchUpdates,
+          chunkMedicineUpdates,
+          chunkInventoryUpdates,
+        });
+
+        if (userId) {
+          await auditService.logAction({
+            tenantId,
+            userId,
+            entityType: 'IMPORT_JOB_CHUNK',
+            entityId: jobId,
+            action: 'CHUNK_COMMITTED',
+            newData: {
+              chunkIndex: i / this.CHUNK_SIZE + 1,
+              totalChunks,
+              medicinesCount: chunkMedicines.length,
+              batchesCount: chunkBatches.length,
+            },
+          });
+        }
+
+        logger.info(
+          { jobId, chunk: i / this.CHUNK_SIZE + 1, total: totalChunks },
+          '[SharedImportEngine] Committed chunk',
         );
 
-        await onProgress({
-          processed,
-          total: progressTotal || allMedicineIds.length,
-        });
+        if (onProgress) {
+          const processed = Math.min(
+            progressTotal || allMedicineIds.length,
+            Math.round(
+              ((i + chunkMedIds.size) / allMedicineIds.length) *
+                (progressTotal || allMedicineIds.length),
+            ),
+          );
+
+          await onProgress({
+            processed,
+            total: progressTotal || allMedicineIds.length,
+          });
+        }
       }
+    } finally {
+      stopHeartbeat();
+      await releaseLock(lockResource);
     }
   }
 
@@ -228,6 +254,16 @@ class SharedImportEngine {
                 batchData.availableQuantity = { increment: upd.qty };
               }
 
+              // Re-importing a previously cleared batch makes it active again (Rule 2 & 3).
+              // Never blindly reactivate all batches.
+              if (upd.reactivate) {
+                batchData.status = 'ACTIVE';
+                batchData.isArchived = false;
+                batchData.archivedAt = null;
+                batchData.archivedBy = null;
+                batchData.archiveReason = null;
+              }
+
               if (upd.purchasePrice !== undefined) batchData.purchasePrice = upd.purchasePrice;
               if (upd.sellingPrice !== undefined) batchData.sellingPrice = upd.sellingPrice;
               if (upd.mrp !== undefined) batchData.mrp = upd.mrp;
@@ -289,53 +325,99 @@ class SharedImportEngine {
             });
           }
 
-          // 6. Upsert Inventory
-          if (chunkInventoryUpdates.size > 0) {
-            const medIds = Array.from(chunkInventoryUpdates.keys());
+          // 6. Reconcile Inventory from Resulting Batches (Rules 5 & 6)
+          const affectedMedIds = Array.from(
+            new Set([
+              ...chunkMedicines.map((m) => m.id),
+              ...chunkBatches.map((b) => b.medicineId),
+              ...chunkBatchUpdates.map((u) => u.medicineId),
+              ...Array.from(chunkInventoryUpdates.keys()),
+            ]),
+          );
+
+          if (affectedMedIds.length > 0) {
+            // Find all active batches for affected medicines to calculate true current stock
+            const activeBatchesInTx = await tx.inventoryBatch.findMany({
+              where: {
+                tenantId,
+                ...(branchId ? { branchId } : {}),
+                medicineId: { in: affectedMedIds },
+                deletedAt: null,
+                isArchived: false,
+                status: 'ACTIVE',
+              },
+              select: {
+                medicineId: true,
+                availableQuantity: true,
+                quantity: true,
+                expiryDate: true,
+              },
+            });
+
+            const now = new Date();
+            now.setHours(0, 0, 0, 0);
+
+            const stockByMedicine = new Map();
+            for (const medId of affectedMedIds) {
+              stockByMedicine.set(medId, 0);
+            }
+
+            for (const b of activeBatchesInTx) {
+              const isExpired = b.expiryDate ? new Date(b.expiryDate) <= now : false;
+              if (!isExpired) {
+                const qty =
+                  b.availableQuantity !== undefined && b.availableQuantity !== null
+                    ? b.availableQuantity
+                    : b.quantity || 0;
+                stockByMedicine.set(
+                  b.medicineId,
+                  (stockByMedicine.get(b.medicineId) || 0) + Math.max(0, qty),
+                );
+              }
+            }
 
             // Find existing inventory records
             const existingInvs = await tx.inventory.findMany({
               where: {
                 tenantId,
                 branchId,
-                medicineId: { in: medIds },
+                medicineId: { in: affectedMedIds },
               },
-              select: { medicineId: true },
+              select: { id: true, medicineId: true, reorderPoint: true },
             });
 
-            const existingSet = new Set(existingInvs.map((i) => i.medicineId));
-            const toCreate = [];
-            const toUpdate = [];
+            const existingInvMap = new Map(existingInvs.map((inv) => [inv.medicineId, inv]));
 
-            for (const [medId, qty] of chunkInventoryUpdates.entries()) {
-              if (existingSet.has(medId)) {
-                toUpdate.push({ medicineId: medId, qty });
-              } else {
-                toCreate.push({
-                  tenantId,
-                  branchId,
-                  medicineId: medId,
-                  currentStock: qty,
-                  reorderPoint: 10,
-                });
+            for (const medId of affectedMedIds) {
+              const actualStock = stockByMedicine.get(medId) || 0;
+              const existingInv = existingInvMap.get(medId);
+              const reorderPoint = existingInv?.reorderPoint ?? 10;
+
+              let status = 'HEALTHY';
+              if (actualStock <= 0) {
+                status = 'OUT_OF_STOCK';
+              } else if (actualStock <= reorderPoint) {
+                status = 'LOW_STOCK';
               }
-            }
 
-            if (toCreate.length > 0) {
-              await tx.inventory.createMany({ data: toCreate, skipDuplicates: true });
-            }
-
-            if (toUpdate.length > 0) {
-              for (const upd of toUpdate) {
+              if (existingInv) {
                 await tx.inventory.update({
-                  where: {
-                    tenantId_branchId_medicineId: {
-                      tenantId,
-                      branchId,
-                      medicineId: upd.medicineId,
-                    },
+                  where: { id: existingInv.id },
+                  data: {
+                    currentStock: actualStock,
+                    status,
                   },
-                  data: { currentStock: { increment: upd.qty } },
+                });
+              } else {
+                await tx.inventory.create({
+                  data: {
+                    tenantId,
+                    branchId,
+                    medicineId: medId,
+                    currentStock: actualStock,
+                    reorderPoint: 10,
+                    status,
+                  },
                 });
               }
             }

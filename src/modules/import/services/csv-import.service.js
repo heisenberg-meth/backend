@@ -306,21 +306,42 @@ class CsvImportService {
   }
 
   async _preloadBatches(tenantId, branchId) {
+    const hasBranch =
+      branchId && branchId !== 'all' && branchId !== 'null' && branchId !== 'undefined';
     const batches = await prisma.inventoryBatch.findMany({
-      where: { tenantId, branchId, deletedAt: null },
-      select: { id: true, medicineId: true, batchNumber: true, barcode: true },
+      where: {
+        tenantId,
+        ...(hasBranch ? { branchId } : {}),
+        deletedAt: null,
+      },
+      select: {
+        id: true,
+        branchId: true,
+        medicineId: true,
+        batchNumber: true,
+        barcode: true,
+        status: true,
+        isArchived: true,
+        archiveReason: true,
+      },
     });
     const map = new Map();
     for (const b of batches) {
-      const key = `${b.medicineId}:${b.batchNumber}`.toLowerCase();
+      const bBranch = b.branchId || 'default';
+      const key = `${bBranch}:${b.medicineId}:${b.batchNumber}`.toLowerCase().trim();
       map.set(key, b);
     }
     return map;
   }
 
   async _preloadInventory(tenantId, branchId) {
+    const hasBranch =
+      branchId && branchId !== 'all' && branchId !== 'null' && branchId !== 'undefined';
     const items = await prisma.inventory.findMany({
-      where: { tenantId, branchId },
+      where: {
+        tenantId,
+        ...(hasBranch ? { branchId } : {}),
+      },
       select: { medicineId: true, currentStock: true, id: true },
     });
     const map = new Map();
@@ -601,47 +622,6 @@ class CsvImportService {
       if (existingMedicine) {
         medicineId = existingMedicine.id;
       } else {
-        /*
-        ======================================================
-        Future Feature
-
-        Medicine Count Limits
-
-        Enable this block only if subscription plans
-        need medicine quantity restrictions.
-
-        Current Business Decision:
-        Unlimited medicines for all tenants.
-
-        Date Disabled:
-        2026
-
-        ======================================================
-        if (ctx.maxMedicines !== undefined && ctx.maxMedicines !== -1) {
-          const currentTotal = ctx.currentMedicinesCount + ctx.newMedicines.length;
-          if (currentTotal >= ctx.maxMedicines) {
-            logger.warn(
-              {
-                rowNum: ctx.importedCount + ctx.newMedicines.length + 1,
-                name,
-                maxMedicines: ctx.maxMedicines,
-              },
-              '[CSV-Import] Plan Limit Reached',
-            );
-            ctx.errors.push({
-              row: ctx.importedCount + ctx.newMedicines.length + 1,
-              name: name || 'Unknown',
-              reason: 'Plan Limit Reached',
-              field: 'plan',
-              value: ctx.maxMedicines,
-              errorCode: 'PLAN_LIMIT_REACHED',
-              message: 'Plan Limit Reached',
-            });
-            continue;
-          }
-        }
-        */
-
         let resolvedCategoryId = null;
         if (category) {
           const normalizedCat = category.toLowerCase().trim();
@@ -708,21 +688,72 @@ class CsvImportService {
 
       const finalBarcode =
         barcode || (barcodeOptions?.autoGen ? `BC-${crypto.randomUUID()}` : null);
-      const finalBatchNo = batchNo || `IMP-${crypto.randomUUID().toUpperCase()}`;
-
-      const batchKey = `${medicineId}:${finalBatchNo}`.toLowerCase();
-      const existingEntry = batchMap.get(batchKey);
+      const bBranch = branchId || 'default';
+      let finalBatchNo = batchNo || `IMP-${crypto.randomUUID().toUpperCase()}`;
+      let batchKey = `${bBranch}:${medicineId}:${finalBatchNo}`.toLowerCase().trim();
+      let existingEntry = batchMap.get(batchKey);
+      if (!existingEntry && bBranch !== 'default') {
+        existingEntry = batchMap.get(`default:${medicineId}:${finalBatchNo}`.toLowerCase().trim());
+      }
 
       let targetBatchId = null;
 
       if (existingEntry) {
-        targetBatchId = existingEntry.id;
+        const isArchived = Boolean(existingEntry.isArchived || existingEntry.status === 'ARCHIVED');
+        const archiveReason = existingEntry.archiveReason;
+
         if (existingEntry.isNew) {
           ctx.newBatches[existingEntry.index].quantity += qty;
           ctx.newBatches[existingEntry.index].receivedQuantity += qty;
           ctx.newBatches[existingEntry.index].availableQuantity += qty;
+          targetBatchId = existingEntry.id;
+        } else if (isArchived && archiveReason !== 'CLEAR_INVENTORY') {
+          // Rule 4: Never resurrect Expired Cleanup historical stock
+          const isRowExpired = expiryDate ? new Date(expiryDate) <= new Date() : false;
+          if (isRowExpired) {
+            logger.warn(
+              { medicineId, batchNo: finalBatchNo, expiryDate },
+              '[CSV-Import] Skipping re-import of expired batch matching historical Expired Cleanup record',
+            );
+            continue;
+          }
+          const oldBatchKey = batchKey;
+          finalBatchNo = `${finalBatchNo}-V2`;
+          batchKey = `${bBranch}:${medicineId}:${finalBatchNo}`.toLowerCase().trim();
+          targetBatchId = crypto.randomUUID();
+          ctx.newBatches.push({
+            id: targetBatchId,
+            tenantId,
+            medicineId,
+            branchId,
+            batchNumber: finalBatchNo,
+            barcode: finalBarcode,
+            quantity: qty,
+            receivedQuantity: qty,
+            availableQuantity: qty,
+            expiryDate:
+              expiryDate || new Date(new Date().setFullYear(new Date().getFullYear() + 2)),
+            purchasePrice: price,
+            sellingPrice: price * 1.2,
+            mrp: price * 1.2,
+            status: 'ACTIVE',
+            supplierId: ctx.supplierId || null,
+          });
+          const newEntry = {
+            id: targetBatchId,
+            isNew: true,
+            index: ctx.newBatches.length - 1,
+          };
+          batchMap.set(oldBatchKey, newEntry);
+          batchMap.set(batchKey, newEntry);
         } else {
-          ctx.batchQuantityUpdates.push({ batchId: targetBatchId, qty, medicineId });
+          targetBatchId = existingEntry.id;
+          ctx.batchQuantityUpdates.push({
+            batchId: targetBatchId,
+            qty,
+            medicineId,
+            ...(isArchived && archiveReason === 'CLEAR_INVENTORY' ? { reactivate: true } : {}),
+          });
         }
       } else {
         targetBatchId = crypto.randomUUID();

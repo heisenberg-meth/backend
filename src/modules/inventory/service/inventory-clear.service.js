@@ -2,10 +2,18 @@ import prisma from '../../../config/prisma.js';
 import logger from '../../../shared/utils/logger.js';
 import auditService from '../../audit/service/audit.prisma.service.js';
 import cacheInvalidatorService from './cache-invalidator.service.js';
-import { acquireLock, releaseLock } from '../../../shared/utils/lock.js';
+import { acquireLock, releaseLock, startLockHeartbeat } from '../../../shared/utils/lock.js';
 import { mainQueue } from '../../../queue/index.js';
 
 class InventoryClearService {
+  _buildBranchWhere(branchId) {
+    if (branchId && branchId !== 'all' && branchId !== 'null' && branchId !== 'undefined') {
+      return { branchId };
+    }
+
+    return {};
+  }
+
   /**
    * Builds the Prisma filter for active inventory belonging to a tenant and branch.
    */
@@ -19,11 +27,8 @@ class InventoryClearService {
         { quantity: { gt: 0 } },
         { availableQuantity: { gt: 0 } },
       ],
+      ...this._buildBranchWhere(branchId),
     };
-
-    if (branchId && branchId !== 'all' && branchId !== 'null' && branchId !== 'undefined') {
-      where.branchId = branchId;
-    }
 
     return where;
   }
@@ -36,30 +41,41 @@ class InventoryClearService {
    * @returns {Promise<{ batchCount: number, totalUnits: number, branchName: string|null }>}
    */
   async getClearSummary(tenantId, branchId = null) {
+    if (!branchId || ['all', 'null', 'undefined'].includes(branchId)) {
+      const err = new Error('A valid branch is required.');
+      err.statusCode = 400;
+      err.errorCode = 'BRANCH_REQUIRED';
+      throw err;
+    }
+
     const where = this._buildActiveInventoryWhere(tenantId, branchId);
 
-    const [aggregate, branch] = await Promise.all([
-      prisma.inventoryBatch.aggregate({
+    const [batches, branch] = await Promise.all([
+      prisma.inventoryBatch.findMany({
         where,
-        _count: { id: true },
-        _sum: { availableQuantity: true, quantity: true },
+        select: {
+          availableQuantity: true,
+          quantity: true,
+        },
       }),
-      branchId && branchId !== 'all'
-        ? prisma.branch.findFirst({
-            where: { id: branchId, tenantId },
-            select: { name: true },
-          })
-        : null,
+      prisma.branch.findFirst({
+        where: {
+          id: branchId,
+          tenantId,
+        },
+        select: {
+          name: true,
+        },
+      }),
     ]);
 
-    const batchCount = aggregate._count?.id || 0;
-    const totalUnits =
-      (aggregate._sum?.availableQuantity ?? 0) > 0
-        ? aggregate._sum.availableQuantity
-        : (aggregate._sum?.quantity ?? 0);
+    const totalUnits = batches.reduce(
+      (sum, b) => sum + (b.availableQuantity > 0 ? b.availableQuantity : b.quantity || 0),
+      0,
+    );
 
     return {
-      batchCount,
+      batchCount: batches.length,
       totalUnits,
       branchName: branch?.name || null,
     };
@@ -76,7 +92,14 @@ class InventoryClearService {
    * @returns {Promise<{ success: boolean, message: string, summary: { batchesCleared: number, unitsCleared: number } }>}
    */
   async clearBranchInventory(tenantId, branchId = null, userId = null) {
-    const lockResource = `inventory-op:${tenantId}:${branchId || 'default'}`;
+    if (!branchId || ['all', 'null', 'undefined'].includes(branchId)) {
+      const err = new Error('A valid branch is required to clear inventory.');
+      err.statusCode = 400;
+      err.errorCode = 'BRANCH_REQUIRED';
+      throw err;
+    }
+
+    const lockResource = `inventory-op:${tenantId}:${branchId}`;
     const locked = await acquireLock(lockResource, 30000);
 
     if (!locked) {
@@ -87,6 +110,9 @@ class InventoryClearService {
       err.errorCode = 'OPERATION_IN_PROGRESS';
       throw err;
     }
+
+    const stopHeartbeat =
+      typeof startLockHeartbeat === 'function' ? startLockHeartbeat(lockResource, 30000) : () => {};
 
     try {
       // Check if an import is currently in progress for this tenant (PRD Section 34)
@@ -122,9 +148,28 @@ class InventoryClearService {
       });
 
       if (activeBatches.length === 0) {
+        // Reset scoped Inventory records even if there are no active batches (Rule 7)
+        await prisma.inventory.updateMany({
+          where: {
+            tenantId,
+            ...this._buildBranchWhere(branchId),
+          },
+          data: {
+            currentStock: 0,
+            reservedStock: 0,
+            status: 'OUT_OF_STOCK',
+          },
+        });
+
+        try {
+          await cacheInvalidatorService.invalidateInventoryCaches(tenantId);
+        } catch (cacheErr) {
+          logger.warn({ err: cacheErr }, 'Cache invalidation failed after empty inventory clear');
+        }
+
         return {
           success: true,
-          message: 'No active inventory to clear',
+          message: 'No active inventory to clear (inventory reset to zero)',
           summary: {
             batchesCleared: 0,
             unitsCleared: 0,
@@ -199,7 +244,7 @@ class InventoryClearService {
               const prevQty = b.availableQuantity > 0 ? b.availableQuantity : b.quantity;
               return {
                 tenantId,
-                branchId: branchId || null,
+                branchId,
                 medicineId: b.medicineId,
                 batchId: b.id,
                 movementType: 'DISPOSAL',
@@ -219,6 +264,19 @@ class InventoryClearService {
             });
           }
         }
+
+        // 4. Reset Inventory aggregate records
+        await tx.inventory.updateMany({
+          where: {
+            tenantId,
+            ...this._buildBranchWhere(branchId),
+          },
+          data: {
+            currentStock: 0,
+            reservedStock: 0,
+            status: 'OUT_OF_STOCK',
+          },
+        });
       });
 
       // 4. Audit Log (asynchronous fallback handled inside service)
@@ -264,6 +322,7 @@ class InventoryClearService {
         },
       };
     } finally {
+      stopHeartbeat();
       await releaseLock(lockResource);
     }
   }
