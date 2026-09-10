@@ -83,6 +83,7 @@ describe('Inventory Listing Semantics & Summary Tests', () => {
             isArchived: false,
             status: 'ACTIVE',
             availableQuantity: { gt: 0 },
+            expiryDate: { gt: expect.any(Date) },
           },
         },
       });
@@ -101,6 +102,43 @@ describe('Inventory Listing Semantics & Summary Tests', () => {
       expect(result.total).toBe(0);
     });
 
+    it('returns medicine when it has active usable stock in the target branch', async () => {
+      const medicine = {
+        id: 'medicine-1',
+        name: 'Acyclovir 400mg',
+        inventory: [
+          {
+            branchId: 'branch-456',
+            currentStock: 25,
+          },
+        ],
+        inventoryBatches: [
+          {
+            id: 'batch-1',
+            batchNumber: 'ACV-001',
+            quantity: 25,
+            availableQuantity: 25,
+            reservedQuantity: 0,
+            status: 'ACTIVE',
+            isArchived: false,
+            expiryDate: new Date(Date.now() + 86400000 * 100),
+          },
+        ],
+      };
+
+      mockPrisma.medicine.findMany.mockResolvedValue([medicine]);
+      mockPrisma.medicine.count.mockResolvedValue(1);
+
+      const result = await medicineRepository.findAll({
+        tenantId: 'tenant-123',
+        branchId: 'branch-456',
+      });
+
+      expect(result.total).toBe(1);
+      expect(result.medicines).toHaveLength(1);
+      expect(result.medicines[0].name).toBe('Acyclovir 400mg');
+    });
+
     it('does not return cleared medicines in OUT_OF_STOCK status', async () => {
       mockPrisma.$queryRaw.mockResolvedValueOnce([{ count: 0 }]).mockResolvedValueOnce([]);
 
@@ -116,16 +154,61 @@ describe('Inventory Listing Semantics & Summary Tests', () => {
       expect(result.total).toBe(0);
 
       expect(mockPrisma.$queryRaw).toHaveBeenCalledTimes(2);
+
+      const queries = mockPrisma.$queryRaw.mock.calls;
+      expect(queries.length).toBe(2);
+
+      // Verify both SQL queries contain branch, active_batch_count, isArchived, and deletedAt checks
+      for (const call of queries) {
+        const sql = call[0]?.strings?.join?.(' ') || String(call[0]);
+        expect(sql).toContain('branchId');
+        expect(sql).toContain('active_batch_count');
+        expect(sql).toContain('isArchived');
+        expect(sql).toContain('deletedAt');
+      }
     });
 
-    it('does not return archived batches as inventory after clear', async () => {
+    it('excludes cleared inventory from all inventory listing results', async () => {
       mockPrisma.medicine.findMany.mockResolvedValue([]);
       mockPrisma.medicine.count.mockResolvedValue(0);
 
-      await medicineRepository.findAll({
+      const result = await medicineRepository.findAll({
+        tenantId: 'tenant-123',
+        branchId: 'branch-456',
+        skip: 0,
+        take: 20,
+      });
+
+      expect(result).toEqual({
+        medicines: [],
+        total: 0,
+      });
+
+      const queryArg = mockPrisma.medicine.findMany.mock.calls[0][0];
+
+      expect(queryArg.where.inventoryBatches.some).toEqual({
+        branchId: 'branch-456',
+        deletedAt: null,
+        isArchived: false,
+        status: 'ACTIVE',
+        availableQuantity: { gt: 0 },
+        expiryDate: {
+          gt: expect.any(Date),
+        },
+      });
+    });
+
+    it('excludes expired batches from active inventory listing', async () => {
+      mockPrisma.medicine.findMany.mockResolvedValue([]);
+      mockPrisma.medicine.count.mockResolvedValue(0);
+
+      const result = await medicineRepository.findAll({
         tenantId: 'tenant-123',
         branchId: 'branch-456',
       });
+
+      expect(result.medicines).toEqual([]);
+      expect(result.total).toBe(0);
 
       const queryArg = mockPrisma.medicine.findMany.mock.calls[0][0];
 
@@ -135,6 +218,9 @@ describe('Inventory Listing Semantics & Summary Tests', () => {
         isArchived: false,
         status: 'ACTIVE',
         availableQuantity: { gt: 0 },
+        expiryDate: {
+          gt: expect.any(Date),
+        },
       });
     });
   });
