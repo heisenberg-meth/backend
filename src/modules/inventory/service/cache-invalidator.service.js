@@ -8,7 +8,7 @@ import redisClient from '../../../config/redis.js';
 import { scanKeys } from '../../../shared/utils/scan-keys.js';
 
 class CacheInvalidatorService {
-  async invalidateInventoryCaches(tenantId, medicineIds = []) {
+  async invalidateInventoryCaches(tenantId, medicineIds = [], branchId = null) {
     try {
       await medicineInventoryService.invalidateCache(tenantId);
 
@@ -19,7 +19,7 @@ class CacheInvalidatorService {
       await inventoryStatusService.invalidateCache(tenantId);
 
       // Also invalidate unified inventory summary cache
-      await unifiedInventorySummaryService.invalidateCache(tenantId);
+      await unifiedInventorySummaryService.invalidateCache(tenantId, branchId);
 
       const ids = Array.isArray(medicineIds) ? medicineIds : [medicineIds].filter(Boolean);
 
@@ -34,12 +34,12 @@ class CacheInvalidatorService {
       }
 
       logger.info(
-        { tenantId, medicineIds: ids },
+        { tenantId, branchId, medicineIds: ids },
         '[CACHE_INVALIDATOR] Inventory caches invalidated successfully',
       );
     } catch (err) {
       logger.warn(
-        { err, tenantId, medicineIds },
+        { err, tenantId, branchId, medicineIds },
         '[CACHE_INVALIDATOR] Failed to invalidate inventory caches',
       );
     }

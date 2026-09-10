@@ -32,6 +32,14 @@ const mockLock = {
   startLockHeartbeat: jest.fn().mockReturnValue(() => {}),
 };
 
+const mockCacheInvalidatorService = {
+  invalidateInventoryCaches: jest.fn().mockResolvedValue(),
+};
+
+const mockMainQueue = {
+  add: jest.fn().mockResolvedValue(),
+};
+
 jest.unstable_mockModule('../../src/shared/utils/lock.js', () => mockLock);
 
 jest.unstable_mockModule('../../src/modules/audit/service/audit.prisma.service.js', () => ({
@@ -40,6 +48,17 @@ jest.unstable_mockModule('../../src/modules/audit/service/audit.prisma.service.j
 
 jest.unstable_mockModule('../../src/config/prisma.js', () => ({
   default: mockPrisma,
+}));
+
+jest.unstable_mockModule(
+  '../../src/modules/inventory/service/cache-invalidator.service.js',
+  () => ({
+    default: mockCacheInvalidatorService,
+  }),
+);
+
+jest.unstable_mockModule('../../src/queue/index.js', () => ({
+  mainQueue: mockMainQueue,
 }));
 
 const { default: sharedImportEngine } =
@@ -360,5 +379,36 @@ describe('SharedImportEngine - Integrity & Ordering Enforcement', () => {
       statusCode: 400,
       errorCode: 'BRANCH_REQUIRED',
     });
+  });
+
+  it('should invalidate inventory caches and trigger analytics refresh after committing chunks', async () => {
+    const medicineId = 'med-cache-test';
+    const batchId = 'batch-cache-test';
+
+    mockPrisma.inventoryBatch.findMany.mockResolvedValue([
+      {
+        id: batchId,
+        medicineId,
+        quantity: 50,
+        availableQuantity: 50,
+        expiryDate: new Date('2028-01-01'),
+      },
+    ]);
+
+    await sharedImportEngine.commitChunks({
+      tenantId,
+      branchId,
+      userId,
+      jobId: 'job-cache-invalidation-test',
+      newMedicines: [{ id: medicineId, name: 'Cache Test Med' }],
+      newBatches: [{ id: batchId, medicineId, batchNumber: 'B-CACHE' }],
+    });
+
+    expect(mockCacheInvalidatorService.invalidateInventoryCaches).toHaveBeenCalledWith(
+      tenantId,
+      expect.arrayContaining([medicineId]),
+      branchId,
+    );
+    expect(mockMainQueue.add).toHaveBeenCalledWith('update-analytics', { tenantId });
   });
 });

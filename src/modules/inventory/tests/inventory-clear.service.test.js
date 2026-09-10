@@ -189,7 +189,11 @@ describe('InventoryClearService', () => {
           status: 'OUT_OF_STOCK',
         },
       });
-      expect(mockCacheInvalidator.invalidateInventoryCaches).toHaveBeenCalledWith('tenant-1');
+      expect(mockCacheInvalidator.invalidateInventoryCaches).toHaveBeenCalledWith(
+        'tenant-1',
+        [],
+        'branch-1',
+      );
       expect(mockPrisma.$transaction).not.toHaveBeenCalled();
       expect(mockLock.releaseLock).toHaveBeenCalled();
     });
@@ -259,10 +263,11 @@ describe('InventoryClearService', () => {
           userId: 'user-1',
         }),
       );
-      expect(mockCacheInvalidator.invalidateInventoryCaches).toHaveBeenCalledWith('tenant-1', [
-        'med-1',
-        'med-2',
-      ]);
+      expect(mockCacheInvalidator.invalidateInventoryCaches).toHaveBeenCalledWith(
+        'tenant-1',
+        ['med-1', 'med-2'],
+        'branch-1',
+      );
       expect(mockLock.releaseLock).toHaveBeenCalled();
     });
 

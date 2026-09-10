@@ -15,6 +15,9 @@ class DashboardFastifyController {
       today.setHours(0, 0, 0, 0);
       const startOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
 
+      const { forceRefresh } = request.query || {};
+      const isForceRefresh = forceRefresh === true || forceRefresh === 'true';
+
       const [
         todaySalesAggRes,
         monthlySalesAggRes,
@@ -30,7 +33,7 @@ class DashboardFastifyController {
           where: { tenantId, ...(branchId && { branchId }), soldAt: { gte: startOfMonth } },
           _sum: { totalAmount: true },
         }),
-        unifiedInventorySummaryService.getUnifiedSummary(tenantId, branchId),
+        unifiedInventorySummaryService.getUnifiedSummary(tenantId, branchId, isForceRefresh),
         prisma.invoice.count({
           where: { tenantId, ...(branchId && { branchId }), createdAt: { gte: today } },
         }),

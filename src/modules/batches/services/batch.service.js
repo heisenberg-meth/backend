@@ -4,9 +4,8 @@ import eventBus from '../../../shared/services/eventbus.service.js';
 import { mainQueue } from '../../../queue/index.js';
 import prisma from '../../../config/prisma.js';
 import movementService from '../../stock/service/movement.service.js';
-import redisClient from '../../../config/redis.js';
-import { scanKeys } from '../../../shared/utils/scan-keys.js';
 import logger from '../../../shared/utils/logger.js';
+import cacheInvalidatorService from '../../inventory/service/cache-invalidator.service.js';
 
 class BatchService {
   async getBatches(params) {
@@ -65,6 +64,16 @@ class BatchService {
       medicineId: data.medicineId,
       tenantId,
     });
+
+    try {
+      await cacheInvalidatorService.invalidateInventoryCaches(
+        tenantId,
+        data.medicineId,
+        data.branchId,
+      );
+    } catch (err) {
+      logger.warn({ err }, 'Failed to invalidate inventory caches after batch creation');
+    }
 
     return batch;
   }
@@ -145,12 +154,13 @@ class BatchService {
     });
 
     try {
-      const keys = await scanKeys(`inventory:${batch.tenantId}:*`);
-      if (keys.length > 0) {
-        await redisClient.del(...keys);
-      }
+      await cacheInvalidatorService.invalidateInventoryCaches(
+        batch.tenantId,
+        batch.medicineId,
+        batch.branchId,
+      );
     } catch (err) {
-      logger.warn('[REDIS CACHE ERROR]', err);
+      logger.warn({ err }, 'Failed to invalidate inventory caches after batch update');
     }
 
     return updated;
@@ -178,6 +188,16 @@ class BatchService {
       performedBy: userId,
       notes: 'Batch soft deleted/archived',
     });
+
+    try {
+      await cacheInvalidatorService.invalidateInventoryCaches(
+        tenantId,
+        batch.medicineId,
+        batch.branchId,
+      );
+    } catch (err) {
+      logger.warn({ err }, 'Failed to invalidate inventory caches after batch deletion');
+    }
   }
 
   async quarantineBatch(id, reason, tenantId, userId, reqInfo = {}) {
@@ -205,6 +225,16 @@ class BatchService {
     });
 
     await eventBus.publish('BATCH_QUARANTINED', { batchId: id, reason, tenantId });
+
+    try {
+      await cacheInvalidatorService.invalidateInventoryCaches(
+        tenantId,
+        batch.medicineId,
+        batch.branchId,
+      );
+    } catch (err) {
+      logger.warn({ err }, 'Failed to invalidate inventory caches after batch quarantine');
+    }
 
     return quarantined;
   }
@@ -236,6 +266,16 @@ class BatchService {
       reason,
       tenantId,
     });
+
+    try {
+      await cacheInvalidatorService.invalidateInventoryCaches(
+        tenantId,
+        batch.medicineId,
+        batch.branchId,
+      );
+    } catch (err) {
+      logger.warn({ err }, 'Failed to invalidate inventory caches after batch recall');
+    }
 
     return recalled;
   }
@@ -363,7 +403,8 @@ class BatchService {
   }
 
   async backfillSupplierFromMedicine(tenantId) {
-    const medicinesWithBoth = await prisma.$queryRawUnsafe(`
+    const medicinesWithBoth = await prisma.$queryRawUnsafe(
+      `
       WITH with_supplier AS (
         SELECT DISTINCT "medicineId" 
         FROM "InventoryBatch" 
@@ -377,11 +418,14 @@ class BatchService {
       SELECT ws."medicineId"
       FROM with_supplier ws
       INNER JOIN without_supplier wsu ON ws."medicineId" = wsu."medicineId"
-    `, tenantId);
+    `,
+      tenantId,
+    );
 
     let totalUpdated = 0;
     for (const { medicineId } of medicinesWithBoth) {
-      const bestSupplier = await prisma.$queryRawUnsafe(`
+      const bestSupplier = await prisma.$queryRawUnsafe(
+        `
         SELECT ib."supplierId", COUNT(*) as cnt
         FROM "InventoryBatch" ib
         WHERE ib."medicineId" = $1
@@ -389,7 +433,9 @@ class BatchService {
         GROUP BY ib."supplierId"
         ORDER BY cnt DESC
         LIMIT 1
-      `, medicineId);
+      `,
+        medicineId,
+      );
 
       if (bestSupplier.length === 0) continue;
 

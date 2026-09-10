@@ -9,6 +9,21 @@ class InventoryClearController {
   async getClearSummary(request, reply) {
     try {
       const branchId = request.query?.branchId || request.branchId;
+      if (!branchId || ['all', 'null', 'undefined'].includes(branchId)) {
+        return reply.code(400).send({
+          success: false,
+          error: {
+            code: 'BRANCH_REQUIRED',
+            message: 'A valid branch is required.',
+          },
+        });
+      }
+
+      if (typeof reply.header === 'function') {
+        reply.header('Cache-Control', 'no-store, no-cache, must-revalidate');
+        reply.header('Pragma', 'no-cache');
+      }
+
       const summary = await inventoryClearService.getClearSummary(request.tenantId, branchId);
 
       return reply.send({
@@ -17,6 +32,15 @@ class InventoryClearController {
         summary,
       });
     } catch (err) {
+      if (err.statusCode) {
+        return reply.code(err.statusCode).send({
+          success: false,
+          error: {
+            code: err.errorCode || 'CLEAR_SUMMARY_ERROR',
+            message: err.message,
+          },
+        });
+      }
       request.log.error({ err }, 'Failed to fetch inventory clear summary');
       return reply
         .code(500)

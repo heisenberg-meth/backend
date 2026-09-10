@@ -29,11 +29,11 @@ class UnifiedInventorySummaryService {
       WITH batch_aggregates AS (
         SELECT 
           ib."medicineId",
-          SUM(CASE WHEN (ib."expiryDate"::date > CURRENT_DATE AND ib."status" = 'ACTIVE') THEN ib."availableQuantity" ELSE 0 END) as usable_quantity,
-          SUM(CASE WHEN (ib."expiryDate"::date <= CURRENT_DATE OR ib."status" = 'EXPIRED') THEN ib."availableQuantity" ELSE 0 END) as expired_quantity,
-          SUM(ib."availableQuantity") as total_quantity,
-          SUM(ib."availableQuantity" * COALESCE(ib."purchasePrice", 0)) as total_value,
-          COUNT(*) FILTER (WHERE ib."availableQuantity" > 0 AND (ib."expiryDate"::date <= CURRENT_DATE OR ib."status" = 'EXPIRED')) as expired_batches,
+          SUM(CASE WHEN ((ib."expiryDate" IS NULL OR ib."expiryDate"::date > CURRENT_DATE) AND ib."status" = 'ACTIVE') THEN COALESCE(ib."availableQuantity", 0) ELSE 0 END) as usable_quantity,
+          SUM(CASE WHEN ((ib."expiryDate" IS NOT NULL AND ib."expiryDate"::date <= CURRENT_DATE) OR ib."status" = 'EXPIRED') THEN COALESCE(ib."availableQuantity", 0) ELSE 0 END) as expired_quantity,
+          SUM(COALESCE(ib."availableQuantity", 0)) as total_quantity,
+          SUM(COALESCE(ib."availableQuantity", 0) * COALESCE(ib."purchasePrice", 0)) as total_value,
+          COUNT(*) FILTER (WHERE COALESCE(ib."availableQuantity", 0) > 0 AND ((ib."expiryDate" IS NOT NULL AND ib."expiryDate"::date <= CURRENT_DATE) OR ib."status" = 'EXPIRED')) as expired_batches,
           MAX(i."reorderPoint") as max_reorder_point
         FROM "InventoryBatch" ib
         INNER JOIN "Medicine" m
@@ -45,6 +45,7 @@ class UnifiedInventorySummaryService {
           AND i."tenantId" = m."tenantId"
 
         WHERE m."tenantId" = ${tenantId}
+          AND ib."tenantId" = ${tenantId}
           AND ib."deletedAt" IS NULL
           AND m."deletedAt" IS NULL
           AND m."isActive" = true
@@ -117,8 +118,17 @@ class UnifiedInventorySummaryService {
     return result;
   }
 
-  async invalidateCache(tenantId) {
+  async invalidateCache(tenantId, branchId = null) {
     try {
+      const specificKeys = [
+        `inventory:unified:${tenantId}:all:summary`,
+        branchId ? `inventory:unified:${tenantId}:${branchId}:summary` : null,
+      ].filter(Boolean);
+
+      if (specificKeys.length > 0) {
+        await redisClient.del(...specificKeys);
+      }
+
       const keys = await scanKeys(`inventory:unified:${tenantId}:*`);
       if (keys.length > 0) {
         await redisClient.del(...keys);
@@ -274,8 +284,8 @@ class UnifiedInventorySummaryService {
     };
   }
 
-  async getDashboardMetrics(tenantId, branchId = null) {
-    const summary = await this.getUnifiedSummary(tenantId, branchId);
+  async getDashboardMetrics(tenantId, branchId = null, forceRefresh = false) {
+    const summary = await this.getUnifiedSummary(tenantId, branchId, forceRefresh);
 
     return {
       critical: summary.outOfStockCount,
@@ -293,8 +303,8 @@ class UnifiedInventorySummaryService {
     };
   }
 
-  async getInventoryPageMetrics(tenantId, branchId = null) {
-    const summary = await this.getUnifiedSummary(tenantId, branchId);
+  async getInventoryPageMetrics(tenantId, branchId = null, forceRefresh = false) {
+    const summary = await this.getUnifiedSummary(tenantId, branchId, forceRefresh);
 
     return {
       totalMedicines: summary.totalMedicines,

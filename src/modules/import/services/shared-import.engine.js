@@ -2,6 +2,8 @@ import prisma from '../../../config/prisma.js';
 import logger from '../../../shared/utils/logger.js';
 import auditService from '../../audit/service/audit.service.js';
 import { acquireLock, releaseLock, startLockHeartbeat } from '../../../shared/utils/lock.js';
+import cacheInvalidatorService from '../../inventory/service/cache-invalidator.service.js';
+import { mainQueue } from '../../../queue/index.js';
 
 class SharedImportEngine {
   constructor() {
@@ -44,7 +46,7 @@ class SharedImportEngine {
       throw err;
     }
 
-    const stopHeartbeat =
+    const stopLockHeartbeat =
       typeof startLockHeartbeat === 'function' ? startLockHeartbeat(lockResource, 60000) : () => {};
 
     try {
@@ -181,8 +183,38 @@ class SharedImportEngine {
           });
         }
       }
+
+      // Invalidate all relevant caches for affected medicines & branch
+      try {
+        await cacheInvalidatorService.invalidateInventoryCaches(tenantId, allMedicineIds, branchId);
+        logger.info(
+          {
+            tenantId,
+            branchId,
+            operation: 'IMPORT',
+          },
+          'Invalidated unified inventory summary cache',
+        );
+      } catch (cacheErr) {
+        logger.warn(
+          { err: cacheErr, tenantId, branchId },
+          '[SharedImportEngine] Failed to invalidate inventory caches',
+        );
+      }
+
+      // Queue background analytics refresh
+      try {
+        if (mainQueue) {
+          await mainQueue.add('update-analytics', { tenantId });
+        }
+      } catch (qErr) {
+        logger.warn(
+          { err: qErr, tenantId },
+          '[SharedImportEngine] Failed to enqueue analytics update',
+        );
+      }
     } finally {
-      stopHeartbeat();
+      stopLockHeartbeat();
       await releaseLock(lockResource);
     }
   }

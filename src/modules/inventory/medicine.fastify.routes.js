@@ -98,6 +98,7 @@ async function medicineRoutes(fastify) {
           type: 'object',
           properties: {
             branchId: { type: 'string' },
+            forceRefresh: { type: ['boolean', 'string'] },
           },
         },
       },

@@ -100,7 +100,7 @@ class InventoryClearService {
     }
 
     const lockResource = `inventory-op:${tenantId}:${branchId}`;
-    const locked = await acquireLock(lockResource, 30000);
+    const locked = await acquireLock(lockResource, 60000);
 
     if (!locked) {
       const err = new Error(
@@ -111,8 +111,8 @@ class InventoryClearService {
       throw err;
     }
 
-    const stopHeartbeat =
-      typeof startLockHeartbeat === 'function' ? startLockHeartbeat(lockResource, 30000) : () => {};
+    const stopLockHeartbeat =
+      typeof startLockHeartbeat === 'function' ? startLockHeartbeat(lockResource, 60000) : () => {};
 
     try {
       // Check if an import is currently in progress for this tenant (PRD Section 34)
@@ -162,7 +162,15 @@ class InventoryClearService {
         });
 
         try {
-          await cacheInvalidatorService.invalidateInventoryCaches(tenantId);
+          await cacheInvalidatorService.invalidateInventoryCaches(tenantId, [], branchId);
+          logger.info(
+            {
+              tenantId,
+              branchId,
+              operation: 'CLEAR_INVENTORY',
+            },
+            'Invalidated unified inventory summary cache',
+          );
         } catch (cacheErr) {
           logger.warn({ err: cacheErr }, 'Cache invalidation failed after empty inventory clear');
         }
@@ -294,7 +302,19 @@ class InventoryClearService {
 
       // 5. Invalidate all relevant caches
       try {
-        await cacheInvalidatorService.invalidateInventoryCaches(tenantId, affectedMedicineIds);
+        await cacheInvalidatorService.invalidateInventoryCaches(
+          tenantId,
+          affectedMedicineIds,
+          branchId,
+        );
+        logger.info(
+          {
+            tenantId,
+            branchId,
+            operation: 'CLEAR_INVENTORY',
+          },
+          'Invalidated unified inventory summary cache',
+        );
       } catch (cacheErr) {
         logger.warn({ err: cacheErr }, 'Cache invalidation failed after inventory clear');
       }
@@ -322,7 +342,7 @@ class InventoryClearService {
         },
       };
     } finally {
-      stopHeartbeat();
+      stopLockHeartbeat();
       await releaseLock(lockResource);
     }
   }

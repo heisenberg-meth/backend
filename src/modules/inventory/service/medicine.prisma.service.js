@@ -144,8 +144,8 @@ class MedicinePrismaService {
     return alerts.sort((a, b) => a.stock - b.stock);
   }
 
-  async getInventorySummary(tenantId, branchId = null) {
-    return unifiedInventorySummaryService.getInventoryPageMetrics(tenantId, branchId);
+  async getInventorySummary(tenantId, branchId = null, forceRefresh = false) {
+    return unifiedInventorySummaryService.getInventoryPageMetrics(tenantId, branchId, forceRefresh);
   }
 
   async invalidateCache(tenantId) {

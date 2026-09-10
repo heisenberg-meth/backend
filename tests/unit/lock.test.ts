@@ -7,6 +7,10 @@ const mockRedis = {
 
   del: jest.fn<(key: string) => Promise<number>>(),
   pexpire: jest.fn<(key: string, ttl: number) => Promise<number>>(),
+  eval: jest.fn<
+    (script: string, numkeys: number, ...args: (string | number)[]) => Promise<number>
+  >(),
+  get: jest.fn<(key: string) => Promise<string | null>>(),
 };
 
 jest.unstable_mockModule('../../src/config/redis.js', () => ({
@@ -15,7 +19,7 @@ jest.unstable_mockModule('../../src/config/redis.js', () => ({
   default: mockRedis,
 }));
 
-const { acquireLock, extendLock, startLockHeartbeat, releaseLock } =
+const { acquireLock, extendLock, startLockHeartbeat, releaseLock, getLockToken } =
   await import('../../src/shared/utils/lock.js');
 
 describe('Lock Utility (Unit)', () => {
@@ -23,61 +27,118 @@ describe('Lock Utility (Unit)', () => {
     jest.clearAllMocks();
   });
 
-  it('should acquire a lock if Redis returns OK', async () => {
+  it('should acquire a lock with a generated token if Redis returns OK', async () => {
     mockRedis.set.mockResolvedValue('OK');
 
     const result = await acquireLock('test-resource', 1000);
 
     expect(result).toBe(true);
+    expect(mockRedis.set).toHaveBeenCalledWith(
+      'lock:test-resource',
+      expect.any(String),
+      'PX',
+      1000,
+      'NX',
+    );
+    expect(getLockToken('test-resource')).toBeDefined();
+  });
 
-    expect(mockRedis.set).toHaveBeenCalledWith('lock:test-resource', 'locked', 'PX', 1000, 'NX');
+  it('should acquire a lock with a custom token if provided', async () => {
+    mockRedis.set.mockResolvedValue('OK');
+
+    const result = await acquireLock('test-resource-custom', 1000, 'my-custom-token');
+
+    expect(result).toBe(true);
+    expect(mockRedis.set).toHaveBeenCalledWith(
+      'lock:test-resource-custom',
+      'my-custom-token',
+      'PX',
+      1000,
+      'NX',
+    );
+    expect(getLockToken('test-resource-custom')).toBe('my-custom-token');
   });
 
   it('should fail to acquire a lock if Redis returns null', async () => {
     mockRedis.set.mockResolvedValue(null);
 
-    const result = await acquireLock('test-resource', 1000);
+    const result = await acquireLock('test-resource-fail', 1000);
 
     expect(result).toBe(false);
   });
 
-  it('should extend a lock if Redis pexpire returns 1', async () => {
-    mockRedis.pexpire.mockResolvedValue(1);
+  it('should extend a lock using Lua script if ownership token matches', async () => {
+    mockRedis.eval.mockResolvedValue(1);
 
-    const result = await extendLock('test-resource', 5000);
+    const result = await extendLock('test-resource', 5000, 'token-123');
 
     expect(result).toBe(true);
-    expect(mockRedis.pexpire).toHaveBeenCalledWith('lock:test-resource', 5000);
+    expect(mockRedis.eval).toHaveBeenCalledWith(
+      expect.stringContaining('redis.call("get", KEYS[1]) == ARGV[1]'),
+      1,
+      'lock:test-resource',
+      'token-123',
+      5000,
+    );
   });
 
-  it('should return false if Redis pexpire returns 0', async () => {
-    mockRedis.pexpire.mockResolvedValue(0);
+  it('should fail to extend a lock if ownership token does not match in Redis', async () => {
+    mockRedis.eval.mockResolvedValue(0);
 
-    const result = await extendLock('test-resource', 5000);
+    const result = await extendLock('test-resource', 5000, 'token-123');
 
     expect(result).toBe(false);
+  });
+
+  it('should not extend a lock if no ownership token is known', async () => {
+    const result = await extendLock('unknown-resource', 5000);
+
+    expect(result).toBe(false);
+    expect(mockRedis.pexpire).not.toHaveBeenCalled();
   });
 
   it('should start and stop a lock heartbeat timer', () => {
-    mockRedis.pexpire.mockResolvedValue(1);
+    mockRedis.eval.mockResolvedValue(1);
     jest.useFakeTimers();
 
-    const stopHeartbeat = startLockHeartbeat('test-resource', 2000, 1000);
+    const stopHeartbeat = startLockHeartbeat('test-resource', 2000, 1000, 'token-123');
     expect(typeof stopHeartbeat).toBe('function');
 
     jest.advanceTimersByTime(1000);
-    expect(mockRedis.pexpire).toHaveBeenCalledWith('lock:test-resource', 2000);
+    expect(mockRedis.eval).toHaveBeenCalledWith(
+      expect.stringContaining('redis.call("get", KEYS[1]) == ARGV[1]'),
+      1,
+      'lock:test-resource',
+      'token-123',
+      2000,
+    );
 
     stopHeartbeat();
     jest.advanceTimersByTime(2000);
-    expect(mockRedis.pexpire).toHaveBeenCalledTimes(1);
+    expect(mockRedis.eval).toHaveBeenCalledTimes(1);
 
     jest.useRealTimers();
   });
 
-  it('should release a lock', async () => {
-    await releaseLock('test-resource');
+  it('should release a lock using atomic Lua script when ownership token is known', async () => {
+    mockRedis.eval.mockResolvedValue(1);
 
-    expect(mockRedis.del).toHaveBeenCalledWith('lock:test-resource');
+    const released = await releaseLock('test-resource-custom', 'my-custom-token');
+
+    expect(released).toBe(true);
+    expect(mockRedis.eval).toHaveBeenCalledWith(
+      expect.stringContaining('redis.call("del", KEYS[1])'),
+      1,
+      'lock:test-resource-custom',
+      'my-custom-token',
+    );
+    expect(getLockToken('test-resource-custom')).toBeNull();
+  });
+
+  it('should not release a lock if no ownership token is known', async () => {
+    const released = await releaseLock('unknown-resource');
+
+    expect(released).toBe(false);
+    expect(mockRedis.del).not.toHaveBeenCalled();
   });
 });

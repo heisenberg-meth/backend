@@ -83,10 +83,12 @@ class MedicineFastifyController {
   }
 
   async getInventorySummaryData(request) {
-    const { branchId } = request.query;
+    const { branchId, forceRefresh } = request.query;
+    const isForceRefresh = forceRefresh === true || forceRefresh === 'true';
     const summary = await medicineService.getInventorySummary(
       request.tenantId,
       branchId || request.branchId,
+      isForceRefresh,
     );
     return success(summary);
   }
