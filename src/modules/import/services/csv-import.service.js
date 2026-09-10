@@ -600,8 +600,35 @@ class CsvImportService {
       }
 
       let expiryDate = null;
+
       if (expiryStr) {
         expiryDate = this._parseDate(expiryStr);
+
+        if (!expiryDate) {
+          ctx.errors.push({
+            row: ctx.importedCount + ctx.newMedicines.length + 1,
+            name: name || 'Unknown',
+            reason: `Invalid expiry date format: "${expiryStr}"`,
+            field: 'expiryDate',
+            value: expiryStr,
+            errorCode: 'INVALID_DATE',
+            message: `Invalid expiry date format: "${expiryStr}"`,
+          });
+          continue;
+        }
+
+        if (new Date(expiryDate) <= new Date()) {
+          ctx.errors.push({
+            row: ctx.importedCount + ctx.newMedicines.length + 1,
+            name: name || 'Unknown',
+            reason: `Medicine expiry date must be in the future. Received expired date "${expiryStr}"`,
+            field: 'expiryDate',
+            value: expiryStr,
+            errorCode: 'EXPIRED_PRODUCT',
+            message: `Medicine expiry date must be in the future. Received expired date "${expiryStr}"`,
+          });
+          continue;
+        }
       }
 
       const normalizedName = name.toLowerCase().trim();

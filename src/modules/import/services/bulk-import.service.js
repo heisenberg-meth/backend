@@ -358,11 +358,15 @@ class BulkImportService {
             errorCode: 'INVALID_DATE',
             message: `Invalid expiry date format: "${expiryStr}"`,
           });
-        } else if (expiryDate < new Date()) {
+        } else if (expiryDate <= new Date()) {
           isExpired = true;
-          validationWarnings.push(
-            `Medicine already expired (${expiryStr}) — flagged with EXPIRED_PRODUCT`,
-          );
+
+          validationErrors.push({
+            field: 'expiryDate',
+            value: expiryStr,
+            errorCode: 'EXPIRED_PRODUCT',
+            message: `Medicine expiry date must be in the future. Received expired date "${expiryStr}"`,
+          });
         }
       }
 
