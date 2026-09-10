@@ -98,7 +98,7 @@ class MedicinePrismaRepository {
         )
         SELECT m."id"
         FROM "Medicine" m
-        LEFT JOIN batch_aggregates ba ON m."id" = ba."medicineId"
+        INNER JOIN batch_aggregates ba ON m."id" = ba."medicineId"
         LEFT JOIN inventory_aggregates ia ON m."id" = ia."medicineId"
         WHERE m."tenantId" = ${tenantId}
           AND m."deletedAt" IS NULL
@@ -156,7 +156,7 @@ class MedicinePrismaRepository {
         )
         SELECT COUNT(m."id") as count
         FROM "Medicine" m
-        LEFT JOIN batch_aggregates ba ON m."id" = ba."medicineId"
+        INNER JOIN batch_aggregates ba ON m."id" = ba."medicineId"
         LEFT JOIN inventory_aggregates ia ON m."id" = ia."medicineId"
         WHERE m."tenantId" = ${tenantId}
           AND m."deletedAt" IS NULL
@@ -198,6 +198,7 @@ class MedicinePrismaRepository {
               where: {
                 ...(targetBranchId ? { branchId: targetBranchId } : {}),
                 deletedAt: null,
+                isArchived: false,
                 ...(upperStatus === 'EXPIRED'
                   ? {
                       OR: [{ status: 'EXPIRED' }, { expiryDate: { lte: new Date() } }],
@@ -261,7 +262,11 @@ class MedicinePrismaRepository {
               where: targetBranchId ? { branchId: targetBranchId } : {},
             },
             inventoryBatches: {
-              where: { ...(targetBranchId ? { branchId: targetBranchId } : {}), deletedAt: null },
+              where: {
+                ...(targetBranchId ? { branchId: targetBranchId } : {}),
+                deletedAt: null,
+                isArchived: false,
+              },
               orderBy: { expiryDate: 'asc' },
             },
             purchaseOrderItems: {
