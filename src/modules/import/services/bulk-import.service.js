@@ -720,7 +720,7 @@ class BulkImportService {
     // PRD §4.4 & TC-IMP-04: Validate Ask Me resolution completeness
     if (duplicateStrategy && duplicateStrategy.toLowerCase() === 'ask me') {
       const unresolvedRows = validatedRows
-        .filter((r) => r.isDuplicate && !this._getDecisionAction(duplicateDecisions, r.rowNum))
+        .filter((r) => r.isConflict && !this._getDecisionAction(duplicateDecisions, r.rowNum))
         .map((r) => r.rowNum);
       if (unresolvedRows.length > 0) {
         const err = new Error(
