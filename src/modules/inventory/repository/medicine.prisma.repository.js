@@ -29,6 +29,9 @@ class MedicinePrismaRepository {
     skip,
     take,
   }) {
+    const targetBranchId = branchId === 'null' || !branchId ? undefined : branchId;
+    const upperStatus = status ? status.toUpperCase().replace(/\s+/g, '_') : null;
+
     const baseWhere = {
       tenantId,
       deletedAt: null,
@@ -43,10 +46,17 @@ class MedicinePrismaRepository {
       ...(categoryId && { categoryId }),
       ...(manufacturerId && { manufacturerId }),
       ...(isActive !== undefined && { isActive }),
+      inventoryBatches: {
+        some: {
+          ...(targetBranchId ? { branchId: targetBranchId } : {}),
+          deletedAt: null,
+          isArchived: false,
+          status: 'ACTIVE',
+          availableQuantity: { gt: 0 },
+          OR: [{ expiryDate: null }, { expiryDate: { gt: new Date() } }],
+        },
+      },
     };
-
-    const targetBranchId = branchId === 'null' || !branchId ? undefined : branchId;
-    const upperStatus = status ? status.toUpperCase().replace(/\s+/g, '_') : null;
 
     let medicines = [];
     let total = 0;

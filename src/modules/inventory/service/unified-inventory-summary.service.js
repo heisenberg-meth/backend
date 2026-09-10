@@ -55,24 +55,22 @@ class UnifiedInventorySummaryService {
       ),
       medicine_stats AS (
         SELECT
-          COUNT(*) as total_medicines,
-          COUNT(*) FILTER (WHERE m."isActive" = true AND COALESCE(ba.usable_quantity, 0) > 0) as medicines_with_stock,
-          COUNT(*) FILTER (WHERE m."isActive" = true AND COALESCE(ba.usable_quantity, 0) = 0 AND COALESCE(ba.expired_quantity, 0) = 0) as out_of_stock_medicines,
+          COUNT(ba."medicineId") as total_medicines,
+          COUNT(*) FILTER (WHERE COALESCE(ba.usable_quantity, 0) > 0) as medicines_with_stock,
+          COUNT(*) FILTER (WHERE COALESCE(ba.usable_quantity, 0) = 0 AND COALESCE(ba.expired_quantity, 0) = 0) as out_of_stock_medicines,
           COUNT(*) FILTER (
-            WHERE m."isActive" = true
-              AND COALESCE(ba.usable_quantity, 0) > 0
+            WHERE COALESCE(ba.usable_quantity, 0) > 0
               AND COALESCE(ba.usable_quantity, 0) <= COALESCE(ba.max_reorder_point, m."reorderLevel", 10)
           ) as low_stock_medicines,
           COUNT(*) FILTER (
-            WHERE m."isActive" = true
-              AND COALESCE(ba.usable_quantity, 0) > COALESCE(ba.max_reorder_point, m."reorderLevel", 10)
+            WHERE COALESCE(ba.usable_quantity, 0) > COALESCE(ba.max_reorder_point, m."reorderLevel", 10)
           ) as in_stock_medicines,
           COALESCE(SUM(ba.usable_quantity), 0) as total_stock_units,
           COALESCE(SUM(ba.total_value), 0) as inventory_value,
           COALESCE(SUM(ba.expired_batches), 0) as expired_batches_count,
-          COUNT(*) FILTER (WHERE m."isActive" = true AND COALESCE(ba.usable_quantity, 0) > 0 AND ba.expired_batches > 0) as medicines_with_expired
-        FROM "Medicine" m
-        LEFT JOIN batch_aggregates ba ON m."id" = ba."medicineId"
+          COUNT(*) FILTER (WHERE COALESCE(ba.usable_quantity, 0) > 0 AND ba.expired_batches > 0) as medicines_with_expired
+        FROM batch_aggregates ba
+        INNER JOIN "Medicine" m ON m."id" = ba."medicineId"
         WHERE m."tenantId" = ${tenantId}
           AND m."deletedAt" IS NULL
       )
