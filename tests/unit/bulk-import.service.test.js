@@ -88,6 +88,7 @@ describe('BulkImportService - PRD Implementation & Test Cases', () => {
         },
       ],
       duplicateStrategy: 'Merge',
+      processExistingMedicines: true,
       supplier: 'Global Pharma',
       barcodeOptions: { autoGen: false, overwrite: false },
     };
@@ -184,6 +185,7 @@ describe('BulkImportService - PRD Implementation & Test Cases', () => {
       ],
       duplicateStrategy: 'Ask me',
       duplicateDecisions: {}, // No decision provided
+      processExistingMedicines: true,
       supplier: 'Global Pharma',
       barcodeOptions: { autoGen: false, overwrite: false },
     };
@@ -226,6 +228,7 @@ describe('BulkImportService - PRD Implementation & Test Cases', () => {
       duplicateDecisions: {
         1: { action: 'OVERWRITE' },
       },
+      processExistingMedicines: true,
       supplier: 'Global Pharma',
       barcodeOptions: { autoGen: false, overwrite: false },
     };
@@ -395,6 +398,7 @@ describe('BulkImportService - PRD Implementation & Test Cases', () => {
       {
         medicines,
         duplicateStrategy: 'Overwrite',
+        processExistingMedicines: true,
       },
       tenantId,
       branchId,
@@ -464,6 +468,7 @@ describe('BulkImportService - PRD Implementation & Test Cases', () => {
       {
         medicines,
         duplicateStrategy: 'Merge',
+        processExistingMedicines: true,
       },
       tenantId,
       branchId,
@@ -544,6 +549,7 @@ describe('BulkImportService - PRD Implementation & Test Cases', () => {
         medicines,
         duplicateStrategy: 'Ask me',
         duplicateDecisions,
+        processExistingMedicines: true,
       },
       tenantId,
       branchId,
@@ -592,6 +598,7 @@ describe('BulkImportService - PRD Implementation & Test Cases', () => {
         },
       ],
       duplicateStrategy: 'Skip', // Would erroneously skip under flawed logic
+      processExistingMedicines: true,
     };
 
     // Analyze first
@@ -719,6 +726,7 @@ describe('BulkImportService - PRD Implementation & Test Cases', () => {
         },
       ],
       duplicateStrategy: 'Merge',
+      processExistingMedicines: true,
       supplier: 'Global Pharma',
       barcodeOptions: { autoGen: false, overwrite: false },
     };
@@ -775,6 +783,7 @@ describe('BulkImportService - PRD Implementation & Test Cases', () => {
         },
       ],
       duplicateStrategy: 'Overwrite',
+      processExistingMedicines: true,
       supplier: 'Global Pharma',
       barcodeOptions: { autoGen: false, overwrite: false },
     };
@@ -799,5 +808,172 @@ describe('BulkImportService - PRD Implementation & Test Cases', () => {
     expect(callArgs.newBatches[0].batchNumber).toBe('BATCH002');
     expect(callArgs.newBatches[0].quantity).toBe(50);
     expect(callArgs.newMovements[0].notes).toContain('Duplicate resolved via OVERWRITE');
+  });
+
+  describe('PRD — Process Existing Medicines Checkbox', () => {
+    const existingMed = {
+      id: 'med-exist-test',
+      name: 'Existing Pan 40',
+      barcode: '9990001112223',
+    };
+    const existingBatch = {
+      id: 'batch-exist-test',
+      medicineId: 'med-exist-test',
+      batchNumber: 'BATCH-EX-1',
+      quantity: 50,
+      purchasePrice: 20,
+    };
+
+    beforeEach(() => {
+      mockPrisma.medicine.findMany.mockResolvedValue([existingMed]);
+      mockPrisma.inventoryBatch.findMany.mockResolvedValue([existingBatch]);
+    });
+
+    it('skips existing medicines when processExistingMedicines is false, even if duplicateStrategy is Overwrite', async () => {
+      const payload = {
+        medicines: [
+          {
+            name: 'Existing Pan 40',
+            barcode: '9990001112223',
+            qty: '20',
+            price: '25.00',
+            batch: 'BATCH-EX-1',
+          },
+        ],
+        duplicateStrategy: 'Overwrite',
+        processExistingMedicines: false,
+      };
+
+      const result = await bulkImportService.commit(payload, tenantId, branchId, userId);
+      expect(result.success).toBe(true);
+      expect(result.summary.skipped).toBe(1);
+      expect(result.summary.overwritten).toBe(0);
+      expect(result.summary.imported).toBe(0);
+
+      const callArgs = mockSharedEngine.commitChunks.mock.calls[0][0];
+      expect(callArgs.newMedicines).toHaveLength(0);
+      expect(callArgs.newBatches).toHaveLength(0);
+      expect(callArgs.medicineUpdates).toHaveLength(0);
+      expect(callArgs.batchQuantityUpdates).toHaveLength(0);
+    });
+
+    it('skips existing medicines by default when processExistingMedicines is omitted', async () => {
+      const payload = {
+        medicines: [
+          {
+            name: 'Existing Pan 40',
+            barcode: '9990001112223',
+            qty: '20',
+            price: '25.00',
+            batch: 'BATCH-EX-1',
+          },
+        ],
+        duplicateStrategy: 'Merge',
+      };
+
+      const result = await bulkImportService.commit(payload, tenantId, branchId, userId);
+      expect(result.success).toBe(true);
+      expect(result.summary.skipped).toBe(1);
+      expect(result.summary.merged).toBe(0);
+      expect(result.summary.imported).toBe(0);
+    });
+
+    it('skips existing medicines without raising unresolved conflict when duplicateStrategy is Ask me and checkbox is false', async () => {
+      const payload = {
+        medicines: [
+          {
+            name: 'Existing Pan 40',
+            barcode: '9990001112223',
+            qty: '20',
+            price: '25.00',
+            batch: 'BATCH-EX-1',
+          },
+        ],
+        duplicateStrategy: 'Ask me',
+        duplicateDecisions: {},
+        processExistingMedicines: false,
+      };
+
+      const result = await bulkImportService.commit(payload, tenantId, branchId, userId);
+      expect(result.success).toBe(true);
+      expect(result.summary.skipped).toBe(1);
+      expect(result.summary.imported).toBe(0);
+    });
+
+    it('processes existing medicines using duplicateStrategy when processExistingMedicines is true', async () => {
+      const payload = {
+        medicines: [
+          {
+            name: 'Existing Pan 40',
+            barcode: '9990001112223',
+            qty: '30',
+            price: '22.00',
+            batch: 'BATCH-EX-1',
+          },
+        ],
+        duplicateStrategy: 'Overwrite',
+        processExistingMedicines: true,
+      };
+
+      const result = await bulkImportService.commit(payload, tenantId, branchId, userId);
+      expect(result.success).toBe(true);
+      expect(result.summary.overwritten).toBe(1);
+      expect(result.summary.skipped).toBe(0);
+      expect(result.summary.imported).toBe(1);
+
+      const callArgs = mockSharedEngine.commitChunks.mock.calls[0][0];
+      expect(callArgs.batchQuantityUpdates).toHaveLength(1);
+      expect(callArgs.batchQuantityUpdates[0].batchId).toBe('batch-exist-test');
+    });
+
+    it('always rejects expired incoming products regardless of processExistingMedicines', async () => {
+      const payload = {
+        medicines: [
+          {
+            name: 'Existing Pan 40',
+            barcode: '9990001112223',
+            qty: '30',
+            price: '22.00',
+            expiry: '2020-01-01',
+            batch: 'BATCH-EX-1',
+          },
+        ],
+        duplicateStrategy: 'Overwrite',
+        processExistingMedicines: true,
+      };
+
+      const result = await bulkImportService.commit(payload, tenantId, branchId, userId);
+      expect(result.summary.failed).toBe(1);
+      expect(result.summary.imported).toBe(0);
+      expect(result.errors).toHaveLength(1);
+      expect(result.errors[0].errorCode).toBe('EXPIRED_PRODUCT');
+
+      const callArgs = mockSharedEngine.commitChunks.mock.calls[0][0];
+      expect(callArgs.newBatches).toHaveLength(0);
+      expect(callArgs.batchQuantityUpdates).toHaveLength(0);
+    });
+
+    it('creates new medicines regardless of processExistingMedicines setting', async () => {
+      mockPrisma.medicine.findMany.mockResolvedValue([]);
+      mockPrisma.inventoryBatch.findMany.mockResolvedValue([]);
+
+      const payload = {
+        medicines: [
+          {
+            name: 'Brand New Medicine 10mg',
+            qty: '100',
+            price: '15.00',
+            batch: 'BATCH-NEW-1',
+          },
+        ],
+        processExistingMedicines: false,
+      };
+
+      const result = await bulkImportService.commit(payload, tenantId, branchId, userId);
+      expect(result.success).toBe(true);
+      expect(result.summary.created).toBe(1);
+      expect(result.summary.imported).toBe(1);
+      expect(result.summary.skipped).toBe(0);
+    });
   });
 });

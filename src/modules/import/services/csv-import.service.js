@@ -37,6 +37,7 @@ class CsvImportService {
       duplicateStrategy,
       barcodeOptions,
       supplier: supplierName,
+      processExistingMedicines = false,
     },
   ) {
     try {
@@ -129,6 +130,7 @@ class CsvImportService {
                   userId,
                   duplicateStrategy,
                   barcodeOptions,
+                  processExistingMedicines: processExistingMedicines === true,
                   medicineMap,
                   batchMap,
                   inventoryMap,
@@ -168,6 +170,7 @@ class CsvImportService {
                   userId,
                   duplicateStrategy,
                   barcodeOptions,
+                  processExistingMedicines: processExistingMedicines === true,
                   medicineMap,
                   batchMap,
                   inventoryMap,
@@ -420,8 +423,16 @@ class CsvImportService {
   }
 
   _processChunk(rows, ctx) {
-    const { tenantId, branchId, userId, duplicateStrategy, barcodeOptions, medicineMap, batchMap } =
-      ctx;
+    const {
+      tenantId,
+      branchId,
+      userId,
+      duplicateStrategy,
+      barcodeOptions,
+      medicineMap,
+      batchMap,
+      processExistingMedicines = false,
+    } = ctx;
 
     for (const row of rows) {
       const name = this._getColumn(
@@ -639,7 +650,7 @@ class CsvImportService {
       }
 
       if (existingMedicine) {
-        if (duplicateStrategy === 'Skip') {
+        if (!processExistingMedicines || duplicateStrategy === 'Skip') {
           ctx.importedCount++;
           continue;
         }

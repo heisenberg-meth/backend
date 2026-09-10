@@ -148,6 +148,7 @@ class ImportFastifyController {
         duplicateStrategy,
         barcodeOptions: rawBarcodeOpts,
         supplier: supplierName,
+        processExistingMedicines,
       } = request.body || {};
       if (!fileContent) {
         return reply.code(400).send({
@@ -209,6 +210,7 @@ class ImportFastifyController {
         duplicateStrategy: duplicateStrategy || 'Skip',
         barcodeOptions,
         supplier: supplierName || 'None',
+        processExistingMedicines: processExistingMedicines === true,
       });
 
       return reply.code(202).send({
