@@ -35,30 +35,15 @@ describe('Purchase Order & Invoice Summary', () => {
   });
 
   describe('Repository: getSummary', () => {
-    it('should query prisma with tenantId filter and calculate summary metrics', async () => {
-      // Mock counts for invoices
-      // Total: 15, Pending: 3, Paid: 10, Partial: 1, Cancelled: 1
-      mockPrisma.purchaseInvoice.count
-        .mockResolvedValueOnce(15) // total
-        .mockResolvedValueOnce(3) // pending
-        .mockResolvedValueOnce(10) // paid
-        .mockResolvedValueOnce(1) // partial
-        .mockResolvedValueOnce(1); // cancelled
-
-      mockPrisma.purchaseInvoice.aggregate.mockResolvedValueOnce({
-        _sum: {
-          balanceAmount: '125000.00',
-          totalAmount: '150000.00',
-        },
-      });
-
-      // Mock counts for orders
-      // Total: 8, Pending: 4, Received: 3, Cancelled: 1
+    it('should calculate PO summary from PurchaseOrder (not invoices) per PRD §17-18 & §52', async () => {
+      // 6 Purchase Orders:
+      // total: 6, pending: 3 (APPROVED), approved: 3, received: 2, cancelled: 1
       mockPrisma.purchaseOrder.count
-        .mockResolvedValueOnce(8) // total
-        .mockResolvedValueOnce(4) // pending
-        .mockResolvedValueOnce(3) // received
-        .mockResolvedValueOnce(1); // cancelled
+        .mockResolvedValueOnce(6) // totalOrders
+        .mockResolvedValueOnce(3) // pendingOrders (e.g. APPROVED)
+        .mockResolvedValueOnce(3) // approvedOrders
+        .mockResolvedValueOnce(2) // receivedOrders
+        .mockResolvedValueOnce(1); // cancelledOrders
 
       mockPrisma.purchaseOrder.aggregate.mockResolvedValueOnce({
         _sum: {
@@ -67,53 +52,109 @@ describe('Purchase Order & Invoice Summary', () => {
         },
       });
 
-      const summary = await purchaseOrderRepository.getSummary(tenantId);
+      // 4 Purchase Invoices:
+      // total: 4, pendingPayment: 3, paid: 1, partial: 0, cancelled: 0
+      mockPrisma.purchaseInvoice.count
+        .mockResolvedValueOnce(4) // totalInvoices
+        .mockResolvedValueOnce(3) // pendingPaymentInvoices
+        .mockResolvedValueOnce(1) // paidInvoices
+        .mockResolvedValueOnce(0) // partialInvoices
+        .mockResolvedValueOnce(0); // cancelledInvoices
 
-      // Verify PRD §6 top-level canonical fields
-      expect(summary.totalPurchaseOrders).toBe(15);
-      expect(summary.pendingPurchaseOrders).toBe(3);
-      expect(summary.paidPurchaseOrders).toBe(10);
-      expect(summary.cancelledPurchaseOrders).toBe(1);
-      expect(summary.pendingValue).toBe(125000);
-
-      // Verify detailed breakdowns
-      expect(summary.invoices).toEqual({
-        total: 15,
-        pending: 3,
-        paid: 10,
-        partial: 1,
-        cancelled: 1,
-        pendingValue: 125000,
+      mockPrisma.purchaseInvoice.aggregate.mockResolvedValueOnce({
+        _sum: {
+          balanceAmount: '125000.00',
+          totalAmount: '150000.00',
+        },
       });
 
+      const summary = await purchaseOrderRepository.getSummary(tenantId);
+
+      // Verify PRD §17-18 PO fields derived from PurchaseOrder model
+      expect(summary.total).toBe(6);
+      expect(summary.pending).toBe(3);
+      expect(summary.approved).toBe(3);
+      expect(summary.received).toBe(2);
+      expect(summary.cancelled).toBe(1);
+      expect(summary.totalPurchaseOrders).toBe(6);
+      expect(summary.pendingPurchaseOrders).toBe(3);
+      expect(summary.approvedPurchaseOrders).toBe(3);
+      expect(summary.receivedPurchaseOrders).toBe(2);
+      expect(summary.cancelledPurchaseOrders).toBe(1);
+      expect(summary.pendingValue).toBe(45000);
+
+      // Verify detailed breakdowns
       expect(summary.orders).toEqual({
-        total: 8,
-        pending: 4,
-        completed: 3,
+        total: 6,
+        pending: 3,
+        approved: 3,
+        received: 2,
         cancelled: 1,
         pendingValue: 45000,
       });
 
+      // Invoices must remain completely separate (AC-03, AC-15)
+      expect(summary.invoices).toEqual({
+        total: 4,
+        pendingPayment: 3,
+        paid: 1,
+        partial: 0,
+        cancelled: 0,
+        pendingValue: 125000,
+      });
+
       // Verify tenantId was passed in queries
-      expect(mockPrisma.purchaseInvoice.count).toHaveBeenCalledWith(
-        expect.objectContaining({
-          where: expect.objectContaining({ tenantId }),
-        }),
-      );
       expect(mockPrisma.purchaseOrder.count).toHaveBeenCalledWith(
         expect.objectContaining({
           where: expect.objectContaining({ tenantId, deletedAt: null }),
         }),
       );
+      expect(mockPrisma.purchaseInvoice.count).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({ tenantId }),
+        }),
+      );
+    });
+
+    it('should demonstrate PO receiving decrements pending POs while invoices remain unaffected (PRD §52)', async () => {
+      // After PO-003 transitions to RECEIVED:
+      // total: 6, pending: 2, approved: 2, received: 3, cancelled: 1
+      mockPrisma.purchaseOrder.count
+        .mockResolvedValueOnce(6) // totalOrders
+        .mockResolvedValueOnce(2) // pendingOrders (decremented from 3 to 2)
+        .mockResolvedValueOnce(2) // approvedOrders
+        .mockResolvedValueOnce(3) // receivedOrders (incremented from 2 to 3)
+        .mockResolvedValueOnce(1); // cancelledOrders
+
+      mockPrisma.purchaseOrder.aggregate.mockResolvedValueOnce({
+        _sum: { totalAmount: '30000.00' },
+      });
+
+      // Invoices remain unaffected at 3 pending payments
+      mockPrisma.purchaseInvoice.count
+        .mockResolvedValueOnce(4)
+        .mockResolvedValueOnce(3) // pendingPayment remains 3
+        .mockResolvedValueOnce(1)
+        .mockResolvedValueOnce(0)
+        .mockResolvedValueOnce(0);
+
+      mockPrisma.purchaseInvoice.aggregate.mockResolvedValueOnce({
+        _sum: { balanceAmount: '125000.00' },
+      });
+
+      const summary = await purchaseOrderRepository.getSummary(tenantId);
+
+      expect(summary.pendingPurchaseOrders).toBe(2);
+      expect(summary.invoices.pendingPayment).toBe(3);
     });
 
     it('should support branchId filtering for multi-branch environments', async () => {
       const branchId = 'branch-001';
 
-      mockPrisma.purchaseInvoice.count.mockResolvedValue(0);
-      mockPrisma.purchaseInvoice.aggregate.mockResolvedValue({ _sum: {} });
       mockPrisma.purchaseOrder.count.mockResolvedValue(0);
       mockPrisma.purchaseOrder.aggregate.mockResolvedValue({ _sum: {} });
+      mockPrisma.purchaseInvoice.count.mockResolvedValue(0);
+      mockPrisma.purchaseInvoice.aggregate.mockResolvedValue({ _sum: {} });
 
       await purchaseOrderRepository.getSummary(tenantId, branchId);
 
@@ -127,10 +168,10 @@ describe('Purchase Order & Invoice Summary', () => {
 
   describe('Service: getSummary', () => {
     it('should delegate getSummary to repository', async () => {
-      mockPrisma.purchaseInvoice.count.mockResolvedValue(0);
-      mockPrisma.purchaseInvoice.aggregate.mockResolvedValue({ _sum: {} });
       mockPrisma.purchaseOrder.count.mockResolvedValue(0);
       mockPrisma.purchaseOrder.aggregate.mockResolvedValue({ _sum: {} });
+      mockPrisma.purchaseInvoice.count.mockResolvedValue(0);
+      mockPrisma.purchaseInvoice.aggregate.mockResolvedValue({ _sum: {} });
 
       const result = await purchaseOrderService.getSummary(tenantId);
       expect(result).toBeDefined();
@@ -140,19 +181,22 @@ describe('Purchase Order & Invoice Summary', () => {
 
   describe('Controller: getSummary', () => {
     it('should return 200 with summary data when successful', async () => {
-      mockPrisma.purchaseInvoice.count
-        .mockResolvedValueOnce(5)
-        .mockResolvedValueOnce(2)
-        .mockResolvedValueOnce(3)
-        .mockResolvedValueOnce(0)
-        .mockResolvedValueOnce(0);
-      mockPrisma.purchaseInvoice.aggregate.mockResolvedValueOnce({ _sum: { balanceAmount: 2500 } });
       mockPrisma.purchaseOrder.count
+        .mockResolvedValueOnce(20)
+        .mockResolvedValueOnce(5)
+        .mockResolvedValueOnce(5)
+        .mockResolvedValueOnce(13)
+        .mockResolvedValueOnce(2);
+      mockPrisma.purchaseOrder.aggregate.mockResolvedValueOnce({ _sum: { totalAmount: 100000 } });
+      mockPrisma.purchaseInvoice.count
+        .mockResolvedValueOnce(15)
         .mockResolvedValueOnce(3)
-        .mockResolvedValueOnce(1)
+        .mockResolvedValueOnce(10)
         .mockResolvedValueOnce(2)
         .mockResolvedValueOnce(0);
-      mockPrisma.purchaseOrder.aggregate.mockResolvedValueOnce({ _sum: { totalAmount: 1000 } });
+      mockPrisma.purchaseInvoice.aggregate.mockResolvedValueOnce({
+        _sum: { balanceAmount: 50000 },
+      });
 
       const req = {
         tenantId,
@@ -168,14 +212,17 @@ describe('Purchase Order & Invoice Summary', () => {
       expect(reply.send).toHaveBeenCalledWith({
         success: true,
         data: expect.objectContaining({
-          pendingPurchaseOrders: 2,
-          totalPurchaseOrders: 5,
+          totalPurchaseOrders: 20,
+          pendingPurchaseOrders: 5,
+          approvedPurchaseOrders: 5,
+          receivedPurchaseOrders: 13,
+          cancelledPurchaseOrders: 2,
         }),
       });
     });
 
     it('should return 500 when database operation throws, rather than masking with 0', async () => {
-      mockPrisma.purchaseInvoice.count.mockRejectedValueOnce(new Error('DB Connection Lost'));
+      mockPrisma.purchaseOrder.count.mockRejectedValueOnce(new Error('DB Connection Lost'));
 
       const req = {
         tenantId,

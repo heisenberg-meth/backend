@@ -477,7 +477,10 @@ ${order.notes ? `<p style="color:#6b7280;font-size:12px;margin-top:24px;"><stron
       const summary = await purchaseOrderService.getSummary(tenantId, branchId);
       return reply.send({ success: true, data: summary });
     } catch (error) {
-      logger.error({ err: error, tenantId }, 'Failed to get purchase orders summary');
+      logger.error(
+        { err: error, tenantId, branchId, stack: error.stack },
+        '[PurchaseSummary] Failed to calculate purchase summary',
+      );
       return reply.code(500).send({
         success: false,
         error: error.message || 'Failed to retrieve purchase summary',

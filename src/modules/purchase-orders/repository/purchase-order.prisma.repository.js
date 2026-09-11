@@ -160,40 +160,66 @@ class PurchaseOrderPrismaRepository {
   }
 
   async getSummary(tenantId, branchId = null) {
-    const invoiceWhere = {
-      tenantId,
-    };
+    const validBranchId =
+      typeof branchId === 'string' && branchId.trim() !== '' ? branchId.trim() : null;
 
     const orderWhere = {
       tenantId,
       deletedAt: null,
-      ...(branchId ? { branchId } : {}),
+      ...(validBranchId ? { branchId: validBranchId } : {}),
     };
 
+    const invoiceWhere = {
+      tenantId,
+    };
+
+    // Valid PurchaseOrderStatus enum members awaiting receipt/fulfillment
     const pendingOrderStatuses = [
-      'DRAFT',
-      'PENDING_APPROVAL',
       'APPROVED',
-      'ORDERED',
+      'PARTIALLY_RECEIVED',
       'SENT',
       'SENT_TO_SUPPLIER',
       'ACKNOWLEDGED',
-      'PARTIALLY_RECEIVED',
+      'PENDING_APPROVAL',
+      'DRAFT',
     ];
+    const receivedOrderStatuses = ['RECEIVED', 'CLOSED', 'RECONCILED'];
+    const cancelledOrderStatuses = ['CANCELLED', 'REJECTED'];
 
     const [
+      totalOrders,
+      pendingOrders,
+      approvedOrders,
+      receivedOrders,
+      cancelledOrders,
+      ordersAggregate,
       totalInvoices,
-      pendingInvoices,
+      pendingPaymentInvoices,
       paidInvoices,
       partialInvoices,
       cancelledInvoices,
       invoicesAggregate,
-      totalOrders,
-      pendingOrders,
-      receivedOrders,
-      cancelledOrders,
-      ordersAggregate,
     ] = await Promise.all([
+      prisma.purchaseOrder.count({ where: orderWhere }),
+      prisma.purchaseOrder.count({
+        where: { ...orderWhere, status: { in: pendingOrderStatuses } },
+      }),
+      prisma.purchaseOrder.count({
+        where: { ...orderWhere, status: 'APPROVED' },
+      }),
+      prisma.purchaseOrder.count({
+        where: { ...orderWhere, status: { in: receivedOrderStatuses } },
+      }),
+      prisma.purchaseOrder.count({
+        where: { ...orderWhere, status: { in: cancelledOrderStatuses } },
+      }),
+      prisma.purchaseOrder.aggregate({
+        where: { ...orderWhere, status: { in: pendingOrderStatuses } },
+        _sum: {
+          totalAmount: true,
+          balanceAmount: true,
+        },
+      }),
       prisma.purchaseInvoice.count({ where: invoiceWhere }),
       prisma.purchaseInvoice.count({
         where: { ...invoiceWhere, paymentStatus: 'PENDING' },
@@ -217,24 +243,10 @@ class PurchaseOrderPrismaRepository {
           totalAmount: true,
         },
       }),
-      prisma.purchaseOrder.count({ where: orderWhere }),
-      prisma.purchaseOrder.count({
-        where: { ...orderWhere, status: { in: pendingOrderStatuses } },
-      }),
-      prisma.purchaseOrder.count({
-        where: { ...orderWhere, status: { in: ['RECEIVED', 'CLOSED', 'RECONCILED'] } },
-      }),
-      prisma.purchaseOrder.count({
-        where: { ...orderWhere, status: { in: ['CANCELLED', 'REJECTED'] } },
-      }),
-      prisma.purchaseOrder.aggregate({
-        where: { ...orderWhere, status: { in: pendingOrderStatuses } },
-        _sum: {
-          totalAmount: true,
-          balanceAmount: true,
-        },
-      }),
     ]);
+
+    const pendingOrdersTotal =
+      ordersAggregate?._sum?.totalAmount != null ? Number(ordersAggregate._sum.totalAmount) : 0;
 
     const pendingInvoiceBalance =
       invoicesAggregate?._sum?.balanceAmount != null
@@ -243,29 +255,33 @@ class PurchaseOrderPrismaRepository {
           ? Number(invoicesAggregate._sum.totalAmount)
           : 0;
 
-    const pendingOrdersTotal =
-      ordersAggregate?._sum?.totalAmount != null ? Number(ordersAggregate._sum.totalAmount) : 0;
-
     return {
-      totalPurchaseOrders: totalInvoices,
-      pendingPurchaseOrders: pendingInvoices,
-      paidPurchaseOrders: paidInvoices,
-      cancelledPurchaseOrders: cancelledInvoices,
-      pendingValue: pendingInvoiceBalance,
+      total: totalOrders,
+      pending: pendingOrders,
+      approved: approvedOrders,
+      received: receivedOrders,
+      cancelled: cancelledOrders,
+      totalPurchaseOrders: totalOrders,
+      pendingPurchaseOrders: pendingOrders,
+      approvedPurchaseOrders: approvedOrders,
+      receivedPurchaseOrders: receivedOrders,
+      cancelledPurchaseOrders: cancelledOrders,
+      pendingValue: pendingOrdersTotal,
+      orders: {
+        total: totalOrders,
+        pending: pendingOrders,
+        approved: approvedOrders,
+        received: receivedOrders,
+        cancelled: cancelledOrders,
+        pendingValue: pendingOrdersTotal,
+      },
       invoices: {
         total: totalInvoices,
-        pending: pendingInvoices,
+        pendingPayment: pendingPaymentInvoices,
         paid: paidInvoices,
         partial: partialInvoices,
         cancelled: cancelledInvoices,
         pendingValue: pendingInvoiceBalance,
-      },
-      orders: {
-        total: totalOrders,
-        pending: pendingOrders,
-        completed: receivedOrders,
-        cancelled: cancelledOrders,
-        pendingValue: pendingOrdersTotal,
       },
     };
   }
