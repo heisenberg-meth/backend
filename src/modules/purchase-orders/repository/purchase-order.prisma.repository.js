@@ -158,6 +158,117 @@ class PurchaseOrderPrismaRepository {
       },
     });
   }
+
+  async getSummary(tenantId, branchId = null) {
+    const invoiceWhere = {
+      tenantId,
+    };
+
+    const orderWhere = {
+      tenantId,
+      deletedAt: null,
+      ...(branchId ? { branchId } : {}),
+    };
+
+    const pendingOrderStatuses = [
+      'DRAFT',
+      'PENDING_APPROVAL',
+      'APPROVED',
+      'ORDERED',
+      'SENT',
+      'SENT_TO_SUPPLIER',
+      'ACKNOWLEDGED',
+      'PARTIALLY_RECEIVED',
+    ];
+
+    const [
+      totalInvoices,
+      pendingInvoices,
+      paidInvoices,
+      partialInvoices,
+      cancelledInvoices,
+      invoicesAggregate,
+      totalOrders,
+      pendingOrders,
+      receivedOrders,
+      cancelledOrders,
+      ordersAggregate,
+    ] = await Promise.all([
+      prisma.purchaseInvoice.count({ where: invoiceWhere }),
+      prisma.purchaseInvoice.count({
+        where: { ...invoiceWhere, paymentStatus: 'PENDING' },
+      }),
+      prisma.purchaseInvoice.count({
+        where: { ...invoiceWhere, paymentStatus: 'PAID' },
+      }),
+      prisma.purchaseInvoice.count({
+        where: { ...invoiceWhere, paymentStatus: { in: ['PARTIAL', 'PARTIALLY_PAID'] } },
+      }),
+      prisma.purchaseInvoice.count({
+        where: { ...invoiceWhere, paymentStatus: 'CANCELLED' },
+      }),
+      prisma.purchaseInvoice.aggregate({
+        where: {
+          ...invoiceWhere,
+          paymentStatus: { in: ['PENDING', 'PARTIAL', 'PARTIALLY_PAID', 'OVERDUE'] },
+        },
+        _sum: {
+          balanceAmount: true,
+          totalAmount: true,
+        },
+      }),
+      prisma.purchaseOrder.count({ where: orderWhere }),
+      prisma.purchaseOrder.count({
+        where: { ...orderWhere, status: { in: pendingOrderStatuses } },
+      }),
+      prisma.purchaseOrder.count({
+        where: { ...orderWhere, status: { in: ['RECEIVED', 'CLOSED', 'RECONCILED'] } },
+      }),
+      prisma.purchaseOrder.count({
+        where: { ...orderWhere, status: { in: ['CANCELLED', 'REJECTED'] } },
+      }),
+      prisma.purchaseOrder.aggregate({
+        where: { ...orderWhere, status: { in: pendingOrderStatuses } },
+        _sum: {
+          totalAmount: true,
+          balanceAmount: true,
+        },
+      }),
+    ]);
+
+    const pendingInvoiceBalance =
+      invoicesAggregate?._sum?.balanceAmount != null
+        ? Number(invoicesAggregate._sum.balanceAmount)
+        : invoicesAggregate?._sum?.totalAmount != null
+          ? Number(invoicesAggregate._sum.totalAmount)
+          : 0;
+
+    const pendingOrdersTotal =
+      ordersAggregate?._sum?.totalAmount != null ? Number(ordersAggregate._sum.totalAmount) : 0;
+
+    return {
+      totalPurchaseOrders: totalInvoices,
+      pendingPurchaseOrders: pendingInvoices,
+      paidPurchaseOrders: paidInvoices,
+      cancelledPurchaseOrders: cancelledInvoices,
+      pendingValue: pendingInvoiceBalance,
+      invoices: {
+        total: totalInvoices,
+        pending: pendingInvoices,
+        paid: paidInvoices,
+        partial: partialInvoices,
+        cancelled: cancelledInvoices,
+        pendingValue: pendingInvoiceBalance,
+      },
+      orders: {
+        total: totalOrders,
+        pending: pendingOrders,
+        completed: receivedOrders,
+        cancelled: cancelledOrders,
+        pendingValue: pendingOrdersTotal,
+      },
+    };
+  }
 }
 
 export default new PurchaseOrderPrismaRepository();

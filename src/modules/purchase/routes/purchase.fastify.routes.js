@@ -1,4 +1,5 @@
 import purchaseController from '../fastify/purchase.fastify.controller.js';
+import purchaseOrderController from '../../purchase-orders/controller/purchase-order.fastify.controller.js';
 import { authenticate, requireTenant } from '../../../middleware/auth.fastify.js';
 import { requirePermission } from '../../../middleware/permission.fastify.js';
 import { requireFeature } from '../../../middleware/feature.guard.fastify.js';
@@ -6,6 +7,15 @@ import { requireFeature } from '../../../middleware/feature.guard.fastify.js';
 async function purchaseFastifyRoutes(fastify) {
   fastify.addHook('preHandler', authenticate);
   fastify.addHook('preHandler', requireTenant);
+
+  fastify.get(
+    '/summary',
+    {
+      schema: { tags: ['Purchase'], summary: 'Get purchase summary' },
+      preHandler: [requirePermission('VIEW_INVENTORY')],
+    },
+    purchaseOrderController.getSummary,
+  );
 
   fastify.post(
     '/receive',

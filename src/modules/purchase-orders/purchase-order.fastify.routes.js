@@ -38,6 +38,24 @@ async function purchaseOrderRoutes(fastify) {
   );
 
   fastify.get(
+    '/summary',
+    {
+      schema: {
+        tags: ['Purchase Orders'],
+        summary: 'Get live summary of purchase orders and invoices',
+        querystring: {
+          type: 'object',
+          properties: {
+            branchId: { type: 'string' },
+          },
+        },
+      },
+      preHandler: [requirePermission('purchase-orders.read')],
+    },
+    purchaseOrderController.getSummary,
+  );
+
+  fastify.get(
     '/by-supplier/:supplierId',
     {
       schema: {

@@ -488,6 +488,7 @@ const setupFastify = async () => {
   await fastify.register(uploadsRoutes, { prefix: '/api/uploads' });
   await fastify.register(avatarRoutes, { prefix: '/avatars' });
   await fastify.register(purchaseOrderRoutes, { prefix: '/api/purchase-orders' });
+  await fastify.register(purchaseOrderRoutes, { prefix: '/api/purchases' });
   await fastify.register(subscriptionRoutes, { prefix: '/api/subscriptions' });
   await fastify.register(paymentRoutes, { prefix: '/api/payments' });
   await fastify.register(analyticsRoutes, { prefix: '/api/analytics' });

@@ -1490,6 +1490,10 @@ class PurchaseOrderService {
 
     return updated;
   }
+
+  async getSummary(tenantId, branchId = null) {
+    return purchaseOrderRepository.getSummary(tenantId, branchId);
+  }
 }
 
 export default new PurchaseOrderService();

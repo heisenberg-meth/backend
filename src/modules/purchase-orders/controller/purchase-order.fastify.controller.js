@@ -469,6 +469,21 @@ ${order.notes ? `<p style="color:#6b7280;font-size:12px;margin-top:24px;"><stron
         .send({ success: false, error: 'Failed to generate purchase order PDF' });
     }
   }
+
+  async getSummary(request, reply) {
+    const tenantId = request.tenantId;
+    const { branchId } = request.query || {};
+    try {
+      const summary = await purchaseOrderService.getSummary(tenantId, branchId);
+      return reply.send({ success: true, data: summary });
+    } catch (error) {
+      logger.error({ err: error, tenantId }, 'Failed to get purchase orders summary');
+      return reply.code(500).send({
+        success: false,
+        error: error.message || 'Failed to retrieve purchase summary',
+      });
+    }
+  }
 }
 
 export default new PurchaseOrderFastifyController();
