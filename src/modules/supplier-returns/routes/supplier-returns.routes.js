@@ -155,6 +155,19 @@ async function supplierReturnsRoutes(fastify) {
     supplierReturnController.updateReturnStatus,
   );
 
+  fastify.post(
+    '/:id/complete',
+    {
+      schema: {
+        tags: ['Supplier Returns'],
+        summary: 'Complete supplier return and deduct inventory stock',
+        params: idParam,
+      },
+      preHandler: [requirePermission('purchases.update')],
+    },
+    supplierReturnController.completeReturn,
+  );
+
   fastify.patch(
     '/:id/dispatch-status',
     {

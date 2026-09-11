@@ -223,6 +223,91 @@ describe('Inventory Listing Semantics & Summary Tests', () => {
         },
       });
     });
+
+    it('includes batchNumber in search filters to support searching by batch (TC-004)', async () => {
+      mockPrisma.medicine.findMany.mockResolvedValue([]);
+      mockPrisma.medicine.count.mockResolvedValue(0);
+
+      await medicineRepository.findAll({
+        tenantId: 'tenant-123',
+        branchId: 'branch-456',
+        search: 'BD26120437',
+      });
+
+      expect(mockPrisma.medicine.findMany).toHaveBeenCalledTimes(1);
+      const queryArg = mockPrisma.medicine.findMany.mock.calls[0][0];
+      const orClauses = queryArg.where.OR;
+
+      expect(orClauses).toEqual(
+        expect.arrayContaining([
+          { name: { contains: 'BD26120437', mode: 'insensitive' } },
+          { genericName: { contains: 'BD26120437', mode: 'insensitive' } },
+          { barcode: { contains: 'BD26120437', mode: 'insensitive' } },
+          { sku: { contains: 'BD26120437', mode: 'insensitive' } },
+          {
+            inventoryBatches: {
+              some: {
+                branchId: 'branch-456',
+                deletedAt: null,
+                isArchived: false,
+                batchNumber: { contains: 'BD26120437', mode: 'insensitive' },
+              },
+            },
+          },
+        ]),
+      );
+    });
+
+    it('calculates identical availableStock for medicine when unsearched vs searched (TC-001 vs TC-002)', async () => {
+      const mockMedicine = {
+        id: 'med-acy-1',
+        name: 'Acyclovir 400mg',
+        inventory: [{ branchId: 'branch-456', currentStock: 4 }],
+        inventoryBatches: [
+          {
+            id: 'batch-1',
+            batchNumber: 'BD26120437',
+            quantity: 4,
+            availableQuantity: 4,
+            reservedQuantity: 0,
+            status: 'ACTIVE',
+            isArchived: false,
+            branchId: 'branch-456',
+            deletedAt: null,
+            expiryDate: new Date(Date.now() + 86400000 * 365),
+          },
+        ],
+      };
+
+      // 1. Initial view without search
+      mockPrisma.medicine.findMany.mockResolvedValueOnce([mockMedicine]);
+      mockPrisma.medicine.count.mockResolvedValueOnce(1);
+
+      const unsearchedResult = await medicineRepository.findAll({
+        tenantId: 'tenant-123',
+        branchId: 'branch-456',
+      });
+
+      // 2. Searched view with "acy"
+      mockPrisma.medicine.findMany.mockResolvedValueOnce([mockMedicine]);
+      mockPrisma.medicine.count.mockResolvedValueOnce(1);
+
+      const searchedResult = await medicineRepository.findAll({
+        tenantId: 'tenant-123',
+        branchId: 'branch-456',
+        search: 'acy',
+      });
+
+      expect(unsearchedResult.medicines[0].availableStock).toBe(4);
+      expect(searchedResult.medicines[0].availableStock).toBe(4);
+      expect(searchedResult.medicines[0].batchNumber).toBe('BD26120437');
+      expect(unsearchedResult.medicines[0].batchNumber).toBe(
+        searchedResult.medicines[0].batchNumber,
+      );
+      expect(unsearchedResult.medicines[0].availableStock).toBe(
+        searchedResult.medicines[0].availableStock,
+      );
+    });
   });
 
   describe('UnifiedInventorySummaryService.getUnifiedSummary()', () => {

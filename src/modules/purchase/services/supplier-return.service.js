@@ -1,5 +1,7 @@
 import ledgerService from '../../vendors/services/ledger.service.js';
 import prisma from '../../../config/prisma.js';
+import cacheInvalidatorService from '../../inventory/service/cache-invalidator.service.js';
+import logger from '../../../shared/utils/logger.js';
 
 class SupplierReturnService {
   async createReturn(tenantId, data, userId) {
@@ -73,23 +75,33 @@ class SupplierReturnService {
   }
 
   async approveReturn(tenantId, returnId, userId) {
-    return await prisma.$transaction(async (tx) => {
-      const returnRecord = await tx.supplierReturn.findUnique({
+    const returnRecord = await prisma.$transaction(async (tx) => {
+      const record = await tx.supplierReturn.findUnique({
         where: { id: returnId },
         include: { items: true },
       });
 
-      if (!returnRecord || returnRecord.tenantId !== tenantId) throw new Error('Return not found');
-      if (returnRecord.status !== 'DRAFT')
-        throw new Error(`Cannot approve return in ${returnRecord.status} status`);
+      if (!record || record.tenantId !== tenantId) throw new Error('Return not found');
+      if (record.status !== 'DRAFT')
+        throw new Error(`Cannot approve return in ${record.status} status`);
 
-      for (const item of returnRecord.items) {
+      for (const item of record.items) {
         const batch = await tx.inventoryBatch.findUnique({ where: { id: item.batchId } });
         if (!batch) throw new Error(`Batch ${item.batchId} not found`);
 
+        const avail = batch.availableQuantity != null ? batch.availableQuantity : batch.quantity;
+        if (item.quantity > avail) {
+          throw new Error(
+            `Return quantity (${item.quantity}) exceeds available stock for batch ${batch.batchNumber}`,
+          );
+        }
+
         await tx.inventoryBatch.update({
           where: { id: item.batchId },
-          data: { quantity: { decrement: item.quantity } },
+          data: {
+            quantity: { decrement: item.quantity },
+            availableQuantity: { decrement: item.quantity },
+          },
         });
 
         await tx.inventory.update({
@@ -110,11 +122,14 @@ class SupplierReturnService {
             medicineId: item.medicineId,
             batchId: item.batchId,
             movementType: 'SUPPLIER_RETURN',
-            quantity: item.quantity,
+            quantity: -item.quantity,
+            quantityBefore: batch.availableQuantity,
+            quantityAfter: batch.availableQuantity - item.quantity,
             referenceType: 'SUPPLIER_RETURN',
             referenceId: returnId,
+            idempotencyKey: `supplier-return:${returnId}:${item.id || item.batchId}`,
             performedBy: userId,
-            notes: returnRecord.reason || 'SUPPLIER_RETURN',
+            notes: record.reason || 'SUPPLIER_RETURN',
           },
         });
       }
@@ -134,8 +149,18 @@ class SupplierReturnService {
         },
       });
 
-      return returnRecord;
+      return record;
     });
+
+    try {
+      const medicineIds = returnRecord.items?.map((i) => i.medicineId).filter(Boolean) || [];
+      const branchId = returnRecord.items?.[0]?.batch?.branchId || null;
+      await cacheInvalidatorService.invalidateInventoryCaches(tenantId, medicineIds, branchId);
+    } catch (cacheErr) {
+      logger.warn({ err: cacheErr, tenantId }, 'PURCHASE_RETURN_CACHE_INVALIDATION_FAILED');
+    }
+
+    return returnRecord;
   }
 
   async dispatchReturn(tenantId, returnId, userId) {
@@ -279,18 +304,20 @@ class SupplierReturnService {
       prisma.supplierReturn.count({ where: { tenantId } }),
     ]);
 
-    const normalizedReturns = returns.map(ret => {
+    const normalizedReturns = returns.map((ret) => {
       if (ret.items && ret.items.length > 0) return ret;
       if (ret.batchId) {
         return {
           ...ret,
-          items: [{
-            medicine: ret.batch?.medicine,
-            batch: ret.batch,
-            quantity: ret.quantity,
-            purchasePrice: ret.returnAmount,
-            reason: ret.reason
-          }]
+          items: [
+            {
+              medicine: ret.batch?.medicine,
+              batch: ret.batch,
+              quantity: ret.quantity,
+              purchasePrice: ret.returnAmount,
+              reason: ret.reason,
+            },
+          ],
         };
       }
       return { ...ret, items: [] };
@@ -327,13 +354,15 @@ class SupplierReturnService {
 
     if (!returnRecord.items || returnRecord.items.length === 0) {
       if (returnRecord.batchId) {
-        returnRecord.items = [{
-          medicine: returnRecord.batch?.medicine,
-          batch: returnRecord.batch,
-          quantity: returnRecord.quantity,
-          purchasePrice: returnRecord.returnAmount,
-          reason: returnRecord.reason
-        }];
+        returnRecord.items = [
+          {
+            medicine: returnRecord.batch?.medicine,
+            batch: returnRecord.batch,
+            quantity: returnRecord.quantity,
+            purchasePrice: returnRecord.returnAmount,
+            reason: returnRecord.reason,
+          },
+        ];
       } else {
         returnRecord.items = [];
       }

@@ -143,13 +143,63 @@ class SupplierReturnController {
         request.body.status,
         request.user.id,
       );
-      return reply.send({ success: true, data: updated });
+      return reply.send({
+        success: true,
+        data: updated,
+        return: updated,
+        inventoryImpact: updated.inventoryImpact || [],
+      });
     } catch (error) {
       request.log.error(
         { err: error, endpoint: 'supplier-return-update-status' },
         'Supplier return error',
       );
-      return reply.code(500).send({ success: false, message: error.message });
+      const isClientError =
+        error.statusCode === 400 ||
+        error.statusCode === 404 ||
+        error.statusCode === 409 ||
+        error.code === 'INSUFFICIENT_STOCK' ||
+        error.message?.includes('Cannot return') ||
+        error.message?.includes('exceeds available stock') ||
+        error.message?.includes('not found') ||
+        error.message?.includes('Cannot transition');
+      return reply
+        .code(error.statusCode || (isClientError ? 400 : 500))
+        .send({ success: false, message: error.message, code: error.code });
+    }
+  }
+
+  async completeReturn(request, reply) {
+    try {
+      const result = await supplierReturnService.completeReturn(
+        request.params.id,
+        request.tenantId,
+        request.user.id,
+      );
+      return reply.code(200).send({
+        success: true,
+        message: 'Supplier return completed successfully',
+        data: result,
+        return: result,
+        inventoryImpact: result.inventoryImpact || [],
+      });
+    } catch (error) {
+      request.log.error(
+        { err: error, endpoint: 'supplier-return-complete' },
+        'Supplier return complete error',
+      );
+      const isClientError =
+        error.statusCode === 400 ||
+        error.statusCode === 404 ||
+        error.statusCode === 409 ||
+        error.code === 'INSUFFICIENT_STOCK' ||
+        error.message?.includes('Cannot return') ||
+        error.message?.includes('exceeds available stock') ||
+        error.message?.includes('not found') ||
+        error.message?.includes('Cannot transition');
+      return reply
+        .code(error.statusCode || (isClientError ? 400 : 500))
+        .send({ success: false, message: error.message, code: error.code });
     }
   }
 

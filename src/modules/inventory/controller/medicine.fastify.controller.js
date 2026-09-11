@@ -33,8 +33,10 @@ class MedicineFastifyController {
       page,
       limit,
       branchId,
+      forceRefresh,
     } = request.query;
     const finalSearch = search || q;
+    const isForceRefresh = forceRefresh === true || forceRefresh === 'true';
 
     // Automatically set lowStock if URL contains 'low-stock'
     const lowStock = request.query.lowStock || request.url.includes('low-stock');
@@ -42,6 +44,7 @@ class MedicineFastifyController {
     const result = await medicineService.getMedicines({
       tenantId: request.tenantId,
       branchId: branchId || request.branchId, // Use explicit or session branch
+      forceRefresh: isForceRefresh,
       query: {
         search: finalSearch,
         categoryId,

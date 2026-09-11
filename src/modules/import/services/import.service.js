@@ -9,6 +9,7 @@ import logger from '../../../shared/utils/logger.js';
 import auditService from '../../audit/service/audit.prisma.service.js';
 import { emitEvent } from '../../../shared/events/erp-event-bus.js';
 import { DOMAIN_EVENTS } from '../../../shared/constants/events.js';
+import cacheInvalidatorService from '../../inventory/service/cache-invalidator.service.js';
 
 class ImportService {
   async createImportJob(data, tenantId, userId) {
@@ -269,6 +270,14 @@ class ImportService {
     });
 
     await emitEvent(DOMAIN_EVENTS.INVENTORY_CREATED, { jobId, tenantId });
+
+    try {
+      const medicineIds =
+        job.extractedItems?.map((item) => item.matchedMedicineId).filter(Boolean) || [];
+      await cacheInvalidatorService.invalidateInventoryCaches(tenantId, medicineIds);
+    } catch (cacheErr) {
+      logger.warn({ err: cacheErr, tenantId }, 'IMPORT_APPROVE_CACHE_INVALIDATION_FAILED');
+    }
 
     return result;
   }

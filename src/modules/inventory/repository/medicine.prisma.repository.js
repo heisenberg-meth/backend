@@ -32,6 +32,9 @@ class MedicinePrismaRepository {
     const targetBranchId = branchId === 'null' || !branchId ? undefined : branchId;
     const upperStatus = status ? status.toUpperCase().replace(/\s+/g, '_') : null;
 
+    const todayStart = new Date();
+    todayStart.setHours(0, 0, 0, 0);
+
     const baseWhere = {
       tenantId,
       deletedAt: null,
@@ -41,6 +44,16 @@ class MedicinePrismaRepository {
           { genericName: { contains: search, mode: 'insensitive' } },
           { barcode: { contains: search, mode: 'insensitive' } },
           { sku: { contains: search, mode: 'insensitive' } },
+          {
+            inventoryBatches: {
+              some: {
+                batchNumber: { contains: search, mode: 'insensitive' },
+                deletedAt: null,
+                isArchived: false,
+                ...(targetBranchId ? { branchId: targetBranchId } : {}),
+              },
+            },
+          },
         ],
       }),
       ...(categoryId && { categoryId }),
@@ -48,12 +61,12 @@ class MedicinePrismaRepository {
       ...(isActive !== undefined && { isActive }),
       inventoryBatches: {
         some: {
-          branchId: targetBranchId,
+          ...(targetBranchId ? { branchId: targetBranchId } : {}),
           deletedAt: null,
           isArchived: false,
           status: 'ACTIVE',
           availableQuantity: { gt: 0 },
-          expiryDate: { gt: new Date() },
+          expiryDate: { gt: todayStart },
         },
       },
     };
@@ -116,7 +129,7 @@ class MedicinePrismaRepository {
           ${isActive !== undefined ? Prisma.sql`AND m."isActive" = ${isActive}` : Prisma.sql``}
           ${categoryId ? Prisma.sql`AND m."categoryId" = ${categoryId}` : Prisma.sql``}
           ${manufacturerId ? Prisma.sql`AND m."manufacturerId" = ${manufacturerId}` : Prisma.sql``}
-          ${search ? Prisma.sql`AND (m."name" ILIKE ${'%' + search + '%'} OR m."genericName" ILIKE ${'%' + search + '%'} OR m."barcode" ILIKE ${'%' + search + '%'} OR m."sku" ILIKE ${'%' + search + '%'})` : Prisma.sql``}
+          ${search ? Prisma.sql`AND (m."name" ILIKE ${'%' + search + '%'} OR m."genericName" ILIKE ${'%' + search + '%'} OR m."barcode" ILIKE ${'%' + search + '%'} OR m."sku" ILIKE ${'%' + search + '%'} OR EXISTS (SELECT 1 FROM "InventoryBatch" sub_ib WHERE sub_ib."medicineId" = m."id" AND sub_ib."batchNumber" ILIKE ${'%' + search + '%'} AND sub_ib."deletedAt" IS NULL AND sub_ib."isArchived" = false ${bCond}))` : Prisma.sql``}
           ${upperStatus === 'IN_STOCK' ? Prisma.sql`AND COALESCE(ba.usable_stock, 0) > COALESCE(ia.max_reorder_point, m."reorderLevel", 10) AND (ba.next_expiry IS NULL OR ba.next_expiry > (CURRENT_DATE + INTERVAL '30 days'))` : Prisma.sql``}
           ${upperStatus === 'LOW_STOCK' || lowStock ? Prisma.sql`AND COALESCE(ba.usable_stock, 0) > 0 AND COALESCE(ba.usable_stock, 0) <= COALESCE(ia.max_reorder_point, m."reorderLevel", 10) AND (ba.next_expiry IS NULL OR ba.next_expiry > (CURRENT_DATE + INTERVAL '30 days'))` : Prisma.sql``}
           ${upperStatus === 'OUT_OF_STOCK' ? Prisma.sql`AND ba.active_batch_count > 0 AND COALESCE(ba.usable_stock, 0) <= 0 AND COALESCE(ba.expired_stock, 0) <= 0` : Prisma.sql``}
@@ -175,7 +188,7 @@ class MedicinePrismaRepository {
           ${isActive !== undefined ? Prisma.sql`AND m."isActive" = ${isActive}` : Prisma.sql``}
           ${categoryId ? Prisma.sql`AND m."categoryId" = ${categoryId}` : Prisma.sql``}
           ${manufacturerId ? Prisma.sql`AND m."manufacturerId" = ${manufacturerId}` : Prisma.sql``}
-          ${search ? Prisma.sql`AND (m."name" ILIKE ${'%' + search + '%'} OR m."genericName" ILIKE ${'%' + search + '%'} OR m."barcode" ILIKE ${'%' + search + '%'} OR m."sku" ILIKE ${'%' + search + '%'})` : Prisma.sql``}
+          ${search ? Prisma.sql`AND (m."name" ILIKE ${'%' + search + '%'} OR m."genericName" ILIKE ${'%' + search + '%'} OR m."barcode" ILIKE ${'%' + search + '%'} OR m."sku" ILIKE ${'%' + search + '%'} OR EXISTS (SELECT 1 FROM "InventoryBatch" sub_ib WHERE sub_ib."medicineId" = m."id" AND sub_ib."batchNumber" ILIKE ${'%' + search + '%'} AND sub_ib."deletedAt" IS NULL AND sub_ib."isArchived" = false ${bCond}))` : Prisma.sql``}
           ${upperStatus === 'IN_STOCK' ? Prisma.sql`AND COALESCE(ba.usable_stock, 0) > COALESCE(ia.max_reorder_point, m."reorderLevel", 10) AND (ba.next_expiry IS NULL OR ba.next_expiry > (CURRENT_DATE + INTERVAL '30 days'))` : Prisma.sql``}
           ${upperStatus === 'LOW_STOCK' || lowStock ? Prisma.sql`AND COALESCE(ba.usable_stock, 0) > 0 AND COALESCE(ba.usable_stock, 0) <= COALESCE(ia.max_reorder_point, m."reorderLevel", 10) AND (ba.next_expiry IS NULL OR ba.next_expiry > (CURRENT_DATE + INTERVAL '30 days'))` : Prisma.sql``}
           ${upperStatus === 'OUT_OF_STOCK' ? Prisma.sql`AND ba.active_batch_count > 0 AND COALESCE(ba.usable_stock, 0) <= 0 AND COALESCE(ba.expired_stock, 0) <= 0` : Prisma.sql``}
@@ -280,7 +293,7 @@ class MedicinePrismaRepository {
                 isArchived: false,
                 status: 'ACTIVE',
                 availableQuantity: { gt: 0 },
-                expiryDate: { gt: new Date() },
+                expiryDate: { gt: todayStart },
               },
               orderBy: { expiryDate: 'asc' },
             },

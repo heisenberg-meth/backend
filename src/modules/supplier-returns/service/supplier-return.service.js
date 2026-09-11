@@ -1,10 +1,10 @@
 import prisma from '../../../config/prisma.js';
 import redisClient from '../../../config/redis.js';
 import supplierReturnRepository from '../repository/supplier-return.repository.js';
-import movementService from '../../stock/service/movement.service.js';
 import logger from '../../../shared/utils/logger.js';
 import expiryService from '../../inventory/service/expiry.service.js';
 import auditService from '../../audit/service/audit.prisma.service.js';
+import cacheInvalidatorService from '../../inventory/service/cache-invalidator.service.js';
 
 class SupplierReturnService {
   async getExpiredGroupedBySupplier(tenantId) {
@@ -124,10 +124,13 @@ class SupplierReturnService {
 
   async updateStatus(id, tenantId, status, userId) {
     const validTransitions = {
-      DRAFT: ['PENDING', 'REJECTED'],
-      PENDING: ['APPROVED', 'REJECTED'],
-      APPROVED: ['PICKED_UP', 'REJECTED'],
-      PICKED_UP: ['COMPLETED', 'REJECTED'],
+      DRAFT: ['PENDING', 'COMPLETED', 'REJECTED', 'CANCELLED'],
+      PENDING: ['APPROVED', 'COMPLETED', 'REJECTED', 'CANCELLED'],
+      APPROVED: ['PICKED_UP', 'COMPLETED', 'REJECTED', 'CANCELLED'],
+      PICKED_UP: ['COMPLETED', 'REJECTED', 'CANCELLED'],
+      COMPLETED: [],
+      REJECTED: [],
+      CANCELLED: [],
     };
 
     const returnRecord = await supplierReturnRepository.findReturnById(id, tenantId);
@@ -138,47 +141,139 @@ class SupplierReturnService {
       throw new Error(`Cannot transition from ${returnRecord.status} to ${status}`);
     }
 
-    return prisma.$transaction(async (tx) => {
-      if (status === 'APPROVED') {
+    let inventoryImpact = [];
+
+    const updated = await prisma.$transaction(async (tx) => {
+      // Inventory stock mutation strictly upon COMPLETED
+      if (status === 'COMPLETED') {
         const items =
           returnRecord.items?.length > 0
             ? returnRecord.items
-            : [
-                {
-                  batchId: returnRecord.batchId,
-                  medicineId: returnRecord.medicineId,
-                  quantity: returnRecord.quantity,
-                },
-              ];
+            : returnRecord.batchId
+              ? [
+                  {
+                    batchId: returnRecord.batchId,
+                    medicineId: returnRecord.medicineId,
+                    quantity: returnRecord.quantity,
+                    reason: returnRecord.reason,
+                  },
+                ]
+              : [];
 
-        for (const item of items) {
-          if (item.batchId && item.quantity) {
-            // Get branchId from the batch if not directly available
-            let branchId = returnRecord.branchId;
-            if (!branchId && item.batch) {
-              branchId = item.batch.branchId;
+        // Check if stock deduction was already performed for this return (Idempotency)
+        const existingMovement = await tx.stockMovement.findFirst({
+          where: {
+            tenantId,
+            referenceType: 'SUPPLIER_RETURN',
+            referenceId: id,
+          },
+        });
+
+        if (!existingMovement) {
+          for (const item of items) {
+            if (!item.batchId || !item.quantity || item.quantity <= 0) continue;
+
+            const batch = await tx.inventoryBatch.findFirst({
+              where: {
+                id: item.batchId,
+                tenantId,
+                deletedAt: null,
+              },
+              include: {
+                medicine: true,
+              },
+            });
+
+            if (!batch) {
+              const err = new Error(`Batch ${item.batchId} not found`);
+              err.statusCode = 404;
+              throw err;
             }
 
-            await movementService.recordMovement(
-              tenantId,
-              {
-                medicineId: item.medicineId || returnRecord.medicineId,
+            if (batch.availableQuantity < item.quantity) {
+              const err = new Error(
+                `Cannot return ${item.quantity} units. Only ${batch.availableQuantity} units are available in batch ${batch.batchNumber}.`,
+              );
+              err.statusCode = 400;
+              err.code = 'INSUFFICIENT_STOCK';
+              throw err;
+            }
+
+            // Decrement batch availableQuantity and quantity
+            await tx.inventoryBatch.update({
+              where: { id: item.batchId },
+              data: {
+                quantity: { decrement: item.quantity },
+                availableQuantity: { decrement: item.quantity },
+              },
+            });
+
+            // Decrement branch inventory
+            const resolvedBranchId =
+              returnRecord.branchId || item.batch?.branchId || batch.branchId || null;
+
+            if (resolvedBranchId) {
+              const existingInventory = await tx.inventory.findFirst({
+                where: {
+                  tenantId,
+                  branchId: resolvedBranchId,
+                  medicineId: item.medicineId || batch.medicineId,
+                },
+              });
+              if (existingInventory) {
+                await tx.inventory.update({
+                  where: { id: existingInventory.id },
+                  data: {
+                    currentStock: { decrement: item.quantity },
+                  },
+                });
+              }
+            }
+
+            // Record stock movement ledger entry
+            await tx.stockMovement.create({
+              data: {
+                tenantId,
+                branchId: resolvedBranchId,
+                medicineId: item.medicineId || batch.medicineId,
                 batchId: item.batchId,
-                branchId: branchId || null,
                 movementType: 'SUPPLIER_RETURN',
-                quantity: -item.quantity, // Negative for deduction
+                quantity: -item.quantity,
+                quantityBefore: batch.availableQuantity,
+                quantityAfter: batch.availableQuantity - item.quantity,
                 referenceType: 'SUPPLIER_RETURN',
                 referenceId: id,
-                notes: 'Supplier Return - Approved',
+                idempotencyKey: `supplier-return:${id}:${item.id || item.batchId}`,
+                performedBy: userId,
+                notes: item.reason || returnRecord.reason || 'Supplier Return - Completed',
               },
-              userId,
-              tx,
-            );
+            });
+
+            inventoryImpact.push({
+              medicineId: item.medicineId || batch.medicineId,
+              medicineName: batch.medicine?.name || item.medicine?.name || 'Medicine',
+              batchId: item.batchId,
+              batchNumber: batch.batchNumber,
+              quantityReturned: item.quantity,
+              remainingQuantity: batch.availableQuantity - item.quantity,
+            });
           }
         }
 
+        // Auto-generate credit note if needed and not already exists
         const totalReturnAmount = Number(returnRecord.returnAmount || 0);
         if (totalReturnAmount > 0) {
+          const existingNote = await tx.supplierCreditNote.findFirst({
+            where: { returnId: id },
+          });
+          if (!existingNote) {
+            const creditData = {
+              amount: totalReturnAmount,
+              notes: 'Auto-generated on completion',
+            };
+            await supplierReturnRepository.createCreditNote(id, creditData, tx);
+          }
+
           await supplierReturnRepository.recordLedgerEntry(
             tenantId,
             returnRecord.supplierId,
@@ -192,15 +287,7 @@ class SupplierReturnService {
         }
       }
 
-      if (status === 'COMPLETED') {
-        const creditData = {
-          amount: returnRecord.returnAmount || 0,
-          notes: 'Auto-generated on completion',
-        };
-        await supplierReturnRepository.createCreditNote(id, creditData, tx);
-      }
-
-      const updated = await supplierReturnRepository.updateReturnStatus(
+      const updatedRecord = await supplierReturnRepository.updateReturnStatus(
         id,
         tenantId,
         status,
@@ -229,8 +316,32 @@ class SupplierReturnService {
 
       redisClient.del(`supplier-return:dashboard:${tenantId}`).catch(() => {});
 
-      return updated;
+      return updatedRecord;
     });
+
+    if (status === 'COMPLETED') {
+      const medicineIds = (returnRecord.items || [])
+        .map((i) => i.medicineId || i.batch?.medicineId)
+        .filter(Boolean);
+      if (returnRecord.medicineId && !medicineIds.includes(returnRecord.medicineId)) {
+        medicineIds.push(returnRecord.medicineId);
+      }
+      const branchId = returnRecord.branchId || returnRecord.items?.[0]?.batch?.branchId || null;
+      try {
+        await cacheInvalidatorService.invalidateInventoryCaches(tenantId, medicineIds, branchId);
+      } catch (cacheErr) {
+        logger.warn({ err: cacheErr, tenantId }, 'SUPPLIER_RETURN_CACHE_INVALIDATION_FAILED');
+      }
+    }
+
+    return {
+      ...updated,
+      inventoryImpact,
+    };
+  }
+
+  async completeReturn(id, tenantId, userId) {
+    return this.updateStatus(id, tenantId, 'COMPLETED', userId);
   }
 
   async generateCreditNote(returnId, data) {

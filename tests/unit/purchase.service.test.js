@@ -104,6 +104,17 @@ jest.unstable_mockModule('../../src/modules/vendors/services/ledger.service.js',
   default: mockLedgerService,
 }));
 
+const mockCacheInvalidatorService = {
+  invalidateInventoryCaches: jest.fn().mockResolvedValue(undefined),
+};
+
+jest.unstable_mockModule(
+  '../../src/modules/inventory/service/cache-invalidator.service.js',
+  () => ({
+    default: mockCacheInvalidatorService,
+  }),
+);
+
 const { default: purchaseService } =
   await import('../../src/modules/purchase/services/purchase.service.js');
 const { default: stockInService } =

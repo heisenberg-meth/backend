@@ -6,6 +6,7 @@ import { emitLocalEvent } from '../../../shared/events/local-event-bus.js';
 import { emitEvent } from '../../../shared/events/erp-event-bus.js';
 import logger from '../../../shared/utils/logger.js';
 import { BadRequestError, NotFoundError, ConflictError } from '../../../shared/utils/errors.js';
+import cacheInvalidatorService from '../../inventory/service/cache-invalidator.service.js';
 
 class PurchaseOrderService {
   async logAudit(txOrPrisma, tenantId, userId, action, target) {
@@ -826,6 +827,17 @@ class PurchaseOrderService {
     });
     await emitEvent(DOMAIN_EVENTS.PURCHASE_ORDER_CANCELLED, { orderId: id, tenantId });
 
+    try {
+      const medicineIds = updated.items?.map((i) => i.medicineId).filter(Boolean) || [];
+      await cacheInvalidatorService.invalidateInventoryCaches(
+        tenantId,
+        medicineIds,
+        order.branchId,
+      );
+    } catch (cacheErr) {
+      logger.warn({ err: cacheErr, tenantId }, 'PO_CANCEL_CACHE_INVALIDATION_FAILED');
+    }
+
     return updated;
   }
 
@@ -1250,6 +1262,14 @@ class PurchaseOrderService {
             'CRITICAL: Failed to queue PO received event retry',
           );
         }
+      }
+
+      // Invalidate inventory caches for affected medicines & branch
+      try {
+        const medicineIds = receivedItems.map((i) => i.medicineId).filter(Boolean);
+        await cacheInvalidatorService.invalidateInventoryCaches(tenantId, medicineIds, branchId);
+      } catch (cacheErr) {
+        logger.warn({ err: cacheErr, tenantId, branchId }, 'PO_RECEIVE_CACHE_INVALIDATION_FAILED');
       }
 
       logger.info(

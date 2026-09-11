@@ -140,7 +140,16 @@ class SupplierReturnRepository {
         items: {
           include: {
             medicine: { select: { id: true, name: true, genericName: true } },
-            batch: { select: { id: true, batchNumber: true, expiryDate: true, branchId: true } },
+            batch: {
+              select: {
+                id: true,
+                batchNumber: true,
+                expiryDate: true,
+                branchId: true,
+                quantity: true,
+                availableQuantity: true,
+              },
+            },
           },
         },
         creditNotes: true,
@@ -148,7 +157,16 @@ class SupplierReturnRepository {
         approver: { select: { id: true, fullName: true } },
         purchaseInvoice: { select: { id: true, invoiceNumber: true } },
         medicine: { select: { id: true, name: true, genericName: true } },
-        batch: { select: { id: true, batchNumber: true, expiryDate: true, branchId: true } },
+        batch: {
+          select: {
+            id: true,
+            batchNumber: true,
+            expiryDate: true,
+            branchId: true,
+            quantity: true,
+            availableQuantity: true,
+          },
+        },
       },
     });
   }

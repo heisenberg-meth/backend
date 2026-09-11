@@ -17,17 +17,19 @@ import {
 class MedicinePrismaService {
   async getMedicines(params) {
     try {
-      const { tenantId, branchId, query = {}, pagination = {} } = params;
+      const { tenantId, branchId, query = {}, pagination = {}, forceRefresh = false } = params;
 
       const cacheKey = `inventory:${tenantId}:${branchId || 'all'}:${JSON.stringify(query)}:${JSON.stringify(pagination)}`;
 
-      try {
-        const cachedData = await redisClient.get(cacheKey);
-        if (cachedData) {
-          return JSON.parse(cachedData);
+      if (!forceRefresh) {
+        try {
+          const cachedData = await redisClient.get(cacheKey);
+          if (cachedData) {
+            return JSON.parse(cachedData);
+          }
+        } catch (err) {
+          logger.error({ err }, '[REDIS CACHE ERROR]');
         }
-      } catch (err) {
-        logger.error({ err }, '[REDIS CACHE ERROR]');
       }
 
       const { search, categoryId, manufacturerId, isActive, lowStock, status, sortBy, order } =
