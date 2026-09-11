@@ -21,35 +21,57 @@ async function updateBulkProgress(jobId, data) {
 }
 
 class BulkImportService {
-  async getInventoryState(tenantId) {
+  async getInventoryState(tenantId, branchId = null) {
     if (!tenantId) {
       throw new Error('tenantId is required');
     }
 
+    const branchFilter =
+      branchId && branchId !== 'null' && branchId !== 'undefined' ? { branchId } : {};
+
     let existingMedicineCount = 0;
-    if (typeof prisma.medicine?.count === 'function') {
+
+    // PRD §6: Check actual pharmacy inventory/batches, not master medicine catalog
+    if (typeof prisma.inventoryBatch?.count === 'function') {
+      existingMedicineCount = await prisma.inventoryBatch.count({
+        where: {
+          tenantId,
+          deletedAt: null,
+          isArchived: false,
+          status: { not: 'ARCHIVED' },
+          ...branchFilter,
+        },
+      });
+    } else if (typeof prisma.inventoryBatch?.findMany === 'function') {
+      const sample = await prisma.inventoryBatch.findMany({
+        where: {
+          tenantId,
+          deletedAt: null,
+          isArchived: false,
+          status: { not: 'ARCHIVED' },
+          ...branchFilter,
+        },
+        take: 1,
+        select: { id: true },
+      });
+      if (sample && sample.length > 0) {
+        existingMedicineCount = sample.length;
+      }
+    } else if (typeof prisma.inventory?.count === 'function') {
+      existingMedicineCount = await prisma.inventory.count({
+        where: {
+          tenantId,
+          ...branchFilter,
+        },
+      });
+    } else if (typeof prisma.medicine?.count === 'function') {
+      // Fallback only if inventory models are not available
       existingMedicineCount = await prisma.medicine.count({
         where: {
           tenantId,
           deletedAt: null,
         },
       });
-      if (existingMedicineCount === 0 && typeof prisma.medicine?.findMany === 'function') {
-        const sample = await prisma.medicine.findMany({
-          where: { tenantId, deletedAt: null },
-          take: 1,
-          select: { id: true },
-        });
-        if (sample && sample.length > 0) {
-          existingMedicineCount = sample.length;
-        }
-      }
-    } else if (typeof prisma.medicine?.findMany === 'function') {
-      const all = await prisma.medicine.findMany({
-        where: { tenantId, deletedAt: null },
-        select: { id: true },
-      });
-      existingMedicineCount = all.length;
     }
 
     const inventoryState = existingMedicineCount === 0 ? 'EMPTY' : 'EXISTING';
@@ -350,13 +372,6 @@ class BulkImportService {
     let currentExistingCount = existingMedicineCount;
     let currentRequiresDup = requiresDuplicateStrategy;
     let currentRecommendedStrategy = recommendedStrategy;
-
-    if (existingMedicines.length > 0 && currentInventoryState === 'EMPTY') {
-      currentInventoryState = 'EXISTING';
-      currentExistingCount = existingMedicines.length;
-      currentRequiresDup = true;
-      currentRecommendedStrategy = duplicateStrategy || 'Skip';
-    }
 
     for (const med of existingMedicines) {
       if (med.name) {
@@ -737,7 +752,14 @@ class BulkImportService {
       let diffDesc = '';
       const matchedMedicine = row.matchedMedicine;
 
-      if (matchedMedicine) {
+      if (currentInventoryState === 'EMPTY') {
+        // PRD §4, §5, §10, §33 AC-01, AC-02, AC-03:
+        // FIRST IMPORT MODE: Inventory is empty. Duplicate handling is bypassed completely.
+        // Even if the medicine exists in the catalog master, this is the first inventory import for this pharmacy.
+        // Valid rows are directly imported into inventory (0 skipped, 0 duplicate conflicts).
+        isDuplicate = false;
+        analysis.new++;
+      } else if (matchedMedicine) {
         analysis.existingMedicines++;
         if (isProcessExisting) {
           analysis.willProcess++;
@@ -865,7 +887,9 @@ class BulkImportService {
         ...row,
         isDuplicate,
         isConflict,
-        isSkippedDueToExisting: Boolean(matchedMedicine && !isProcessExisting),
+        isSkippedDueToExisting: Boolean(
+          currentInventoryState !== 'EMPTY' && matchedMedicine && !isProcessExisting,
+        ),
       });
     }
 
@@ -1026,168 +1050,174 @@ class BulkImportService {
       if (currentMatch) {
         medicineId = currentMatch.id;
 
-        if (!isProcessExisting) {
-          skippedCount++;
-          continue;
-        }
-
-        if (row.isDuplicate) {
-          const action = (
-            this._getDecisionAction(duplicateDecisions, row.rowNum) || duplicateStrategy
-          ).toLowerCase();
-
-          // PRD §4.1: Strategy Skip - 0 master updates, 0 batch updates, 0 stock aggregate changes
-          if (action === 'skip') {
+        if (currentInventoryState === 'EMPTY') {
+          // PRD §4, §10, §33 AC-01, AC-02, AC-03:
+          // In First Import Mode, reuse existing catalog medicine definition
+          // and directly import the new batch into inventory. Never skip due to duplicate strategy or isProcessExisting!
+        } else {
+          if (!isProcessExisting) {
             skippedCount++;
             continue;
           }
 
-          // PRD §4.2: Strategy Overwrite / §4.3 Strategy Merge
-          if (action === 'overwrite' || action === 'merge') {
-            isDuplicateResolution = true;
-            duplicateAction = action;
+          if (row.isDuplicate) {
+            const action = (
+              this._getDecisionAction(duplicateDecisions, row.rowNum) || duplicateStrategy
+            ).toLowerCase();
 
-            if (action === 'overwrite') overwrittenCount++;
-            if (action === 'merge') mergedCount++;
-
-            // Master Catalog Updates (Immutable under Stock Entry Only)
-            if (importType !== 'Stock Entry Only') {
-              const updatePayload = {};
-              if (row.barcode && (barcodeOptions.overwrite || !currentMatch.barcode)) {
-                updatePayload.barcode = row.barcode;
-                currentMatch.barcode = row.barcode;
-                medicineMapByBarcode.set(row.barcode.trim(), currentMatch);
-              }
-              if (row.category && (action === 'overwrite' || !currentMatch.categoryId)) {
-                const resolvedCatId = categoryMap.get(row.category.trim().toLowerCase());
-                if (resolvedCatId) {
-                  updatePayload.categoryId = resolvedCatId;
-                  currentMatch.categoryId = resolvedCatId;
-                }
-              }
-              if (row.manufacturer && (action === 'overwrite' || !currentMatch.manufacturerId)) {
-                const resolvedMfrId = manufacturerMap.get(row.manufacturer.trim().toLowerCase());
-                if (resolvedMfrId) {
-                  updatePayload.manufacturerId = resolvedMfrId;
-                  currentMatch.manufacturerId = resolvedMfrId;
-                }
-              }
-              if (row.schedule && (action === 'overwrite' || !currentMatch.scheduleType)) {
-                updatePayload.scheduleType = row.schedule;
-                currentMatch.scheduleType = row.schedule;
-              }
-              if (row.genericName && (action === 'overwrite' || !currentMatch.genericName)) {
-                updatePayload.genericName = row.genericName;
-                currentMatch.genericName = row.genericName;
-              }
-              if (row.strength && (action === 'overwrite' || !currentMatch.strength)) {
-                updatePayload.strength = row.strength;
-                currentMatch.strength = row.strength;
-              }
-              if (row.dosageForm && (action === 'overwrite' || !currentMatch.dosageForm)) {
-                updatePayload.dosageForm = row.dosageForm;
-                currentMatch.dosageForm = row.dosageForm;
-              }
-              if (row.hsnCode && (action === 'overwrite' || !currentMatch.hsnCode)) {
-                updatePayload.hsnCode = row.hsnCode;
-                currentMatch.hsnCode = row.hsnCode;
-              }
-              if (
-                row.gstPercentage !== undefined &&
-                (action === 'overwrite' ||
-                  currentMatch.gstPercentage === null ||
-                  currentMatch.gstPercentage === undefined)
-              ) {
-                updatePayload.gstPercentage = row.gstPercentage;
-                currentMatch.gstPercentage = row.gstPercentage;
-              }
-              if (Object.keys(updatePayload).length > 0) {
-                medicineUpdates.push({ id: medicineId, data: updatePayload });
-              }
+            // PRD §4.1: Strategy Skip - 0 master updates, 0 batch updates, 0 stock aggregate changes
+            if (action === 'skip') {
+              skippedCount++;
+              continue;
             }
 
-            // Batch Updates for Overwrite / Merge
-            const parsedQty = parseInt(row.qty, 10);
-            let finalBatchNo = row.batch
-              ? String(row.batch).trim()
-              : `IMP-${crypto.randomUUID().substring(0, 8).toUpperCase()}`;
-            const bBranch = branchId || 'default';
-            const normFinalBatch = finalBatchNo.toLowerCase().trim();
-            let batchKey = `${bBranch}:${medicineId}:${normFinalBatch}`;
-            let existingBatchEntry = commitBatchMap.get(batchKey);
-            if (!existingBatchEntry && bBranch !== 'default') {
-              existingBatchEntry = commitBatchMap.get(`default:${medicineId}:${normFinalBatch}`);
-            }
+            // PRD §4.2: Strategy Overwrite / §4.3 Strategy Merge
+            if (action === 'overwrite' || action === 'merge') {
+              isDuplicateResolution = true;
+              duplicateAction = action;
 
-            if (existingBatchEntry) {
-              const existingBatch = existingBatchEntry.batch;
-              const isArchived = Boolean(
-                existingBatch?.isArchived || existingBatch?.status === 'ARCHIVED',
-              );
-              const archiveReason = existingBatch?.archiveReason;
+              if (action === 'overwrite') overwrittenCount++;
+              if (action === 'merge') mergedCount++;
 
-              // Rules 2, 3, 4:
-              // If archived for reasons other than CLEAR_INVENTORY (e.g. Expired Cleanup):
-              if (isArchived && archiveReason !== 'CLEAR_INVENTORY') {
-                const isRowExpired = row.expiryDate
-                  ? new Date(row.expiryDate) <= new Date()
-                  : false;
-                if (isRowExpired) {
-                  // Do not resurrect expired cleanup historical stock
+              // Master Catalog Updates (Immutable under Stock Entry Only)
+              if (importType !== 'Stock Entry Only') {
+                const updatePayload = {};
+                if (row.barcode && (barcodeOptions.overwrite || !currentMatch.barcode)) {
+                  updatePayload.barcode = row.barcode;
+                  currentMatch.barcode = row.barcode;
+                  medicineMapByBarcode.set(row.barcode.trim(), currentMatch);
+                }
+                if (row.category && (action === 'overwrite' || !currentMatch.categoryId)) {
+                  const resolvedCatId = categoryMap.get(row.category.trim().toLowerCase());
+                  if (resolvedCatId) {
+                    updatePayload.categoryId = resolvedCatId;
+                    currentMatch.categoryId = resolvedCatId;
+                  }
+                }
+                if (row.manufacturer && (action === 'overwrite' || !currentMatch.manufacturerId)) {
+                  const resolvedMfrId = manufacturerMap.get(row.manufacturer.trim().toLowerCase());
+                  if (resolvedMfrId) {
+                    updatePayload.manufacturerId = resolvedMfrId;
+                    currentMatch.manufacturerId = resolvedMfrId;
+                  }
+                }
+                if (row.schedule && (action === 'overwrite' || !currentMatch.scheduleType)) {
+                  updatePayload.scheduleType = row.schedule;
+                  currentMatch.scheduleType = row.schedule;
+                }
+                if (row.genericName && (action === 'overwrite' || !currentMatch.genericName)) {
+                  updatePayload.genericName = row.genericName;
+                  currentMatch.genericName = row.genericName;
+                }
+                if (row.strength && (action === 'overwrite' || !currentMatch.strength)) {
+                  updatePayload.strength = row.strength;
+                  currentMatch.strength = row.strength;
+                }
+                if (row.dosageForm && (action === 'overwrite' || !currentMatch.dosageForm)) {
+                  updatePayload.dosageForm = row.dosageForm;
+                  currentMatch.dosageForm = row.dosageForm;
+                }
+                if (row.hsnCode && (action === 'overwrite' || !currentMatch.hsnCode)) {
+                  updatePayload.hsnCode = row.hsnCode;
+                  currentMatch.hsnCode = row.hsnCode;
+                }
+                if (
+                  row.gstPercentage !== undefined &&
+                  (action === 'overwrite' ||
+                    currentMatch.gstPercentage === null ||
+                    currentMatch.gstPercentage === undefined)
+                ) {
+                  updatePayload.gstPercentage = row.gstPercentage;
+                  currentMatch.gstPercentage = row.gstPercentage;
+                }
+                if (Object.keys(updatePayload).length > 0) {
+                  medicineUpdates.push({ id: medicineId, data: updatePayload });
+                }
+              }
+
+              // Batch Updates for Overwrite / Merge
+              const parsedQty = parseInt(row.qty, 10);
+              let finalBatchNo = row.batch
+                ? String(row.batch).trim()
+                : `IMP-${crypto.randomUUID().substring(0, 8).toUpperCase()}`;
+              const bBranch = branchId || 'default';
+              const normFinalBatch = finalBatchNo.toLowerCase().trim();
+              let batchKey = `${bBranch}:${medicineId}:${normFinalBatch}`;
+              let existingBatchEntry = commitBatchMap.get(batchKey);
+              if (!existingBatchEntry && bBranch !== 'default') {
+                existingBatchEntry = commitBatchMap.get(`default:${medicineId}:${normFinalBatch}`);
+              }
+
+              if (existingBatchEntry) {
+                const existingBatch = existingBatchEntry.batch;
+                const isArchived = Boolean(
+                  existingBatch?.isArchived || existingBatch?.status === 'ARCHIVED',
+                );
+                const archiveReason = existingBatch?.archiveReason;
+
+                // Rules 2, 3, 4:
+                // If archived for reasons other than CLEAR_INVENTORY (e.g. Expired Cleanup):
+                if (isArchived && archiveReason !== 'CLEAR_INVENTORY') {
+                  const isRowExpired = row.expiryDate
+                    ? new Date(row.expiryDate) <= new Date()
+                    : false;
+                  if (isRowExpired) {
+                    // Do not resurrect expired cleanup historical stock
+                    continue;
+                  }
+                  // Valid incoming batch reusing an expired cleanup batch number:
+                  // Create as new versioned batch to satisfy unique constraint without reviving historical stock
+                  finalBatchNo = `${finalBatchNo}-V2`;
+                  batchKey = `${bBranch}:${medicineId}:${finalBatchNo.toLowerCase().trim()}`;
+                  // Fall through to create new batch below
+                } else {
+                  const targetBatchId = existingBatchEntry.id;
+                  const isStockEntryOnly = importType === 'Stock Entry Only';
+                  const mode = isStockEntryOnly
+                    ? 'INCREMENT'
+                    : action === 'overwrite'
+                      ? 'SET'
+                      : 'INCREMENT';
+
+                  const batchUpdate = {
+                    batchId: targetBatchId,
+                    medicineId,
+                    mode,
+                    qty: parsedQty,
+                    ...(isArchived && archiveReason === 'CLEAR_INVENTORY'
+                      ? { reactivate: true }
+                      : {}),
+                  };
+
+                  if (action === 'overwrite') {
+                    batchUpdate.purchasePrice = row.price;
+                    batchUpdate.sellingPrice = row.price * 1.2;
+                    batchUpdate.mrp = row.price * 1.2;
+                    if (row.expiryDate) batchUpdate.expiryDate = row.expiryDate;
+                  }
+
+                  batchQuantityUpdates.push(batchUpdate);
+
+                  newMovements.push({
+                    id: crypto.randomUUID(),
+                    batchId: targetBatchId,
+                    tenantId,
+                    branchId,
+                    medicineId,
+                    movementType: 'STOCK_IN',
+                    quantity: parsedQty,
+                    referenceType: 'BULK_IMPORT',
+                    performedBy: userId,
+                    notes: `Duplicate resolved via ${action.toUpperCase()}`,
+                  });
+
+                  inventoryUpdates.push({ medicineId, qty: parsedQty });
                   continue;
                 }
-                // Valid incoming batch reusing an expired cleanup batch number:
-                // Create as new versioned batch to satisfy unique constraint without reviving historical stock
-                finalBatchNo = `${finalBatchNo}-V2`;
-                batchKey = `${bBranch}:${medicineId}:${finalBatchNo.toLowerCase().trim()}`;
-                // Fall through to create new batch below
-              } else {
-                const targetBatchId = existingBatchEntry.id;
-                const isStockEntryOnly = importType === 'Stock Entry Only';
-                const mode = isStockEntryOnly
-                  ? 'INCREMENT'
-                  : action === 'overwrite'
-                    ? 'SET'
-                    : 'INCREMENT';
-
-                const batchUpdate = {
-                  batchId: targetBatchId,
-                  medicineId,
-                  mode,
-                  qty: parsedQty,
-                  ...(isArchived && archiveReason === 'CLEAR_INVENTORY'
-                    ? { reactivate: true }
-                    : {}),
-                };
-
-                if (action === 'overwrite') {
-                  batchUpdate.purchasePrice = row.price;
-                  batchUpdate.sellingPrice = row.price * 1.2;
-                  batchUpdate.mrp = row.price * 1.2;
-                  if (row.expiryDate) batchUpdate.expiryDate = row.expiryDate;
-                }
-
-                batchQuantityUpdates.push(batchUpdate);
-
-                newMovements.push({
-                  id: crypto.randomUUID(),
-                  batchId: targetBatchId,
-                  tenantId,
-                  branchId,
-                  medicineId,
-                  movementType: 'STOCK_IN',
-                  quantity: parsedQty,
-                  referenceType: 'BULK_IMPORT',
-                  performedBy: userId,
-                  notes: `Duplicate resolved via ${action.toUpperCase()}`,
-                });
-
-                inventoryUpdates.push({ medicineId, qty: parsedQty });
-                continue;
               }
+              // PRD §24 & §27: If existing batch was NOT found for this medicine,
+              // do not continue; fall through to create the new batch in newBatches below.
             }
-            // PRD §24 & §27: If existing batch was NOT found for this medicine,
-            // do not continue; fall through to create the new batch in newBatches below.
           }
         }
       } else {
@@ -1309,9 +1339,9 @@ class BulkImportService {
         }
       }
 
-      // Handle stock creation for New Medicines or New Batches on Existing Medicines
+      // PRD Addendum §3.1: Handle stock creation for New Medicines or New Batches (allow qty 0 for out-of-stock SKUs)
       const parsedQty = parseInt(row.qty, 10);
-      if (!isNaN(parsedQty) && parsedQty > 0) {
+      if (!isNaN(parsedQty) && parsedQty >= 0) {
         const parsedPrice = parseFloat(row.price) || 0;
         let finalBatchNo = row.batch
           ? String(row.batch).trim()

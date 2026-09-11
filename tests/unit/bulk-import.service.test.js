@@ -14,7 +14,13 @@ const mockPrisma = {
     createMany: jest.fn().mockResolvedValue({}),
   },
   medicine: { findMany: jest.fn().mockResolvedValue([]), count: jest.fn().mockResolvedValue(0) },
-  inventoryBatch: { findMany: jest.fn().mockResolvedValue([]) },
+  inventoryBatch: {
+    findMany: jest.fn().mockResolvedValue([]),
+    count: jest.fn().mockImplementation(async () => {
+      const batches = await mockPrisma.inventoryBatch.findMany();
+      return Array.isArray(batches) ? batches.length : 0;
+    }),
+  },
   supplier: {
     findFirst: jest.fn().mockResolvedValue({ id: 'sup-1', name: 'Global Pharma' }),
     findMany: jest.fn().mockResolvedValue([]),
@@ -57,6 +63,13 @@ describe('BulkImportService - PRD Implementation & Test Cases', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+    mockPrisma.medicine.count.mockResolvedValue(0);
+    mockPrisma.medicine.findMany.mockResolvedValue([]);
+    mockPrisma.inventoryBatch.findMany.mockResolvedValue([]);
+    mockPrisma.inventoryBatch.count.mockImplementation(async () => {
+      const batches = await mockPrisma.inventoryBatch.findMany();
+      return Array.isArray(batches) ? batches.length : 0;
+    });
   });
 
   it('should aggregate quantity into existing batch on Merge duplicate strategy', async () => {
@@ -979,8 +992,9 @@ describe('BulkImportService - PRD Implementation & Test Cases', () => {
   });
 
   describe('PRD Intelligent First-Time & Duplicate-Aware Import Flow', () => {
-    it('determines EMPTY inventory state when medicine count is 0', async () => {
-      mockPrisma.medicine.count.mockResolvedValue(0);
+    it('determines EMPTY inventory state when inventory batch count is 0', async () => {
+      mockPrisma.inventoryBatch.findMany.mockResolvedValue([]);
+      mockPrisma.inventoryBatch.count.mockResolvedValue(0);
 
       const state = await bulkImportService.getInventoryState(tenantId, branchId);
       expect(state.success).toBe(true);
@@ -990,8 +1004,23 @@ describe('BulkImportService - PRD Implementation & Test Cases', () => {
       expect(state.recommendedStrategy).toBe('DIRECT_IMPORT');
     });
 
-    it('determines EXISTING inventory state when medicine count is > 0', async () => {
-      mockPrisma.medicine.count.mockResolvedValue(42);
+    it('determines EMPTY inventory state when inventory has 0 batches even if medicine catalog has 100 records (PRD §1 & §6)', async () => {
+      // PRD Core Bug Scenario: 100 catalog medicines, but 0 inventory batches
+      mockPrisma.medicine.count.mockResolvedValue(100);
+      mockPrisma.medicine.findMany.mockResolvedValue(new Array(100).fill({ id: 'med-id' }));
+      mockPrisma.inventoryBatch.findMany.mockResolvedValue([]);
+      mockPrisma.inventoryBatch.count.mockResolvedValue(0);
+
+      const state = await bulkImportService.getInventoryState(tenantId, branchId);
+      expect(state.success).toBe(true);
+      expect(state.inventoryState).toBe('EMPTY');
+      expect(state.existingMedicineCount).toBe(0);
+      expect(state.requiresDuplicateStrategy).toBe(false);
+      expect(state.recommendedStrategy).toBe('DIRECT_IMPORT');
+    });
+
+    it('determines EXISTING inventory state when inventory batch count is > 0', async () => {
+      mockPrisma.inventoryBatch.count.mockResolvedValue(42);
 
       const state = await bulkImportService.getInventoryState(tenantId, branchId);
       expect(state.success).toBe(true);
@@ -1248,34 +1277,84 @@ describe('BulkImportService - PRD Implementation & Test Cases', () => {
       expect(result.errors[1].category).toBe('Pricing');
     });
 
-    it('PRD Addendum §8, §26, §27: returns validationErrors and failedRecords with structured fields', async () => {
+    it('PRD Core Acceptance Test (AC-01 to AC-03): 100 catalog medicines, 0 inventory stock -> 77 imported, 0 skipped, 23 failed', async () => {
+      // Setup: 100 medicines exist in catalog, but 0 batches exist in inventory (Total SKU = 0)
+      const catalogMedicines = [];
+      for (let i = 1; i <= 100; i++) {
+        catalogMedicines.push({
+          id: `cat-med-${i}`,
+          name: `Medicine ${i}`,
+          barcode: `BARCODE-${i}`,
+          categoryId: 'cat-1',
+          manufacturerId: 'mfr-1',
+        });
+      }
+      mockPrisma.medicine.count.mockResolvedValue(100);
+      mockPrisma.medicine.findMany.mockResolvedValue(catalogMedicines);
+      mockPrisma.inventoryBatch.findMany.mockResolvedValue([]);
+      mockPrisma.inventoryBatch.count.mockResolvedValue(0);
+
+      // 100 CSV rows: 77 valid (matching catalog medicines), 23 invalid (invalid quantities or expired)
+      const csvRows = [];
+      for (let i = 1; i <= 77; i++) {
+        csvRows.push({
+          name: `Medicine ${i}`,
+          barcode: `BARCODE-${i}`,
+          qty: '20',
+          price: '50.00',
+          batch: `BATCH-${i}`,
+          expiry: '2028-12-31',
+        });
+      }
+      for (let i = 78; i <= 100; i++) {
+        csvRows.push({
+          name: `Medicine ${i}`,
+          barcode: `BARCODE-${i}`,
+          qty: '-5', // Invalid negative quantity
+          price: '50.00',
+          batch: `BATCH-${i}`,
+          expiry: '2024-01-01', // Expired
+        });
+      }
+
       const payload = {
-        medicines: [
-          {
-            name: 'Valid Med',
-            qty: '10',
-            price: '20.00',
-          },
-          {
-            name: 'A', // invalid short name
-            qty: '-5', // invalid quantity
-            price: '-10', // invalid price
-          },
-        ],
+        medicines: csvRows,
+        duplicateStrategy: 'Skip', // User selected or defaulted to Skip
+        processExistingMedicines: false, // Checkbox was false as shown in user's screenshot
       };
 
-      const dryRunResult = await bulkImportService.analyze(payload, tenantId, branchId, userId);
-      expect(dryRunResult.validationErrors).toBeDefined();
-      expect(dryRunResult.failedRecords).toBeDefined();
-      expect(dryRunResult.summary.totalRows).toBe(2);
-      expect(dryRunResult.summary.validRows).toBe(1);
-      expect(dryRunResult.summary.invalidRows).toBe(1);
+      // 1. Analyze / Dry-run verification
+      const dryRun = await bulkImportService.analyze(payload, tenantId, branchId, userId);
+      expect(dryRun.success).toBe(true);
+      expect(dryRun.inventoryState).toBe('EMPTY');
+      expect(dryRun.summary.inventoryState).toBe('EMPTY');
+      expect(dryRun.summary.new).toBe(77);
+      expect(dryRun.summary.duplicates).toBe(0);
+      expect(dryRun.summary.willSkip).toBe(0); // 0 skipped in preview!
+      expect(dryRun.summary.validRows).toBe(77);
+      expect(dryRun.summary.invalidRows).toBe(23);
+      expect(dryRun.summary.errors).toBe(23);
 
+      // 2. Commit execution verification
       const commitResult = await bulkImportService.commit(payload, tenantId, branchId, userId);
+      expect(commitResult.success).toBe(true);
       expect(commitResult.status).toBe('COMPLETED_WITH_ERRORS');
-      expect(commitResult.failedRecords).toHaveLength(1);
-      expect(commitResult.summary.failed).toBe(1);
-      expect(commitResult.summary.created).toBe(1);
+
+      // PRD Strict Requirement: 77 imported, 0 skipped, 23 failed
+      expect(commitResult.summary.total).toBe(100);
+      expect(commitResult.summary.imported).toBe(77);
+      expect(commitResult.summary.created).toBe(77);
+      expect(commitResult.summary.skipped).toBe(0); // ZERO SKIPPED!
+      expect(commitResult.summary.failed).toBe(23);
+      expect(commitResult.summary.duplicates).toBe(0);
+
+      // PRD §14: Row-level error breakdown for all 23 failed records
+      expect(commitResult.failedRecords).toHaveLength(23);
+      commitResult.failedRecords.forEach((err, idx) => {
+        expect(err.rowNumber).toBe(78 + idx);
+        expect(err.medicineName).toBe(`Medicine ${78 + idx}`);
+        expect(err.reason).toContain('Quantity must be 0 or more');
+      });
     });
   });
 });
