@@ -176,7 +176,6 @@ class PurchaseOrderPrismaRepository {
 
     // Valid PurchaseOrderStatus enum members awaiting receipt/fulfillment
     const pendingOrderStatuses = [
-      'PENDING',
       'APPROVED',
       'PARTIALLY_RECEIVED',
       'SENT',

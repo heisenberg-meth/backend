@@ -25,8 +25,9 @@ class PurchaseOrderFastifyController {
         'PENDING_APPROVAL',
         'APPROVED',
         'SENT',
+        'SENT_TO_SUPPLIER',
+        'ACKNOWLEDGED',
         'PARTIALLY_RECEIVED',
-        'ORDERED',
       ];
       const orders = await purchaseOrderService.getOrdersByStatus(tenantId, statuses);
       return reply.send({ success: true, data: orders });
