@@ -295,6 +295,14 @@ class MedicinePrismaService {
               : rawMedicineData.packSize
                 ? Number(String(rawMedicineData.packSize).replace(/\D/g, '')) || null
                 : null,
+          stripSize:
+            rawMedicineData.stripSize !== undefined && rawMedicineData.stripSize !== null
+              ? Number(rawMedicineData.stripSize)
+              : rawMedicineData.unitPerPack !== undefined && rawMedicineData.unitPerPack !== null
+                ? Number(rawMedicineData.unitPerPack)
+                : rawMedicineData.packSize
+                  ? Number(String(rawMedicineData.packSize).replace(/\D/g, '')) || 10
+                  : 10,
           scheduleType: rawMedicineData.scheduleType || rawMedicineData.schedule || null,
           storageCondition: rawMedicineData.storageCondition || null,
           prescriptionRequired:

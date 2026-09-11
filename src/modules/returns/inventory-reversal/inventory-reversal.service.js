@@ -75,10 +75,21 @@ class InventoryReversalService {
   }
 
   async restockItem(returnRecord, item, userId) {
+    let restoreQuantity = item.returnedQuantity;
+    if (item.invoiceItemId) {
+      const invItem = await prisma.invoiceItem.findUnique({
+        where: { id: item.invoiceItemId },
+        select: { sellingUnit: true, stripSize: true },
+      });
+      if (invItem && String(invItem.sellingUnit || '').toUpperCase() === 'STRIP') {
+        restoreQuantity = item.returnedQuantity * (invItem.stripSize || 10);
+      }
+    }
+
     const updatedBatch = await prisma.inventoryBatch.update({
       where: { id: item.batchId },
       data: {
-        quantity: { increment: item.returnedQuantity },
+        quantity: { increment: restoreQuantity },
       },
     });
 
@@ -88,8 +99,8 @@ class InventoryReversalService {
         medicineId: item.medicineId,
         batchId: item.batchId,
         type: 'RETURN',
-        quantity: item.returnedQuantity,
-        previousStock: updatedBatch.quantity - item.returnedQuantity,
+        quantity: restoreQuantity,
+        previousStock: updatedBatch.quantity - restoreQuantity,
         newStock: updatedBatch.quantity,
         referenceType: 'RETURN',
         referenceId: returnRecord.id,
@@ -104,7 +115,7 @@ class InventoryReversalService {
         medicineId: item.medicineId,
         batchId: item.batchId,
         transactionType: 'RETURN',
-        quantityChange: item.returnedQuantity,
+        quantityChange: restoreQuantity,
         quantityAfter: updatedBatch.quantity,
         referenceType: 'RETURN',
         referenceId: returnRecord.id,

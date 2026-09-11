@@ -23,6 +23,8 @@ export function normalizeInvoice(invoice) {
     gst: Number(item.gstPercentage || 0),
     gstAmount: Number(item.gstAmount || 0),
     total: Number(item.totalPrice || item.totalAmount || 0),
+    sellingUnit: item.sellingUnit || 'STRIP',
+    stripSize: Number(item.stripSize || 10),
     batchId: item.batchId,
     batchNumber: item.batch?.batchNumber || 'N/A',
   }));

@@ -204,6 +204,7 @@ class MedicineIntelligenceService {
       purchaseUnit: rawMedicineData.purchaseUnit || 'STRIP',
       sellingUnit: rawMedicineData.sellingUnit || 'STRIP',
       unitPerPack: rawMedicineData.unitPerPack || 10,
+      stripSize: rawMedicineData.stripSize || rawMedicineData.unitPerPack || 10,
       gstPercentage: rawMedicineData.gstPercentage ?? 0,
       hsnCode: rawMedicineData.hsnCode,
       barcode: rawMedicineData.barcode,

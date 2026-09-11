@@ -197,6 +197,8 @@ class InvoiceEngine {
           sgst: item.sgst,
           igst: item.igst,
           totalPrice: item.totalPrice,
+          sellingUnit: item.sellingUnit || 'STRIP',
+          stripSize: item.stripSize ? Number(item.stripSize) : 10,
         });
       }
 
@@ -375,6 +377,8 @@ class InvoiceEngine {
           sgst: item.sgst,
           igst: item.igst,
           totalPrice: item.totalPrice,
+          sellingUnit: item.sellingUnit || 'STRIP',
+          stripSize: item.stripSize ? Number(item.stripSize) : 10,
         });
       }
 
@@ -641,6 +645,10 @@ class InvoiceEngine {
         } else {
           for (const item of invoice.items) {
             if (item.batchId) {
+              const stripSize =
+                item.stripSize || item.medicine?.stripSize || item.medicine?.unitPerPack || 10;
+              const isStrip = String(item.sellingUnit || '').toUpperCase() === 'STRIP';
+              const restockQty = isStrip ? item.quantity * stripSize : item.quantity;
               await movementService.recordMovement(
                 tenantId,
                 {
@@ -648,7 +656,7 @@ class InvoiceEngine {
                   batchId: item.batchId,
                   branchId: invoice.branchId,
                   movementType: 'RETURN',
-                  quantity: item.quantity,
+                  quantity: restockQty,
                   referenceType: 'INVOICE_CANCEL',
                   referenceId: invoice.id,
                   notes: `Restock from cancelled invoice ${invoice.invoiceNumber}. Reason: ${reason}`,
@@ -917,16 +925,26 @@ class InvoiceEngine {
     const medicineName =
       item.medicine?.medicineName || item.medicine?.name || item.medicineName || 'Unknown';
 
+    const stripSize =
+      item.stripSize || item.medicine?.stripSize || item.medicine?.unitPerPack || 10;
+    const isPill = String(item.sellingUnit || '').toUpperCase() === 'PILL';
+    const isStrip = String(item.sellingUnit || '').toUpperCase() === 'STRIP';
+    const deductionQuantity = isPill
+      ? item.quantity
+      : isStrip
+        ? item.quantity * stripSize
+        : item.quantity;
+
     let batchesToUse;
     try {
-      batchesToUse = this._allocateAcrossBatches(orderedBatches, item.quantity, medicineName);
+      batchesToUse = this._allocateAcrossBatches(orderedBatches, deductionQuantity, medicineName);
     } catch (err) {
       logger.error(
         {
           event: 'STOCK_DEDUCTION_FAILURE',
           tenantId,
           medicineId: item.medicineId,
-          requested: item.quantity,
+          requested: deductionQuantity,
           branchId: invoice.branchId,
         },
         err.message,

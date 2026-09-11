@@ -743,6 +743,7 @@ model Medicine {
   purchaseUnit             PurchaseUnit?
   sellingUnit              SellingUnit?
   unitPerPack              Int?
+  stripSize                Int?                       @default(10)
   gstPercentage            Float                      @default(0)
   hsnCode                  String?
   barcode                  String?
@@ -2065,6 +2066,8 @@ model InvoiceItem {
   discountAmount     Decimal        @default(0) @db.Decimal(12, 2)
   igst               Decimal        @default(0) @db.Decimal(12, 2)
   sgst               Decimal        @default(0) @db.Decimal(12, 2)
+  sellingUnit        String?        @default("STRIP")
+  stripSize          Int?           @default(10)
   batch              InventoryBatch @relation(fields: [batchId], references: [id])
   invoice            Invoice        @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
   medicine           Medicine       @relation(fields: [medicineId], references: [id])

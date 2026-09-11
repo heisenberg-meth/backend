@@ -20,11 +20,22 @@ class RefundInventoryService {
         continue;
       }
 
+      let restoreQuantity = item.returnedQuantity;
+      if (item.invoiceItemId) {
+        const invItem = await client.invoiceItem.findUnique({
+          where: { id: item.invoiceItemId },
+          select: { sellingUnit: true, stripSize: true },
+        });
+        if (invItem && String(invItem.sellingUnit || '').toUpperCase() === 'STRIP') {
+          restoreQuantity = item.returnedQuantity * (invItem.stripSize || 10);
+        }
+      }
+
       await client.inventoryBatch.update({
         where: { id: item.batchId },
         data: {
-          quantity: { increment: item.returnedQuantity },
-          availableQuantity: { increment: item.returnedQuantity },
+          quantity: { increment: restoreQuantity },
+          availableQuantity: { increment: restoreQuantity },
         },
       });
 
@@ -37,7 +48,7 @@ class RefundInventoryService {
           },
         },
         data: {
-          currentStock: { increment: item.returnedQuantity },
+          currentStock: { increment: restoreQuantity },
         },
       });
 
@@ -48,7 +59,7 @@ class RefundInventoryService {
           medicineId: item.medicineId,
           batchId: item.batchId,
           movementType: 'RETURN',
-          quantity: item.returnedQuantity,
+          quantity: restoreQuantity,
           referenceType: 'RETURN',
           referenceId: returnId,
           notes: `Restored from refund ${returnId}`,
