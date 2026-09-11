@@ -289,14 +289,35 @@ class PurchaseOrderFastifyController {
 
   async cancelOrder(request, reply) {
     const { id } = request.params;
-    const { reason } = request.body;
+    const { reason } = request.body || {};
     const tenantId = request.tenantId;
     const userId = request.user.id;
     try {
       const order = await purchaseOrderService.cancelOrder(tenantId, id, userId, reason);
-      return reply.send({ success: true, data: order, message: 'Purchase order cancelled' });
+      return reply.send({
+        success: true,
+        purchaseOrder: {
+          id: order.id,
+          poNumber: order.orderNumber,
+          status: order.status,
+        },
+        data: order,
+        message: 'Purchase order cancelled',
+      });
     } catch (error) {
-      return reply.code(400).send({ success: false, error: error.message });
+      if (error.statusCode === 409 || error.code === 'INVALID_STATUS_TRANSITION') {
+        return reply.code(409).send({
+          success: false,
+          code: 'INVALID_STATUS_TRANSITION',
+          message: error.message || 'Invalid status transition',
+        });
+      }
+      const statusCode = error.statusCode || (error.name === 'NotFoundError' ? 404 : 400);
+      return reply.code(statusCode).send({
+        success: false,
+        error: error.message,
+        message: error.message,
+      });
     }
   }
 

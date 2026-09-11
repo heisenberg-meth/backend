@@ -18,6 +18,13 @@ export const procurementStateMachine = new StateMachine({
         CANCEL: PROCUREMENT_STATUS.CANCELLED,
       },
     },
+    [PROCUREMENT_STATUS.PENDING]: {
+      on: {
+        APPROVE: PROCUREMENT_STATUS.APPROVED,
+        REJECT: PROCUREMENT_STATUS.REJECTED,
+        CANCEL: PROCUREMENT_STATUS.CANCELLED,
+      },
+    },
     [PROCUREMENT_STATUS.APPROVED]: {
       on: {
         PLACE_ORDER: PROCUREMENT_STATUS.SENT_TO_SUPPLIER,

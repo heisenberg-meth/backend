@@ -18,15 +18,16 @@ export const requirePermission = (permissionName) => {
       });
     }
 
-    const hasPermission = request.user.assignedRole.permissions.some(
-      (rp) => rp.permission.name === permissionName,
+    const perms = Array.isArray(permissionName) ? permissionName : [permissionName];
+    const hasPermission = request.user.assignedRole.permissions.some((rp) =>
+      perms.includes(rp.permission.name),
     );
 
     if (!hasPermission) {
       return reply.code(403).send({
         success: false,
         error: {
-          message: `Access denied. Required permission: ${permissionName}`,
+          message: `Access denied. Required permission: ${Array.isArray(permissionName) ? permissionName.join(' or ') : permissionName}`,
           code: 'PERMISSION_DENIED',
         },
       });

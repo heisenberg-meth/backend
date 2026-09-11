@@ -383,20 +383,30 @@ async function purchaseOrderRoutes(fastify) {
     purchaseOrderController.receiveOrder,
   );
 
+  const cancelSchema = {
+    tags: ['Purchase Orders'],
+    summary: 'Cancel a purchase order',
+    params: { type: 'object', properties: { id: { type: 'string', format: 'uuid' } } },
+    body: {
+      type: 'object',
+      properties: { reason: { type: 'string' } },
+    },
+  };
+
   fastify.post(
     '/:id/cancel',
     {
-      schema: {
-        tags: ['Purchase Orders'],
-        summary: 'Cancel a purchase order',
-        params: { type: 'object', properties: { id: { type: 'string', format: 'uuid' } } },
-        body: {
-          type: 'object',
-          required: ['reason'],
-          properties: { reason: { type: 'string', minLength: 5 } },
-        },
-      },
-      preHandler: [requirePermission('purchase-orders.cancel')],
+      schema: cancelSchema,
+      preHandler: [requirePermission(['purchase-orders.cancel', 'purchase-orders.update'])],
+    },
+    purchaseOrderController.cancelOrder,
+  );
+
+  fastify.patch(
+    '/:id/cancel',
+    {
+      schema: cancelSchema,
+      preHandler: [requirePermission(['purchase-orders.cancel', 'purchase-orders.update'])],
     },
     purchaseOrderController.cancelOrder,
   );

@@ -804,17 +804,54 @@ class PurchaseOrderService {
     return updated;
   }
 
-  async cancelOrder(tenantId, id, userId, reason) {
+  async cancelOrder(tenantId, id, userId, reason = 'Cancelled by user') {
     const order = await this.getOrderById(tenantId, id);
+    if (!order) {
+      throw new NotFoundError('Purchase order not found');
+    }
 
-    const nextStatus = procurementStateMachine.transition(order.status, 'CANCEL');
+    if (order.status === 'RECEIVED' || order.status === 'PARTIALLY_RECEIVED') {
+      const err = new Error('A received purchase order cannot be cancelled.');
+      err.statusCode = 409;
+      err.code = 'INVALID_STATUS_TRANSITION';
+      throw err;
+    }
+
+    if (order.status === 'CANCELLED') {
+      const err = new Error('A cancelled purchase order cannot be cancelled again.');
+      err.statusCode = 409;
+      err.code = 'INVALID_STATUS_TRANSITION';
+      throw err;
+    }
+
+    if (order.status === 'CLOSED' || order.status === 'RECONCILED' || order.status === 'REJECTED') {
+      const err = new Error(`A ${order.status.toLowerCase()} purchase order cannot be cancelled.`);
+      err.statusCode = 409;
+      err.code = 'INVALID_STATUS_TRANSITION';
+      throw err;
+    }
+
+    let nextStatus;
+    try {
+      nextStatus = procurementStateMachine.transition(order.status, 'CANCEL');
+    } catch (e) {
+      const err = new Error(
+        e.message || `Cannot cancel purchase order in '${order.status}' status`,
+      );
+      err.statusCode = 409;
+      err.code = 'INVALID_STATUS_TRANSITION';
+      throw err;
+    }
+
+    const cancelReason =
+      typeof reason === 'string' && reason.trim() ? reason.trim() : 'Cancelled by user';
 
     const updated = await prisma.purchaseOrder.update({
       where: { id, tenantId },
       data: {
         status: nextStatus,
         cancelledAt: new Date(),
-        notes: `${order.notes || ''}\nCancellation Reason: ${reason}`,
+        notes: `${order.notes || ''}\nCancellation Reason: ${cancelReason}`.trim(),
       },
       include: { items: true },
     });
@@ -823,7 +860,7 @@ class PurchaseOrderService {
       orderId: id,
       tenantId,
       userId,
-      reason,
+      reason: cancelReason,
     });
     await emitEvent(DOMAIN_EVENTS.PURCHASE_ORDER_CANCELLED, { orderId: id, tenantId });
 
