@@ -190,7 +190,15 @@ class BulkImportService {
         total,
         percentage: 100,
         status: 'complete',
-        summary: result.summary,
+        summary: {
+          ...result.summary,
+          errors: result.errors || [],
+          failures: result.failures || result.errors || [],
+          validationErrors: result.validationErrors || result.errors || [],
+        },
+        errors: result.errors || [],
+        failures: result.failures || result.errors || [],
+        validationErrors: result.validationErrors || result.errors || [],
       });
 
       await prisma.importJob.update({
@@ -200,7 +208,13 @@ class BulkImportService {
           processedAt: new Date(),
           extractedData: {
             ...payload,
-            summary: result.summary,
+            summary: {
+              ...result.summary,
+              errors: result.errors || [],
+              failures: result.failures || result.errors || [],
+            },
+            errors: result.errors || [],
+            failures: result.failures || result.errors || [],
           },
         },
       });
@@ -1526,6 +1540,10 @@ class BulkImportService {
       inventoryState: currentInventoryState,
       existingMedicineCount: currentExistingCount,
       requiresDuplicateStrategy: currentRequiresDup,
+      errors: analysis.errors,
+      failures: analysis.errors,
+      validationErrors: analysis.errors,
+      failedRecords: analysis.errors,
     };
 
     const importJob = await prisma.importJob.create({
@@ -1541,6 +1559,8 @@ class BulkImportService {
           processExistingMedicines: isProcessExisting,
           supplier: supplierName !== 'None' ? supplierName : 'General / CSV',
           summary: commitSummary,
+          errors: analysis.errors,
+          failures: analysis.errors,
         },
       },
     });
@@ -1573,6 +1593,7 @@ class BulkImportService {
         committedBy: userId,
       },
       errors: analysis.errors,
+      failures: analysis.errors,
       validationErrors: analysis.errors,
       failedRecords: analysis.errors,
     };

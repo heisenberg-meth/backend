@@ -1350,6 +1350,10 @@ describe('BulkImportService - PRD Implementation & Test Cases', () => {
 
       // PRD §14: Row-level error breakdown for all 23 failed records
       expect(commitResult.failedRecords).toHaveLength(23);
+      expect(commitResult.failures).toHaveLength(23);
+      expect(commitResult.errors).toHaveLength(23);
+      expect(commitResult.summary.errors).toHaveLength(23);
+      expect(commitResult.summary.failures).toHaveLength(23);
       commitResult.failedRecords.forEach((err, idx) => {
         expect(err.rowNumber).toBe(78 + idx);
         expect(err.medicineName).toBe(`Medicine ${78 + idx}`);
