@@ -95,6 +95,19 @@ class ImportFastifyController {
     }
   }
 
+  async getInventoryState(request, reply) {
+    try {
+      const result = await bulkImportService.getInventoryState(request.tenantId, request.branchId);
+      return reply.send(result);
+    } catch (error) {
+      request.log.error(error);
+      return reply.code(400).send({
+        success: false,
+        message: error.message,
+      });
+    }
+  }
+
   async analyzeBulkImport(request, reply) {
     try {
       const result = await bulkImportService.analyze(

@@ -58,6 +58,12 @@ export default async function (fastify) {
     handler: controller.approveImport,
   });
 
+  fastify.get('/bulk/state', {
+    schema: { tags: ['Import'], summary: 'Get current inventory state (empty vs existing)' },
+    preHandler: [requirePermission('VIEW_INVENTORY')],
+    handler: controller.getInventoryState,
+  });
+
   fastify.post('/bulk/analyze', {
     bodyLimit: 50 * 1024 * 1024,
     schema: { tags: ['Import'], summary: 'Analyze bulk medicine import' },

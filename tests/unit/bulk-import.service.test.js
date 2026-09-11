@@ -13,7 +13,7 @@ const mockPrisma = {
     findMany: jest.fn().mockResolvedValue([]),
     createMany: jest.fn().mockResolvedValue({}),
   },
-  medicine: { findMany: jest.fn().mockResolvedValue([]) },
+  medicine: { findMany: jest.fn().mockResolvedValue([]), count: jest.fn().mockResolvedValue(0) },
   inventoryBatch: { findMany: jest.fn().mockResolvedValue([]) },
   supplier: {
     findFirst: jest.fn().mockResolvedValue({ id: 'sup-1', name: 'Global Pharma' }),
@@ -314,11 +314,11 @@ describe('BulkImportService - PRD Implementation & Test Cases', () => {
       });
     }
 
-    // 5 validation error rows (e.g. invalid price or zero quantity)
+    // 5 validation error rows (negative quantity rejected per PRD Addendum §3.1)
     for (let i = 1; i <= 5; i++) {
       medicines.push({
         name: `Invalid Med ${i}`,
-        qty: '0', // Invalid quantity
+        qty: '-10', // Negative quantity is invalid
         price: '10.00',
       });
     }
@@ -386,7 +386,7 @@ describe('BulkImportService - PRD Implementation & Test Cases', () => {
     for (let i = 1; i <= 5; i++) {
       medicines.push({
         name: `Invalid Med ${i}`,
-        qty: '0',
+        qty: '-10',
         price: '10.00',
       });
     }
@@ -456,7 +456,7 @@ describe('BulkImportService - PRD Implementation & Test Cases', () => {
     for (let i = 1; i <= 5; i++) {
       medicines.push({
         name: `Invalid Med ${i}`,
-        qty: '0',
+        qty: '-10',
         price: '10.00',
       });
     }
@@ -536,7 +536,7 @@ describe('BulkImportService - PRD Implementation & Test Cases', () => {
     for (let i = 1; i <= 5; i++) {
       medicines.push({
         name: `Invalid Med ${i}`,
-        qty: '0',
+        qty: '-10',
         price: '10.00',
       });
     }
@@ -946,7 +946,8 @@ describe('BulkImportService - PRD Implementation & Test Cases', () => {
       expect(result.summary.failed).toBe(1);
       expect(result.summary.imported).toBe(0);
       expect(result.errors).toHaveLength(1);
-      expect(result.errors[0].errorCode).toBe('EXPIRED_PRODUCT');
+      expect(result.errors[0].errorCode).toBe('EXPIRED_DATE');
+      expect(result.errors[0].message).toContain('Expiry date cannot be in the past');
 
       const callArgs = mockSharedEngine.commitChunks.mock.calls[0][0];
       expect(callArgs.newBatches).toHaveLength(0);
@@ -974,6 +975,307 @@ describe('BulkImportService - PRD Implementation & Test Cases', () => {
       expect(result.summary.created).toBe(1);
       expect(result.summary.imported).toBe(1);
       expect(result.summary.skipped).toBe(0);
+    });
+  });
+
+  describe('PRD Intelligent First-Time & Duplicate-Aware Import Flow', () => {
+    it('determines EMPTY inventory state when medicine count is 0', async () => {
+      mockPrisma.medicine.count.mockResolvedValue(0);
+
+      const state = await bulkImportService.getInventoryState(tenantId, branchId);
+      expect(state.success).toBe(true);
+      expect(state.inventoryState).toBe('EMPTY');
+      expect(state.existingMedicineCount).toBe(0);
+      expect(state.requiresDuplicateStrategy).toBe(false);
+      expect(state.recommendedStrategy).toBe('DIRECT_IMPORT');
+    });
+
+    it('determines EXISTING inventory state when medicine count is > 0', async () => {
+      mockPrisma.medicine.count.mockResolvedValue(42);
+
+      const state = await bulkImportService.getInventoryState(tenantId, branchId);
+      expect(state.success).toBe(true);
+      expect(state.inventoryState).toBe('EXISTING');
+      expect(state.existingMedicineCount).toBe(42);
+      expect(state.requiresDuplicateStrategy).toBe(true);
+      expect(state.recommendedStrategy).toBe('SKIP');
+    });
+
+    it('analyzes empty inventory and returns DIRECT_IMPORT without requiring duplicate strategy', async () => {
+      mockPrisma.medicine.count.mockResolvedValue(0);
+      mockPrisma.medicine.findMany.mockResolvedValue([]);
+      mockPrisma.inventoryBatch.findMany.mockResolvedValue([]);
+
+      const payload = {
+        medicines: [
+          {
+            name: 'Paracetamol 500mg',
+            qty: '100',
+            price: '10.00',
+            batch: 'BATCH-A1',
+          },
+        ],
+      };
+
+      const result = await bulkImportService.analyze(payload, tenantId, branchId, userId);
+      expect(result.success).toBe(true);
+      expect(result.inventoryState).toBe('EMPTY');
+      expect(result.existingMedicineCount).toBe(0);
+      expect(result.requiresDuplicateStrategy).toBe(false);
+      expect(result.recommendedStrategy).toBe('DIRECT_IMPORT');
+      expect(result.summary.inventoryState).toBe('EMPTY');
+      expect(result.summary.new).toBe(1);
+      expect(result.summary.duplicates).toBe(0);
+    });
+
+    it('detects intra-file duplicate rows even on empty inventory (PRD §52)', async () => {
+      mockPrisma.medicine.count.mockResolvedValue(0);
+      mockPrisma.medicine.findMany.mockResolvedValue([]);
+      mockPrisma.inventoryBatch.findMany.mockResolvedValue([]);
+
+      const payload = {
+        medicines: [
+          {
+            name: 'Paracetamol 500mg',
+            qty: '100',
+            price: '10.00',
+            batch: 'BATCH-A1',
+          },
+          {
+            name: 'Paracetamol 500mg',
+            qty: '50',
+            price: '10.00',
+            batch: 'BATCH-A1', // Same name + batch in uploaded file
+          },
+        ],
+      };
+
+      const result = await bulkImportService.analyze(payload, tenantId, branchId, userId);
+      expect(result.success).toBe(true);
+      expect(result.errors).toHaveLength(1);
+      expect(result.errors[0].errorCode).toBe('INTERNAL_DUPLICATE');
+      expect(result.errors[0].row).toBe(2);
+    });
+
+    it('commits direct import on empty inventory without requiring duplicate decisions', async () => {
+      mockPrisma.medicine.count.mockResolvedValue(0);
+      mockPrisma.medicine.findMany.mockResolvedValue([]);
+      mockPrisma.inventoryBatch.findMany.mockResolvedValue([]);
+
+      const payload = {
+        medicines: [
+          {
+            name: 'Cetirizine 10mg',
+            qty: '50',
+            price: '5.00',
+            batch: 'BATCH-C1',
+          },
+        ],
+        // Note: No duplicateStrategy provided because user is on empty inventory
+      };
+
+      const result = await bulkImportService.commit(payload, tenantId, branchId, userId);
+      expect(result.success).toBe(true);
+      expect(result.summary.created).toBe(1);
+      expect(result.summary.imported).toBe(1);
+      expect(result.summary.inventoryState).toBe('EMPTY');
+      expect(result.summary.existingMedicineCount).toBe(0);
+    });
+  });
+
+  describe('PRD Addendum — Import Validation, Failed Records & Error Reporting', () => {
+    beforeEach(() => {
+      mockPrisma.medicine.count.mockResolvedValue(0);
+      mockPrisma.medicine.findMany.mockResolvedValue([]);
+      mockPrisma.inventoryBatch.findMany.mockResolvedValue([]);
+    });
+
+    it('PRD Addendum §3.1: accepts quantity 0 as valid', async () => {
+      const payload = {
+        medicines: [
+          {
+            name: 'Paracetamol 500mg',
+            qty: '0',
+            price: '10.00',
+            batch: 'BATCH-001',
+          },
+        ],
+      };
+
+      const result = await bulkImportService.analyze(payload, tenantId, branchId, userId);
+      expect(result.success).toBe(true);
+      expect(result.errors).toHaveLength(0);
+      expect(result.summary.validRows).toBe(1);
+      expect(result.summary.invalidRows).toBe(0);
+    });
+
+    it('PRD Addendum §3.1: rejects negative quantity with INVALID_QUANTITY', async () => {
+      const payload = {
+        medicines: [
+          {
+            name: 'Paracetamol 500mg',
+            qty: '-20',
+            price: '10.00',
+            batch: 'BATCH-001',
+          },
+        ],
+      };
+
+      const result = await bulkImportService.analyze(payload, tenantId, branchId, userId);
+      expect(result.success).toBe(true);
+      expect(result.errors).toHaveLength(1);
+      expect(result.errors[0].code).toBe('INVALID_QUANTITY');
+      expect(result.errors[0].errorCode).toBe('INVALID_QUANTITY');
+      expect(result.errors[0].message).toContain('Quantity must be 0 or more');
+      expect(result.errors[0].action).toContain('Change the quantity to 0 or a positive number');
+      expect(result.errors[0].category).toBe('Quantity');
+    });
+
+    it('PRD Addendum §3.1: rejects missing quantity with MISSING_QUANTITY', async () => {
+      const payload = {
+        medicines: [
+          {
+            name: 'Paracetamol 500mg',
+            qty: '',
+            price: '10.00',
+            batch: 'BATCH-001',
+          },
+        ],
+      };
+
+      const result = await bulkImportService.analyze(payload, tenantId, branchId, userId);
+      expect(result.success).toBe(true);
+      expect(result.errors).toHaveLength(1);
+      expect(result.errors[0].code).toBe('MISSING_QUANTITY');
+      expect(result.errors[0].message).toBe('Quantity is required');
+    });
+
+    it("PRD Addendum §4: allows today's expiry date, rejects strictly past expiry date", async () => {
+      const today = new Date();
+      const todayStr = today.toISOString().split('T')[0];
+
+      const yesterday = new Date(Date.now() - 24 * 60 * 60 * 1000);
+      const yesterdayStr = yesterday.toISOString().split('T')[0];
+
+      const payload = {
+        medicines: [
+          {
+            name: 'Amoxicillin 250mg',
+            qty: '10',
+            price: '15.00',
+            batch: 'AMX-TODAY',
+            expiry: todayStr,
+          },
+          {
+            name: 'Ibuprofen 400mg',
+            qty: '10',
+            price: '12.00',
+            batch: 'IBU-PAST',
+            expiry: yesterdayStr,
+          },
+        ],
+      };
+
+      const result = await bulkImportService.analyze(payload, tenantId, branchId, userId);
+      expect(result.success).toBe(true);
+      expect(result.errors).toHaveLength(1);
+      expect(result.errors[0].medicineName).toBe('Ibuprofen 400mg');
+      expect(result.errors[0].code).toBe('EXPIRED_DATE');
+      expect(result.errors[0].message).toBe('Expiry date cannot be in the past');
+      expect(result.errors[0].category).toBe('Expiry');
+    });
+
+    it('PRD Addendum §6: multi-error collection captures all errors for a single row', async () => {
+      const payload = {
+        medicines: [
+          {
+            name: 'Paracetamol',
+            qty: '-10',
+            expiry: '2024-01-01',
+            price: '10.00',
+            batch: 'B001',
+          },
+        ],
+      };
+
+      const result = await bulkImportService.analyze(payload, tenantId, branchId, userId);
+      expect(result.success).toBe(true);
+      expect(result.errors).toHaveLength(1);
+
+      const rowError = result.errors[0];
+      expect(rowError.rowNumber).toBe(1);
+      expect(rowError.medicineName).toBe('Paracetamol');
+      expect(rowError.batchNumber).toBe('B001');
+      expect(rowError.errors).toHaveLength(2);
+
+      const errorCodes = rowError.errors.map((e) => e.code);
+      expect(errorCodes).toContain('INVALID_QUANTITY');
+      expect(errorCodes).toContain('EXPIRED_DATE');
+
+      expect(rowError.message).toContain('Quantity must be 0 or more');
+      expect(rowError.message).toContain('Expiry date cannot be in the past');
+    });
+
+    it('PRD Addendum §7: rejects MRP below purchase price and selling price above MRP', async () => {
+      const payload = {
+        medicines: [
+          {
+            name: 'Cough Syrup',
+            qty: '10',
+            price: '100.00',
+            mrp: '80.00',
+            batch: 'CS01',
+          },
+          {
+            name: 'Eye Drops',
+            qty: '10',
+            price: '50.00',
+            mrp: '60.00',
+            sellingPrice: '75.00',
+            batch: 'ED01',
+          },
+        ],
+      };
+
+      const result = await bulkImportService.analyze(payload, tenantId, branchId, userId);
+      expect(result.success).toBe(true);
+      expect(result.errors).toHaveLength(2);
+
+      expect(result.errors[0].code).toBe('MRP_BELOW_PURCHASE_PRICE');
+      expect(result.errors[0].category).toBe('Pricing');
+
+      expect(result.errors[1].code).toBe('SELLING_PRICE_ABOVE_MRP');
+      expect(result.errors[1].category).toBe('Pricing');
+    });
+
+    it('PRD Addendum §8, §26, §27: returns validationErrors and failedRecords with structured fields', async () => {
+      const payload = {
+        medicines: [
+          {
+            name: 'Valid Med',
+            qty: '10',
+            price: '20.00',
+          },
+          {
+            name: 'A', // invalid short name
+            qty: '-5', // invalid quantity
+            price: '-10', // invalid price
+          },
+        ],
+      };
+
+      const dryRunResult = await bulkImportService.analyze(payload, tenantId, branchId, userId);
+      expect(dryRunResult.validationErrors).toBeDefined();
+      expect(dryRunResult.failedRecords).toBeDefined();
+      expect(dryRunResult.summary.totalRows).toBe(2);
+      expect(dryRunResult.summary.validRows).toBe(1);
+      expect(dryRunResult.summary.invalidRows).toBe(1);
+
+      const commitResult = await bulkImportService.commit(payload, tenantId, branchId, userId);
+      expect(commitResult.status).toBe('COMPLETED_WITH_ERRORS');
+      expect(commitResult.failedRecords).toHaveLength(1);
+      expect(commitResult.summary.failed).toBe(1);
+      expect(commitResult.summary.created).toBe(1);
     });
   });
 });

@@ -21,6 +21,49 @@ async function updateBulkProgress(jobId, data) {
 }
 
 class BulkImportService {
+  async getInventoryState(tenantId) {
+    if (!tenantId) {
+      throw new Error('tenantId is required');
+    }
+
+    let existingMedicineCount = 0;
+    if (typeof prisma.medicine?.count === 'function') {
+      existingMedicineCount = await prisma.medicine.count({
+        where: {
+          tenantId,
+          deletedAt: null,
+        },
+      });
+      if (existingMedicineCount === 0 && typeof prisma.medicine?.findMany === 'function') {
+        const sample = await prisma.medicine.findMany({
+          where: { tenantId, deletedAt: null },
+          take: 1,
+          select: { id: true },
+        });
+        if (sample && sample.length > 0) {
+          existingMedicineCount = sample.length;
+        }
+      }
+    } else if (typeof prisma.medicine?.findMany === 'function') {
+      const all = await prisma.medicine.findMany({
+        where: { tenantId, deletedAt: null },
+        select: { id: true },
+      });
+      existingMedicineCount = all.length;
+    }
+
+    const inventoryState = existingMedicineCount === 0 ? 'EMPTY' : 'EXISTING';
+    const requiresDuplicateStrategy = existingMedicineCount > 0;
+
+    return {
+      success: true,
+      inventoryState,
+      existingMedicineCount,
+      requiresDuplicateStrategy,
+      recommendedStrategy: inventoryState === 'EMPTY' ? 'DIRECT_IMPORT' : 'SKIP',
+    };
+  }
+
   async analyze(payload, tenantId, branchId, userId) {
     return this._processBulkImport(payload, tenantId, branchId, userId, true);
   }
@@ -200,6 +243,14 @@ class BulkImportService {
       }
     }
 
+    const stateInfo = await this.getInventoryState(tenantId, branchId);
+    const {
+      inventoryState,
+      existingMedicineCount,
+      requiresDuplicateStrategy,
+      recommendedStrategy,
+    } = stateInfo;
+
     const analysis = {
       new: 0,
       duplicates: 0,
@@ -212,11 +263,16 @@ class BulkImportService {
       readyCount: 0,
       validBarcodes: 0,
       autoGenBarcodes: 0,
+      inventoryState,
+      existingMedicineCount,
+      requiresDuplicateStrategy,
+      recommendedStrategy,
     };
 
     const preValidatedRows = [];
     const namesToLookup = new Set();
     const barcodesToLookup = new Set();
+    const seenInFile = new Map();
 
     for (let index = 0; index < medicines.length; index++) {
       const rawRow = medicines[index];
@@ -290,6 +346,18 @@ class BulkImportService {
     const medicineMapByBarcode = new Map();
     const medicineMapByComposite = new Map();
 
+    let currentInventoryState = inventoryState;
+    let currentExistingCount = existingMedicineCount;
+    let currentRequiresDup = requiresDuplicateStrategy;
+    let currentRecommendedStrategy = recommendedStrategy;
+
+    if (existingMedicines.length > 0 && currentInventoryState === 'EMPTY') {
+      currentInventoryState = 'EXISTING';
+      currentExistingCount = existingMedicines.length;
+      currentRequiresDup = true;
+      currentRecommendedStrategy = duplicateStrategy || 'Skip';
+    }
+
     for (const med of existingMedicines) {
       if (med.name) {
         const normName = med.name.toLowerCase().trim();
@@ -328,31 +396,77 @@ class BulkImportService {
       const validationErrors = [];
       const validationWarnings = [];
 
-      // PRD §8.1: Medicine Name - min 2 non-whitespace characters
+      // PRD §52: Intra-file duplicate detection (same medicine name + batch in uploaded file)
+      if (name && batch) {
+        const fileKey = `${name.toLowerCase()}::${batch.toLowerCase()}`;
+        if (seenInFile.has(fileKey)) {
+          const firstSeenRow = seenInFile.get(fileKey);
+          validationErrors.push({
+            field: 'batch',
+            value: rawRow.batch,
+            code: 'INTERNAL_DUPLICATE',
+            errorCode: 'INTERNAL_DUPLICATE',
+            message: `Duplicate row in file: "${name}" with batch "${rawRow.batch}" was already defined on row ${firstSeenRow}`,
+            action: 'Remove the duplicate row or assign a unique batch number.',
+            category: 'Duplicate',
+          });
+        } else {
+          seenInFile.set(fileKey, rowNum);
+        }
+      }
+
+      // PRD Addendum §7: Medicine Name - required and min 2 non-whitespace characters
       if (!name || name.replace(/\s+/g, '').length < 2) {
         validationErrors.push({
           field: 'name',
           value: name,
-          errorCode: 'INVALID_NAME',
+          code: 'MISSING_MEDICINE_NAME',
+          errorCode: 'MISSING_MEDICINE_NAME',
           message:
             'Medicine name is required and must contain at least 2 non-whitespace characters',
+          action: 'Provide a valid medicine name with at least 2 characters.',
+          category: 'Required',
         });
       }
 
-      // PRD §8.1: Quantity - positive integer
-      const qty = this._parseQuantity(qtyStr);
-      if (isNaN(qty) || qty <= 0) {
+      // PRD Addendum §3.1: Quantity validation - allow 0, reject negative, reject non-numeric/empty
+      let qty = NaN;
+      if (!qtyStr) {
         validationErrors.push({
           field: 'quantity',
           value: qtyStr,
-          errorCode: 'INVALID_QUANTITY',
-          message: qtyStr
-            ? `Expected a positive number (> 0), received "${qtyStr}"`
-            : 'Quantity is empty or zero',
+          code: 'MISSING_QUANTITY',
+          errorCode: 'MISSING_QUANTITY',
+          message: 'Quantity is required',
+          action: 'Specify quantity as 0 or a positive number.',
+          category: 'Quantity',
         });
+      } else {
+        qty = this._parseQuantity(qtyStr);
+        if (isNaN(qty)) {
+          validationErrors.push({
+            field: 'quantity',
+            value: qtyStr,
+            code: 'INVALID_QUANTITY',
+            errorCode: 'INVALID_QUANTITY',
+            message: 'Quantity must be a number',
+            action: 'Enter a valid numeric quantity.',
+            category: 'Quantity',
+          });
+        } else if (qty < 0) {
+          validationErrors.push({
+            field: 'quantity',
+            value: qtyStr,
+            code: 'INVALID_QUANTITY',
+            errorCode: 'INVALID_QUANTITY',
+            message: 'Quantity must be 0 or more',
+            action: 'Change the quantity to 0 or a positive number.',
+            category: 'Quantity',
+          });
+        }
       }
 
-      // PRD §8.3: Expiry date normalization and past-expiry detection
+      // PRD Addendum §4 & §5: Expiry date validation - reject strictly before today, allow today
       let expiryDate = null;
       let isExpired = false;
       if (expiryStr) {
@@ -361,31 +475,43 @@ class BulkImportService {
           validationErrors.push({
             field: 'expiryDate',
             value: expiryStr,
-            errorCode: 'INVALID_DATE',
+            code: 'INVALID_EXPIRY_DATE',
+            errorCode: 'INVALID_EXPIRY_DATE',
             message: `Invalid expiry date format: "${expiryStr}"`,
+            action: 'Use YYYY-MM-DD or MM/YYYY date format.',
+            category: 'Expiry',
           });
-        } else if (expiryDate <= new Date()) {
-          isExpired = true;
-
-          validationErrors.push({
-            field: 'expiryDate',
-            value: expiryStr,
-            errorCode: 'EXPIRED_PRODUCT',
-            message: `Medicine expiry date must be in the future. Received expired date "${expiryStr}"`,
-          });
+        } else {
+          const startOfToday = new Date();
+          startOfToday.setHours(0, 0, 0, 0);
+          if (expiryDate < startOfToday) {
+            isExpired = true;
+            validationErrors.push({
+              field: 'expiryDate',
+              value: expiryStr,
+              code: 'EXPIRED_DATE',
+              errorCode: 'EXPIRED_DATE',
+              message: 'Expiry date cannot be in the past',
+              action: 'Update the expiry date to today or a future date.',
+              category: 'Expiry',
+            });
+          }
         }
       }
 
-      // PRD §8.2: Purchase price (> 0) and optional MRP sanity (MRP >= purchase price)
+      // PRD Addendum §7: Pricing validation - purchase price (> 0), MRP >= purchase price
       const price = this._parsePrice(priceStr);
       if (isNaN(price) || price <= 0) {
         validationErrors.push({
           field: 'price',
           value: priceStr,
-          errorCode: 'INVALID_PRICE',
+          code: 'INVALID_PURCHASE_PRICE',
+          errorCode: 'INVALID_PURCHASE_PRICE',
           message: priceStr
-            ? `Expected a positive number (> 0), received "${priceStr}"`
-            : 'Price is empty or invalid',
+            ? `Purchase price must be greater than 0, received "${priceStr}"`
+            : 'Purchase price is required and must be greater than 0',
+          action: 'Enter a valid purchase price greater than 0.',
+          category: 'Pricing',
         });
       } else {
         const rawMrp =
@@ -395,8 +521,21 @@ class BulkImportService {
             validationErrors.push({
               field: 'mrp',
               value: String(rawRow.mrp),
-              errorCode: 'INVALID_MRP',
+              code: 'MRP_BELOW_PURCHASE_PRICE',
+              errorCode: 'MRP_BELOW_PURCHASE_PRICE',
               message: `MRP (${rawMrp}) cannot be less than purchase price (${price})`,
+              action: 'Ensure MRP is greater than or equal to purchase price.',
+              category: 'Pricing',
+            });
+          } else if (rawMrp <= 0) {
+            validationErrors.push({
+              field: 'mrp',
+              value: String(rawRow.mrp),
+              code: 'INVALID_MRP',
+              errorCode: 'INVALID_MRP',
+              message: 'MRP must be greater than 0',
+              action: 'Enter a valid MRP greater than 0.',
+              category: 'Pricing',
             });
           }
         } else {
@@ -409,8 +548,29 @@ class BulkImportService {
             validationErrors.push({
               field: 'price',
               value: priceStr,
-              errorCode: 'INVALID_PRICE',
+              code: 'INVALID_PURCHASE_PRICE',
+              errorCode: 'INVALID_PURCHASE_PRICE',
               message: pricingError,
+              action: 'Ensure price and margin values are valid.',
+              category: 'Pricing',
+            });
+          }
+        }
+
+        const rawSelling =
+          rawRow.sellingPrice !== undefined && rawRow.sellingPrice !== null
+            ? this._parsePrice(rawRow.sellingPrice)
+            : null;
+        if (rawSelling !== null && !isNaN(rawSelling) && rawMrp !== null && !isNaN(rawMrp)) {
+          if (rawSelling > rawMrp) {
+            validationErrors.push({
+              field: 'sellingPrice',
+              value: String(rawRow.sellingPrice),
+              code: 'SELLING_PRICE_ABOVE_MRP',
+              errorCode: 'SELLING_PRICE_ABOVE_MRP',
+              message: 'Selling price cannot exceed MRP',
+              action: 'Set selling price to be less than or equal to MRP.',
+              category: 'Pricing',
             });
           }
         }
@@ -430,18 +590,36 @@ class BulkImportService {
         analysis.autoGenBarcodes++;
       }
 
+      // PRD Addendum §6 & §8: Multi-error collection per row
       if (validationErrors.length > 0) {
-        for (const err of validationErrors) {
-          analysis.errors.push({
-            row: rowNum,
-            name: name || 'Unknown',
-            reason: err.message,
+        const primaryError = validationErrors[0];
+        const combinedMessage = validationErrors.map((e) => e.message).join('; ');
+        analysis.errors.push({
+          row: rowNum,
+          rowNumber: rowNum,
+          name: name || 'Unknown',
+          medicineName: name || 'Unknown',
+          batch: batch || '',
+          batchNumber: batch || '',
+          field: primaryError.field,
+          value: primaryError.value,
+          code: primaryError.code,
+          errorCode: primaryError.errorCode,
+          message: combinedMessage,
+          reason: combinedMessage,
+          action: primaryError.action,
+          category: primaryError.category || 'Other',
+          rawRow,
+          errors: validationErrors.map((err) => ({
             field: err.field,
-            value: err.value,
+            code: err.code,
             errorCode: err.errorCode,
             message: err.message,
-          });
-        }
+            value: err.value !== undefined ? String(err.value) : '',
+            action: err.action || '',
+            category: err.category || 'Other',
+          })),
+        });
         continue;
       }
 
@@ -695,8 +873,16 @@ class BulkImportService {
       return {
         success: true,
         dryRun: true,
+        importSessionId: jobId || `preview-${Date.now()}`,
+        inventoryState: currentInventoryState,
+        existingMedicineCount: currentExistingCount,
+        requiresDuplicateStrategy: currentRequiresDup,
+        recommendedStrategy: currentRecommendedStrategy,
         summary: {
           total: medicines.length,
+          totalRows: medicines.length,
+          validRows: medicines.length - analysis.errors.length,
+          invalidRows: analysis.errors.length,
           new: analysis.new,
           duplicates: analysis.duplicates,
           conflicts: analysis.conflicts,
@@ -709,16 +895,26 @@ class BulkImportService {
           validBarcodes: analysis.validBarcodes,
           autoGenBarcodes: analysis.autoGenBarcodes,
           rows: analysis.rows,
+          inventoryState: currentInventoryState,
+          existingMedicineCount: currentExistingCount,
+          requiresDuplicateStrategy: currentRequiresDup,
+          recommendedStrategy: currentRecommendedStrategy,
         },
         rows: analysis.rows,
         errors: analysis.errors,
+        validationErrors: analysis.errors,
+        failedRecords: analysis.errors,
       };
     }
 
     // --- COMMIT PHASE ---
 
-    // PRD §4.4 & TC-IMP-04: Validate Ask Me resolution completeness
-    if (duplicateStrategy && duplicateStrategy.toLowerCase() === 'ask me') {
+    // PRD §4.4 & TC-IMP-04: Validate Ask Me resolution completeness for existing inventory
+    if (
+      currentInventoryState === 'EXISTING' &&
+      duplicateStrategy &&
+      duplicateStrategy.toLowerCase() === 'ask me'
+    ) {
       const unresolvedRows = validatedRows
         .filter((r) => r.isConflict && !this._getDecisionAction(duplicateDecisions, r.rowNum))
         .map((r) => r.rowNum);
@@ -997,24 +1193,66 @@ class BulkImportService {
       } else {
         // Unmatched medicine handling
         if (importType === 'Update Existing') {
+          const errMsg = `Cannot update medicine "${row.name}" because it does not exist in system.`;
           analysis.errors.push({
             row: row.rowNum,
+            rowNumber: row.rowNum,
             name: row.name || 'Unknown',
+            medicineName: row.name || 'Unknown',
+            batch: row.batch || '',
+            batchNumber: row.batch || '',
             field: 'name',
             value: row.name,
+            code: 'RECORD_NOT_FOUND',
             errorCode: 'RECORD_NOT_FOUND',
-            message: `Cannot update medicine "${row.name}" because it does not exist in system.`,
+            message: errMsg,
+            reason: errMsg,
+            action: 'Ensure medicine exists in system or select "New Medicines" import type.',
+            category: 'Other',
+            rawRow: row,
+            errors: [
+              {
+                field: 'name',
+                code: 'RECORD_NOT_FOUND',
+                errorCode: 'RECORD_NOT_FOUND',
+                message: errMsg,
+                value: row.name,
+                action: 'Ensure medicine exists in system or select "New Medicines" import type.',
+                category: 'Other',
+              },
+            ],
           });
           continue;
         }
         if (importType === 'Stock Entry Only') {
+          const errMsg = `Cannot add stock for medicine "${row.name}" because it does not exist in catalog.`;
           analysis.errors.push({
             row: row.rowNum,
+            rowNumber: row.rowNum,
             name: row.name || 'Unknown',
+            medicineName: row.name || 'Unknown',
+            batch: row.batch || '',
+            batchNumber: row.batch || '',
             field: 'name',
             value: row.name,
+            code: 'MEDICINE_NOT_FOUND',
             errorCode: 'MEDICINE_NOT_FOUND',
-            message: `Cannot add stock for medicine "${row.name}" because it does not exist in catalog.`,
+            message: errMsg,
+            reason: errMsg,
+            action: 'Add medicine to catalog first or select "New Medicines" import type.',
+            category: 'Other',
+            rawRow: row,
+            errors: [
+              {
+                field: 'name',
+                code: 'MEDICINE_NOT_FOUND',
+                errorCode: 'MEDICINE_NOT_FOUND',
+                message: errMsg,
+                value: row.name,
+                action: 'Add medicine to catalog first or select "New Medicines" import type.',
+                category: 'Other',
+              },
+            ],
           });
           continue;
         }
@@ -1255,6 +1493,9 @@ class BulkImportService {
       newMedicinesCount: newMedicines.length,
       newBatchesCount: newBatches.length,
       warnings: 0,
+      inventoryState: currentInventoryState,
+      existingMedicineCount: currentExistingCount,
+      requiresDuplicateStrategy: currentRequiresDup,
     };
 
     const importJob = await prisma.importJob.create({
@@ -1290,6 +1531,7 @@ class BulkImportService {
     return {
       success: true,
       dryRun: false,
+      status: analysis.errors.length > 0 ? 'COMPLETED_WITH_ERRORS' : 'COMPLETED',
       message:
         analysis.errors.length > 0
           ? 'Bulk import completed with validation errors.'
@@ -1301,6 +1543,8 @@ class BulkImportService {
         committedBy: userId,
       },
       errors: analysis.errors,
+      validationErrors: analysis.errors,
+      failedRecords: analysis.errors,
     };
   }
 
