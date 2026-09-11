@@ -49,6 +49,7 @@ class InvoiceService {
       status,
       fromDate,
       toDate,
+      billDate,
     } = params;
     const limitInt = parseInt(limit);
     const skip =
@@ -61,6 +62,7 @@ class InvoiceService {
       status,
       fromDate,
       toDate,
+      billDate,
     });
 
     return {
@@ -107,14 +109,25 @@ class InvoiceService {
 
       const formatSafeDate = (dateVal) => {
         if (!dateVal) return 'N/A';
+        if (typeof dateVal === 'string') {
+          const match = dateVal.match(/^(\d{4})-(\d{2})-(\d{2})/);
+          if (match) {
+            const [, y, m, d] = match;
+            return `${d}/${m}/${y}`;
+          }
+        }
         const date = new Date(dateVal);
-        return isNaN(date.getTime()) ? 'N/A' : date.toLocaleDateString('en-IN');
+        if (isNaN(date.getTime())) return 'N/A';
+        const d = String(date.getDate()).padStart(2, '0');
+        const m = String(date.getMonth() + 1).padStart(2, '0');
+        const y = date.getFullYear();
+        return `${d}/${m}/${y}`;
       };
 
       doc
         .fontSize(12)
         .text(`Invoice #: ${invoice.invoiceNumber}`, 50, 120)
-        .text(`Date: ${formatSafeDate(invoice.createdAt)}`, 50, 135)
+        .text(`Date: ${formatSafeDate(invoice.billDate || invoice.createdAt)}`, 50, 135)
         .text(`Status: ${invoice.status}`, 50, 150)
         .moveDown();
 

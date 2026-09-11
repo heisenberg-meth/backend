@@ -41,7 +41,7 @@ class InvoiceRepository {
 
   async findAll(
     tenantId,
-    { skip = 0, take = 20, branchId, patientId, status, fromDate, toDate } = {},
+    { skip = 0, take = 20, branchId, patientId, status, fromDate, toDate, billDate } = {},
   ) {
     const where = {
       tenantId,
@@ -51,7 +51,26 @@ class InvoiceRepository {
       ...(status && { status }),
     };
 
-    if (fromDate || toDate) {
+    if (billDate) {
+      const dateStr =
+        typeof billDate === 'string'
+          ? billDate.split('T')[0]
+          : new Date(billDate).toISOString().split('T')[0];
+      const parsedBillDate = new Date(dateStr);
+      const dayStart = new Date(`${dateStr}T00:00:00.000Z`);
+      const dayEnd = new Date(`${dateStr}T23:59:59.999Z`);
+
+      where.OR = [
+        { billDate: parsedBillDate },
+        {
+          billDate: null,
+          createdAt: {
+            gte: dayStart,
+            lte: dayEnd,
+          },
+        },
+      ];
+    } else if (fromDate || toDate) {
       where.createdAt = {};
       if (fromDate) {
         where.createdAt.gte = new Date(fromDate);

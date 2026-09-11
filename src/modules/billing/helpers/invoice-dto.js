@@ -43,6 +43,19 @@ export function normalizeInvoice(invoice) {
 
   const timestamp = safeTimestamp(invoice.createdAt || invoice.soldAt);
 
+  const resolveBillDate = (inv) => {
+    if (inv.billDate) {
+      if (typeof inv.billDate === 'string') return inv.billDate.split('T')[0];
+      if (inv.billDate instanceof Date) return inv.billDate.toISOString().split('T')[0];
+    }
+    const dt = inv.createdAt || inv.soldAt ? new Date(inv.createdAt || inv.soldAt) : new Date();
+    return !isNaN(dt.getTime())
+      ? dt.toISOString().split('T')[0]
+      : new Date().toISOString().split('T')[0];
+  };
+
+  const billDate = resolveBillDate(invoice);
+
   return {
     id: invoice.id,
     invoiceId: invoice.invoiceId || invoice.id,
@@ -52,6 +65,7 @@ export function normalizeInvoice(invoice) {
       invoice.billNumber ||
       invoice.invoice?.billNumber ||
       `INV-${invoice.id.slice(0, 8)}`,
+    billDate,
     createdAt: timestamp.toISOString(),
     date: timestamp.toISOString(),
     time: timestamp.toLocaleTimeString('en-US', {

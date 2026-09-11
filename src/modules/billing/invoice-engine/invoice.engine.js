@@ -38,6 +38,7 @@ class InvoiceEngine {
       discountType,
       patientName,
       patientPhone,
+      billDate: inputBillDate,
     } = data;
 
     if (!branchId) {
@@ -80,11 +81,20 @@ class InvoiceEngine {
       const resolvedDiscountType =
         discountType || (this._safeNumber(discountPercentage) > 0 ? 'PERCENTAGE' : 'FIXED');
 
+      let billDate = new Date();
+      if (inputBillDate) {
+        const parsed = new Date(inputBillDate);
+        if (!isNaN(parsed.getTime())) {
+          billDate = parsed;
+        }
+      }
+
       const invoice = await t.invoice.create({
         data: {
           tenantId,
           branchId,
           invoiceNumber,
+          billDate,
           patientId,
           patientName: patientName || defaultPatientName || 'Walk-in Customer',
           patientPhone: patientPhone || defaultPatientPhone || null,
@@ -209,6 +219,7 @@ class InvoiceEngine {
       discountType,
       patientName,
       patientPhone,
+      billDate: inputBillDate,
     } = data;
 
     if (!branchId) {
@@ -261,6 +272,9 @@ class InvoiceEngine {
       const updatedInvoice = await t.invoice.update({
         where: { id: invoiceId },
         data: {
+          ...(inputBillDate && !isNaN(new Date(inputBillDate).getTime())
+            ? { billDate: new Date(inputBillDate) }
+            : {}),
           patientId,
           patientName: patientName || defaultPatientName || 'Walk-in Customer',
           patientPhone: patientPhone || defaultPatientPhone || null,

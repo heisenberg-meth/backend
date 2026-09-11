@@ -1993,6 +1993,7 @@ model Invoice {
   customerPincode      String?
   customerGST          String?
   createdBy            String?
+  billDate             DateTime?            @db.Date
   createdAt            DateTime             @default(now())
   updatedAt            DateTime             @updatedAt
   deletedAt            DateTime?
@@ -2032,6 +2033,7 @@ model Invoice {
 
   @@unique([tenantId, invoiceNumber])
   @@index([tenantId, createdAt])
+  @@index([tenantId, billDate])
   @@index([patientId])
   @@index([tenantId, status], map: "idx_invoice_tenant_status")
   @@index([tenantId, deletedAt])
