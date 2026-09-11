@@ -4,6 +4,7 @@ import checkoutRoutes from './checkout.fastify.routes.js';
 import { authenticate, requireTenant } from '../../middleware/auth.fastify.js';
 import { requirePermission } from '../../middleware/permission.fastify.js';
 import prisma from '../../config/prisma.js';
+import { logger } from '@sentry/node';
 
 export default async function (fastify) {
   fastify.addHook('preHandler', authenticate);
@@ -102,7 +103,8 @@ export default async function (fastify) {
         };
 
         return reply.send({ success: true, data: usage });
-      } catch {
+      } catch (err) {
+        logger.error(err);
         return reply.code(500).send({ success: false, error: 'Failed to fetch usage' });
       }
     },

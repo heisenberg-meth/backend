@@ -349,7 +349,8 @@ const setupFastify = async () => {
         await prisma.$queryRaw`SELECT column_name FROM information_schema.columns WHERE table_name = 'User' AND column_name IN ('failedLoginAttempts', 'lockedUntil', 'lastFailedLogin', 'lastSuccessfulLogin')`;
       if (authCols.length < 4) throw new Error('Schema mismatch');
       dbHealthGauge.set(1);
-    } catch {
+    } catch (err) {
+      logger.error(err, '[DATABASE] Database health check failed');
       dbStatus = 'disconnected';
       dbHealthGauge.set(0);
       isHealthy = false;
@@ -358,7 +359,8 @@ const setupFastify = async () => {
     try {
       await fastify.redis.ping();
       redisHealthGauge.set(1);
-    } catch {
+    } catch (err) {
+      logger.error(err);
       redisStatus = 'disconnected';
       redisHealthGauge.set(0);
       isHealthy = false;

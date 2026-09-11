@@ -324,8 +324,8 @@ class InventoryClearService {
         if (mainQueue) {
           await mainQueue.add('update-analytics', { tenantId });
         }
-      } catch {
-        // queue error non-blocking
+      } catch (err) {
+        logger.error({ err }, 'Failed to queue analytics refresh');
       }
 
       logger.info(

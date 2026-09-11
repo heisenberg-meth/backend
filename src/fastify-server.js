@@ -100,17 +100,19 @@ async function validateDatabaseHealth() {
 
     try {
       await prisma.$queryRaw`SELECT "status", "maxBranches", "maxUsers", "aiEnabled", "whatsappEnabled" FROM "Tenant" LIMIT 1`;
-    } catch {
+    } catch (err) {
       throw new Error(
         'Schema inconsistency: "Tenant" table is missing required quota/gate columns',
+        err,
       );
     }
 
     try {
       await prisma.$queryRaw`SELECT "failureReason", "maxRetries" FROM "Notification" LIMIT 1`;
-    } catch {
+    } catch (err) {
       throw new Error(
         'Schema inconsistency: "Notification" table is missing required columns (failureReason or maxRetries)',
+        err,
       );
     }
 

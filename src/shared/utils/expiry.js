@@ -13,6 +13,8 @@
  *  - SAFE:        expiryDate > TODAY + 90 days
  */
 
+import logger from './logger.js';
+
 export const SQL_EXPIRED_CONDITION = '"expiryDate"::date <= CURRENT_DATE';
 
 export const EXPIRY_BUCKETS = Object.freeze({
@@ -35,7 +37,8 @@ function parseDateParts(d) {
     const iso = dt.toISOString();
     const [y, m, day] = iso.substring(0, 10).split('-').map(Number);
     return { year: y, month: m - 1, date: day };
-  } catch {
+  } catch (err) {
+    logger.error(err);
     return {
       year: dt.getUTCFullYear(),
       month: dt.getUTCMonth(),

@@ -779,7 +779,8 @@ export const adminService = {
     try {
       await adminRepository.pingDatabase();
       dbLatency = Date.now() - dbStart;
-    } catch {
+    } catch (err) {
+      logger.error(err);
       dbStatus = 'unhealthy';
       dbLatency = Date.now() - dbStart;
     }
@@ -899,7 +900,8 @@ export const adminService = {
           status: 'PENDING',
         });
         sent++;
-      } catch {
+      } catch (err) {
+        logger.error(err);
         failed++;
       }
     }

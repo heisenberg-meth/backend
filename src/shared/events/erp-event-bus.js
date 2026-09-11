@@ -23,7 +23,6 @@ export const emitEvent = async (eventName, data) => {
   const { sanitizeRedisPayload } = await import('../utils/sanitize-redis-payload.js');
   const safeData = sanitizeRedisPayload(data);
 
-  // Debug logging to catch serialization issues
   try {
     JSON.stringify(safeData);
   } catch (jsonErr) {

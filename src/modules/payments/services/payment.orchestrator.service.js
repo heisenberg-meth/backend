@@ -286,10 +286,7 @@ class PaymentOrchestratorService {
             );
 
             if (notes?.type === 'SUBSCRIPTION_UPGRADE') {
-              logger.info(
-                { tenantId: targetTenantId, notes },
-                '[PAYMENT] Activating subscription',
-              );
+              logger.info({ tenantId: targetTenantId, notes }, '[PAYMENT] Activating subscription');
 
               const planId = notes.planId || 'pro';
               const billingCycle = notes.billingCycle || 'monthly';
@@ -360,7 +357,8 @@ class PaymentOrchestratorService {
 
     try {
       return crypto.timingSafeEqual(Buffer.from(expectedSignature), Buffer.from(signature));
-    } catch {
+    } catch (err) {
+      logger.error({ err }, 'Failed to verify signature');
       return false;
     }
   }

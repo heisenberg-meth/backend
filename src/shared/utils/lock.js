@@ -1,5 +1,6 @@
 import crypto from 'crypto';
 import { initRedis } from '../../config/redis.js';
+import logger from './logger.js';
 
 const redisClient = initRedis();
 
@@ -102,8 +103,8 @@ export const startLockHeartbeat = (
       if (!extended) {
         clearInterval(timer);
       }
-    } catch {
-      // transient redis errors during renewal shouldn't crash
+    } catch (err) {
+      logger.error(err);
     }
   }, interval);
 

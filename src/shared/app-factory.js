@@ -11,6 +11,7 @@ import redis from '@fastify/redis';
 import client from 'prom-client';
 import prisma from '../config/prisma.js';
 import env from '../config/env.js';
+import { logger } from '@sentry/node';
 
 const dbHealthGauge = new client.Gauge({
   name: 'health_db_status',
@@ -186,7 +187,8 @@ const createServiceApp = async (options = {}) => {
     try {
       await prisma.$queryRaw`SELECT 1`;
       dbHealthGauge.set(1);
-    } catch {
+    } catch (err) {
+      logger.error({ err }, 'Database health check failed');
       health.status = 'degraded';
       health.db = 'disconnected';
       dbHealthGauge.set(0);
@@ -195,7 +197,8 @@ const createServiceApp = async (options = {}) => {
     try {
       await fastify.redis.ping();
       redisHealthGauge.set(1);
-    } catch {
+    } catch (err) {
+      logger.error({ err }, 'Redis health check failed');
       health.status = 'degraded';
       health.redis = 'disconnected';
       redisHealthGauge.set(0);

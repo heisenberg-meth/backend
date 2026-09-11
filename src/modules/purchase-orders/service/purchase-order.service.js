@@ -99,7 +99,8 @@ class PurchaseOrderService {
           if (expiryDateVal) {
             try {
               formattedExpiryDate = new Date(expiryDateVal).toISOString().split('T')[0];
-            } catch {
+            } catch (err) {
+              logger.error({ err }, 'Failed to format expiry date');
               formattedExpiryDate = String(expiryDateVal);
             }
           }

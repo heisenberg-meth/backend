@@ -1,6 +1,5 @@
 // src/bootstrap.js
 
-// Catch missing module errors synchronously before anything else
 process.on('uncaughtException', (err) => {
   if (err.code === 'ERR_MODULE_NOT_FOUND') {
     const match =

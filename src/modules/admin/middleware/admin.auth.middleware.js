@@ -12,10 +12,10 @@ export const authenticateAdmin = async (request, reply) => {
 
   try {
     await request.jwtVerify();
-  } catch {
+  } catch (err) {
     return reply.code(401).send({
       success: false,
-      error: { message: 'Invalid or expired admin token', code: 'ADMIN_TOKEN_INVALID' },
+      error: { message: 'Invalid or expired admin token', code: 'ADMIN_TOKEN_INVALID', err },
     });
   }
 

@@ -546,7 +546,8 @@ class MedicineAlertService {
     try {
       const cached = await redisClient.get(key);
       return cached ? JSON.parse(cached) : null;
-    } catch {
+    } catch (error) {
+      logger.error({ error, key }, '[MEDICINE-ALERT-SERVICE] Failed to get cache');
       return null;
     }
   }

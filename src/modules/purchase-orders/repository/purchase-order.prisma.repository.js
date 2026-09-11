@@ -1,3 +1,4 @@
+import { logger } from '@sentry/node';
 import prisma from '../../../config/prisma.js';
 
 class PurchaseOrderPrismaRepository {
@@ -255,14 +256,39 @@ class PurchaseOrderPrismaRepository {
           ? Number(invoicesAggregate._sum.totalAmount)
           : 0;
 
+    let activeSuppliers = 0;
+    let supplierReturns = 0;
+    try {
+      if (typeof prisma.supplier?.count === 'function') {
+        activeSuppliers = await prisma.supplier.count({
+          where: { tenantId, deletedAt: null, status: 'ACTIVE' },
+        });
+      }
+      if (typeof prisma.supplierReturn?.aggregate === 'function') {
+        const retAgg = await prisma.supplierReturn.aggregate({
+          where: { tenantId },
+          _sum: { returnAmount: true },
+        });
+        supplierReturns = retAgg?._sum?.returnAmount != null ? Number(retAgg._sum.returnAmount) : 0;
+      }
+    } catch (error) {
+      logger.error(error, 'Error fetching supplier data');
+    }
+
+    const thisMonthPurchases =
+      invoicesAggregate?._sum?.totalAmount != null ? Number(invoicesAggregate._sum.totalAmount) : 0;
+
     return {
+      thisMonthPurchases,
+      pendingPurchaseOrders: pendingOrders,
+      supplierReturns,
+      activeSuppliers,
       total: totalOrders,
       pending: pendingOrders,
       approved: approvedOrders,
       received: receivedOrders,
       cancelled: cancelledOrders,
       totalPurchaseOrders: totalOrders,
-      pendingPurchaseOrders: pendingOrders,
       approvedPurchaseOrders: approvedOrders,
       receivedPurchaseOrders: receivedOrders,
       cancelledPurchaseOrders: cancelledOrders,

@@ -30,7 +30,8 @@ class PurchaseOrderFastifyController {
       ];
       const orders = await purchaseOrderService.getOrdersByStatus(tenantId, statuses);
       return reply.send({ success: true, data: orders });
-    } catch {
+    } catch (err) {
+      logger.error({ err, tenantId }, 'Failed to retrieve pending orders');
       return reply.code(500).send({ success: false, error: 'Failed to retrieve pending orders' });
     }
   }
@@ -41,7 +42,8 @@ class PurchaseOrderFastifyController {
       const statuses = ['RECEIVED', 'RECONCILED'];
       const orders = await purchaseOrderService.getOrdersByStatus(tenantId, statuses);
       return reply.send({ success: true, data: orders });
-    } catch {
+    } catch (err) {
+      logger.error({ err, tenantId }, 'Failed to retrieve completed orders');
       return reply.code(500).send({ success: false, error: 'Failed to retrieve completed orders' });
     }
   }
@@ -52,7 +54,8 @@ class PurchaseOrderFastifyController {
     try {
       const orders = await purchaseOrderService.getOrdersBySupplier(tenantId, supplierId);
       return reply.send({ success: true, data: orders });
-    } catch {
+    } catch (err) {
+      logger.error({ err, tenantId }, 'Failed to retrieve supplier orders');
       return reply.code(500).send({ success: false, error: 'Failed to retrieve supplier orders' });
     }
   }

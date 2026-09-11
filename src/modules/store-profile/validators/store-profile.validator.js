@@ -1,3 +1,5 @@
+import { logger } from '@sentry/node';
+
 const INDIAN_STATE_CODES = [
   '01',
   '02',
@@ -234,7 +236,8 @@ export function validateLogoUrl(url) {
   try {
     new URL(url);
     return { valid: true, error: null };
-  } catch {
+  } catch (err) {
+    logger.error(err);
     return { valid: false, error: 'Invalid logo URL. Must be a valid URL' };
   }
 }

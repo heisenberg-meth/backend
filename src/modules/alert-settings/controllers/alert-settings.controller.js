@@ -105,7 +105,8 @@ class AlertSettingsController {
     try {
       await service.deleteOverride(tenantId, id);
       return reply.send({ success: true, message: 'Threshold override deleted' });
-    } catch {
+    } catch (err) {
+      logger.error({ err, tenantId }, 'Failed to delete override');
       return reply.code(500).send({ success: false, error: 'Failed to delete override' });
     }
   }

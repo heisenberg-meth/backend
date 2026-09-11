@@ -2,6 +2,7 @@ import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import env from '../../config/env.js';
+import logger from '../utils/logger.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -47,7 +48,8 @@ function sanitizeUrl(url) {
 function fileExists(filePath) {
   try {
     return fs.existsSync(filePath);
-  } catch {
+  } catch (err) {
+    logger.error({ err }, 'Failed to check file existence');
     return false;
   }
 }

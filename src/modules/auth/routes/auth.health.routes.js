@@ -4,6 +4,7 @@ import env from '../../../config/env.js';
 import authMetricsService from '../service/auth.metrics.service.js';
 import { CURRENT_AUTH_VERSION } from '../auth.constants.js';
 import { resolvedCookieDomain } from '../../../config/cookie.config.js';
+import { logger } from '@sentry/node';
 
 export default async function authHealthRoutes(fastify) {
   fastify.get('/health', async () => {
@@ -12,13 +13,15 @@ export default async function authHealthRoutes(fastify) {
 
     try {
       await prisma.$queryRaw`SELECT 1`;
-    } catch {
+    } catch (err) {
+      logger.error(err);
       dbStatus = 'disconnected';
     }
 
     try {
       await redis.ping();
-    } catch {
+    } catch (err) {
+      logger.error(err);
       redisStatus = 'disconnected';
     }
 
@@ -43,13 +46,15 @@ export default async function authHealthRoutes(fastify) {
 
     try {
       await prisma.$queryRaw`SELECT 1`;
-    } catch {
+    } catch (err) {
+      logger.error(err);
       dbStatus = 'disconnected';
     }
 
     try {
       await redis.ping();
-    } catch {
+    } catch (err) {
+      logger.error(err);
       redisStatus = 'disconnected';
     }
 
@@ -60,8 +65,8 @@ export default async function authHealthRoutes(fastify) {
       try {
         const result = await prisma.userSession.count({ where: { revoked: false } });
         sessionCount = result;
-      } catch {
-        // ignore
+      } catch (err) {
+        logger.error(err);
       }
     }
 

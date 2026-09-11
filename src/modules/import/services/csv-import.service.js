@@ -230,8 +230,8 @@ class CsvImportService {
 
       try {
         fs.unlinkSync(filePath);
-      } catch {
-        logger.warn({ filePath }, '[CSV-Import] Cleanup failed');
+      } catch (fileERR) {
+        logger.warn({ filePath }, '[CSV-Import] Cleanup failed', fileERR);
       }
 
       await updateProgress(jobId, {

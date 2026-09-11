@@ -840,8 +840,8 @@ class AuthPrismaService {
     let payload;
     try {
       payload = tokenService.verifyPasswordResetToken(resetToken);
-    } catch {
-      const err = new Error('Invalid or expired reset token.');
+    } catch (err) {
+      logger.error('Invalid or expired reset token.', err);
       err.code = AUTH_ERRORS.INVALID_RESET_TOKEN;
       throw err;
     }

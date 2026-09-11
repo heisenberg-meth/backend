@@ -21,7 +21,8 @@ class RazorpayWebhookHandler {
 
     try {
       return crypto.timingSafeEqual(Buffer.from(expectedSignature), Buffer.from(signature));
-    } catch {
+    } catch (err) {
+      logger.error(err);
       return false;
     }
   }
