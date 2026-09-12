@@ -475,13 +475,7 @@ class SettingsPrismaService {
         // 6. Invoices, Payments, Sales & Returns
         await tx.invoiceDeliveryLog.deleteMany({ where: { tenantId } });
         await tx.invoicePrintJob.deleteMany({ where: { tenantId } });
-        await tx.importExtractedItem.deleteMany({
-          where: {
-            importJob: {
-              tenantId,
-            },
-          },
-        });
+        await tx.invoiceAuditLog.deleteMany({ where: { tenantId } });
         await tx.invoiceEvent.deleteMany({ where: { invoice: { tenantId } } });
         await tx.creditNote.deleteMany({ where: { tenantId } });
         await tx.refundPayment.deleteMany({ where: { tenantId } });
@@ -567,7 +561,13 @@ class SettingsPrismaService {
         await tx.medicineSubscription.deleteMany({ where: { tenantId } });
         await tx.medicineSupplier.deleteMany({ where: { tenantId } });
         await tx.alertThresholdOverride.deleteMany({ where: { tenantId } });
-        await tx.importExtractedItem.deleteMany({ where: { job: { tenantId } } });
+        await tx.importExtractedItem.deleteMany({
+          where: {
+            importJob: {
+              tenantId,
+            },
+          },
+        });
         await tx.importJob.deleteMany({ where: { tenantId } });
         await tx.medicine.deleteMany({ where: { tenantId } });
         await tx.supplier.deleteMany({ where: { tenantId } });
