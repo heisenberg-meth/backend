@@ -127,6 +127,39 @@ class SettingsFastifyController {
     const history = await gstService.getGstVersionHistory(request.tenantId, category, branchId);
     return reply.send({ success: true, data: history });
   }
+
+  async resetAccountData(request, reply) {
+    const { confirmation, password } = request.body || {};
+
+    if (confirmation !== 'RESET') {
+      return reply.code(400).send({
+        success: false,
+        message: 'Confirmation phrase must be exactly "RESET" in capital letters.',
+      });
+    }
+
+    if (!password || typeof password !== 'string' || !password.trim()) {
+      return reply.code(400).send({
+        success: false,
+        message: 'Account password is required to authorize data reset.',
+      });
+    }
+
+    try {
+      const result = await settingsService.resetAccountData(
+        request.tenantId,
+        request.user.id,
+        password.trim(),
+      );
+      return reply.send(result);
+    } catch (err) {
+      const statusCode = err.statusCode || 500;
+      return reply.code(statusCode).send({
+        success: false,
+        message: err.message || 'Failed to reset pharmacy data.',
+      });
+    }
+  }
 }
 
 export default new SettingsFastifyController();

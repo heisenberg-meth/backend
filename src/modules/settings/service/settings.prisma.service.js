@@ -4,6 +4,7 @@ import logger from '../../../shared/utils/logger.js';
 import settingsAuditRepository from '../gst/settings.audit.repository.js';
 import { settingsEventEmitter, SettingsEvents } from '../events/settings.events.js';
 import { scanKeys } from '../../../shared/utils/scan-keys.js';
+import bcrypt from 'bcryptjs';
 
 const SETTINGS_CATEGORIES = [
   'inventory',
@@ -370,6 +371,241 @@ class SettingsPrismaService {
         },
       },
     });
+  }
+
+  /**
+   * Destructively reset all operational data for a tenant while preserving
+   * the tenant identity, user credentials, subscription and configuration.
+   *
+   * @param {string} tenantId - Tenant ID derived from authenticated session
+   * @param {string} userId - User ID performing the action
+   * @param {string} password - User password for authentication confirmation
+   */
+  async resetAccountData(tenantId, userId, password) {
+    if (!tenantId) {
+      const err = new Error('Tenant context required for account data reset');
+      err.statusCode = 400;
+      throw err;
+    }
+
+    if (!password) {
+      const err = new Error('Password verification is required for account data reset');
+      err.statusCode = 400;
+      throw err;
+    }
+
+    // Verify user credentials & authorization
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      include: { tenant: true },
+    });
+
+    if (!user || user.tenantId !== tenantId) {
+      const err = new Error('User not found or does not belong to this tenant');
+      err.statusCode = 403;
+      throw err;
+    }
+
+    if (user.role !== 'OWNER' && user.role !== 'ADMIN') {
+      const err = new Error(
+        'Only an account owner or administrator can reset pharmacy operational data',
+      );
+      err.statusCode = 403;
+      throw err;
+    }
+
+    const isPasswordValid = await bcrypt.compare(password, user.password);
+    if (!isPasswordValid) {
+      const err = new Error('Invalid account password. Reset aborted.');
+      err.statusCode = 401;
+      throw err;
+    }
+
+    logger.warn(
+      { tenantId, userId, email: user.email },
+      'Beginning transactional Master Reset of tenant operational data',
+    );
+
+    // Execute atomic transactional reset honoring foreign key hierarchy
+    await prisma.$transaction(
+      async (tx) => {
+        // 1. Predictive Analytics, Metrics & Summaries
+        await tx.salesAnomaly.deleteMany({ where: { tenantId } });
+        await tx.revenueHeatmap.deleteMany({ where: { tenantId } });
+        await tx.revenueSnapshot.deleteMany({ where: { tenantId } });
+        await tx.dailySalesSummary.deleteMany({ where: { tenantId } });
+        await tx.dailyPurchaseSummary.deleteMany({ where: { tenantId } });
+        await tx.dailyProcurementSummary.deleteMany({ where: { tenantId } });
+        await tx.dailyFinanceSummary.deleteMany({ where: { tenantId } });
+        await tx.dashboardSnapshot.deleteMany({ where: { tenantId } });
+        await tx.deadStockAnalysis.deleteMany({ where: { tenantId } });
+        await tx.fastMovingMedicine.deleteMany({ where: { tenantId } });
+        await tx.slowMovingStock.deleteMany({ where: { tenantId } });
+        await tx.outbreakPrediction.deleteMany({ where: { tenantId } });
+        await tx.demandForecast.deleteMany({ where: { tenantId } });
+        await tx.forecastRecommendation.deleteMany({ where: { tenantId } });
+        await tx.expiryRiskPrediction.deleteMany({ where: { tenantId } });
+        await tx.expiryRecommendation.deleteMany({ where: { tenantId } });
+        await tx.expiryAlert.deleteMany({ where: { tenantId } });
+        await tx.executiveInsight.deleteMany({ where: { tenantId } });
+        await tx.tallyExport.deleteMany({ where: { tenantId } });
+        await tx.gstSummary.deleteMany({ where: { tenantId } });
+        await tx.hsnSummary.deleteMany({ where: { tenantId } });
+        await tx.paymentMethodAnalytics.deleteMany({ where: { tenantId } });
+
+        // 2. Financial & Accounting Operational Records
+        await tx.expense.deleteMany({ where: { tenantId } });
+        await tx.journalEntry.deleteMany({ where: { tenantId } });
+        await tx.transaction.deleteMany({ where: { tenantId } });
+        await tx.cashRegisterSession.deleteMany({ where: { tenantId } });
+        await tx.shift.deleteMany({ where: { tenantId } });
+
+        // 3. Deliveries, Riders & Logistics
+        await tx.delivery.deleteMany({ where: { tenantId } });
+        await tx.rider.deleteMany({ where: { tenantId } });
+
+        // 4. File Assets linked to tenant
+        await tx.fileAsset.deleteMany({ where: { tenantId } });
+
+        // 5. Notifications & Retry Logs
+        await tx.notificationRetryLog.deleteMany({ where: { tenantId } });
+        await tx.smsNotification.deleteMany({ where: { tenantId } });
+        await tx.notification.deleteMany({ where: { tenantId } });
+
+        // 6. Invoices, Payments, Sales & Returns
+        await tx.invoiceDeliveryLog.deleteMany({ where: { tenantId } });
+        await tx.invoicePrintJob.deleteMany({ where: { tenantId } });
+        await tx.invoiceAuditLog.deleteMany({ where: { tenantId } });
+        await tx.invoiceEvent.deleteMany({ where: { invoice: { tenantId } } });
+        await tx.creditNote.deleteMany({ where: { tenantId } });
+        await tx.refundPayment.deleteMany({ where: { tenantId } });
+        await tx.paymentAllocation.deleteMany({ where: { tenantId } });
+        await tx.payment.deleteMany({ where: { tenantId } });
+        await tx.paymentSession.deleteMany({ where: { tenantId } });
+        await tx.returnItem.deleteMany({ where: { return: { tenantId } } });
+        await tx.salesReturn.deleteMany({ where: { tenantId } });
+        await tx.return.deleteMany({ where: { tenantId } });
+        await tx.invoiceItem.deleteMany({ where: { invoice: { tenantId } } });
+        await tx.saleItem.deleteMany({ where: { sale: { tenantId } } });
+        await tx.onlineOrderItem.deleteMany({ where: { tenantId } });
+        await tx.onlineOrder.deleteMany({ where: { tenantId } });
+        await tx.invoice.deleteMany({ where: { tenantId } });
+        await tx.sale.deleteMany({ where: { tenantId } });
+
+        // 7. Suppliers & Procurement
+        await tx.supplierCreditNoteUsage.deleteMany({ where: { creditNote: { tenantId } } });
+        await tx.supplierCreditNote.deleteMany({ where: { tenantId } });
+        await tx.supplierReturnItem.deleteMany({ where: { return: { tenantId } } });
+        await tx.supplierReturn.deleteMany({ where: { tenantId } });
+        await tx.supplierPaymentAllocation.deleteMany({ where: { tenantId } });
+        await tx.supplierPayment.deleteMany({ where: { tenantId } });
+        await tx.supplierMetrics.deleteMany({ where: { supplier: { tenantId } } });
+        await tx.supplierLedger.deleteMany({ where: { tenantId } });
+        await tx.goodsReceiptNoteItem.deleteMany({ where: { grn: { tenantId } } });
+        await tx.goodsReceiptNote.deleteMany({ where: { tenantId } });
+        await tx.purchaseInvoice.deleteMany({ where: { tenantId } });
+        await tx.purchaseOrderItem.deleteMany({ where: { purchaseOrder: { tenantId } } });
+        await tx.purchaseOrderApproval.deleteMany({ where: { purchaseOrder: { tenantId } } });
+        await tx.purchaseOrderRevision.deleteMany({ where: { purchaseOrder: { tenantId } } });
+        await tx.purchaseOrder.deleteMany({ where: { tenantId } });
+
+        // 8. Patient Records, Prescriptions & Loyalty
+        await tx.inpatientMedicationUsage.deleteMany({ where: { admission: { tenantId } } });
+        await tx.patientAdmission.deleteMany({ where: { tenantId } });
+        await tx.patientIdentityMap.deleteMany({ where: { patient: { tenantId } } });
+        await tx.patientSegment.deleteMany({ where: { patient: { tenantId } } });
+        await tx.patientCreditLedger.deleteMany({ where: { tenantId } });
+        await tx.patientCreditAccount.deleteMany({ where: { tenantId } });
+        await tx.loyaltyTransaction.deleteMany({ where: { tenantId } });
+        await tx.patientLoyaltyAccount.deleteMany({ where: { tenantId } });
+        await tx.patientAuditLog.deleteMany({ where: { tenantId } });
+        await tx.patientRefillReminder.deleteMany({ where: { tenantId } });
+        await tx.patientRefill.deleteMany({ where: { tenantId } });
+        await tx.patientReminder.deleteMany({ where: { tenantId } });
+        await tx.patientAdherence.deleteMany({ where: { tenantId } });
+        await tx.patientBehavior.deleteMany({ where: { tenantId } });
+        await tx.patientPrescription.deleteMany({ where: { tenantId } });
+        await tx.patientInsuranceClaim.deleteMany({ where: { tenantId } });
+        await tx.prescriptionVerification.deleteMany({ where: { prescription: { tenantId } } });
+        await tx.prescriptionItem.deleteMany({ where: { prescription: { tenantId } } });
+        await tx.prescription.deleteMany({ where: { tenantId } });
+        await tx.doctor.deleteMany({ where: { tenantId } });
+        await tx.patient.deleteMany({ where: { tenantId } });
+
+        // 9. Stock, Batches & Inventory
+        await tx.stockMovement.deleteMany({ where: { tenantId } });
+        await tx.stockTransferItem.deleteMany({ where: { transfer: { tenantId } } });
+        await tx.stockTransfer.deleteMany({ where: { tenantId } });
+        await tx.stockSnapshot.deleteMany({ where: { tenantId } });
+        await tx.stockAlert.deleteMany({ where: { tenantId } });
+        await tx.damagedStock.deleteMany({ where: { tenantId } });
+        await tx.quarantinedBatch.deleteMany({ where: { batch: { tenantId } } });
+        await tx.inventoryDisposal.deleteMany({ where: { tenantId } });
+        await tx.inventoryReconciliation.deleteMany({ where: { tenantId } });
+        await tx.inventorySyncLog.deleteMany({ where: { tenantId } });
+        await tx.batchRecall.deleteMany({ where: { tenantId } });
+        await tx.batchAuditLog.deleteMany({ where: { tenantId } });
+        await tx.inventoryBatch.deleteMany({ where: { tenantId } });
+        await tx.inventory.deleteMany({ where: { tenantId } });
+
+        // 10. Medicine Catalog & Categories
+        await tx.drugAlternative.deleteMany({ where: { tenantId } });
+        await tx.drugInteraction.deleteMany({ where: { tenantId } });
+        await tx.barcodeMapping.deleteMany({ where: { medicine: { tenantId } } });
+        await tx.medicineBarcode.deleteMany({ where: { tenantId } });
+        await tx.medicineInventoryConfig.deleteMany({ where: { tenantId } });
+        await tx.medicinePriceHistory.deleteMany({ where: { tenantId } });
+        await tx.medicinePricing.deleteMany({ where: { tenantId } });
+        await tx.ecommercePricing.deleteMany({ where: { tenantId } });
+        await tx.medicineStatusHistory.deleteMany({ where: { tenantId } });
+        await tx.medicineSubscription.deleteMany({ where: { tenantId } });
+        await tx.medicineSupplier.deleteMany({ where: { tenantId } });
+        await tx.alertThresholdOverride.deleteMany({ where: { tenantId } });
+        await tx.importExtractedItem.deleteMany({ where: { job: { tenantId } } });
+        await tx.importJob.deleteMany({ where: { tenantId } });
+        await tx.medicine.deleteMany({ where: { tenantId } });
+        await tx.supplier.deleteMany({ where: { tenantId } });
+        await tx.manufacturer.deleteMany({ where: { tenantId } });
+        await tx.medicineCategory.deleteMany({ where: { tenantId } });
+
+        // 11. Record Security Audit Log
+        await tx.auditLog.create({
+          data: {
+            tenantId,
+            userId,
+            username: user.fullName || user.email,
+            shopName: user.tenant?.name || 'Pharmacy',
+            action: 'ACCOUNT_DATA_RESET',
+            target: 'All operational records reset',
+            type: 'SECURITY',
+          },
+        });
+      },
+      { timeout: 30000 },
+    );
+
+    // Invalidate Redis caches for this tenant
+    try {
+      const keys = await scanKeys(`*${tenantId}*`);
+      if (keys && keys.length > 0) {
+        await redisClient.del(...keys);
+      }
+    } catch (cacheErr) {
+      logger.warn({ cacheErr }, 'Cache invalidation warning after account data reset');
+    }
+
+    await this.invalidateCache(tenantId);
+
+    logger.info(
+      { tenantId, userId },
+      'Master Reset completed successfully. All operational data cleared.',
+    );
+
+    return {
+      success: true,
+      message:
+        'Operational pharmacy data reset successfully. All account credentials remain active.',
+    };
   }
 
   /**

@@ -310,6 +310,25 @@ async function settingsRoutes(fastify) {
     },
     settingsController.getSettings,
   );
+
+  fastify.post(
+    '/reset-account-data',
+    {
+      schema: {
+        tags: ['Settings'],
+        summary: 'Destructively reset all operational pharmacy data for tenant',
+        body: {
+          type: 'object',
+          required: ['confirmation', 'password'],
+          properties: {
+            confirmation: { type: 'string' },
+            password: { type: 'string' },
+          },
+        },
+      },
+    },
+    settingsController.resetAccountData,
+  );
 }
 
 export default settingsRoutes;
