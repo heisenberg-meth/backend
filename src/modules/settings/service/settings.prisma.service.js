@@ -475,7 +475,13 @@ class SettingsPrismaService {
         // 6. Invoices, Payments, Sales & Returns
         await tx.invoiceDeliveryLog.deleteMany({ where: { tenantId } });
         await tx.invoicePrintJob.deleteMany({ where: { tenantId } });
-        await tx.invoiceAuditLog.deleteMany({ where: { tenantId } });
+        await tx.invoiceAuditLog.deleteMany({
+          where: {
+            invoice: {
+              tenantId,
+            },
+          },
+        });
         await tx.invoiceEvent.deleteMany({ where: { invoice: { tenantId } } });
         await tx.creditNote.deleteMany({ where: { tenantId } });
         await tx.refundPayment.deleteMany({ where: { tenantId } });
