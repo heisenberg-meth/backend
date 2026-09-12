@@ -475,9 +475,9 @@ class SettingsPrismaService {
         // 6. Invoices, Payments, Sales & Returns
         await tx.invoiceDeliveryLog.deleteMany({ where: { tenantId } });
         await tx.invoicePrintJob.deleteMany({ where: { tenantId } });
-        await tx.invoiceAuditLog.deleteMany({
+        await tx.importExtractedItem.deleteMany({
           where: {
-            invoice: {
+            importJob: {
               tenantId,
             },
           },
