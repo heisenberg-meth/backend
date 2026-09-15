@@ -745,4 +745,204 @@ describe('InvoiceEngine', () => {
       );
     });
   });
+
+  describe('SellingUnit & StripSize Normalization and Deduction', () => {
+    const branchId = 'branch-1';
+    const medicineId = 'med-1';
+
+    beforeEach(() => {
+      jest.clearAllMocks();
+    });
+
+    it('createDraft preserves sellingUnit = PILL and custom stripSize in invoice items', async () => {
+      const data = {
+        branchId,
+        items: [
+          {
+            medicineId,
+            batchId: 'batch-1',
+            quantity: 35,
+            unitPrice: 5,
+            sellingUnit: 'PILL',
+            stripSize: 15,
+            gstPercentage: 0,
+          },
+        ],
+      };
+
+      const mockTx = {
+        storeProfile: { findFirst: jest.fn().mockResolvedValue(null) },
+        patient: { findUnique: jest.fn().mockResolvedValue(null) },
+        invoice: {
+          create: jest.fn().mockImplementation((args) => ({ ...args.data, id: 'inv-draft-1' })),
+          count: jest.fn().mockResolvedValue(0),
+        },
+        inventoryBatch: {
+          findMany: jest.fn().mockResolvedValue([{ id: 'batch-1' }]),
+        },
+        invoiceItem: { createMany: jest.fn() },
+      };
+
+      prisma.$transaction.mockImplementation(async (cb) => cb(mockTx));
+
+      await invoiceEngine.createDraft(tenantId, userId, data);
+
+      expect(mockTx.invoiceItem.createMany).toHaveBeenCalledTimes(1);
+      const insertedItems = mockTx.invoiceItem.createMany.mock.calls[0][0].data;
+      expect(insertedItems).toHaveLength(1);
+      expect(insertedItems[0].sellingUnit).toBe('PILL');
+      expect(insertedItems[0].stripSize).toBe(15);
+      expect(insertedItems[0].quantity).toBe(35);
+    });
+
+    it('updateDraft preserves sellingUnit = PILL and custom stripSize in invoice items', async () => {
+      const data = {
+        branchId,
+        items: [
+          {
+            medicineId,
+            batchId: 'batch-1',
+            quantity: 20,
+            unitPrice: 5,
+            sellingUnit: 'PILL',
+            stripSize: 12,
+            gstPercentage: 0,
+          },
+        ],
+      };
+
+      const existingInvoice = {
+        id: 'inv-draft-2',
+        tenantId,
+        branchId,
+        status: 'DRAFT',
+      };
+
+      const mockTx = {
+        invoice: {
+          findFirst: jest.fn().mockResolvedValue(existingInvoice),
+          update: jest.fn().mockImplementation((args) => ({ ...existingInvoice, ...args.data })),
+        },
+        storeProfile: { findFirst: jest.fn().mockResolvedValue(null) },
+        patient: { findUnique: jest.fn().mockResolvedValue(null) },
+        inventoryBatch: {
+          findMany: jest.fn().mockResolvedValue([{ id: 'batch-1' }]),
+        },
+        invoiceItem: {
+          deleteMany: jest.fn().mockResolvedValue({ count: 1 }),
+          createMany: jest.fn().mockResolvedValue({ count: 1 }),
+        },
+        invoiceAuditLog: { create: jest.fn() },
+      };
+
+      prisma.$transaction.mockImplementation(async (cb) => cb(mockTx));
+
+      await invoiceEngine.updateDraft('inv-draft-2', tenantId, userId, data);
+
+      expect(mockTx.invoiceItem.createMany).toHaveBeenCalledTimes(1);
+      const insertedItems = mockTx.invoiceItem.createMany.mock.calls[0][0].data;
+      expect(insertedItems).toHaveLength(1);
+      expect(insertedItems[0].sellingUnit).toBe('PILL');
+      expect(insertedItems[0].stripSize).toBe(12);
+      expect(insertedItems[0].quantity).toBe(20);
+    });
+
+    it('_processItemDeduction deducts exact pill quantity when sellingUnit = PILL', async () => {
+      const mockBatches = [
+        {
+          id: 'batch-1',
+          batchNumber: 'B1',
+          availableQuantity: 100,
+          expiryDate: new Date('2026-12-31'),
+        },
+      ];
+
+      const mockTx = {
+        inventoryBatch: {
+          findMany: jest.fn().mockResolvedValue(mockBatches),
+        },
+      };
+
+      const invoice = { id: 'inv-pill-1', branchId };
+      const item = {
+        medicineId,
+        batchId: 'batch-1',
+        quantity: 35,
+        sellingUnit: 'PILL',
+        stripSize: 10,
+        medicine: { name: 'Paracetamol', stripSize: 10 },
+      };
+
+      const allocations = await invoiceEngine._processItemDeduction(
+        tenantId,
+        invoice,
+        item,
+        userId,
+        mockTx,
+      );
+
+      // 35 PILLs should deduce exactly 35 units, not 35 * 10 = 350
+      expect(allocations).toEqual([{ id: 'batch-1', quantity: 35, batchNumber: 'B1' }]);
+      expect(movementService.recordMovement).toHaveBeenCalledWith(
+        tenantId,
+        expect.objectContaining({
+          medicineId,
+          batchId: 'batch-1',
+          quantity: -35,
+          movementType: 'SALE',
+        }),
+        userId,
+        mockTx,
+      );
+    });
+
+    it('_processItemDeduction multiplies by stripSize when sellingUnit = STRIP', async () => {
+      const mockBatches = [
+        {
+          id: 'batch-1',
+          batchNumber: 'B1',
+          availableQuantity: 500,
+          expiryDate: new Date('2026-12-31'),
+        },
+      ];
+
+      const mockTx = {
+        inventoryBatch: {
+          findMany: jest.fn().mockResolvedValue(mockBatches),
+        },
+      };
+
+      const invoice = { id: 'inv-strip-1', branchId };
+      const item = {
+        medicineId,
+        batchId: 'batch-1',
+        quantity: 35,
+        sellingUnit: 'STRIP',
+        stripSize: 10,
+        medicine: { name: 'Paracetamol', stripSize: 10 },
+      };
+
+      const allocations = await invoiceEngine._processItemDeduction(
+        tenantId,
+        invoice,
+        item,
+        userId,
+        mockTx,
+      );
+
+      // 35 STRIPs should deduce 35 * 10 = 350 units
+      expect(allocations).toEqual([{ id: 'batch-1', quantity: 350, batchNumber: 'B1' }]);
+      expect(movementService.recordMovement).toHaveBeenCalledWith(
+        tenantId,
+        expect.objectContaining({
+          medicineId,
+          batchId: 'batch-1',
+          quantity: -350,
+          movementType: 'SALE',
+        }),
+        userId,
+        mockTx,
+      );
+    });
+  });
 });

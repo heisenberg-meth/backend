@@ -51,6 +51,8 @@ class InvoiceEngine {
       quantity: this._safeNumber(item.quantity ?? item.qty),
       unitPrice: this._safeNumber(item.unitPrice ?? item.price),
       gstPercentage: this._safeNumber(item.gstPercentage ?? item.gst),
+      sellingUnit: String(item.sellingUnit || 'STRIP').toUpperCase(),
+      stripSize: this._safeNumber(item.stripSize ?? item.unitPerPack ?? 10) || 10,
     }));
 
     const execute = async (t) => {
@@ -234,6 +236,8 @@ class InvoiceEngine {
       quantity: this._safeNumber(item.quantity ?? item.qty),
       unitPrice: this._safeNumber(item.unitPrice ?? item.price),
       gstPercentage: this._safeNumber(item.gstPercentage ?? item.gst),
+      sellingUnit: String(item.sellingUnit || 'STRIP').toUpperCase(),
+      stripSize: this._safeNumber(item.stripSize ?? item.unitPerPack ?? 10) || 10,
     }));
 
     const execute = async (t) => {
