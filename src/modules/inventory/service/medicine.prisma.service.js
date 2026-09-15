@@ -366,6 +366,7 @@ class MedicinePrismaService {
             tenantId,
             {
               ...initialBatch,
+              supplierId: rawMedicineData.supplierId || undefined,
               medicineId: newMedicine.id,
               branchId,
               referenceType: 'INITIAL_STOCK',
