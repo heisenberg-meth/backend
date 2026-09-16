@@ -129,13 +129,7 @@ const createServiceApp = async (options = {}) => {
     ],
     credentials: true,
     methods: ['GET', 'PUT', 'POST', 'DELETE', 'OPTIONS', 'PATCH'],
-    allowedHeaders: [
-      'Content-Type',
-      'Authorization',
-      'x-csrf-token',
-      'X-Idempotency-Key',
-      'ngrok-skip-browser-warning',
-    ],
+    allowedHeaders: ['Content-Type', 'Authorization', 'x-csrf-token', 'X-Idempotency-Key'],
   });
 
   await fastify.register(redis, {

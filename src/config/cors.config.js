@@ -33,7 +33,6 @@ export const CORS_CONFIG = {
     'x-csrf-token',
     'X-Idempotency-Key',
     'x-session-id',
-    'ngrok-skip-browser-warning',
   ],
   // FIX #07: 'set-cookie' removed — browsers handle Set-Cookie automatically when
   // withCredentials/credentials:true is set. Exposing it to JS weakens cookie security.

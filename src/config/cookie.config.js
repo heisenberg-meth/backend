@@ -26,29 +26,17 @@ const resolveCookieDomain = () => {
 
 const cookieDomain = resolveCookieDomain();
 
-const isNgrok = env.frontendUrl?.includes('ngrok') || false;
 const isLocalhost =
   env.frontendUrl?.includes('localhost') || env.frontendUrl?.includes('127.0.0.1') || false;
 
 // ─── Base Options ───────────────────────────────────────────────────────────
 const getBaseCookieOptions = () => {
-  if (isLocalhost && !isNgrok) {
+  if (isLocalhost) {
     return {
       path: '/',
       httpOnly: true,
       sameSite: 'lax',
       secure: false,
-      // Domain is explicitly undefined for localhost
-    };
-  }
-
-  if (isNgrok) {
-    return {
-      path: '/',
-      httpOnly: true,
-      sameSite: 'none',
-      secure: true,
-      // Domain is explicitly undefined for ngrok
     };
   }
 
