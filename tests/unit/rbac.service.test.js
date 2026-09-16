@@ -1,4 +1,4 @@
-import { jest , describe, afterEach, it, expect } from '@jest/globals';
+import { jest, describe, afterEach, it, expect } from '@jest/globals';
 
 const mockPrisma = {
   user: {
@@ -10,9 +10,8 @@ jest.unstable_mockModule('../../src/config/prisma.js', () => ({
   default: mockPrisma,
 }));
 
-const { default: authzService } = await import(
-  '../../src/modules/access-control/services/authz.service.js'
-);
+const { default: authzService } =
+  await import('../../src/modules/access-control/services/authz.service.js');
 
 describe('AuthzService Unit Tests', () => {
   const userId = 'user-1';

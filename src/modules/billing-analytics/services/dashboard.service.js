@@ -28,7 +28,9 @@ class DashboardService {
           totalSales: Number(Number(summary.totalSales).toFixed(2)),
           totalInvoices: summary.totalInvoices,
           totalRefunds: Number(Number(summary.totalReturns).toFixed(2)),
-          netRevenue: Number((Number(summary.totalSales) - Number(summary.totalReturns)).toFixed(2)),
+          netRevenue: Number(
+            (Number(summary.totalSales) - Number(summary.totalReturns)).toFixed(2),
+          ),
         },
         taxSummary: {
           totalGst: Number(Number(summary.totalGst).toFixed(2)),
@@ -45,9 +47,13 @@ class DashboardService {
 
       if (summaries.length === 0) return this._emptySummary(targetDate);
 
-      const totalSales = Number(summaries.reduce((sum, s) => sum + Number(s.totalSales), 0).toFixed(2));
+      const totalSales = Number(
+        summaries.reduce((sum, s) => sum + Number(s.totalSales), 0).toFixed(2),
+      );
       const totalInvoices = summaries.reduce((sum, s) => sum + s.totalInvoices, 0);
-      const totalRefunds = Number(summaries.reduce((sum, s) => sum + Number(s.totalReturns), 0).toFixed(2));
+      const totalRefunds = Number(
+        summaries.reduce((sum, s) => sum + Number(s.totalReturns), 0).toFixed(2),
+      );
       const totalGst = Number(summaries.reduce((sum, s) => sum + Number(s.totalGst), 0).toFixed(2));
 
       return {

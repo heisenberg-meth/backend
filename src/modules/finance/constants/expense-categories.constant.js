@@ -31,8 +31,6 @@ export const SUPPORTED_EXPENSE_CATEGORIES = [
 export function normalizeCategoryName(input) {
   if (!input || typeof input !== 'string') return null;
   const trimmed = input.trim().toLowerCase();
-  const matched = SUPPORTED_EXPENSE_CATEGORIES.find(
-    (cat) => cat.toLowerCase() === trimmed
-  );
+  const matched = SUPPORTED_EXPENSE_CATEGORIES.find((cat) => cat.toLowerCase() === trimmed);
   return matched || null;
 }

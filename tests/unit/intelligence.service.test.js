@@ -1,10 +1,10 @@
-import { jest , describe, afterEach, it, expect } from '@jest/globals';
+import { jest, describe, afterEach, it, expect } from '@jest/globals';
 
 const mockBatchRepository = {
   findAll: jest.fn(),
   updateStatus: jest.fn(),
   getNearExpiry: jest.fn(),
-  quarantineBatch: jest.fn()
+  quarantineBatch: jest.fn(),
 };
 
 const mockExpiryAlertRepository = {
@@ -19,12 +19,12 @@ const mockRecommendationRepository = {
 
 const mockPrisma = {
   tenant: {
-    findMany: jest.fn()
+    findMany: jest.fn(),
   },
   inventoryTransaction: {
     create: jest.fn(),
-    findUnique: jest.fn()
-  }
+    findUnique: jest.fn(),
+  },
 };
 
 const mockInventoryService = {
@@ -36,32 +36,47 @@ const mockEventBus = {
 };
 
 jest.unstable_mockModule('../../src/config/prisma.js', () => ({
-  default: mockPrisma
+  default: mockPrisma,
 }));
 
 jest.unstable_mockModule('../../src/shared/services/eventbus.service.js', () => ({
-  default: mockEventBus
+  default: mockEventBus,
 }));
 
-jest.unstable_mockModule('../../src/modules/realtime-inventory/services/inventory.service.js', () => ({
-  default: mockInventoryService
-}));
+jest.unstable_mockModule(
+  '../../src/modules/realtime-inventory/services/inventory.service.js',
+  () => ({
+    default: mockInventoryService,
+  }),
+);
 
-jest.unstable_mockModule('../../src/modules/expiry-intelligence/repositories/batch.repository.js', () => ({
-  default: mockBatchRepository
-}));
+jest.unstable_mockModule(
+  '../../src/modules/expiry-intelligence/repositories/batch.repository.js',
+  () => ({
+    default: mockBatchRepository,
+  }),
+);
 
-jest.unstable_mockModule('../../src/modules/expiry-intelligence/repositories/expiry_alert.repository.js', () => ({
-  default: mockExpiryAlertRepository
-}));
+jest.unstable_mockModule(
+  '../../src/modules/expiry-intelligence/repositories/expiry_alert.repository.js',
+  () => ({
+    default: mockExpiryAlertRepository,
+  }),
+);
 
-jest.unstable_mockModule('../../src/modules/expiry-intelligence/repositories/recommendation.repository.js', () => ({
-  default: mockRecommendationRepository
-}));
+jest.unstable_mockModule(
+  '../../src/modules/expiry-intelligence/repositories/recommendation.repository.js',
+  () => ({
+    default: mockRecommendationRepository,
+  }),
+);
 
-const { default: expiryService } = await import('../../src/modules/expiry-intelligence/services/expiry.service.js');
-const { default: recommendationService } = await import('../../src/modules/expiry-intelligence/services/recommendation.service.js');
-const { default: fefoEngine } = await import('../../src/modules/expiry-intelligence/services/fefo_engine.service.js');
+const { default: expiryService } =
+  await import('../../src/modules/expiry-intelligence/services/expiry.service.js');
+const { default: recommendationService } =
+  await import('../../src/modules/expiry-intelligence/services/recommendation.service.js');
+const { default: fefoEngine } =
+  await import('../../src/modules/expiry-intelligence/services/fefo_engine.service.js');
 
 describe('Expiry Intelligence Unit Tests', () => {
   const tenantId = 'tenant-1';
@@ -75,18 +90,20 @@ describe('Expiry Intelligence Unit Tests', () => {
       mockPrisma.tenant.findMany.mockResolvedValue([{ id: tenantId }]);
       const pastDate = new Date();
       pastDate.setDate(pastDate.getDate() - 5);
-      
+
       mockBatchRepository.findAll.mockResolvedValue([
-        { id: 'b1', expiryDate: pastDate, medicineId: 'm1' }
+        { id: 'b1', expiryDate: pastDate, medicineId: 'm1' },
       ]);
       mockExpiryAlertRepository.findExistingAlert.mockResolvedValue(null);
 
       await expiryService.processExpiryScan();
 
       expect(mockBatchRepository.updateStatus).toHaveBeenCalledWith('b1', 'EXPIRED');
-      expect(mockExpiryAlertRepository.createAlert).toHaveBeenCalledWith(expect.objectContaining({
-        severity: 'Critical'
-      }));
+      expect(mockExpiryAlertRepository.createAlert).toHaveBeenCalledWith(
+        expect.objectContaining({
+          severity: 'Critical',
+        }),
+      );
     });
   });
 
@@ -96,14 +113,16 @@ describe('Expiry Intelligence Unit Tests', () => {
       futureDate.setDate(futureDate.getDate() + 10); // 10 days remaining
 
       mockBatchRepository.getNearExpiry.mockResolvedValue([
-        { id: 'b1', batchNumber: 'B1', quantity: 100, expiryDate: futureDate }
+        { id: 'b1', batchNumber: 'B1', quantity: 100, expiryDate: futureDate },
       ]);
 
       await recommendationService.generateRecommendations(tenantId);
 
-      expect(mockRecommendationRepository.upsertRecommendation).toHaveBeenCalledWith(expect.objectContaining({
-        priorityScore: 10 // 100 / 10
-      }));
+      expect(mockRecommendationRepository.upsertRecommendation).toHaveBeenCalledWith(
+        expect.objectContaining({
+          priorityScore: 10, // 100 / 10
+        }),
+      );
     });
   });
 
@@ -115,7 +134,7 @@ describe('Expiry Intelligence Unit Tests', () => {
 
       mockBatchRepository.findAll.mockResolvedValue([
         { id: 'b1', expiryDate: jan, quantity: 10, batchNumber: 'JAN' },
-        { id: 'b2', expiryDate: mar, quantity: 50, batchNumber: 'MAR' }
+        { id: 'b2', expiryDate: mar, quantity: 50, batchNumber: 'MAR' },
       ]);
 
       const result = await fefoEngine.selectBatches(tenantId, 'm1', 15);

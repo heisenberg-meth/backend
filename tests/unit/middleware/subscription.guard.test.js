@@ -1,4 +1,4 @@
-import { jest , describe, beforeEach, it, expect } from '@jest/globals';
+import { jest, describe, beforeEach, it, expect } from '@jest/globals';
 
 const mockFindUnique = jest.fn();
 
@@ -8,9 +8,7 @@ jest.unstable_mockModule('../../../src/config/prisma.js', () => ({
   },
 }));
 
-const { subscriptionGuard } = await import(
-  '../../../src/middleware/subscription.guard.fastify.js'
-);
+const { subscriptionGuard } = await import('../../../src/middleware/subscription.guard.fastify.js');
 
 describe('Subscription Guard Middleware', () => {
   let req;
@@ -48,7 +46,9 @@ describe('Subscription Guard Middleware', () => {
     await subscriptionGuard(req, reply);
     expect(reply.code).toHaveBeenCalledWith(403);
     expect(reply.send).toHaveBeenCalledWith(
-      expect.objectContaining({ error: expect.objectContaining({ message: expect.stringContaining('expired') }) })
+      expect.objectContaining({
+        error: expect.objectContaining({ message: expect.stringContaining('expired') }),
+      }),
     );
   });
 

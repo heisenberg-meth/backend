@@ -54,25 +54,31 @@ jest.unstable_mockModule('../../../src/config/redis.js', () => ({
   quitRedis: jest.fn().mockResolvedValue(),
 }));
 jest.unstable_mockModule('../../../src/shared/utils/logger.js', () => ({ default: mockLogger }));
-jest.unstable_mockModule('../../../src/modules/settings/gst/settings.audit.repository.js', () => ({ default: mockAuditRepository }));
-jest.unstable_mockModule('../../../src/modules/store-profile/events/store-profile.events.js', () => ({
-  storeProfileEventEmitter: mockEventEmitter,
-  StoreProfileEvents: {
-    STORE_PROFILE_CREATED: 'store_profile:created',
-    STORE_PROFILE_UPDATED: 'store_profile:updated',
-    STORE_PROFILE_VERSIONED: 'store_profile:versioned',
-    GSTIN_CHANGED: 'store_profile:gstin_changed',
-    DRUG_LICENSE_UPDATED: 'store_profile:drug_license_updated',
-    BRANDING_UPDATED: 'store_profile:branding_updated',
-    DOCUMENT_UPLOADED: 'store_profile:document_uploaded',
-    DOCUMENT_VERIFIED: 'store_profile:document_verified',
-    LOCALIZATION_UPDATED: 'store_profile:localization_updated',
-    CACHE_INVALIDATED: 'store_profile:cache_invalidated',
-    COMPLIANCE_ALERT: 'store_profile:compliance_alert',
-  },
+jest.unstable_mockModule('../../../src/modules/settings/gst/settings.audit.repository.js', () => ({
+  default: mockAuditRepository,
 }));
+jest.unstable_mockModule(
+  '../../../src/modules/store-profile/events/store-profile.events.js',
+  () => ({
+    storeProfileEventEmitter: mockEventEmitter,
+    StoreProfileEvents: {
+      STORE_PROFILE_CREATED: 'store_profile:created',
+      STORE_PROFILE_UPDATED: 'store_profile:updated',
+      STORE_PROFILE_VERSIONED: 'store_profile:versioned',
+      GSTIN_CHANGED: 'store_profile:gstin_changed',
+      DRUG_LICENSE_UPDATED: 'store_profile:drug_license_updated',
+      BRANDING_UPDATED: 'store_profile:branding_updated',
+      DOCUMENT_UPLOADED: 'store_profile:document_uploaded',
+      DOCUMENT_VERIFIED: 'store_profile:document_verified',
+      LOCALIZATION_UPDATED: 'store_profile:localization_updated',
+      CACHE_INVALIDATED: 'store_profile:cache_invalidated',
+      COMPLIANCE_ALERT: 'store_profile:compliance_alert',
+    },
+  }),
+);
 
-const { default: storeProfileService } = await import('../../../src/modules/store-profile/services/store-profile.service.js');
+const { default: storeProfileService } =
+  await import('../../../src/modules/store-profile/services/store-profile.service.js');
 
 describe('StoreProfileService', () => {
   const tenantId = 'tenant-1';
@@ -151,7 +157,7 @@ describe('StoreProfileService', () => {
       mockPrisma.storeProfile.findUnique.mockResolvedValue(null);
 
       await expect(
-        storeProfileService.updateProfile(tenantId, { gstin: 'INVALID' }, userId)
+        storeProfileService.updateProfile(tenantId, { gstin: 'INVALID' }, userId),
       ).rejects.toThrow('GSTIN must be exactly 15 characters');
     });
 
@@ -159,7 +165,11 @@ describe('StoreProfileService', () => {
       mockPrisma.storeProfile.findUnique.mockResolvedValue(null);
 
       await expect(
-        storeProfileService.updateProfile(tenantId, { drugLicenseNumber: 'INVALID-LICENSE' }, userId)
+        storeProfileService.updateProfile(
+          tenantId,
+          { drugLicenseNumber: 'INVALID-LICENSE' },
+          userId,
+        ),
       ).rejects.toThrow('Invalid drug license format');
     });
 
@@ -167,7 +177,7 @@ describe('StoreProfileService', () => {
       mockPrisma.storeProfile.findUnique.mockResolvedValue(null);
 
       await expect(
-        storeProfileService.updateProfile(tenantId, { email: 'not-an-email' }, userId)
+        storeProfileService.updateProfile(tenantId, { email: 'not-an-email' }, userId),
       ).rejects.toThrow('Invalid email format');
     });
 
@@ -205,7 +215,11 @@ describe('StoreProfileService', () => {
       });
       mockPrisma.storeProfileVersion.count.mockResolvedValue(0);
 
-      await storeProfileService.updateProfile(tenantId, { storeName: 'Test Pharmacy', gstin: '29abcde1234f1z4' }, userId);
+      await storeProfileService.updateProfile(
+        tenantId,
+        { storeName: 'Test Pharmacy', gstin: '29abcde1234f1z4' },
+        userId,
+      );
 
       expect(mockPrisma.storeProfile.create).toHaveBeenCalledWith({
         data: expect.objectContaining({

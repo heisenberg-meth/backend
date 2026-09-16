@@ -13,26 +13,26 @@ spec:
         app: auth-service
     spec:
       containers:
-      - name: auth
-        image: ghcr.io/viyan-platform/viyan-backend:latest
-        command: ["node", "src/services/auth/server.js"]
-        ports:
-        - containerPort: 5001
-        env:
-        - name: SERVICE_PORT
-          value: "5001"
-        envFrom:
-        - configMapRef:
-            name: backend-config
-        - secretRef:
-            name: backend-secrets
-        resources:
-          requests:
-            cpu: 100m
-            memory: 128Mi
-          limits:
-            cpu: 500m
-            memory: 256Mi
+        - name: auth
+          image: ghcr.io/viyan-platform/viyan-backend:latest
+          command: ['node', 'src/services/auth/server.js']
+          ports:
+            - containerPort: 5001
+          env:
+            - name: SERVICE_PORT
+              value: '5001'
+          envFrom:
+            - configMapRef:
+                name: backend-config
+            - secretRef:
+                name: backend-secrets
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 256Mi
 ---
 apiVersion: v1
 kind: Service

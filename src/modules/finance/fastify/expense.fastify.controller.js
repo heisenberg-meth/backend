@@ -36,8 +36,8 @@ class ExpenseFastifyController {
     } catch (error) {
       if (error instanceof ZodError) {
         request.log.warn({ errors: error.issues }, 'Expense Validation Failed');
-        const errors = error.issues.map(issue => ({
-          field: issue.path.filter(p => p !== 'body').join('.'),
+        const errors = error.issues.map((issue) => ({
+          field: issue.path.filter((p) => p !== 'body').join('.'),
           message: issue.message,
         }));
         return reply.code(400).send({
@@ -82,14 +82,18 @@ class ExpenseFastifyController {
       });
     } catch (error) {
       if (error instanceof ZodError) {
-        const errors = error.issues.map(issue => ({
-          field: issue.path.filter(p => p !== 'body').join('.'),
+        const errors = error.issues.map((issue) => ({
+          field: issue.path.filter((p) => p !== 'body').join('.'),
           message: issue.message,
         }));
         return reply.code(400).send({
           success: false,
           message: 'Validation failed',
-          error: { message: errors[0]?.message || 'Validation failed', code: 'VALIDATION_ERROR', details: errors },
+          error: {
+            message: errors[0]?.message || 'Validation failed',
+            code: 'VALIDATION_ERROR',
+            details: errors,
+          },
           errors,
         });
       }

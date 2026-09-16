@@ -2,14 +2,13 @@ import analyticsRepository from '../repository/analytics.repository.js';
 
 class AnalyticsService {
   async getTenantKPIs(tenantId) {
-    const [totalSku, lowStock, expiring30Days, inventoryValue, supplierCount] =
-      await Promise.all([
-        analyticsRepository.getSkuCount(tenantId),
-        analyticsRepository.getLowStockCount(tenantId),
-        analyticsRepository.getExpiring30Count(tenantId),
-        analyticsRepository.getInventoryValue(tenantId),
-        analyticsRepository.getSupplierCount(tenantId),
-      ]);
+    const [totalSku, lowStock, expiring30Days, inventoryValue, supplierCount] = await Promise.all([
+      analyticsRepository.getSkuCount(tenantId),
+      analyticsRepository.getLowStockCount(tenantId),
+      analyticsRepository.getExpiring30Count(tenantId),
+      analyticsRepository.getInventoryValue(tenantId),
+      analyticsRepository.getSupplierCount(tenantId),
+    ]);
 
     return {
       totalSku: Number(totalSku || 0),

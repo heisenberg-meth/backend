@@ -129,7 +129,9 @@ class CrmController {
       const { segmentName, message } = request.body;
 
       if (!segmentName || !message) {
-        return reply.code(400).send({ success: false, message: 'segmentName and message are required' });
+        return reply
+          .code(400)
+          .send({ success: false, message: 'segmentName and message are required' });
       }
 
       const patientSegments = await prisma.patientSegment.findMany({

@@ -5,16 +5,10 @@ const paymentSessionCleanupWorker = {
   handle: async () => {
     try {
       const cleanedCount = await paymentSessionService.cleanupExpiredSessions();
-      logger.info(
-        { cleanedCount },
-        '[WORKER] Payment session cleanup completed',
-      );
+      logger.info({ cleanedCount }, '[WORKER] Payment session cleanup completed');
       return { success: true, cleanedCount };
     } catch (error) {
-      logger.error(
-        { error: error.message },
-        '[WORKER] Payment session cleanup failed',
-      );
+      logger.error({ error: error.message }, '[WORKER] Payment session cleanup failed');
       throw error;
     }
   },

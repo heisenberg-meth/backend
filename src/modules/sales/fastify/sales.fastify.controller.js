@@ -115,10 +115,10 @@ class SalesFastifyController {
 
         await tx.sale.update({
           where: { id },
-          data: { 
-            status: 'CANCELLED', 
-            cancelledAt: new Date(), 
-            cancelledBy: request.user.id 
+          data: {
+            status: 'CANCELLED',
+            cancelledAt: new Date(),
+            cancelledBy: request.user.id,
           },
         });
       });

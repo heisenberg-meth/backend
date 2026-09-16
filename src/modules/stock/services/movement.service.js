@@ -182,7 +182,9 @@ class MovementService {
     const { batchId, quantity, reason, medicineId } = data;
 
     if (!batchId || !quantity || quantity <= 0) {
-      throw new Error('[MOVEMENT_SERVICE] Invalid damage data: batchId and positive quantity required');
+      throw new Error(
+        '[MOVEMENT_SERVICE] Invalid damage data: batchId and positive quantity required',
+      );
     }
 
     if (!medicineId) {

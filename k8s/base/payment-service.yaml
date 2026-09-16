@@ -13,26 +13,26 @@ spec:
         app: payment-service
     spec:
       containers:
-      - name: payment
-        image: viyan-backend:latest
-        command: ["node", "src/services/payments/server.js"]
-        ports:
-        - containerPort: 5003
-        env:
-        - name: SERVICE_PORT
-          value: "5003"
-        envFrom:
-        - configMapRef:
-            name: backend-config
-        - secretRef:
-            name: backend-secrets
-        resources:
-          requests:
-            cpu: 100m
-            memory: 128Mi
-          limits:
-            cpu: 500m
-            memory: 256Mi
+        - name: payment
+          image: viyan-backend:latest
+          command: ['node', 'src/services/payments/server.js']
+          ports:
+            - containerPort: 5003
+          env:
+            - name: SERVICE_PORT
+              value: '5003'
+          envFrom:
+            - configMapRef:
+                name: backend-config
+            - secretRef:
+                name: backend-secrets
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 256Mi
 ---
 apiVersion: v1
 kind: Service

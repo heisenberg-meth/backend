@@ -12,7 +12,9 @@ describe('Password hashing', () => {
     const hash = await bcrypt.hash(password, 10);
 
     expect(hash).toBeDefined();
-    expect(hash.startsWith('$2a$') || hash.startsWith('$2b$') || hash.startsWith('$2y$')).toBe(true);
+    expect(hash.startsWith('$2a$') || hash.startsWith('$2b$') || hash.startsWith('$2y$')).toBe(
+      true,
+    );
 
     const isValid = await bcrypt.compare(password, hash);
     expect(isValid).toBe(true);
@@ -43,29 +45,26 @@ describe('JWT token operations', () => {
   });
 
   it('should reject tampered token', () => {
-    const token = jwt.sign(
-      { userId: 'test', tenantId: 'test', role: 'OWNER' },
-      TEST_SECRET,
-      { expiresIn: '15m', algorithm: 'HS256' },
-    );
+    const token = jwt.sign({ userId: 'test', tenantId: 'test', role: 'OWNER' }, TEST_SECRET, {
+      expiresIn: '15m',
+      algorithm: 'HS256',
+    });
     expect(() => jwt.verify(token + 'bad', TEST_SECRET, { algorithms: ['HS256'] })).toThrow();
   });
 
   it('should reject expired token', () => {
-    const token = jwt.sign(
-      { userId: 'test', tenantId: 'test', role: 'OWNER' },
-      TEST_SECRET,
-      { expiresIn: '0s', algorithm: 'HS256' },
-    );
+    const token = jwt.sign({ userId: 'test', tenantId: 'test', role: 'OWNER' }, TEST_SECRET, {
+      expiresIn: '0s',
+      algorithm: 'HS256',
+    });
     expect(() => jwt.verify(token, TEST_SECRET, { algorithms: ['HS256'] })).toThrow('expired');
   });
 
   it('should reject wrong algorithm', () => {
-    const token = jwt.sign(
-      { userId: 'test' },
-      TEST_SECRET,
-      { expiresIn: '15m', algorithm: 'none' },
-    );
+    const token = jwt.sign({ userId: 'test' }, TEST_SECRET, {
+      expiresIn: '15m',
+      algorithm: 'none',
+    });
     expect(() => jwt.verify(token, TEST_SECRET, { algorithms: ['HS256'] })).toThrow();
   });
 });
@@ -182,11 +181,11 @@ describe('API response interceptor pattern', () => {
 
 describe('Auth service method signatures', () => {
   it('should have correct _signAccessToken signature', () => {
-    const signToken = (user) => jwt.sign(
-      { userId: user.id, tenantId: user.tenantId, role: user.role },
-      TEST_SECRET,
-      { expiresIn: '15m', algorithm: 'HS256' },
-    );
+    const signToken = (user) =>
+      jwt.sign({ userId: user.id, tenantId: user.tenantId, role: user.role }, TEST_SECRET, {
+        expiresIn: '15m',
+        algorithm: 'HS256',
+      });
 
     const mockUser = { id: 'u1', tenantId: 't1', role: 'OWNER' };
     const token = signToken(mockUser);

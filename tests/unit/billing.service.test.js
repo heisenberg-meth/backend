@@ -43,14 +43,14 @@ describe('PricingService Unit Tests', () => {
   it('should calculate invoice totals correctly', () => {
     const items = [
       { unitPrice: 100, quantity: 1, gstPercentage: 12, discountPercentage: 0 },
-      { unitPrice: 200, quantity: 1, gstPercentage: 18, discountPercentage: 10 }
+      { unitPrice: 200, quantity: 1, gstPercentage: 18, discountPercentage: 10 },
     ];
 
     const result = pricingService.calculateInvoiceTotals(items, 50);
 
     // Item 1: price 100, gst 12, total 112
     // Item 2: price 200, discount 20, gst 18% of 180 = 32.4, total 212.4
-    
+
     // Subtotal = 100 + 200 = 300
     // Total Discount = 20 (item) + 50 (invoice) = 70
     // Total GST = 12 + 32.4 = 44.4

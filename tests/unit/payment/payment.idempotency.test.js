@@ -1,4 +1,4 @@
-import { jest , describe, beforeEach, it, expect } from '@jest/globals';
+import { jest, describe, beforeEach, it, expect } from '@jest/globals';
 
 const mockRedisGet = jest.fn();
 const mockRedisSet = jest.fn();
@@ -29,9 +29,8 @@ jest.unstable_mockModule('../../../src/modules/payments/services/payment.lock.se
   },
 }));
 
-const { default: idempotencyService } = await import(
-  '../../../src/modules/payments/services/payment.idempotency.service.js'
-);
+const { default: idempotencyService } =
+  await import('../../../src/modules/payments/services/payment.idempotency.service.js');
 
 describe('PaymentIdempotencyService', () => {
   beforeEach(() => {

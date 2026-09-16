@@ -318,7 +318,10 @@ class AlertFastifyController {
         alertAnalyticsService.getEscalationReport(tenantId, { days: parseInt(days) }),
       ]);
 
-      return reply.send({ success: true, data: { summary, trends, topMedicines, escalationReport } });
+      return reply.send({
+        success: true,
+        data: { summary, trends, topMedicines, escalationReport },
+      });
     } catch (error) {
       request.log.error({ err: error, endpoint: 'alert-analytics' }, 'Alert error');
       return reply.code(500).send({ success: false, message: error.message });

@@ -90,7 +90,13 @@ jest.unstable_mockModule(loggerPath, () => ({
   default: { info: jest.fn(), warn: jest.fn(), error: jest.fn() },
 }));
 
-const [notificationServiceModule, dedupModule, rateLimitModule, deliveryTrackingModule, analyticsModule] = await Promise.all([
+const [
+  notificationServiceModule,
+  dedupModule,
+  rateLimitModule,
+  deliveryTrackingModule,
+  analyticsModule,
+] = await Promise.all([
   import(notificationServicePath),
   import(dedupServicePath),
   import(rateLimitServicePath),

@@ -249,7 +249,10 @@ class AlertNotificationService {
       const exists = await redisClient.get(key);
       return !!exists;
     } catch (err) {
-      logger.warn({ key, error: err.message }, 'Redis dedup check failed — treating as not sent to avoid blocking alerts');
+      logger.warn(
+        { key, error: err.message },
+        'Redis dedup check failed — treating as not sent to avoid blocking alerts',
+      );
       return false;
     }
   }

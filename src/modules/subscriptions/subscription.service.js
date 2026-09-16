@@ -204,11 +204,7 @@ class SubscriptionService {
     }
 
     // If existing is expired or cancelled, proceed with trial activation
-    if (
-      existing &&
-      existing.status !== 'EXPIRED' &&
-      existing.status !== 'CANCELLED'
-    ) {
+    if (existing && existing.status !== 'EXPIRED' && existing.status !== 'CANCELLED') {
       // e.g. status is PENDING or some other state - return as-is
       return existing;
     }

@@ -26,7 +26,7 @@ services:
       POSTGRES_DB: viyan_db
 
     ports:
-      - "5433:5432"
+      - '5433:5432'
 
     volumes:
       - postgres_data:/var/lib/postgresql/data
@@ -35,7 +35,7 @@ services:
       - viyan-network
 
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U viyan_user -d viyan_db"]
+      test: ['CMD-SHELL', 'pg_isready -U viyan_user -d viyan_db']
       interval: 5s
       timeout: 5s
       retries: 5
@@ -45,13 +45,13 @@ services:
     command: redis-server --maxmemory-policy noeviction
 
     ports:
-      - "6379:6379"
+      - '6379:6379'
 
     networks:
       - viyan-network
 
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      test: ['CMD', 'redis-cli', 'ping']
       interval: 5s
       timeout: 5s
       retries: 5
@@ -75,7 +75,7 @@ services:
       COOKIE_DOMAIN: ${COOKIE_DOMAIN}
       FRONTEND_URL: ${FRONTEND_URL:-http://localhost:5173}
       # FIX #03/#15: OTP logging must be off in production
-      LOG_OTP: "false"
+      LOG_OTP: 'false'
 
     depends_on:
       postgres:
@@ -91,7 +91,7 @@ services:
       - viyan-network
 
     ports:
-      - "5000:5000"
+      - '5000:5000'
 
   frontend:
     build:
@@ -108,7 +108,7 @@ services:
       - viyan-network
 
     ports:
-      - "5173:5173"
+      - '5173:5173'
 
 networks:
   viyan-network:

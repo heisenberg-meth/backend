@@ -1,4 +1,4 @@
-import { jest , describe, it, expect } from '@jest/globals';
+import { jest, describe, it, expect } from '@jest/globals';
 
 jest.unstable_mockModule('../../../src/config/prisma.js', () => ({
   default: {},
@@ -43,11 +43,15 @@ describe('PaymentStateMachine', () => {
     });
 
     it('should throw on illegal transition PENDING -> REFUNDED', () => {
-      expect(() => stateMachine.validateTransition('PENDING', 'REFUNDED')).toThrow('Invalid payment state transition');
+      expect(() => stateMachine.validateTransition('PENDING', 'REFUNDED')).toThrow(
+        'Invalid payment state transition',
+      );
     });
 
     it('should throw on illegal transition SUCCESS -> CREATED', () => {
-      expect(() => stateMachine.validateTransition('SUCCESS', 'CREATED')).toThrow('Invalid payment state transition');
+      expect(() => stateMachine.validateTransition('SUCCESS', 'CREATED')).toThrow(
+        'Invalid payment state transition',
+      );
     });
 
     it('should throw on transition from terminal state', () => {

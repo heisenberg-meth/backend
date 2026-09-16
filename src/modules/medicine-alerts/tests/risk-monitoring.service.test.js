@@ -93,7 +93,13 @@ jest.unstable_mockModule(redisPath, () => ({
 }));
 
 // Import modules AFTER mocking
-const [{ default: riskMonitoringService }, { default: alertRepository }, { default: forecastingService }, { default: prisma }, { default: eventBus }] = await Promise.all([
+const [
+  { default: riskMonitoringService },
+  { default: alertRepository },
+  { default: forecastingService },
+  { default: prisma },
+  { default: eventBus },
+] = await Promise.all([
   import(riskMonitoringServicePath),
   import(alertRepositoryPath),
   import(forecastingServicePath),

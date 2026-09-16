@@ -1,4 +1,4 @@
-import { jest , describe, beforeEach, it, expect } from '@jest/globals';
+import { jest, describe, beforeEach, it, expect } from '@jest/globals';
 
 const mockIntegrationRepository = {
   getProviders: jest.fn(),
@@ -17,9 +17,12 @@ const mockEventBus = {
   publish: jest.fn().mockResolvedValue(true),
 };
 
-jest.unstable_mockModule('../../src/modules/integrations/repositories/integration.repository.js', () => ({
-  default: mockIntegrationRepository,
-}));
+jest.unstable_mockModule(
+  '../../src/modules/integrations/repositories/integration.repository.js',
+  () => ({
+    default: mockIntegrationRepository,
+  }),
+);
 
 jest.unstable_mockModule('../../src/modules/security/utils/encryption.util.js', () => ({
   encrypt: mockEncryptionUtil.encrypt,
@@ -30,7 +33,8 @@ jest.unstable_mockModule('../../src/shared/services/eventbus.service.js', () => 
   default: mockEventBus,
 }));
 
-const { default: integrationService } = await import('../../src/modules/integrations/services/integration.service.js');
+const { default: integrationService } =
+  await import('../../src/modules/integrations/services/integration.service.js');
 
 describe('IntegrationService', () => {
   beforeEach(() => {
@@ -87,7 +91,7 @@ describe('IntegrationService', () => {
           isEnabled: true,
           config: { apiKey: 'encrypted:raw-secret', senderId: 'VIYANM' },
         }),
-        null
+        null,
       );
     });
   });

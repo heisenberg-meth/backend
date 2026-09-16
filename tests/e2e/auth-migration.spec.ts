@@ -211,7 +211,9 @@ test.describe('Auth Migration E2E Tests', () => {
 
       const cookies = await context.cookies();
       const legacyCookies = cookies.filter(
-        (c) => c.domain.includes('localhost') && (c.name === 'refresh_token' || c.name === 'accessToken'),
+        (c) =>
+          c.domain.includes('localhost') &&
+          (c.name === 'refresh_token' || c.name === 'accessToken'),
       );
 
       for (const cookie of legacyCookies) {

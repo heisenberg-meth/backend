@@ -96,7 +96,11 @@ jest.unstable_mockModule(loggerPath, () => ({
   default: mockLogger,
 }));
 
-const [{ default: medicineSearchService }, { default: barcodeLookupService }, { default: skuLookupService }] = await Promise.all([
+const [
+  { default: medicineSearchService },
+  { default: barcodeLookupService },
+  { default: skuLookupService },
+] = await Promise.all([
   import('../services/medicine-search.service.js'),
   import('../barcode/barcode-lookup.service.js'),
   import('../sku/sku-lookup.service.js'),

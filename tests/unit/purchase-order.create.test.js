@@ -5,7 +5,14 @@ const mockPrisma = {
   user: { findUnique: jest.fn() },
   branch: { findFirst: jest.fn() },
   medicine: { findMany: jest.fn() },
-  purchaseOrder: { create: jest.fn(), findFirst: jest.fn(), findUnique: jest.fn(), update: jest.fn(), findMany: jest.fn(), count: jest.fn() },
+  purchaseOrder: {
+    create: jest.fn(),
+    findFirst: jest.fn(),
+    findUnique: jest.fn(),
+    update: jest.fn(),
+    findMany: jest.fn(),
+    count: jest.fn(),
+  },
   purchaseOrderItem: { create: jest.fn(), update: jest.fn(), findMany: jest.fn() },
   auditLog: { create: jest.fn() },
   goodsReceiptNote: { create: jest.fn() },
@@ -27,9 +34,8 @@ jest.unstable_mockModule('../../src/shared/events/erp-event-bus.js', () => ({
   emitEvent: jest.fn(),
 }));
 
-const { default: purchaseOrderService } = await import(
-  '../../src/modules/purchase-orders/service/purchase-order.service.js'
-);
+const { default: purchaseOrderService } =
+  await import('../../src/modules/purchase-orders/service/purchase-order.service.js');
 
 describe('PurchaseOrderService.createOrder', () => {
   const tenantId = 'tenant-1';
@@ -40,7 +46,11 @@ describe('PurchaseOrderService.createOrder', () => {
   });
 
   it('should create a PO with server-side calculations', async () => {
-    mockPrisma.supplier.findFirst.mockResolvedValue({ id: 'sup-1', name: 'Test Supplier', paymentTermsDays: 30 });
+    mockPrisma.supplier.findFirst.mockResolvedValue({
+      id: 'sup-1',
+      name: 'Test Supplier',
+      paymentTermsDays: 30,
+    });
     mockPrisma.user.findUnique.mockResolvedValue({ branchId: 'branch-1' });
     mockPrisma.medicine.findMany.mockResolvedValue([
       { id: 'med-1', name: 'Paracetamol', gstPercentage: 18, inventory: [{ currentStock: 100 }] },
@@ -60,7 +70,7 @@ describe('PurchaseOrderService.createOrder', () => {
     const result = await purchaseOrderService.createOrder(tenantId, userId, {
       supplierId: 'sup-1',
       items: [
-        { medicineId: 'med-1', quantity: 100, unitPrice: 45.50, gstPercentage: 18 },
+        { medicineId: 'med-1', quantity: 100, unitPrice: 45.5, gstPercentage: 18 },
         { medicineId: 'med-2', quantity: 50, unitPrice: 120, gstPercentage: 12 },
       ],
     });
@@ -77,7 +87,7 @@ describe('PurchaseOrderService.createOrder', () => {
       purchaseOrderService.createOrder(tenantId, userId, {
         supplierId: 'invalid',
         items: [{ medicineId: 'med-1', quantity: 10, unitPrice: 10 }],
-      })
+      }),
     ).rejects.toThrow('Supplier not found');
   });
 
@@ -90,7 +100,7 @@ describe('PurchaseOrderService.createOrder', () => {
       purchaseOrderService.createOrder(tenantId, userId, {
         supplierId: 'sup-1',
         items: [{ medicineId: 'med-999', quantity: 10, unitPrice: 10 }],
-      })
+      }),
     ).rejects.toThrow('Medicine with ID med-999 not found');
   });
 
@@ -101,7 +111,10 @@ describe('PurchaseOrderService.createOrder', () => {
       { id: 'med-1', name: 'Paracetamol', gstPercentage: 18, inventory: [] },
     ]);
     mockPrisma.purchaseOrder.create.mockResolvedValue({
-      id: 'po-1', orderNumber: 'PO-001', status: 'DRAFT', items: [],
+      id: 'po-1',
+      orderNumber: 'PO-001',
+      status: 'DRAFT',
+      items: [],
     });
 
     await purchaseOrderService.createOrder(tenantId, userId, {

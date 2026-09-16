@@ -1,8 +1,8 @@
 /**
  * Inventory Reconciliation API - Single Source of Truth
- * 
+ *
  * GET /inventory/reconciliation
- * 
+ *
  * Returns unified inventory metrics that all modules must use.
  * Used by Dashboard, Stock, Expiry, Bulk Disposal, Supplier Returns, Reports.
  */
@@ -33,11 +33,14 @@ class InventoryReconciliationController {
         data: metrics,
       });
     } catch (error) {
-      request.log.error({
-        endpoint: 'inventory-reconciliation',
-        error: error.message,
-        stack: error.stack,
-      }, 'Failed to get inventory reconciliation');
+      request.log.error(
+        {
+          endpoint: 'inventory-reconciliation',
+          error: error.message,
+          stack: error.stack,
+        },
+        'Failed to get inventory reconciliation',
+      );
 
       return reply.code(500).send({
         success: false,

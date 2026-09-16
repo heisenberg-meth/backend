@@ -25,16 +25,12 @@ jest.unstable_mockModule('../../src/middleware/feature.guard.fastify.js', () => 
   requireFeature: () => async () => {},
 }));
 
-jest.unstable_mockModule(
-  '../../src/modules/purchase/services/supplier-return.service.js',
-  () => ({
-    default: mockSupplierReturnService,
-  }),
-);
+jest.unstable_mockModule('../../src/modules/purchase/services/supplier-return.service.js', () => ({
+  default: mockSupplierReturnService,
+}));
 
-const { default: purchaseRoutes } = await import(
-  '../../src/modules/purchase/routes/purchase.fastify.routes.js'
-);
+const { default: purchaseRoutes } =
+  await import('../../src/modules/purchase/routes/purchase.fastify.routes.js');
 
 describe('Purchase Returns API - GET & POST /api/purchase/returns', () => {
   let app;

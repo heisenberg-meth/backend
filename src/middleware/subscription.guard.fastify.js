@@ -71,11 +71,7 @@ export const subscriptionGuard = async (request, reply) => {
       }
     }
 
-    if (
-      status === 'EXPIRED' ||
-      status === 'SUSPENDED' ||
-      status === 'CANCELLED'
-    ) {
+    if (status === 'EXPIRED' || status === 'SUSPENDED' || status === 'CANCELLED') {
       const isAllowed = ALLOWED_WHEN_EXPIRED.some((p) => url.startsWith(p));
       if (!isAllowed) {
         return reply.code(403).send({

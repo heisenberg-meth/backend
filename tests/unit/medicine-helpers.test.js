@@ -1,5 +1,8 @@
 import { describe, it, expect } from '@jest/globals';
-import { mapDosageFormToPackaging, validatePricing } from '../../src/shared/utils/medicine-helpers.js';
+import {
+  mapDosageFormToPackaging,
+  validatePricing,
+} from '../../src/shared/utils/medicine-helpers.js';
 
 describe('Medicine Helpers Unit Tests', () => {
   describe('mapDosageFormToPackaging', () => {
@@ -37,21 +40,33 @@ describe('Medicine Helpers Unit Tests', () => {
     });
 
     it('should reject purchase price <= 0', () => {
-      expect(validatePricing({ purchasePrice: 0, sellingPrice: 12, mrp: 15 })).toBe('Purchase price must be greater than zero');
-      expect(validatePricing({ purchasePrice: -5, sellingPrice: 12, mrp: 15 })).toBe('Purchase price must be greater than zero');
+      expect(validatePricing({ purchasePrice: 0, sellingPrice: 12, mrp: 15 })).toBe(
+        'Purchase price must be greater than zero',
+      );
+      expect(validatePricing({ purchasePrice: -5, sellingPrice: 12, mrp: 15 })).toBe(
+        'Purchase price must be greater than zero',
+      );
     });
 
     it('should reject MRP <= purchasePrice', () => {
-      expect(validatePricing({ purchasePrice: 10, sellingPrice: 12, mrp: 10 })).toBe('MRP must be greater than purchase price');
-      expect(validatePricing({ purchasePrice: 10, sellingPrice: 12, mrp: 8 })).toBe('MRP must be greater than purchase price');
+      expect(validatePricing({ purchasePrice: 10, sellingPrice: 12, mrp: 10 })).toBe(
+        'MRP must be greater than purchase price',
+      );
+      expect(validatePricing({ purchasePrice: 10, sellingPrice: 12, mrp: 8 })).toBe(
+        'MRP must be greater than purchase price',
+      );
     });
 
     it('should reject selling price < purchasePrice', () => {
-      expect(validatePricing({ purchasePrice: 10, sellingPrice: 8, mrp: 15 })).toBe('Selling price must be greater than or equal to purchase price');
+      expect(validatePricing({ purchasePrice: 10, sellingPrice: 8, mrp: 15 })).toBe(
+        'Selling price must be greater than or equal to purchase price',
+      );
     });
 
     it('should reject selling price > MRP', () => {
-      expect(validatePricing({ purchasePrice: 10, sellingPrice: 16, mrp: 15 })).toBe('Selling price cannot exceed MRP');
+      expect(validatePricing({ purchasePrice: 10, sellingPrice: 16, mrp: 15 })).toBe(
+        'Selling price cannot exceed MRP',
+      );
     });
   });
 });

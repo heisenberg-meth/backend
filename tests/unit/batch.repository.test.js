@@ -11,7 +11,8 @@ jest.unstable_mockModule('../../src/config/prisma.js', () => ({
   default: mockPrisma,
 }));
 
-const { default: batchRepository } = await import('../../src/modules/batches/repositories/batch.repository.js');
+const { default: batchRepository } =
+  await import('../../src/modules/batches/repositories/batch.repository.js');
 
 describe('BatchRepository Unit Tests', () => {
   afterEach(() => {

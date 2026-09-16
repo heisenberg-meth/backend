@@ -58,7 +58,11 @@ class BatchFastifyController {
 
   async updateBatch(request, reply) {
     try {
-      const batch = await batchService.updateBatch(request.params.id, request.body, request.user.id);
+      const batch = await batchService.updateBatch(
+        request.params.id,
+        request.body,
+        request.user.id,
+      );
       return reply.send({ success: true, data: batch });
     } catch (error) {
       request.log.error({ err: error, endpoint: 'batch-update' }, 'Batch error');

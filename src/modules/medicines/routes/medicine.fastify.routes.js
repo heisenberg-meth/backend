@@ -50,7 +50,15 @@ async function medicineIntelligenceRoutes(fastify) {
         tags: ['Medicines'],
         body: {
           type: 'object',
-          required: ['medicineName', 'genericName', 'manufacturer', 'categoryId', 'medicineType', 'dosageForm', 'strength'],
+          required: [
+            'medicineName',
+            'genericName',
+            'manufacturer',
+            'categoryId',
+            'medicineType',
+            'dosageForm',
+            'strength',
+          ],
           properties: {
             medicineName: { type: 'string', minLength: 1 },
             genericName: { type: 'string', minLength: 1 },
@@ -58,23 +66,37 @@ async function medicineIntelligenceRoutes(fastify) {
             manufacturer: { type: 'string', minLength: 1 },
             categoryId: { type: 'string', format: 'uuid' },
             category: { type: 'string' },
-            medicineType: { 
+            medicineType: {
               type: 'string',
-              enum: ['TABLET', 'CAPSULE', 'SYRUP', 'SUSPENSION', 'INJECTION', 'DROPS', 'CREAM', 'GEL', 'OINTMENT', 'POWDER', 'INHALER', 'SPRAY', 'MEDICAL_DEVICE']
+              enum: [
+                'TABLET',
+                'CAPSULE',
+                'SYRUP',
+                'SUSPENSION',
+                'INJECTION',
+                'DROPS',
+                'CREAM',
+                'GEL',
+                'OINTMENT',
+                'POWDER',
+                'INHALER',
+                'SPRAY',
+                'MEDICAL_DEVICE',
+              ],
             },
             dosageForm: { type: 'string' },
             strength: { type: 'string', minLength: 1 },
-            schedule: { 
+            schedule: {
               type: 'string',
-              enum: ['OTC', 'SCHEDULE_H', 'SCHEDULE_H1', 'SCHEDULE_X']
+              enum: ['OTC', 'SCHEDULE_H', 'SCHEDULE_H1', 'SCHEDULE_X'],
             },
-            purchaseUnit: { 
+            purchaseUnit: {
               type: 'string',
-              enum: ['BOX', 'CARTON', 'BOTTLE', 'TUBE', 'PIECE']
+              enum: ['BOX', 'CARTON', 'BOTTLE', 'TUBE', 'PIECE'],
             },
-            sellingUnit: { 
+            sellingUnit: {
               type: 'string',
-              enum: ['TABLET', 'CAPSULE', 'STRIP', 'BOTTLE', 'TUBE', 'PIECE', 'VIAL']
+              enum: ['TABLET', 'CAPSULE', 'STRIP', 'BOTTLE', 'TUBE', 'PIECE', 'VIAL'],
             },
             unitPerPack: { type: 'integer', minimum: 1 },
             gstPercentage: { type: 'number', enum: [0, 5, 12, 18, 28] },
@@ -83,10 +105,10 @@ async function medicineIntelligenceRoutes(fastify) {
             sku: { type: 'string' },
             requiresPrescription: { type: 'boolean', default: false },
             storageCondition: { type: 'string' },
-            status: { 
+            status: {
               type: 'string',
               enum: ['ACTIVE', 'INACTIVE', 'DISCONTINUED'],
-              default: 'ACTIVE'
+              default: 'ACTIVE',
             },
             notes: { type: 'string' },
             // Legacy fields for backward compatibility

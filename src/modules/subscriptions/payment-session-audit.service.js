@@ -19,10 +19,7 @@ class PaymentSessionAuditService {
       },
     });
 
-    logger.info(
-      { tenantId, paymentSessionId, planId, amount },
-      '[AUDIT] Checkout session created',
-    );
+    logger.info({ tenantId, paymentSessionId, planId, amount }, '[AUDIT] Checkout session created');
   }
 
   async logCheckoutOpened(data) {
@@ -91,10 +88,7 @@ class PaymentSessionAuditService {
       },
     });
 
-    logger.warn(
-      { tenantId, paymentSessionId, reason },
-      '[AUDIT] Payment failed',
-    );
+    logger.warn({ tenantId, paymentSessionId, reason }, '[AUDIT] Payment failed');
   }
 
   async logPaymentExpired(data) {
@@ -125,10 +119,7 @@ class PaymentSessionAuditService {
       },
     });
 
-    logger.info(
-      { tenantId, paymentSessionId, planId },
-      '[AUDIT] Subscription activated',
-    );
+    logger.info({ tenantId, paymentSessionId, planId }, '[AUDIT] Subscription activated');
   }
 
   async logWebhookReceived(data) {
@@ -200,10 +191,7 @@ class PaymentSessionAuditService {
         },
       });
     } catch (error) {
-      logger.error(
-        { error: error.message, data },
-        '[AUDIT] Failed to create audit log',
-      );
+      logger.error({ error: error.message, data }, '[AUDIT] Failed to create audit log');
     }
   }
 }

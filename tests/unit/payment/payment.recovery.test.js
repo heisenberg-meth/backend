@@ -1,4 +1,4 @@
-import { jest , describe, beforeEach, it, expect } from '@jest/globals';
+import { jest, describe, beforeEach, it, expect } from '@jest/globals';
 
 const mockPaymentFindMany = jest.fn();
 const mockPaymentFindUnique = jest.fn();
@@ -39,12 +39,15 @@ jest.unstable_mockModule('../../../src/modules/payments/services/payment.lock.se
   },
 }));
 
-jest.unstable_mockModule('../../../src/modules/payments/services/payment.orchestrator.service.js', () => ({
-  default: {
-    _transitionPayment: jest.fn().mockResolvedValue({}),
-    recoverPayment: jest.fn().mockResolvedValue({}),
-  },
-}));
+jest.unstable_mockModule(
+  '../../../src/modules/payments/services/payment.orchestrator.service.js',
+  () => ({
+    default: {
+      _transitionPayment: jest.fn().mockResolvedValue({}),
+      recoverPayment: jest.fn().mockResolvedValue({}),
+    },
+  }),
+);
 
 jest.unstable_mockModule('../../../src/shared/services/eventbus.service.js', () => ({
   default: { publish: jest.fn() },
@@ -54,9 +57,8 @@ jest.unstable_mockModule('../../../src/shared/utils/logger.js', () => ({
   default: { info: jest.fn(), warn: jest.fn(), error: jest.fn() },
 }));
 
-const { default: recoveryService } = await import(
-  '../../../src/modules/payments/services/payment.recovery.service.js'
-);
+const { default: recoveryService } =
+  await import('../../../src/modules/payments/services/payment.recovery.service.js');
 
 describe('PaymentRecoveryService', () => {
   beforeEach(() => {
@@ -120,7 +122,7 @@ describe('PaymentRecoveryService', () => {
       const count = await recoveryService.detectStuckPayments();
       expect(count).toBe(1);
       expect(mockPaymentUpdate).toHaveBeenCalledWith(
-        expect.objectContaining({ data: { status: 'EXPIRED' } })
+        expect.objectContaining({ data: { status: 'EXPIRED' } }),
       );
     });
   });

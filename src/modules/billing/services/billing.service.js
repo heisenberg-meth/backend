@@ -35,7 +35,13 @@ class BillingService {
 
   async finalizeDraft(id, tenantId, data, userId) {
     return await prisma.$transaction(async (tx) => {
-      if (data && (data.items || data.patientId !== undefined || data.patientName || data.discountPercentage !== undefined)) {
+      if (
+        data &&
+        (data.items ||
+          data.patientId !== undefined ||
+          data.patientName ||
+          data.discountPercentage !== undefined)
+      ) {
         await invoiceService.updateDraft(id, tenantId, userId, data, tx);
       }
 
@@ -68,7 +74,10 @@ class BillingService {
       try {
         await anomalyService.detectSalesAnomaly(tenantId, finalized);
       } catch (anomalyErr) {
-        logger.error({ err: anomalyErr, tenantId, invoiceId: finalized.id }, 'Sales anomaly detection failed after invoice finalization');
+        logger.error(
+          { err: anomalyErr, tenantId, invoiceId: finalized.id },
+          'Sales anomaly detection failed after invoice finalization',
+        );
       }
 
       return completeInvoice;
@@ -133,7 +142,10 @@ class BillingService {
       try {
         await anomalyService.detectSalesAnomaly(tenantId, finalized);
       } catch (anomalyErr) {
-        logger.error({ err: anomalyErr, tenantId, invoiceId: finalized.id }, 'Sales anomaly detection failed after invoice finalization');
+        logger.error(
+          { err: anomalyErr, tenantId, invoiceId: finalized.id },
+          'Sales anomaly detection failed after invoice finalization',
+        );
       }
 
       return completeInvoice;
@@ -223,7 +235,10 @@ class BillingService {
         });
       }
     } catch (err) {
-      logger.warn({ err, invoiceId: invoice?.id, tenantId }, 'Failed to send invoice SMS notification');
+      logger.warn(
+        { err, invoiceId: invoice?.id, tenantId },
+        'Failed to send invoice SMS notification',
+      );
     }
   }
 }

@@ -56,7 +56,7 @@ class MedicineFastifyController {
     if (body.scheduleType && !body.schedule) {
       // Map scheduleType to schedule enum
       const scheduleMap = {
-        'OTC': 'OTC',
+        OTC: 'OTC',
         'Schedule H': 'SCHEDULE_H',
         'Schedule H1': 'SCHEDULE_H1',
         'Schedule X': 'SCHEDULE_X',
@@ -66,8 +66,8 @@ class MedicineFastifyController {
 
     try {
       const medicine = await medicineService.createMedicineMaster(tenantId, userId, body);
-      return reply.code(201).send({ 
-        success: true, 
+      return reply.code(201).send({
+        success: true,
         message: 'Medicine created successfully',
         data: {
           id: medicine.id,
@@ -77,7 +77,7 @@ class MedicineFastifyController {
           manufacturer: medicine.manufacturerName,
           status: medicine.status,
           createdAt: medicine.createdAt,
-        }
+        },
       });
     } catch (error) {
       logger.error({ error, tenantId }, 'Failed to create medicine master');

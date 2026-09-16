@@ -1,4 +1,3 @@
-
 # MedAssist API Documentation — Purchase Orders, Stock & Support Tickets
 
 ## Authentication
@@ -66,10 +65,10 @@ POST /api/purchase-orders
     "expectedDeliveryDate": "2026-06-30",
     "paymentMode": "CREDIT",
     "paymentTermsDays": 30,
-    "discountAmount": 100.00,
-    "subtotal": 10550.00,
-    "gstAmount": 1872.00,
-    "totalAmount": 12322.00,
+    "discountAmount": 100.0,
+    "subtotal": 10550.0,
+    "gstAmount": 1872.0,
+    "totalAmount": 12322.0,
     "notes": "Urgent stock replenishment",
     "createdAt": "2026-06-23T12:30:00.000Z",
     "items": [
@@ -78,9 +77,9 @@ POST /api/purchase-orders
         "medicineId": "uuid",
         "medicineName": "Paracetamol 500mg",
         "quantity": 100,
-        "unitPrice": 45.50,
+        "unitPrice": 45.5,
         "gstPercentage": 18,
-        "totalAmount": 4550.00
+        "totalAmount": 4550.0
       }
     ]
   }
@@ -89,8 +88,8 @@ POST /api/purchase-orders
 
 **Validation Errors:**
 
-| Error                          | Code    |
-| ------------------------------ | ------- |
+| Error                          | Code  |
+| ------------------------------ | ----- |
 | Supplier not found             | `400` |
 | Medicine not found             | `400` |
 | At least one medicine required | `400` |
@@ -106,8 +105,8 @@ GET /api/purchase-orders
 
 **Query Parameters:**
 
-| Param          | Type   | Description        |
-| -------------- | ------ | ------------------ |
+| Param        | Type   | Description        |
+| ------------ | ------ | ------------------ |
 | `branchId`   | uuid   | Filter by branch   |
 | `supplierId` | uuid   | Filter by supplier |
 | `status`     | string | Filter by status   |
@@ -159,9 +158,9 @@ POST /api/purchase-orders/:id/receive
       "batchNumber": "BAT-2026-001",
       "expiryDate": "2028-12-31",
       "manufacturingDate": "2026-01-01 (optional)",
-      "purchasePrice": 46.00,
-      "mrp": 75.00,
-      "sellingPrice": 65.00
+      "purchasePrice": 46.0,
+      "mrp": 75.0,
+      "sellingPrice": 65.0
     }
   ],
   "notes": "optional string"
@@ -261,9 +260,9 @@ POST /api/stock/in
   "expiryDate": "2028-06-30T00:00:00.000Z",
   "branchId": "uuid (optional)",
   "manufacturingDate": "2025-06-01T00:00:00.000Z (optional)",
-  "purchasePrice": 18.50,
-  "sellingPrice": 28.00,
-  "mrp": 32.50,
+  "purchasePrice": 18.5,
+  "sellingPrice": 28.0,
+  "mrp": 32.5,
   "supplierId": "uuid (optional)",
   "referenceType": "PURCHASE (optional)",
   "referenceId": "uuid (optional)",
@@ -283,9 +282,9 @@ POST /api/stock/in
   "quantity": 100,
   "receivedQuantity": 100,
   "availableQuantity": 100,
-  "purchasePrice": 18.50,
-  "sellingPrice": 28.00,
-  "mrp": 32.50,
+  "purchasePrice": 18.5,
+  "sellingPrice": 28.0,
+  "mrp": 32.5,
   "expiryDate": "2028-06-30T00:00:00.000Z",
   "manufacturingDate": "2025-06-01T00:00:00.000Z",
   "status": "ACTIVE",
@@ -704,8 +703,8 @@ Staff Reopens → OPEN
 
 ## Notifications
 
-| Event           | Who Notifies   | Message                                    |
-| --------------- | -------------- | ------------------------------------------ |
+| Event           | Who Notifies   | Message                                  |
+| --------------- | -------------- | ---------------------------------------- |
 | Ticket created  | All admins     | `New support ticket {number}: {title}`   |
 | Admin replies   | Ticket creator | `Admin replied to your ticket {number}`  |
 | Staff replies   | All admins     | `New reply on ticket {number}`           |
