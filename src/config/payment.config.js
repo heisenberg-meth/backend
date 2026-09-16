@@ -1,8 +1,6 @@
 import logger from '../shared/utils/logger.js';
 
 const REQUIRED_ENV_KEYS = ['RAZORPAY_KEY_ID', 'RAZORPAY_KEY_SECRET'];
-const PAYMENT_ENV_KEYS = ['RAZORPAY_WEBHOOK_SECRET', 'RAZORPAY_KEY_ID', 'RAZORPAY_KEY_SECRET'];
-
 const ENV_PATTERNS = {
   RAZORPAY_KEY_ID: /^rzp_(live|test)_[A-Za-z0-9]{14,}$/,
   RAZORPAY_KEY_SECRET: /^[A-Za-z0-9]{10,}$/,
@@ -111,6 +109,4 @@ function isConfigured() {
   return validated && validationErrors.length === 0;
 }
 
-export { validateEnvironment, getConfig, getValidationErrors, isConfigured, PAYMENT_ENV_KEYS };
-
-export default { validateEnvironment, getConfig, getValidationErrors, isConfigured };
+export { validateEnvironment, getConfig, getValidationErrors, isConfigured };

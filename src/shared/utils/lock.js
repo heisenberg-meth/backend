@@ -56,7 +56,7 @@ export const acquireLock = async (resource, ttlMs = 5000, customToken = null) =>
  * @param {string|null} customToken Optional custom token
  * @returns {Promise<boolean>} True if lock was extended
  */
-export const extendLock = async (resource, ttlMs = 5000, customToken = null) => {
+const extendLock = async (resource, ttlMs = 5000, customToken = null) => {
   const lockKey = `lock:${resource}`;
   const token = customToken || activeLockTokens.get(resource);
 
@@ -140,10 +140,3 @@ export const releaseLock = async (resource, customToken = null) => {
   const result = await redisClient.eval(RELEASE_LOCK_SCRIPT, 1, lockKey, token);
   return result === 1;
 };
-
-/**
- * Gets the current active lock token for a resource held by this process.
- * @param {string} resource
- * @returns {string|null}
- */
-export const getLockToken = (resource) => activeLockTokens.get(resource) || null;
