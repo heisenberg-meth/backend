@@ -1,4 +1,3 @@
-
 # PaymentSession Migration Guide
 
 ## Overview
