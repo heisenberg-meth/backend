@@ -52,7 +52,8 @@ class InvoiceEngine {
       unitPrice: this._safeNumber(item.unitPrice ?? item.price),
       gstPercentage: this._safeNumber(item.gstPercentage ?? item.gst),
       sellingUnit: String(item.sellingUnit || 'STRIP').toUpperCase(),
-      stripSize: this._safeNumber(item.stripSize ?? item.unitPerPack ?? 10) || 10,
+      stripSize:
+        this._safeNumber(item.stripSize ?? item.unitsPerStrip ?? item.unitPerPack ?? 10) || 10,
     }));
 
     const execute = async (t) => {
@@ -237,7 +238,8 @@ class InvoiceEngine {
       unitPrice: this._safeNumber(item.unitPrice ?? item.price),
       gstPercentage: this._safeNumber(item.gstPercentage ?? item.gst),
       sellingUnit: String(item.sellingUnit || 'STRIP').toUpperCase(),
-      stripSize: this._safeNumber(item.stripSize ?? item.unitPerPack ?? 10) || 10,
+      stripSize:
+        this._safeNumber(item.stripSize ?? item.unitsPerStrip ?? item.unitPerPack ?? 10) || 10,
     }));
 
     const execute = async (t) => {
@@ -930,7 +932,12 @@ class InvoiceEngine {
       item.medicine?.medicineName || item.medicine?.name || item.medicineName || 'Unknown';
 
     const stripSize =
-      item.stripSize || item.medicine?.stripSize || item.medicine?.unitPerPack || 10;
+      item.stripSize ||
+      item.unitsPerStrip ||
+      item.medicine?.unitsPerStrip ||
+      item.medicine?.stripSize ||
+      item.medicine?.unitPerPack ||
+      10;
     const isPill = String(item.sellingUnit || '').toUpperCase() === 'PILL';
     const isStrip = String(item.sellingUnit || '').toUpperCase() === 'STRIP';
     const deductionQuantity = isPill

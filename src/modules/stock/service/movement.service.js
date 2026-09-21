@@ -158,6 +158,9 @@ class MovementService {
           sellingPrice: data.sellingPrice || 0,
           mrp: data.mrp || data.sellingPrice || 0,
           status: 'ACTIVE',
+          ...(data.unitsPerStrip !== undefined && {
+            unitsPerStrip: data.unitsPerStrip ? Number(data.unitsPerStrip) : null,
+          }),
           ...(data.purchaseOrderItemId && { purchaseOrderItemId: data.purchaseOrderItemId }),
           ...(data.supplierId && { supplierId: data.supplierId }),
           ...(data.referenceType === 'PURCHASE' &&

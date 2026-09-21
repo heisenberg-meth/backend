@@ -89,8 +89,17 @@ class BatchService {
       updateData.availableQuantity = data.quantity - (batch.reservedQuantity || 0);
     }
 
-    if (data.mrp !== undefined) {
+    if (data.sellingPrice !== undefined) {
+      updateData.sellingPrice = data.sellingPrice;
+    } else if (
+      data.mrp !== undefined &&
+      (batch.sellingPrice === undefined || batch.sellingPrice === null)
+    ) {
       updateData.sellingPrice = data.mrp;
+    }
+
+    if (data.unitsPerStrip !== undefined) {
+      updateData.unitsPerStrip = data.unitsPerStrip ? Number(data.unitsPerStrip) : null;
     }
 
     const updated = await batchRepository.update(id, updateData);

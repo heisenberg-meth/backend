@@ -948,6 +948,7 @@ model InventoryBatch {
   purchasePrice         Decimal                @default(0) @db.Decimal(12, 2)
   sellingPrice          Decimal                @default(0) @db.Decimal(12, 2)
   mrp                   Decimal                @default(0) @db.Decimal(12, 2)
+  unitsPerStrip         Int?
   rackLocation          String?                @db.VarChar(100)
   supplierId            String?
   createdAt             DateTime               @default(now())

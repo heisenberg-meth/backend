@@ -241,6 +241,7 @@ class MedicinePrismaRepository {
                 sellingPrice: true,
                 mrp: true,
                 purchasePrice: true,
+                unitsPerStrip: true,
                 status: true,
                 branchId: true,
               },
@@ -418,6 +419,10 @@ class MedicinePrismaRepository {
         expiryDate: displayBatch?.expiryDate ?? null,
         mrp: toNum(displayBatch?.mrp),
         purchasePrice: toNum(displayBatch?.purchasePrice),
+        sellingPrice: toNum(displayBatch?.sellingPrice),
+        price: toNum(displayBatch?.sellingPrice) || toNum(displayBatch?.mrp),
+        unitsPerStrip: displayBatch?.unitsPerStrip ?? null,
+        stripSize: displayBatch?.unitsPerStrip ?? m.stripSize ?? 10,
 
         // Backward compatibility
         currentStock: stock,
@@ -511,6 +516,10 @@ class MedicinePrismaRepository {
       expiryDate: fefo?.expiryDate || null,
       mrp: fefo?.mrp || 0,
       purchasePrice: fefo?.purchasePrice || 0,
+      sellingPrice: fefo?.sellingPrice || 0,
+      price: fefo?.sellingPrice || fefo?.mrp || 0,
+      unitsPerStrip: fefo?.unitsPerStrip ?? null,
+      stripSize: fefo?.unitsPerStrip ?? medicine.stripSize ?? 10,
 
       // Legacy compatibility
       currentStock: stock,
